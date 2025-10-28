@@ -411,6 +411,20 @@ app.delete('/delete-snowflake-connection/:id', async (req, res) => {
   }
 });
 
+app.post('/remove-data-source', async (req, res) => {
+  const {dsName}= req.body;
+  try{
+    const deleteQuery = `DELETE FROM data_source_registry WHERE ds_name='${dsName}'`;
+    await dbClient.run(deleteQuery);  
+
+    res.json({success:true,message:`Data source ${dsName} removed successfully`});
+  }
+  catch(err){
+    console.error("Error removing data source:", err);
+    res.status(500).json({success:false,error:err.message});
+  }
+});
+
 app.get('/all-connections', async (req, res) => {
   try{
     const connections=await dbClient.query('SELECT id,connectionname from snow_flake_connections');
@@ -973,12 +987,12 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
 
 
 app.post('/api/calculate', async (req, res) => {
-  const { logic, existingVariables, existingParameters, variableName } = req.body;
+  const { logic, existingVariables, existingParameters, variableName, existingFilters } = req.body;
   if (!logic || !variableName) {
     return res.status(400).json({ message: 'Missing logic or variableName' });
   }
 
-  const allAvailableVariables = { ...existingVariables, ...existingParameters };
+  const allAvailableVariables = { ...existingVariables, ...existingParameters, ...existingFilters };
 
   try {
     const variableDeclarations = Object.entries(allAvailableVariables)
@@ -1004,6 +1018,201 @@ app.post('/api/calculate', async (req, res) => {
   }
 });
 
+app.get("/get-all-ds-names", async (req, res) => {
+  try{
+    const result=await dbClient.query('SELECT ds_name FROM data_source_registry');
+    const dsNames=result.map(row=>row.ds_name);
+    res.json({success:true,data_source_names:dsNames});
+  }catch(err){
+    console.error("Error fetching data_source names:",err);
+    res.status(500).json({success:false,error:err.message});
+  }
+});
+
+app.post("/get-ds-column-names",async(req,res)=>{
+  const ds_name=req.body.ds_name;
+  if(!ds_name){
+    return res.status(400).json({success:false,error:'ds_name is required'});
+  }
+  try{
+    const dsDetails=await dbClient.query(`SELECT connection_id,type,query,parquet_path FROM data_source_registry WHERE ds_name='${ds_name}'`);
+    if(dsDetails.length===0){
+      return res.status(404).json({success:false,error:`Data source ${ds_name} not found`});
+    }
+    const type=dsDetails[0].type;
+    let columnNames=[];
+    if(type==='Live'){
+      const connId=dsDetails[0].connection_id;
+      let query=dsDetails[0].query;
+      const connectionDetails=await dbClient.query(`SELECT * from snow_flake_connections WHERE id=${connId}`);
+      if(connectionDetails.length===0){
+        return res.status(404).json({success:false,error:`Connection with id ${connId} not found`});
+      }
+      const conn=connectionDetails[0];
+      const privateKeyBuffer=Buffer.from(conn.privateKey,'base64');
+      const privateKeyObject=crypto.createPrivateKey({
+        key:privateKeyBuffer,
+        format:'der',
+        type:'pkcs8',
+      });
+      const privateKeyPemBuffer=privateKeyObject.export({
+        format:'pem',
+        type:'pkcs8'
+      });
+      const sfConnection=snowflake.createConnection({
+        account:conn.account,
+        username:conn.username,
+        authenticator:conn.authenticator,
+        privateKey:privateKeyPemBuffer,
+        warehouse:conn.warehouse,
+        database:conn.database,
+        schema:conn.schema,
+      });
+      sfConnection.connect((err,connection)=>{
+        if(err){
+          console.error('❌ Unable to connect to Snowflake:',err.message);
+          return res.status(500).json({success:false,error:err.message});
+        }
+        // Remove trailing semicolon and whitespace
+        query = query.trim().replace(/;+$/, '');
+        // Wrap the original query to get only schema, no data
+        const schemaQuery = `SELECT * FROM (${query}) LIMIT 0`;
+        connection.execute({
+          sqlText:schemaQuery,
+          complete:(err,stmt)=>{
+            if(err){
+              console.error('❌ Failed to execute query:',err.message);
+              sfConnection.destroy();
+              return res.status(500).json({success:false,error:err.message});
+            }
+            columnNames=stmt.getColumns().map(col=>col.getName());
+            sfConnection.destroy();
+            return res.json({success:true,column_names:columnNames});
+          }
+        })
+      })
+    }else if(type==='Extract'){
+      const parquetPath=dsDetails[0].parquet_path;
+      if(!parquetPath){
+        return res.status(404).json({success:false,error:`Parquet path for data source ${ds_name} not found`});
+      }
+      const escapedPath = parquetPath.replace(/\\/g, '\\\\');
+      // Use DESCRIBE to get column names without reading data
+      const describeResult = await dbClient.query(`DESCRIBE SELECT * FROM read_parquet('${escapedPath}')`);
+      columnNames = describeResult.map(row => row.column_name);
+      return res.json({success:true,column_names:columnNames});
+  }else{
+      return res.status(400).json({success:false,error:`Unsupported connection type: ${type}`});
+    }
+  }
+  catch(err){
+    console.error('❌ Error in /get-ds-column-names:',err.message);
+    return res.status(500).json({success:false,error:err.message});
+  }
+});
+
+app.post("/get-distinct-column-values", async (req, res) => {
+  const { ds_name, column_name } = req.body;
+  
+  if (!ds_name) {
+    return res.status(400).json({ success: false, error: 'ds_name is required' });
+  }
+  if (!column_name) {
+    return res.status(400).json({ success: false, error: 'column_name is required' });
+  }
+
+  try {
+    const dsDetails = await dbClient.query(`SELECT connection_id, type, query, parquet_path FROM data_source_registry WHERE ds_name='${ds_name}'`);
+    if (dsDetails.length === 0) {
+      return res.status(404).json({ success: false, error: `Data source ${ds_name} not found` });
+    }
+
+    const type = dsDetails[0].type;
+    let distinctValues = [];
+
+    if (type === 'Live') {
+      const connId = dsDetails[0].connection_id;
+      let query = dsDetails[0].query;
+      const connectionDetails = await dbClient.query(`SELECT * from snow_flake_connections WHERE id=${connId}`);
+      
+      if (connectionDetails.length === 0) {
+        return res.status(404).json({ success: false, error: `Connection with id ${connId} not found` });
+      }
+
+      const conn = connectionDetails[0];
+      const privateKeyBuffer = Buffer.from(conn.privateKey, 'base64');
+      const privateKeyObject = crypto.createPrivateKey({
+        key: privateKeyBuffer,
+        format: 'der',
+        type: 'pkcs8',
+      });
+      const privateKeyPemBuffer = privateKeyObject.export({
+        format: 'pem',
+        type: 'pkcs8'
+      });
+
+      const sfConnection = snowflake.createConnection({
+        account: conn.account,
+        username: conn.username,
+        authenticator: conn.authenticator,
+        privateKey: privateKeyPemBuffer,
+        warehouse: conn.warehouse,
+        database: conn.database,
+        schema: conn.schema,
+      });
+
+      sfConnection.connect((err, connection) => {
+        if (err) {
+          console.error('❌ Unable to connect to Snowflake:', err.message);
+          return res.status(500).json({ success: false, error: err.message });
+        }
+
+        // Remove trailing semicolon and whitespace
+        query = query.trim().replace(/;+$/, '');
+        
+        // Get distinct values for the specified column
+        const distinctQuery = `SELECT DISTINCT "${column_name}" FROM (${query}) WHERE "${column_name}" IS NOT NULL ORDER BY "${column_name}"`;
+
+        connection.execute({
+          sqlText: distinctQuery,
+          complete: (err, stmt, rows) => {
+            if (err) {
+              console.error('❌ Failed to execute query:', err.message);
+              sfConnection.destroy();
+              return res.status(500).json({ success: false, error: err.message });
+            }
+            
+            distinctValues = rows.map(row => row[column_name]);
+            sfConnection.destroy();
+            return res.json({ success: true, distinct_column_values: distinctValues,length:distinctValues.length });
+          }
+        });
+      });
+
+    } else if (type === 'Extract') {
+      const parquetPath = dsDetails[0].parquet_path;
+      if (!parquetPath) {
+        return res.status(404).json({ success: false, error: `Parquet path for data source ${ds_name} not found` });
+      }
+
+      const escapedPath = parquetPath.replace(/\\/g, '\\\\');
+      
+      // Get distinct values from parquet file
+      const distinctQuery = `SELECT DISTINCT "${column_name}" FROM read_parquet('${escapedPath}') WHERE "${column_name}" IS NOT NULL ORDER BY "${column_name}"`;
+      const result = await dbClient.query(distinctQuery);
+      
+      distinctValues = result.map(row => row[column_name]);
+      return res.json({ success: true, distinct_column_values: distinctValues,length:distinctValues.length });
+
+    } else {
+      return res.status(400).json({ success: false, error: `Unsupported connection type: ${type}` });
+    }
+
+  } catch (err) {
+    console.error('❌ Error in /get-distinct-column-values:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 (async()=> {
   try {

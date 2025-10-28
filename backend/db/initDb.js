@@ -35,6 +35,7 @@ async function createDataSourceRegistry(){
   parquet_path TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   last_refreshed TIMESTAMP,
+  FOREIGN KEY (connection_id) REFERENCES snow_flake_connections(id),
 );
 `
   try{

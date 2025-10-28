@@ -4,7 +4,7 @@ import { localStorageEffect } from './persistence';
 // Atom to track all data source names
 export const dataSourceNamesState = atom<string[]>({
   key: 'dataSourceNamesState',
-  default: ['ds1', 'ds2', 'ds3'], // Start with some default data sources
+  default: [], // Start with some default data sources
   effects: [
     localStorageEffect('dataSourceNames')
 ]

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useRecoilState, useResetRecoilState } from 'recoil';
+import { useRecoilState, useRecoilValue, useResetRecoilState } from 'recoil';
 import { motion, AnimatePresence } from 'framer-motion';
 import { parameterAtomFamily } from '../recoil/ParameterFamliy';
 import { parameterNamesState } from '../recoil/ParameterTracker';
+import { arrayParameterNamesSelector,arrayOfArrayParameterNamesSelector,arrayOfObjectsParameterNamesSelector } from '../recoil/ParameterTracker';
 import {
   Box,
   Button,
@@ -27,6 +28,7 @@ export default function AddParameterMui() {
   const [newParamName, setNewParamName] = useState<string>('');
   const [parameterNames, setParameterNames] = useRecoilState(parameterNamesState);
   const [isParamsCollapsed, setIsParamsCollapsed] = useState<boolean>(false);
+
 
   // Use a special state for the parameter value based on selection
   const [parameterValue, setParameterValue] = useRecoilState(
@@ -58,6 +60,10 @@ export default function AddParameterMui() {
       setSelectedParam(parameterNames[0]);
     }
   }, [parameterNames, selectedParam]);
+
+  // console.log('Array Parameters:', useRecoilValue(arrayParameterNamesSelector));
+  // console.log('Array of Array Parameters:', useRecoilValue(arrayOfArrayParameterNamesSelector));
+  // console.log('Array of Object Parameters:', useRecoilValue(arrayOfObjectsParameterNamesSelector));
 
   return (
     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 2, p: 2, height: '100vh' }}>

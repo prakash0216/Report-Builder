@@ -8,4 +8,6 @@ export const variableAtomFamily = atomFamily<string,string>({
   //     localStorageEffect(`variable_${param}`)
   // ]
   });
+
+  
   

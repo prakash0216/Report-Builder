@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useRecoilState } from 'recoil';
+import { useRecoilState, useResetRecoilState } from 'recoil';
 import { dataSourceAtomFamily } from '../recoil/DataSourceFamily'; // Assuming this is your atom family
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -106,10 +106,23 @@ export default function AddDataSourceMui() {
     }
   };
 
-  const removeDataSource = (dsName: string): void => {
-    setDataSourceNames((prev: string[]) => prev.filter(name => name !== dsName));
-    if (selectedDS === dsName) {
-      setSelectedDS(dataSourceNames[0] || '');
+  const resetDataSource=useResetRecoilState(dataSourceAtomFamily(selectedDS));
+
+  const removeDataSource = async (dsName: string): Promise<void> => {
+    try{
+      const response=await axios.post('http://localhost:3002/remove-data-source', { dsName });
+      if(response){
+        setDataSourceNames((prev: string[]) => prev.filter(name => name !== dsName));
+        if (selectedDS === dsName) {
+          setSelectedDS(dataSourceNames[0] || '');
+        }
+        resetDataSource();
+        showAlert(`Data source "${dsName}" removed successfully`, 'success');
+      }
+    }
+    catch(err){
+      console.error('Failed to remove data source', err)
+      showAlert('Failed to remove data source', 'error')
     }
   };
 
