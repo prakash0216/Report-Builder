@@ -3,7 +3,8 @@ import {
     useRecoilState,
     useRecoilValue,
     useSetRecoilState,
-    useRecoilCallback
+    useRecoilCallback,
+    atomFamily // Import atomFamily to define the new structure
 } from 'recoil';
 import { variableNamesState, variableUpdateTriggerState } from '../recoil/Variabletracker';
 import { variableAtomFamily } from '../recoil/VariableFamily';
@@ -13,6 +14,7 @@ import { parameterAtomFamily } from '../recoil/ParameterFamliy';
 import { filterConfigFamily } from '../recoil/FiltersFamily';
 import { filterNamesState } from '../recoil/FiltersFamily';
 import { parameterNamesState } from '../recoil/ParameterTracker';
+import { liveFilterFamily } from '../recoil/LiveFilterFamily';
 import { truncate } from 'lodash';
 
 // Helper to safely parse stored strings into arrays/objects/values
@@ -152,7 +154,7 @@ function StoredLogicItem({ logic, onDelete, onExecute, onDownload }: {
     );
 }
 
-// Parameter display component
+// Parameter display component - Reads live value from parameterAtomFamily
 function ParameterDisplay({ name }: { name: string }) {
     const rawValue = useRecoilValue(parameterAtomFamily(name));
     const parsedValue = safeParse(rawValue);
@@ -183,64 +185,85 @@ function ParameterDisplay({ name }: { name: string }) {
     );
 }
 
+// Filter display component - Reads live value from the new liveFilterFamily
+function FilterDisplay({ name }: { name: string }) {
+    // READ THE LIVE VALUE from the DEDICATED FILTER FAMILY (Array of Objects)
+    const parsedValue = useRecoilValue(liveFilterFamily(name));
+    
+    // Check if value is defined before stringifying
+    const displayString = parsedValue !== undefined && parsedValue !== null ? (
+        typeof parsedValue === 'object'
+            ? JSON.stringify(parsedValue, null, 2)
+            : String(parsedValue)
+    ) : 'N/A';
+
+    const getType = () => {
+        if (Array.isArray(parsedValue)) return 'array';
+        if (parsedValue === null) return 'null';
+        if (parsedValue === undefined) return 'undefined';
+        return typeof parsedValue;
+    };
+
+    return (
+        <div className="border border-gray-200 rounded-lg p-4 bg-blue-50">
+            <div className="flex items-center justify-between mb-2">
+                <h3 className="font-medium text-gray-800">{name}</h3>
+                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                    {getType()}
+                </span>
+            </div>
+            <div className="bg-white p-3 rounded border">
+                <pre className="text-sm text-gray-700 whitespace-pre-wrap" style={{ margin: 0 }}>
+                    {displayString}
+                </pre>
+            </div>
+        </div>
+    );
+}
+
 export default function Hooks() {
     const [variableNames, setVariableNames] = useRecoilState(variableNamesState);
     const setUpdateTrigger = useSetRecoilState(variableUpdateTriggerState);
     const topNValue = useRecoilValue(topNState);
     
-    // Use Recoil state for stored logics instead of local state
+    // Use Recoil state for stored logics
     const [storedLogics, setStoredLogics] = useRecoilState(storedLogicsState);
     
+    // Form states
     const [calculationLogic, setCalculationLogic] = useState('');
     const [variableName, setVariableName] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     
-    // NEW STATE FOR COLLAPSIBLE LIST
+    // UI states
     const [isScopeListExpanded, setIsScopeListExpanded] = useState(false);
-
+    
     // Recoil hooks for parameters and filters
     const parameterNames = useRecoilValue(parameterNamesState);
     const filterNames = useRecoilValue(filterNamesState);
-
+    
     // Setter for the variable atom
     const setVariableAtom = useRecoilCallback(({ set }) => (varName: string, value: string) => {
         set(variableAtomFamily(varName), value);
     }, []);
 
-    // Initialize filter default values into parameters on mount
+    // Initialize filter default values into the new DEDICATED LIVE FILTER FAMILY
     const initializeFilterDefaults = useRecoilCallback(({ snapshot, set }) => async () => {
-        try {
-            for (const filterId of filterNames) {
-                const filterConfig = await snapshot.getPromise(filterConfigFamily(filterId));
-                
-                if (filterConfig?.defaultValues && filterConfig.defaultValues.length > 0) {
-                    const paramName = filterConfig.variableName;
-                    
-                    if (paramName) {
-                        let defaultValue;
-                        
-                        if (filterConfig.selectionType === 'single') {
-                            // For single selection, use the first primitive value
-                            const firstDefault = filterConfig.defaultValues[0];
-                            // Extracting the primitive value regardless of the source format
-                            defaultValue = firstDefault?.value ?? firstDefault;
-
-                        } else {
-                            // For multi selection, extract all primitive values
-                            defaultValue = filterConfig.defaultValues.map((item: any) => item.value ?? item);
-                        }
-                        
-                        // Set the parameter atom with the default value (Source of Truth for live filter selection)
-                        set(parameterAtomFamily(paramName), JSON.stringify(defaultValue));
-                    }
-                }
-            }
-        } catch (err) {
-            console.error('Error initializing filter defaults:', err);
-        }
-    }, [filterNames]);
+      try {
+          for (const filterId of filterNames) {
+              const filterConfig = await snapshot.getPromise(filterConfigFamily(filterId));
+              
+              if (filterConfig?.defaultValues && filterConfig.defaultValues.length > 0 && filterConfig.variableName) {
+                  // Use variableName to set in liveFilterFamily
+                  set(liveFilterFamily(filterConfig.variableName), filterConfig.defaultValues);
+                  console.log(`✅ Initialized filter: ${filterConfig.variableName}`, filterConfig.defaultValues);
+              }
+          }
+      } catch (err) {
+          console.error('Error initializing filter defaults:', err);
+      }
+  }, [filterNames]);
 
     // Run initialization on mount
     useEffect(() => {
@@ -248,46 +271,30 @@ export default function Hooks() {
     }, [initializeFilterDefaults]);
 
     // Function to get all variable and parameter values for sending to backend
-    const getAllValuesForBackend = useRecoilCallback(({ snapshot }) => () => {
-        const allVariables: Record<string, any> = {};
-        const allParameters: Record<string, any> = {}; // Holds ONLY explicit Parameters
-        const allFilters: Record<string, any> = {};    // Holds ONLY interactive Filter/Hook selections
-        
-        // Get all variables
-        variableNames.forEach(varName => {
-            try {
-                const rawValue = snapshot.getLoadable(variableAtomFamily(varName)).contents;
-                const parsedValue = safeParse(rawValue);
-                if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
-                    allVariables[varName] = parsedValue;
-                }
-            } catch (err) {
-                console.warn(`Failed to load variable ${varName}:`, err);
+    // Function to get all variable and parameter values for sending to backend
+  const getAllValuesForBackend = useRecoilCallback(({ snapshot }) => () => {
+    const allVariables: Record<string, any> = {};
+    const allParameters: Record<string, any> = {};
+    const allFilters: Record<string, any> = {};
+    
+    // Get all computed variables
+    variableNames.forEach(varName => {
+        try {
+            const rawValue = snapshot.getLoadable(variableAtomFamily(varName)).contents;
+            const parsedValue = safeParse(rawValue);
+            if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
+                allVariables[varName] = parsedValue;
             }
-        });
+        } catch (err) {
+            console.warn(`Failed to load variable ${varName}:`, err);
+        }
+    });
 
-        const filterNamesSet = new Set(filterNames);
-        
-        // 1. Get filter values (interactive selections)
-        filterNames.forEach(filterId => {
-            try {
-                // The actual live value is stored in parameterAtomFamily under the filter ID (variableName)
-                const rawValue = snapshot.getLoadable(parameterAtomFamily(filterId)).contents;
-                const parsedValue = safeParse(rawValue);
-                
-                if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
-                    allFilters[filterId] = parsedValue;
-                }
-            } catch (err) {
-                console.warn(`Failed to load filter value for ${filterId}:`, err);
-            }
-        });
-
-        // 2. Get explicit parameter values, excluding any names claimed by filters
-        parameterNames.forEach(paramName => {
-            // Skip names that belong to the interactive filter set
-            if (filterNamesSet.has(paramName)) return; 
-
+    // 1. Get explicit parameter values
+    const filterNamesSet = new Set(filterNames);
+    
+    parameterNames.forEach(paramName => {
+        if (!filterNamesSet.has(paramName)) { 
             try {
                 const rawValue = snapshot.getLoadable(parameterAtomFamily(paramName)).contents;
                 const parsedValue = safeParse(rawValue);
@@ -297,14 +304,38 @@ export default function Hooks() {
             } catch (err) {
                 console.warn(`Failed to load explicit parameter ${paramName}:`, err);
             }
-        });
-        
-        // Always include topN in the available variables
-        allVariables['topN'] = topNValue;
-        
-        // Return them separately to be included in the API payload
-        return { variables: allVariables, parameters: allParameters, filters: allFilters };
-    }, [variableNames, parameterNames, filterNames, topNValue]);
+        }
+    });
+
+    // 2. Get live filter values using the variableName from filterConfig
+    filterNames.forEach(filterId => {
+        try {
+            // CRITICAL FIX: Get the filter config first to access variableName
+            const filterConfig = snapshot.getLoadable(filterConfigFamily(filterId)).contents;
+            
+            if (filterConfig && filterConfig.variableName) {
+                // Use variableName as the key to access liveFilterFamily
+                const selectedOptions = snapshot.getLoadable(liveFilterFamily(filterConfig.variableName)).contents;
+                
+                // Store using variableName (e.g., "filter_msl_extract_MOP")
+                allFilters[filterConfig.variableName] = selectedOptions;
+                
+                console.log(`✅ Loaded filter: ${filterConfig.variableName}`, selectedOptions);
+            } else {
+                console.warn(`⚠️ Filter config not found or missing variableName for filterId: ${filterId}`);
+            }
+        } catch (err) {
+            console.warn(`Failed to load live filter value for ${filterId}:`, err);
+        }
+    });
+  
+    // Always include topN in the available variables
+    allVariables['topN'] = topNValue;
+    
+    console.log('📦 All filters being sent:', allFilters);
+    
+    return { variables: allVariables, parameters: allParameters, filters: allFilters };
+  }, [variableNames, parameterNames, filterNames, topNValue]);
 
     // Function to execute a single logic using useRecoilCallback
     const executeSingleLogic = useRecoilCallback(({ set }) => async (logic: StoredLogic) => {
@@ -316,8 +347,8 @@ export default function Hooks() {
                 body: JSON.stringify({
                     logic: logic.logic,
                     existingVariables: variables,
-                    existingParameters: parameters, // Explicit Parameters (e.g., param1: 5)
-                    existingFilters: filters,      // Explicit Filters (e.g., hook_t1: [30])
+                    existingParameters: parameters, // Explicit Parameters
+                    existingFilters: filters,      // Explicit Filters (from dedicated state)
                     variableName: logic.variableName
                 }),
             });
@@ -394,7 +425,7 @@ export default function Hooks() {
                     logic: calculationLogic,
                     existingVariables: variables,
                     existingParameters: parameters, // Explicit Parameters
-                    existingFilters: filters,      // Explicit Filters
+                    existingFilters: filters,      // Explicit Filters (from dedicated state)
                     variableName
                 }),
             });
@@ -704,7 +735,7 @@ export default function Hooks() {
                 {/* All Variables & Parameters Section */}
                 <div className="bg-white rounded-lg shadow-lg p-6">
                     <h2 className="text-xl font-semibold mb-4 text-gray-700">
-                        All Variables & Parameters
+                        All Variables, Parameters and Filters
                     </h2>
                     <div className="text-xs text-gray-500 mb-4">
                         Variables from all sources (auto-updated globally)
@@ -733,7 +764,8 @@ export default function Hooks() {
                             <div className="text-center py-4 text-gray-500 italic">
                                 No custom variables yet. Create some calculations first!
                             </div>
-                        ) : (
+                        ) : 
+                            (
                             Array.from(variableNames).map(name => (
                                 <VariableDisplay key={name} name={name} />
                             ))
@@ -754,8 +786,8 @@ export default function Hooks() {
                             <>
                                 <h3 className="text-lg font-semibold mt-4 mb-2 text-gray-700 border-b border-gray-200 pb-1">Filter/Hook Selections ({filterNames.length})</h3>
                                 {Array.from(filterNames).map(name => (
-                                    // These filter IDs are used as Parameter names in the backend
-                                    <ParameterDisplay key={name} name={name} /> 
+                                    // These filters now read from the dedicated liveFilterFamily
+                                    <FilterDisplay key={name} name={name} /> 
                                 ))}
                             </>
                         )}

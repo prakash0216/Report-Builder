@@ -4,6 +4,9 @@ import { chartConfigState } from "../recoil/ChartConfig";
 import { useRecoilState, useRecoilValue, useRecoilCallback } from "recoil";
 import { variableAtomFamily } from '../recoil/VariableFamily';
 import { variableNamesState, variableUpdateTriggerState } from '../recoil/Variabletracker';
+import { parameterAtomFamily } from "../recoil/ParameterFamliy";
+import { parameterNamesState } from "../recoil/ParameterTracker";
+import { filterConfigFamily,filterNamesState } from "../recoil/FiltersFamily";
 import ResizableChart from "./ResizableChart";
 
 // Helper to safely parse values

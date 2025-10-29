@@ -14,38 +14,38 @@ await conn.run(`
   SET preserve_insertion_order=false;
 `);
 
-const startTime = Date.now();
-console.log("Starting read parquet", new Date().toISOString())
-const result = await conn.stream(`
-    SELECT * FROM read_parquet('./data/run_1760096237024.parquet')
-    ORDER BY WRITTEN_TRX LIMIT 100000
-  `);
+// const startTime = Date.now();
+// console.log("Starting read parquet", new Date().toISOString())
+// const result = await conn.stream(`
+//     SELECT * FROM read_parquet('./data/run_1760096237024.parquet')
+//     ORDER BY WRITTEN_TRX LIMIT 100000
+//   `);
   
-  let data = [];
-  while (true) {
-    const chunk = await result.fetchChunk();
-    if (chunk.rowCount === 0) break;
+//   let data = [];
+//   while (true) {
+//     const chunk = await result.fetchChunk();
+//     if (chunk.rowCount === 0) break;
   
-    const rows = chunk.getRows();
-    for (const r of rows) {
-      data.push(r);
-    }
-  }
-  console.log("Time taken to read parquet:", (Date.now() - startTime) / 1000, "seconds");
-  console.log("Total rows read:", data.length);
-// console.log("Starting stream", new Date().toISOString())
-// const startTime=Date.now();
+//     const rows = chunk.getRows();
+//     for (const r of rows) {
+//       data.push(r);
+//     }
+//   }
+//   console.log("Time taken to read parquet:", (Date.now() - startTime) / 1000, "seconds");
+//   console.log("Total rows read:", data.length);
+console.log("Starting stream", new Date().toISOString())
+const startTime=Date.now();
 
-// const outfile = `./data/run_${Date.now()}.parquet`;
-// await conn.run(`
-//   COPY (
-//     SELECT * FROM ds_msl_extract
-//   )
-//   TO '${outfile}' (FORMAT PARQUET, COMPRESSION ZSTD)
-// `);
-// console.log("File written to", outfile)
+const outfile = `./data/run_${Date.now()}.parquet`;
+await conn.run(`
+  COPY (
+    SELECT * FROM ADW_FACT_DNDL_UPD_LIMITED;
+  )
+  TO '${outfile}' (FORMAT PARQUET, COMPRESSION ZSTD)
+`);
+console.log("File written to", outfile)
 
-// console.log("Time taken", (Date.now()-startTime)/1000, "seconds")
+console.log("Time taken", (Date.now()-startTime)/1000, "seconds")
 
 // --- STREAM RESULTS ---
 // const result = await conn.stream(`

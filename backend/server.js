@@ -884,7 +884,7 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
           complete: (err, stmt, rows) => {
             if (err) {
               sfConnection.destroy();
-              console.error('❌ Failed to execute query:', err.message);
+              console.error('❌ Failed to execute query:', err.message);c
               return reject(new Error('Failed to execute query: ' + err.message));
             }
           }
@@ -920,7 +920,6 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
       });
     });
   }
-  
   if (type === 'Extract') {
     const startTime = Date.now();
     console.log('🔄 Loading from DuckDB Extract');
@@ -944,10 +943,25 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
     // Escape backslashes for Windows paths
     const escapedPath = parquetPath.replace(/\\/g, '\\\\');
     
+    // Build custom query with columns, where, groupBy, orderBy, limit
+    let customQuery;
+    
+    if (columns || where || groupBy || orderBy || limit) {
+        // If custom columns/filters are provided, wrap the base parquet read
+        customQuery = `SELECT ${columns && columns.length > 0 ? columns.join(', ') : '*'} FROM read_parquet('${escapedPath}')` +
+            (where ? ` WHERE ${where}` : '') +
+            (groupBy ? ` GROUP BY ${groupBy.join(', ')}` : '') +
+            (orderBy ? ` ORDER BY ${orderBy}` : '') +
+            (limit ? ` LIMIT ${limit}` : '');
+    } else {
+        // If no custom parameters, use the base query as-is
+        customQuery = `SELECT * FROM read_parquet('${escapedPath}')`;
+    }
+    
+    console.log('Executing DuckDB Query:', customQuery);
+    
     // Use the stream method which returns a QueryResult
-    const queryResult = await dbClient.stream(
-        `SELECT * FROM read_parquet('${escapedPath}')`
-    );
+    const queryResult = await dbClient.stream(customQuery);
     
     let data = [];
     let chunkCount = 0;
@@ -980,7 +994,8 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
     console.log(`✅ Data loaded in ${totalTime}s`);
     console.log(`✅ Loaded ${data.length.toLocaleString()} rows from Parquet file`);
     return data;
-  } else {
+  }
+  else {
     throw new Error(`Unsupported connection type: ${type}`);
   }
 }
