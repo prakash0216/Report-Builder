@@ -870,7 +870,7 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
           customQuery = `SELECT ${columns && columns.length > 0 ? columns.join(', ') : '*'} FROM (${sanitizedQuery}) AS subquery` +
             (where ? ` WHERE ${where}` : '') +
             (groupBy ? ` GROUP BY ${groupBy.join(', ')}` : '') +
-            (orderBy ? ` ORDER BY ${orderBy}` : '') +
+            (orderBy ? ` ORDER BY ${orderBy.join(', ')}` : '') +
             (limit ? ` LIMIT ${limit}` : '');
         } else {
           // If no custom parameters, use the base query as-is
@@ -884,7 +884,7 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
           complete: (err, stmt, rows) => {
             if (err) {
               sfConnection.destroy();
-              console.error('❌ Failed to execute query:', err.message);c
+              console.error('❌ Failed to execute query:', err.message);
               return reject(new Error('Failed to execute query: ' + err.message));
             }
           }
@@ -951,7 +951,7 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
         customQuery = `SELECT ${columns && columns.length > 0 ? columns.join(', ') : '*'} FROM read_parquet('${escapedPath}')` +
             (where ? ` WHERE ${where}` : '') +
             (groupBy ? ` GROUP BY ${groupBy.join(', ')}` : '') +
-            (orderBy ? ` ORDER BY ${orderBy}` : '') +
+            (orderBy ? ` ORDER BY ${orderBy.join(', ')}` : '') +
             (limit ? ` LIMIT ${limit}` : '');
     } else {
         // If no custom parameters, use the base query as-is
@@ -959,6 +959,13 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
     }
     
     console.log('Executing DuckDB Query:', customQuery);
+    
+    // ✅ OPTION 3: Get column names using DESCRIBE query
+    const describeQuery = `DESCRIBE (${customQuery})`;
+    console.log('Getting column names:', describeQuery);
+    const columnInfo = await dbClient.query(describeQuery);
+    const columnNames = columnInfo.map(col => col.column_name);
+    console.log('📋 Column names:', columnNames);
     
     // Use the stream method which returns a QueryResult
     const queryResult = await dbClient.stream(customQuery);
@@ -979,8 +986,16 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
         chunkCount++;
         rowsProcessed += chunk.rowCount;
         
-        // Convert chunk to row objects
-        const rows = chunk.getRows();
+        // ✅ Convert arrays to objects using column names
+        const rowArrays = chunk.getRows();
+        const rows = rowArrays.map(rowArray => {
+            const obj = {};
+            columnNames.forEach((name, index) => {
+                obj[name] = rowArray[index];
+            });
+            return obj;
+        });
+        
         data.push(...rows);
         
         // Log progress every 10 chunks or every 50k rows
@@ -989,7 +1004,6 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
             console.log(`📊 Progress: ${rowsProcessed.toLocaleString()} rows loaded (${chunkCount} chunks) in ${elapsed}s`);
         }
     }
-    
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log(`✅ Data loaded in ${totalTime}s`);
     console.log(`✅ Loaded ${data.length.toLocaleString()} rows from Parquet file`);
@@ -1011,8 +1025,20 @@ app.post('/api/calculate', async (req, res) => {
 
   try {
     const variableDeclarations = Object.entries(allAvailableVariables)
-      .map(([name, value]) => `const ${name} = ${JSON.stringify(value)};`)
-      .join('\n');
+    .map(([name, value]) => {
+      let serialized;
+      if (value === undefined) {
+        serialized = 'undefined';
+      } else if (value === null) {
+        serialized = 'null';
+      } else if (typeof value === 'string' && value === '') {
+        serialized = '""';
+      } else {
+        serialized = JSON.stringify(value);
+      }
+      return `const ${name} = ${serialized};`;
+    })
+    .join('\n');
 
     // This structure correctly handles 'await' inside the logic string.
     const funcString = `(async function(dsConnect) {

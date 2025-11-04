@@ -8,15 +8,15 @@ import DashboardsManagement from './pages/DashboardManagement';
 
 function App() {
   return (
-    <GlobalCalculationWrapper>
       <BrowserRouter>
-        <Routes>
-          <Route path="/dashboards" element={<DropDragDashboard/>}/>
-          <Route path="/addChart/:id" element={<EditChart/>}/>
-          <Route path ="/" element={<DashboardsManagement/>}/>
-        </Routes>
+        <GlobalCalculationWrapper>
+          <Routes>
+            <Route path="/dashboards" element={<DropDragDashboard/>}/>
+            <Route path="/addChart/:id" element={<EditChart/>}/>
+            <Route path ="/" element={<DashboardsManagement/>}/>
+          </Routes>
+        </GlobalCalculationWrapper>
       </BrowserRouter>
-    </GlobalCalculationWrapper>
   );
 }
 

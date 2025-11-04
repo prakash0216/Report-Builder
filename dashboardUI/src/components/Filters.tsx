@@ -302,7 +302,7 @@ const CascadingDropdown: React.FC = () => {
 
     // Fetch filter columns when data source changes (with debouncing)
     useEffect(() => {
-        if (mainCategory === 'filters' && selectedDataSource) {
+        if (mainCategory === 'data-source' && selectedDataSource) {
             setAvailableFilterColumns([]);
             const timeoutId = setTimeout(() => {
                 fetchFilterColumns(selectedDataSource);
@@ -316,7 +316,7 @@ const CascadingDropdown: React.FC = () => {
 
     // Fetch column values when filter column changes (with debouncing)
     useEffect(() => {
-        if (mainCategory === 'filters' && selectedDataSource && selectedFilterColumn) {
+        if (mainCategory === 'data-source' && selectedDataSource && selectedFilterColumn) {
             setAvailableFilterColumnValues([]);
             const timeoutId = setTimeout(() => {
                 fetchFilterColumnValues(selectedDataSource, selectedFilterColumn);
@@ -386,7 +386,7 @@ const CascadingDropdown: React.FC = () => {
         const column = event.target.value;
         setSelectedFilterColumn(column);
         
-        const newVariableName = `filter_${selectedDataSource}_${column}`;
+        const newVariableName = `data_source_${selectedDataSource}_${column}`;
         setVariableName(newVariableName);
         setDisplayName(column.charAt(0).toUpperCase() + column.slice(1).replace(/_/g, ' '));
         
@@ -454,7 +454,7 @@ const CascadingDropdown: React.FC = () => {
     // ==================== GET AVAILABLE VALUES FOR DEFAULT SELECTION ====================
     const getAvailableValues = (): DefaultValueOption[] => {
         // 1. FILTERS CATEGORY: Use fetched column values
-        if (mainCategory === 'filters' && selectedFilterColumn) {
+        if (mainCategory === 'data-source' && selectedFilterColumn) {
             if (availableFilterColumnValues.length > 0) {
                 return availableFilterColumnValues.map(item => ({ 
                     label: item.toString(), 
@@ -554,7 +554,7 @@ const CascadingDropdown: React.FC = () => {
         let actualSelectedName = '';
         if (mainCategory === 'params') {
             actualSelectedName = selectedParamName;
-        } else if (mainCategory === 'filters') {
+        } else if (mainCategory === 'data-source') {
             actualSelectedName = selectedFilterColumn;
         } else if (mainCategory === 'hooks') {
             actualSelectedName = selectedHookName;
@@ -580,7 +580,7 @@ const CascadingDropdown: React.FC = () => {
             selectionType,
             defaultValues,
             availableOptions,
-            dsName: mainCategory === 'filters' ? selectedDataSource : undefined,
+            dsName: mainCategory === 'data-source' ? selectedDataSource : undefined,
             ...(paramType === 'arrayOfArray' && {
                 labelIndex: arrayOfArrayLabelIndex as number,
                 valueIndex: arrayOfArrayValueIndex as number,
@@ -629,7 +629,7 @@ const CascadingDropdown: React.FC = () => {
             setArrayOfArrayValueIndex(config.valueIndex !== undefined ? config.valueIndex : '');
             setArrayOfObjectLabelKey(config.labelKey || '');
             setArrayOfObjectValueKey(config.valueKey || '');
-        } else if (config.category === 'filters') {
+        } else if (config.category === 'data-source') {
             setSelectedFilterColumn(config.paramName);
         } else if (config.category === 'hooks') {
             const resolvedHookType = 
@@ -697,7 +697,7 @@ const CascadingDropdown: React.FC = () => {
     
         // Check if a selection has been made based on category
         if (mainCategory === 'params' && !selectedParamName) return false;
-        if (mainCategory === 'filters' && (!selectedDataSource || !selectedFilterColumn)) return false;
+        if (mainCategory === 'data-source' && (!selectedDataSource || !selectedFilterColumn)) return false;
         if (mainCategory === 'hooks' && !selectedHookName) return false;
     
         // PARAMS category-specific validation
@@ -730,7 +730,7 @@ const CascadingDropdown: React.FC = () => {
     
         // Options and default value check
         const availableOptions = getAvailableValues();
-        const needsOptions = mainCategory === 'params' || mainCategory === 'filters' || mainCategory === 'hooks';
+        const needsOptions = mainCategory === 'params' || mainCategory === 'data-source' || mainCategory === 'hooks';
         
         // Check if options are available (only for categories that need them)
         if (needsOptions && availableOptions.length === 0) {
@@ -752,7 +752,7 @@ const CascadingDropdown: React.FC = () => {
     const getCategoryColor = (category: string): 'primary' | 'secondary' | 'info' | 'default' => {
         const colors: Record<string, 'primary' | 'secondary' | 'info' | 'default'> = {
             params: 'primary',
-            filters: 'secondary',
+            'data-source': 'secondary',
             hooks: 'info',
         };
         return colors[category] || 'default';
@@ -1112,8 +1112,8 @@ const CascadingDropdown: React.FC = () => {
                                     >
                                         <MenuItem value="" disabled>Select a category...</MenuItem>
                                         <MenuItem value="params">📊 Params</MenuItem>
-                                        <MenuItem value="filters">🔍 Filters</MenuItem>
-                                        <MenuItem value="hooks">⚡ Hooks</MenuItem>
+                                        <MenuItem value="data-source">🔍 Data Source</MenuItem>
+                                        <MenuItem value="hooks">⚡ Calculations</MenuItem>
                                     </Select>
                                 </FormControl>
 
@@ -1225,8 +1225,8 @@ const CascadingDropdown: React.FC = () => {
                                 )}
 
                                 {/* 3A. FILTERS CATEGORY - DATA SOURCE SELECTION */}
-                                {mainCategory === 'filters' && (
-                                    <Collapse in={mainCategory === 'filters'}>
+                                {mainCategory === 'data-source' && (
+                                    <Collapse in={mainCategory === 'data-source'}>
                                         <FormControl fullWidth>
                                             <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
                                                 Select Data Source *
@@ -1265,7 +1265,7 @@ const CascadingDropdown: React.FC = () => {
                                 )}
 
                                 {/* 3B. FILTERS CATEGORY - COLUMN SELECTION */}
-                                {mainCategory === 'filters' && selectedDataSource && (
+                                {mainCategory === 'data-source' && selectedDataSource && (
                                     <Collapse in={!!selectedDataSource}>
                                         <Box>
                                             <FormControl fullWidth>
@@ -1318,7 +1318,7 @@ const CascadingDropdown: React.FC = () => {
                                     <Collapse in={mainCategory === 'hooks'}>
                                         <FormControl fullWidth>
                                             <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
-                                                Hook Type *
+                                                Calculation Type *
                                             </FormLabel>
                                             <Select
                                                 value={hookType}
@@ -1326,7 +1326,7 @@ const CascadingDropdown: React.FC = () => {
                                                 displayEmpty
                                                 sx={{ bgcolor: 'white' }}
                                             >
-                                                <MenuItem value="" disabled>Choose a Hook type...</MenuItem>
+                                                <MenuItem value="" disabled>Choose a calculation type...</MenuItem>
                                                 <MenuItem value="array">Array</MenuItem>
                                                 <MenuItem value="arrayOfArray">Array of Array</MenuItem>
                                                 <MenuItem value="arrayOfObjects">Array of Objects</MenuItem>
@@ -1340,7 +1340,7 @@ const CascadingDropdown: React.FC = () => {
                                     <Collapse in={!!hookType}>
                                         <FormControl fullWidth>
                                             <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
-                                                Select Array Hook *
+                                                Select Array Calculation *
                                             </FormLabel>
                                             <Select
                                                 value={selectedHookName}
@@ -1348,7 +1348,7 @@ const CascadingDropdown: React.FC = () => {
                                                 displayEmpty
                                                 sx={{ bgcolor: 'white' }}
                                             >
-                                                <MenuItem value="" disabled>Choose an array hook...</MenuItem>
+                                                <MenuItem value="" disabled>Choose an array calculation...</MenuItem>
                                                 {hooksArrayVariables.map((hook:string) => (
                                                     <MenuItem key={hook} value={hook}>
                                                         {hook}
@@ -1357,7 +1357,7 @@ const CascadingDropdown: React.FC = () => {
                                             </Select>
                                             {hooksArrayVariables.length === 0 && (
                                                 <Typography variant="caption" color="error.main" mt={1}>
-                                                    No array hooks available.
+                                                    No array calculations available.
                                                 </Typography>
                                             )}
                                         </FormControl>
@@ -1368,7 +1368,7 @@ const CascadingDropdown: React.FC = () => {
                                     <Collapse in={!!hookType}>
                                         <FormControl fullWidth>
                                             <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
-                                                Select Array of Array Hook *
+                                                Select Array of Array Calculation *
                                             </FormLabel>
                                             <Select
                                                 value={selectedHookName}
@@ -1385,7 +1385,7 @@ const CascadingDropdown: React.FC = () => {
                                             </Select>
                                             {hooksArrayOfArrayVariables.length === 0 && (
                                                 <Typography variant="caption" color="error.main" mt={1}>
-                                                    No array of array hooks available.
+                                                    No array of array calculations available.
                                                 </Typography>
                                             )}
                                         </FormControl>
@@ -1396,7 +1396,7 @@ const CascadingDropdown: React.FC = () => {
                                     <Collapse in={!!hookType}>
                                         <FormControl fullWidth>
                                             <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
-                                                Select Array of Objects Hook *
+                                                Select Array of Objects Calculations *
                                             </FormLabel>
                                             <Select
                                                 value={selectedHookName}
@@ -1404,7 +1404,7 @@ const CascadingDropdown: React.FC = () => {
                                                 displayEmpty
                                                 sx={{ bgcolor: 'white' }}
                                             >
-                                                <MenuItem value="" disabled>Choose an array of objects hook...</MenuItem>
+                                                <MenuItem value="" disabled>Choose an array of objects calculations...</MenuItem>
                                                 {hooksArrayOfObjectVariables.map((hook: string) => (
                                                     <MenuItem key={hook} value={hook}>
                                                         {hook}
@@ -1413,7 +1413,7 @@ const CascadingDropdown: React.FC = () => {
                                             </Select>
                                             {hooksArrayOfObjectVariables.length === 0 && (
                                                 <Typography variant="caption" color="error.main" mt={1}>
-                                                    No array of objects hooks available.
+                                                    No array of objects calculations available.
                                                 </Typography>
                                             )}
                                         </FormControl>
@@ -1427,7 +1427,7 @@ const CascadingDropdown: React.FC = () => {
 
                                 {/* 6. CONFIGURATION FIELDS */}
                                 {((mainCategory === 'params' && selectedParamName) || 
-                                  (mainCategory === 'filters' && selectedFilterColumn) || 
+                                  (mainCategory === 'data-source' && selectedFilterColumn) || 
                                   (mainCategory === 'hooks' && selectedHookName && hookType)) && (
                                     <Collapse in={true}>
                                         <Box display="flex" flexDirection="column" gap={3}>
@@ -1610,7 +1610,7 @@ const CascadingDropdown: React.FC = () => {
                 </Grid>
 
                 {/* RIGHT COLUMN - SAVED FILTERS LIST */}
-                <Grid size={{xs:12,md:6}}>
+                <Grid size={{xs:12,md:6}} >
                     <Card elevation={3}>
                         <CardContent sx={{ p: 3 }}>
                             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
@@ -1648,183 +1648,185 @@ const CascadingDropdown: React.FC = () => {
                                     </Typography>
                                 </Box>
                             ) : (
-                                <Box display="flex" flexDirection="column" gap={2}>
-                                    {filteredConfigs.map((config: SavedFilterConfig) => (
-                                        <Card
-                                            key={config.variableName}
-                                            variant="outlined"
-                                            sx={{
-                                                bgcolor: 'white',
-                                                border: 2,
-                                                borderColor: editingId === config.variableName ? 'primary.main' : 'grey.200',
-                                                transition: 'all 0.2s',
-                                                '&:hover': {
-                                                    boxShadow: 3,
-                                                    borderColor: 'primary.light',
-                                                },
-                                            }}
-                                        >
-                                            <CardContent sx={{ p: 2 }}>
-                                                <Box
-                                                    display="flex"
-                                                    justifyContent="space-between"
-                                                    alignItems="flex-start"
-                                                    mb={1.5}
-                                                >
-                                                    <Box flex={1}>
-                                                        <Typography variant="h6" fontWeight={700} mb={0.5}>
-                                                            {config.displayName}
-                                                        </Typography>
-                                                        <Box display="flex" gap={1} alignItems="center" flexWrap="wrap">
-                                                            <Chip
-                                                                label={config.category}
-                                                                size="small"
-                                                                color={getCategoryColor(config.category)}
-                                                                sx={{ fontSize: '0.75rem', height: 22 }}
-                                                            />
-                                                            {config.category === 'filters' && config.dsName && (
+                                <Box sx={{ maxHeight: '78vh', overflowY: 'auto', pr: 1 }}>
+                                    <Box display="flex" flexDirection="column" gap={2}>
+                                        {filteredConfigs.map((config: SavedFilterConfig) => (
+                                            <Card
+                                                key={config.variableName}
+                                                variant="outlined"
+                                                sx={{
+                                                    bgcolor: 'white',
+                                                    border: 2,
+                                                    borderColor: editingId === config.variableName ? 'primary.main' : 'grey.200',
+                                                    transition: 'all 0.2s',
+                                                    '&:hover': {
+                                                        boxShadow: 3,
+                                                        borderColor: 'primary.light',
+                                                    },
+                                                }}
+                                            >
+                                                <CardContent sx={{ p: 2 }}>
+                                                    <Box
+                                                        display="flex"
+                                                        justifyContent="space-between"
+                                                        alignItems="flex-start"
+                                                        mb={1.5}
+                                                    >
+                                                        <Box flex={1}>
+                                                            <Typography variant="h6" fontWeight={700} mb={0.5}>
+                                                                {config.displayName}
+                                                            </Typography>
+                                                            <Box display="flex" gap={1} alignItems="center" flexWrap="wrap">
                                                                 <Chip
-                                                                    label={`DS: ${config.dsName}`}
+                                                                    label={config.category}
                                                                     size="small"
-                                                                    color="default"
+                                                                    color={getCategoryColor(config.category)}
                                                                     sx={{ fontSize: '0.75rem', height: 22 }}
                                                                 />
-                                                            )}
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                {config.paramName}
-                                                            </Typography>
+                                                                {config.category === 'filters' && config.dsName && (
+                                                                    <Chip
+                                                                        label={`DS: ${config.dsName}`}
+                                                                        size="small"
+                                                                        color="default"
+                                                                        sx={{ fontSize: '0.75rem', height: 22 }}
+                                                                    />
+                                                                )}
+                                                                <Typography variant="caption" color="text.secondary">
+                                                                    {config.paramName}
+                                                                </Typography>
+                                                            </Box>
                                                         </Box>
-                                                    </Box>
-                                                    <Box display="flex" gap={0.5}>
-                                                        <Tooltip title="Edit">
+                                                        <Box display="flex" gap={0.5}>
+                                                            <Tooltip title="Edit">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => handleEditFilter(config)}
+                                                                    sx={{
+                                                                        bgcolor: 'primary.50',
+                                                                        color: 'primary.main',
+                                                                        '&:hover': { bgcolor: 'primary.100' },
+                                                                    }}
+                                                                >
+                                                                    <EditIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                            <Tooltip title="Delete">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => handleDeleteFilter(config.variableName)}
+                                                                    sx={{
+                                                                        bgcolor: 'error.50',
+                                                                        color: 'error.main',
+                                                                        '&:hover': { bgcolor: 'error.100' },
+                                                                    }}
+                                                                >
+                                                                    <DeleteIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </Tooltip>
                                                             <IconButton
                                                                 size="small"
-                                                                onClick={() => handleEditFilter(config)}
-                                                                sx={{
-                                                                    bgcolor: 'primary.50',
-                                                                    color: 'primary.main',
-                                                                    '&:hover': { bgcolor: 'primary.100' },
-                                                                }}
+                                                                onClick={() => toggleFilterExpanded(config.variableName)}
                                                             >
-                                                                <EditIcon fontSize="small" />
+                                                                {expandedFilters.has(config.variableName) ? (
+                                                                    <ExpandLessIcon fontSize="small" />
+                                                                ) : (
+                                                                    <ExpandMoreIcon fontSize="small" />
+                                                                )}
                                                             </IconButton>
-                                                        </Tooltip>
-                                                        <Tooltip title="Delete">
-                                                            <IconButton
-                                                                size="small"
-                                                                onClick={() => handleDeleteFilter(config.variableName)}
-                                                                sx={{
-                                                                    bgcolor: 'error.50',
-                                                                    color: 'error.main',
-                                                                    '&:hover': { bgcolor: 'error.100' },
-                                                                }}
-                                                            >
-                                                                <DeleteIcon fontSize="small" />
-                                                            </IconButton>
-                                                        </Tooltip>
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => toggleFilterExpanded(config.variableName)}
-                                                        >
-                                                            {expandedFilters.has(config.variableName) ? (
-                                                                <ExpandLessIcon fontSize="small" />
-                                                            ) : (
-                                                                <ExpandMoreIcon fontSize="small" />
-                                                            )}
-                                                        </IconButton>
-                                                    </Box>
-                                                </Box>
-
-                                                <Divider sx={{ my: 1.5 }} />
-
-                                                <Box display="flex" flexDirection="column" gap={1}>
-                                                    <Box display="flex" alignItems="center" justifyContent="space-between">
-                                                        <Box display="flex" alignItems="center" gap={1} flex={1}>
-                                                            <Typography
-                                                                variant="body2"
-                                                                fontWeight={600}
-                                                                color="text.secondary"
-                                                                sx={{ minWidth: 70 }}
-                                                            >
-                                                                Variable:
-                                                            </Typography>
-                                                            <Typography
-                                                                component="code"
-                                                                variant="body2"
-                                                                sx={{
-                                                                    px: 1,
-                                                                    py: 0.5,
-                                                                    bgcolor: 'grey.100',
-                                                                    borderRadius: 0.5,
-                                                                    fontFamily: 'monospace',
-                                                                    fontSize: '0.8rem',
-                                                                }}
-                                                            >
-                                                                {`\${${config.variableName}}`}
-                                                            </Typography>
                                                         </Box>
                                                     </Box>
 
-                                                    <Collapse in={expandedFilters.has(config.variableName)}>
-                                                        <Box display="flex" flexDirection="column" gap={1} mt={1}>
-                                                            <Box display="flex" alignItems="center" gap={1}>
+                                                    <Divider sx={{ my: 1.5 }} />
+
+                                                    <Box display="flex" flexDirection="column" gap={1}>
+                                                        <Box display="flex" alignItems="center" justifyContent="space-between">
+                                                            <Box display="flex" alignItems="center" gap={1} flex={1}>
                                                                 <Typography
                                                                     variant="body2"
                                                                     fontWeight={600}
                                                                     color="text.secondary"
                                                                     sx={{ minWidth: 70 }}
                                                                 >
-                                                                    Type:
+                                                                    Variable:
                                                                 </Typography>
-                                                                <Chip
-                                                                    label={config.selectionType === 'single' ? 'Single Select' : 'Multi Select'}
-                                                                    size="small"
-                                                                    variant="outlined"
-                                                                    sx={{ fontSize: '0.75rem', height: 22 }}
-                                                                />
-                                                            </Box>
-
-                                                            <Box display="flex" alignItems="flex-start" gap={1}>
                                                                 <Typography
+                                                                    component="code"
                                                                     variant="body2"
-                                                                    fontWeight={600}
-                                                                    color="text.secondary"
-                                                                    sx={{ minWidth: 70, mt: 0.5 }}
+                                                                    sx={{
+                                                                        px: 1,
+                                                                        py: 0.5,
+                                                                        bgcolor: 'grey.100',
+                                                                        borderRadius: 0.5,
+                                                                        fontFamily: 'monospace',
+                                                                        fontSize: '0.8rem',
+                                                                    }}
                                                                 >
-                                                                    Defaults:
-                                                                </Typography>
-                                                                <Box display="flex" flexWrap="wrap" gap={0.75}>
-                                                                    {config.defaultValues.map((val: DefaultValueOption, index: number) => (
-                                                                        <Chip
-                                                                            key={index}
-                                                                            label={JSON.stringify(val)}
-                                                                            size="small"
-                                                                            color="success"
-                                                                            sx={{ fontSize: '0.75rem', height: 22, mt: 0.5 }}
-                                                                        />
-                                                                    ))}
-                                                                </Box>
-                                                            </Box>
-
-                                                            <Box display="flex" alignItems="flex-start" gap={1}>
-                                                                <Typography
-                                                                    variant="body2"
-                                                                    fontWeight={600}
-                                                                    color="text.secondary"
-                                                                    sx={{ minWidth: 70, mt: 0.5 }}
-                                                                >
-                                                                    Options:
-                                                                </Typography>
-                                                                <Typography variant="body2" color="text.secondary" sx={{mt:0.5}}>
-                                                                    {config.availableOptions.length} available
+                                                                    {`\${${config.variableName}}`}
                                                                 </Typography>
                                                             </Box>
                                                         </Box>
-                                                    </Collapse>
-                                                </Box>
-                                            </CardContent>
-                                        </Card>
-                                    ))}
+
+                                                        <Collapse in={expandedFilters.has(config.variableName)}>
+                                                            <Box display="flex" flexDirection="column" gap={1} mt={1}>
+                                                                <Box display="flex" alignItems="center" gap={1}>
+                                                                    <Typography
+                                                                        variant="body2"
+                                                                        fontWeight={600}
+                                                                        color="text.secondary"
+                                                                        sx={{ minWidth: 70 }}
+                                                                    >
+                                                                        Type:
+                                                                    </Typography>
+                                                                    <Chip
+                                                                        label={config.selectionType === 'single' ? 'Single Select' : 'Multi Select'}
+                                                                        size="small"
+                                                                        variant="outlined"
+                                                                        sx={{ fontSize: '0.75rem', height: 22 }}
+                                                                    />
+                                                                </Box>
+
+                                                                <Box display="flex" alignItems="flex-start" gap={1}>
+                                                                    <Typography
+                                                                        variant="body2"
+                                                                        fontWeight={600}
+                                                                        color="text.secondary"
+                                                                        sx={{ minWidth: 70, mt: 0.5 }}
+                                                                    >
+                                                                        Defaults:
+                                                                    </Typography>
+                                                                    <Box display="flex" flexWrap="wrap" gap={0.75}>
+                                                                        {config.defaultValues.map((val: DefaultValueOption, index: number) => (
+                                                                            <Chip
+                                                                                key={index}
+                                                                                label={JSON.stringify(val)}
+                                                                                size="small"
+                                                                                color="success"
+                                                                                sx={{ fontSize: '0.75rem', height: 22, mt: 0.5 }}
+                                                                            />
+                                                                        ))}
+                                                                    </Box>
+                                                                </Box>
+
+                                                                <Box display="flex" alignItems="flex-start" gap={1}>
+                                                                    <Typography
+                                                                        variant="body2"
+                                                                        fontWeight={600}
+                                                                        color="text.secondary"
+                                                                        sx={{ minWidth: 70, mt: 0.5 }}
+                                                                    >
+                                                                        Options:
+                                                                    </Typography>
+                                                                    <Typography variant="body2" color="text.secondary" sx={{mt:0.5}}>
+                                                                        {config.availableOptions.length} available
+                                                                    </Typography>
+                                                                </Box>
+                                                            </Box>
+                                                        </Collapse>
+                                                    </Box>
+                                                </CardContent>
+                                            </Card>
+                                        ))}
+                                    </Box>
                                 </Box>
                             )}
                         </CardContent>

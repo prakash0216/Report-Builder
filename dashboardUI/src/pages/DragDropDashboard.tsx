@@ -12,8 +12,7 @@ import { useSetRecoilState } from "recoil";
 import FilterPanel from "../components/FilterPanel";
 import { variableUpdateTriggerState, variableNamesState } from '../recoil/Variabletracker';
 import { variableAtomFamily } from '../recoil/VariableFamily';
-import { topNState } from '../recoil/topN';
-import { storedLogicsState } from '../recoil/StoredLogic';
+import { filterNamesState } from '../recoil/FiltersFamily';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -23,7 +22,7 @@ interface ChartConfigData {
   [key: string]: any;
 }
 
-// Helper to safely parse values - same as in HighChart field
+// Helper to safely parse values
 const safeParse = (value: string): any => {
   try {
     return JSON.parse(value);
@@ -36,7 +35,7 @@ const safeParse = (value: string): any => {
   }
 };
 
-// Helper to replace variable references in JSON string - same as in HighChart field
+// Helper to replace variable references in JSON string
 const replaceVariableReferences = (jsonString: string, variables: Record<string, any>): string => {
   let result = jsonString;
   
@@ -63,19 +62,14 @@ export default function DropDragDashboard() {
   // Listen to variable updates
   const variableUpdateTrigger = useRecoilValue(variableUpdateTriggerState);
   const variableNames = useRecoilValue(variableNamesState);
-  const topNValue = useRecoilValue(topNState);
-  const storedLogics = useRecoilValue(storedLogicsState);
+  
+  // Listen to filter changes
+  const filterNames = useRecoilValue(filterNamesState);
   
   const [layouts, setLayouts] = useRecoilState(layoutState);
   const [showFilters, setShowFilters] = useState(false);
-  const [currentFilters, setCurrentFilters] = useState<any>({});
-  
-  // Add loading state for dashboard recalculation
-  const [isDashboardRecalculating, setIsDashboardRecalculating] = useState(false);
-  const lastProcessedTopNRef = useRef<number | null>(null);
-  const recalculationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Get all variables - same logic as HighChart field
+  // Get all variables
   const getAllVariables = useRecoilCallback(({ snapshot }) => async (): Promise<Record<string, any>> => {
     const variables: Record<string, any> = {};
     const varNameArray: string[] = Array.from(variableNames);
@@ -91,11 +85,8 @@ export default function DropDragDashboard() {
       }
     }
     
-    // Always include topN
-    variables['topN'] = topNValue;
-    
     return variables;
-  }, [variableNames, topNValue]);
+  }, [variableNames]);
 
   const [availableVariables, setAvailableVariables] = useState<Record<string, any>>({});
 
@@ -103,39 +94,6 @@ export default function DropDragDashboard() {
   useEffect(() => {
     getAllVariables().then(setAvailableVariables);
   }, [getAllVariables, variableUpdateTrigger]);
-
-  // Watch for topN changes and trigger dashboard recalculation
-  useEffect(() => {
-    if (topNValue && storedLogics.length > 0 && lastProcessedTopNRef.current !== topNValue) {
-      console.log(`Dashboard: TopN changed from ${lastProcessedTopNRef.current} to ${topNValue}, showing loader...`);
-      
-      setIsDashboardRecalculating(true);
-      lastProcessedTopNRef.current = topNValue;
-      
-      // Clear any existing timeout
-      if (recalculationTimeoutRef.current) {
-        clearTimeout(recalculationTimeoutRef.current);
-      }
-      
-      // Set a timeout to hide the loader after calculations should be complete
-      // This gives time for the Hooks component to finish recalculating
-      recalculationTimeoutRef.current = setTimeout(() => {
-        setIsDashboardRecalculating(false);
-        console.log('Dashboard: Recalculation timeout completed, hiding loader');
-      }, 2000); // 2 second timeout
-    }
-  }, [topNValue, storedLogics.length]);
-
-  // Also hide loader when variableUpdateTrigger changes (indicates calculations finished)
-  useEffect(() => {
-    if (isDashboardRecalculating && variableUpdateTrigger > 0) {
-      // Add small delay to ensure all variables are processed
-      setTimeout(() => {
-        setIsDashboardRecalculating(false);
-        console.log('Dashboard: Variables updated, hiding loader');
-      }, 500);
-    }
-  }, [variableUpdateTrigger, isDashboardRecalculating]);
 
   // Process chart configs with current variables
   const processedChartConfigs = useMemo(() => {
@@ -179,7 +137,6 @@ export default function DropDragDashboard() {
     console.log('Dashboard: Forcing chart config refresh...');
     
     // Trigger a re-render by updating the chart configs
-    // This ensures charts pick up new variable values
     setChartConfigs(current => {
       const refreshed = { ...current };
       
@@ -205,15 +162,6 @@ export default function DropDragDashboard() {
     }
   }, [variableUpdateTrigger, forceChartRefresh]);
 
-  const handleFiltersChange = useCallback((filters: any) => {
-    setCurrentFilters(filters);
-    console.log('Filters updated:', filters);
-  }, []);
-
-  const hasActiveFilters = Object.values(currentFilters).some((filterArray: any) =>
-    Array.isArray(filterArray) && filterArray.length > 0
-  );
-
   // Initialize idRef to avoid duplicates
   useEffect(() => {
     if (layouts && Object.keys(layouts).length > 0) {
@@ -238,6 +186,7 @@ export default function DropDragDashboard() {
   const [resizeHandle, setResizehandle] = useState<ResizeHandleAxis[]>([
     's', 'n', 'se', 'ne', 'w', 'e', 'sw', 'nw'
   ]);
+  
   const [isEditMode, setIsEditMode] = useState<boolean>(true);
 
   useEffect(() => {
@@ -349,36 +298,11 @@ export default function DropDragDashboard() {
   // Calculate the top position for FilterPanel based on edit mode
   const filterPanelTopOffset: string = isEditMode ? '204px' : '90px';
 
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (recalculationTimeoutRef.current) {
-        clearTimeout(recalculationTimeoutRef.current);
-      }
-    };
-  }, []);
-
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Dashboard Recalculation Overlay */}
-      {isDashboardRecalculating && (
-        <div className="fixed inset-0 z-[60] bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 shadow-xl flex items-center space-x-4 max-w-md mx-4">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
-            <div>
-              <h3 className="font-medium text-gray-900">Updating Dashboard</h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Recalculating charts with topN = {topNValue}...
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Filter Panel */}
       <FilterPanel
         showFilters={showFilters}
-        onFiltersChange={handleFiltersChange}
         topOffset={filterPanelTopOffset}
       />
       
@@ -390,15 +314,18 @@ export default function DropDragDashboard() {
             <p className="text-sm text-gray-600 mt-1">
               {isEditMode ? "Edit mode: Drag, resize, and configure your charts" : "View mode: Dashboard is locked"}
               {/* DEBUG INFO */}
-              <span className="ml-4 text-xs bg-gray-100 px-2 py-1 rounded">
-                Variables: {Object.keys(availableVariables).length} | Charts: {Object.keys(processedChartConfigs).length} | TopN: {topNValue}
-              </span>
+              {isEditMode&&(
+                <span className="ml-4 text-xs bg-gray-100 px-2 py-1 rounded">
+                  Variables: {Object.keys(availableVariables).length} | Charts: {Object.keys(processedChartConfigs).length} | Filters: {filterNames.length}
+                </span>
+              )}
             </p>
           </div>
           
           <div className="flex items-center space-x-3">
             {/* Filter Toggle Button */}
-            <button
+            {isEditMode&&(
+              <button
               onClick={() => setShowFilters(!showFilters)}
               className={`px-4 py-2 rounded-lg transition-colors flex items-center relative ${
                 showFilters
@@ -410,20 +337,19 @@ export default function DropDragDashboard() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
               </svg>
               Filters
-              {hasActiveFilters && (
-                <span className="ml-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">
-                  !
-                </span>
-              )}
             </button>
+            )}
 
             {/* Layout Toggle */}
-            <button
-              onClick={toggleCompactType}
-              className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              Layout: {compactType || "Free"}
-            </button>
+            {isEditMode &&(
+               <button
+               onClick={toggleCompactType}
+               className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+             >
+               Layout: {compactType || "Free"}
+             </button>
+            )
+            }
 
             {/* Edit Mode Toggle */}
             <button
@@ -592,7 +518,7 @@ export default function DropDragDashboard() {
                 >
                   {chartConfig ? (
                     <ResizableChart 
-                      key={`${item.i}-${variableUpdateTrigger}-${availableVariables.topN || 0}`}
+                      key={`${item.i}-${variableUpdateTrigger}`}
                       options={chartConfig}
                     />
                   ) : (

@@ -21,10 +21,10 @@ export const storedLogicsState = atom<StoredLogic[]>({
 });
 
 // Atom family for individual logic management (if needed)
-export const storedLogicAtomFamily = atomFamily<StoredLogic | null, string>({
-  key: 'storedLogicAtomFamily',
-  default: null,
-});
+// export const storedLogicAtomFamily = atomFamily<StoredLogic | null, string>({
+//   key: 'storedLogicAtomFamily',
+//   default: null,
+// });
 
 // Selector to get logics count
 export const storedLogicsCountState = selector({

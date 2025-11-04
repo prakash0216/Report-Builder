@@ -4,18 +4,52 @@ import {
     useRecoilValue,
     useSetRecoilState,
     useRecoilCallback,
-    atomFamily // Import atomFamily to define the new structure
 } from 'recoil';
+import {
+    Box,
+    Tabs,
+    Tab,
+    TextField,
+    Button,
+    Typography,
+    Paper,
+    Card,
+    CardContent,
+    Chip,
+    IconButton,
+    Accordion,
+    AccordionSummary,
+    AccordionDetails,
+    Alert,
+    CircularProgress,
+    Tooltip,
+    Stack,
+    Grid,
+    alpha,
+    useTheme,
+} from '@mui/material';
+import {
+    ExpandMore as ExpandMoreIcon,
+    PlayArrow as PlayArrowIcon,
+    Delete as DeleteIcon,
+    Download as DownloadIcon,
+    Edit as EditIcon,
+    Refresh as RefreshIcon,
+    Code as CodeIcon,
+    Storage as StorageIcon,
+    Visibility as VisibilityIcon,
+    Info as InfoIcon,
+    FilterList as FilterListIcon,
+} from '@mui/icons-material';
+
 import { variableNamesState, variableUpdateTriggerState } from '../recoil/Variabletracker';
 import { variableAtomFamily } from '../recoil/VariableFamily';
-import { topNState } from '../recoil/topN';
 import { storedLogicsState, StoredLogic } from '../recoil/StoredLogic';
 import { parameterAtomFamily } from '../recoil/ParameterFamliy';
 import { filterConfigFamily } from '../recoil/FiltersFamily';
 import { filterNamesState } from '../recoil/FiltersFamily';
 import { parameterNamesState } from '../recoil/ParameterTracker';
 import { liveFilterFamily } from '../recoil/LiveFilterFamily';
-import { truncate } from 'lodash';
 
 // Helper to safely parse stored strings into arrays/objects/values
 const safeParse = (value: string): any => {
@@ -36,37 +70,37 @@ const truncateText = (text: string, maxLength: number = 150): string => {
     return text.substring(0, maxLength) + '...';
 };
 
-// Tooltip component
-const Tooltip = ({ children, content }: { children: React.ReactNode; content: string }) => {
-    const [isVisible, setIsVisible] = useState(false);
+// Tab Panel Component
+interface TabPanelProps {
+    children?: React.ReactNode;
+    index: number;
+    value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+    const { children, value, index, ...other } = props;
     return (
         <div
-            className="relative inline-block w-full"
-            onMouseEnter={() => setIsVisible(true)}
-            onMouseLeave={() => setIsVisible(false)}
-            tabIndex={0}
-            onFocus={() => setIsVisible(true)}
-            onBlur={() => setIsVisible(false)}
+            role="tabpanel"
+            hidden={value !== index}
+            id={`tabpanel-${index}`}
+            aria-labelledby={`tab-${index}`}
+            {...other}
         >
-            {children}
-            {isVisible && (
-                <div className="absolute top-full left-0 z-20 mt-2 w-fit min-w-[300px] max-w-[90vw] max-h-[400px] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-gray-200 bg-white text-gray-900 text-xs shadow-xl font-mono p-4">
-                    {content}
-                </div>
-            )}
+            {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
         </div>
     );
-};
+}
 
-// Variable display component
+// Variable Display Component
 function VariableDisplay({ name }: { name: string }) {
+    const theme = useTheme();
     const rawValue = useRecoilValue(variableAtomFamily(name));
     const parsedValue = safeParse(rawValue);
     const displayString = typeof parsedValue === 'object'
         ? JSON.stringify(parsedValue, null, 2)
         : String(parsedValue);
-    const truncatedDisplay = truncateText(displayString, 120);
-    const needsTooltip = displayString.length > 120;
+    const truncatedDisplay = truncateText(displayString, 250);
 
     const getType = () => {
         if (Array.isArray(parsedValue)) return 'array';
@@ -74,128 +108,82 @@ function VariableDisplay({ name }: { name: string }) {
         return typeof parsedValue;
     };
 
-    return (
-        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-            <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-gray-800">{name}</h3>
-                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                    {getType()}
-                </span>
-            </div>
-            <div className="bg-white p-3 rounded border">
-                {needsTooltip ? (
-                    <Tooltip content={truncateText(displayString, 1000)}>
-                        <pre className="text-sm text-gray-700 whitespace-pre-wrap cursor-help" style={{
-                                borderBottom: '1px dotted #3b82f6',
-                                paddingBottom: '2px',
-                                margin: 0
-                            }}>
-                            {truncatedDisplay}
-                        </pre>
-                    </Tooltip>
-                ) : (
-                    <pre className="text-sm text-gray-700 whitespace-pre-wrap" style={{ margin: 0 }}>
-                        {truncatedDisplay}
-                    </pre>
-                )}
-            </div>
-        </div>
-    );
-}
+    const getTypeInfo = () => {
+        const type = getType();
+        if (type === 'array') {
+            return {
+                label: `Array (${parsedValue.length})`,
+                color: 'primary' as const,
+            };
+        }
+        if (type === 'object') return { label: 'Object', color: 'secondary' as const };
+        if (type === 'number') return { label: 'Number', color: 'success' as const };
+        if (type === 'string') return { label: 'String', color: 'info' as const };
+        return { label: type, color: 'default' as const };
+    };
 
-// Stored Logic Item component
-function StoredLogicItem({ logic, onDelete, onExecute, onDownload }: { 
-    logic: StoredLogic; 
-    onDelete: (id: string) => void;
-    onExecute: (logic: StoredLogic) => Promise<void>;
-    onDownload?: (logic: StoredLogic) => void;
-}) {
+    const typeInfo = getTypeInfo();
+
     return (
-        <div className="border border-gray-200 rounded-lg p-4 bg-white">
-            <div className="flex items-center justify-between mb-2">
-                <h4 className="font-medium text-gray-800">{logic.variableName}</h4>
-                <div className="flex gap-2">
-                    <button
-                        onClick={() => onExecute(logic)}
-                        className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
-                    >
-                        Execute
-                    </button>
-                    {onDownload && (
-                        <button
-                            onClick={() => onDownload(logic)}
-                            className="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600"
+        <Card
+            variant="outlined"
+            sx={{
+                mb: 2,
+                borderRadius: 2,
+                transition: 'all 0.2s ease-in-out',
+                '&:hover': {
+                    boxShadow: theme.shadows[4],
+                    transform: 'translateY(-2px)',
+                },
+            }}
+        >
+            <CardContent>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                    <Typography variant="subtitle1" fontWeight="600" color="primary.dark">
+                        {name}
+                    </Typography>
+                    <Chip label={typeInfo.label} size="small" color={typeInfo.color} />
+                </Box>
+                <Paper
+                    variant="outlined"
+                    sx={{
+                        p: 2,
+                        bgcolor: alpha(theme.palette.grey[50], 0.5),
+                        borderRadius: 1.5,
+                        maxHeight: 200,
+                        overflow: 'auto',
+                    }}
+                >
+                    <Tooltip title={displayString.length > 250 ? displayString : ''} arrow placement="top">
+                        <Typography
+                            component="pre"
+                            variant="body2"
+                            sx={{
+                                fontFamily: '"Fira Code", "Courier New", monospace',
+                                fontSize: '0.8rem',
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word',
+                                m: 0,
+                                cursor: displayString.length > 250 ? 'help' : 'default',
+                                color: 'text.secondary',
+                            }}
                         >
-                            Download
-                        </button>
-                    )}
-                    <button
-                        onClick={() => onDelete(logic.id)}
-                        className="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
-                    >
-                        Delete
-                    </button>
-                </div>
-            </div>
-            <div className="bg-gray-50 p-2 rounded border text-xs">
-                <pre className="font-mono text-gray-700 whitespace-pre-wrap">
-                    {truncateText(logic.logic, 200)}
-                </pre>
-            </div>
-            <div className="text-xs text-gray-500 mt-2">
-                Created: {new Date(logic.createdAt).toLocaleString()}
-                {logic.lastExecuted && (
-                    <span className="ml-2">
-                        Last executed: {new Date(logic.lastExecuted).toLocaleString()}
-                    </span>
-                )}
-            </div>
-        </div>
+                            {truncatedDisplay}
+                        </Typography>
+                    </Tooltip>
+                </Paper>
+            </CardContent>
+        </Card>
     );
 }
 
-// Parameter display component - Reads live value from parameterAtomFamily
-function ParameterDisplay({ name }: { name: string }) {
-    const rawValue = useRecoilValue(parameterAtomFamily(name));
-    const parsedValue = safeParse(rawValue);
-    const displayString = typeof parsedValue === 'object'
-        ? JSON.stringify(parsedValue, null, 2)
-        : String(parsedValue);
-
-    const getType = () => {
-        if (Array.isArray(parsedValue)) return 'array';
-        if (parsedValue === null) return 'null';
-        return typeof parsedValue;
-    };
-
-    return (
-        <div className="border border-gray-200 rounded-lg p-4 bg-yellow-50">
-            <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-gray-800">{name}</h3>
-                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                    {getType()}
-                </span>
-            </div>
-            <div className="bg-white p-3 rounded border">
-                <pre className="text-sm text-gray-700 whitespace-pre-wrap" style={{ margin: 0 }}>
-                    {displayString}
-                </pre>
-            </div>
-        </div>
-    );
-}
-
-// Filter display component - Reads live value from the new liveFilterFamily
+// Filter Display Component
 function FilterDisplay({ name }: { name: string }) {
-    // READ THE LIVE VALUE from the DEDICATED FILTER FAMILY (Array of Objects)
+    const theme = useTheme();
     const parsedValue = useRecoilValue(liveFilterFamily(name));
-    
-    // Check if value is defined before stringifying
-    const displayString = parsedValue !== undefined && parsedValue !== null ? (
-        typeof parsedValue === 'object'
-            ? JSON.stringify(parsedValue, null, 2)
-            : String(parsedValue)
-    ) : 'N/A';
+    const displayString = parsedValue !== undefined && parsedValue !== null
+        ? (typeof parsedValue === 'object' ? JSON.stringify(parsedValue, null, 2) : String(parsedValue))
+        : 'N/A';
 
     const getType = () => {
         if (Array.isArray(parsedValue)) return 'array';
@@ -204,347 +192,595 @@ function FilterDisplay({ name }: { name: string }) {
         return typeof parsedValue;
     };
 
+    const getTypeInfo = () => {
+        const type = getType();
+        if (type === 'array') {
+            return {
+                label: `Array (${parsedValue.length})`,
+                color: 'info' as const,
+            };
+        }
+        return { label: type, color: 'info' as const };
+    };
+
+    const typeInfo = getTypeInfo();
+
     return (
-        <div className="border border-gray-200 rounded-lg p-4 bg-blue-50">
-            <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-gray-800">{name}</h3>
-                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                    {getType()}
-                </span>
-            </div>
-            <div className="bg-white p-3 rounded border">
-                <pre className="text-sm text-gray-700 whitespace-pre-wrap" style={{ margin: 0 }}>
-                    {displayString}
-                </pre>
-            </div>
-        </div>
+        <Card
+            variant="outlined"
+            sx={{
+                mb: 2,
+                borderRadius: 2,
+                bgcolor: alpha(theme.palette.info.light, 0.08),
+                transition: 'all 0.2s ease-in-out',
+                '&:hover': {
+                    boxShadow: theme.shadows[4],
+                    transform: 'translateY(-2px)',
+                },
+            }}
+        >
+            <CardContent>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                    <Typography variant="subtitle1" fontWeight="600" color="info.dark">
+                        {name}
+                    </Typography>
+                    <Chip label={typeInfo.label} size="small" color={typeInfo.color} variant="outlined" />
+                </Box>
+                <Paper
+                    variant="outlined"
+                    sx={{
+                        p: 2,
+                        bgcolor: 'white',
+                        borderRadius: 1.5,
+                        maxHeight: 200,
+                        overflow: 'auto',
+                    }}
+                >
+                    <Typography
+                        component="pre"
+                        variant="body2"
+                        sx={{
+                            fontFamily: '"Fira Code", "Courier New", monospace',
+                            fontSize: '0.8rem',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            m: 0,
+                            color: 'text.secondary',
+                        }}
+                    >
+                        {displayString}
+                    </Typography>
+                </Paper>
+            </CardContent>
+        </Card>
+    );
+}
+
+// Stored Logic Item Component
+function StoredLogicItem({
+    logic,
+    onEdit,
+    onDelete,
+    onExecute,
+    onDownload,
+}: {
+    logic: StoredLogic;
+    onEdit: (logic: StoredLogic) => void;
+    onDelete: (id: string) => void;
+    onExecute: (logic: StoredLogic) => Promise<void>;
+    onDownload?: (logic: StoredLogic) => void;
+}) {
+    const theme = useTheme();
+
+    return (
+        <Card
+            variant="outlined"
+            sx={{
+                mb: 2,
+                borderRadius: 2,
+                transition: 'all 0.2s ease-in-out',
+                '&:hover': {
+                    boxShadow: theme.shadows[6],
+                    borderColor: 'primary.main',
+                },
+            }}
+        >
+            <CardContent>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                    <Typography variant="h6" fontWeight="600" color="primary">
+                        {logic.variableName}
+                    </Typography>
+                    <Stack direction="row" spacing={0.5}>
+                        <Tooltip title="Edit Logic" arrow>
+                            <IconButton
+                                size="small"
+                                sx={{
+                                    color: 'primary.main',
+                                    '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) },
+                                }}
+                                onClick={() => onEdit(logic)}
+                            >
+                                <EditIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Execute Now" arrow>
+                            <IconButton
+                                size="small"
+                                sx={{
+                                    color: 'success.main',
+                                    '&:hover': { bgcolor: alpha(theme.palette.success.main, 0.1) },
+                                }}
+                                onClick={() => onExecute(logic)}
+                            >
+                                <PlayArrowIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        {onDownload && (
+                            <Tooltip title="Download Logic" arrow>
+                                <IconButton
+                                    size="small"
+                                    sx={{
+                                        color: 'info.main',
+                                        '&:hover': { bgcolor: alpha(theme.palette.info.main, 0.1) },
+                                    }}
+                                    onClick={() => onDownload(logic)}
+                                >
+                                    <DownloadIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                        <Tooltip title="Delete Logic" arrow>
+                            <IconButton
+                                size="small"
+                                sx={{
+                                    color: 'error.main',
+                                    '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.1) },
+                                }}
+                                onClick={() => onDelete(logic.id)}
+                            >
+                                <DeleteIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
+                </Box>
+                <Paper
+                    variant="outlined"
+                    sx={{
+                        p: 2,
+                        bgcolor: alpha(theme.palette.grey[50], 0.5),
+                        borderRadius: 1.5,
+                        maxHeight: 150,
+                        overflow: 'auto',
+                    }}
+                >
+                    <Typography
+                        component="pre"
+                        variant="body2"
+                        sx={{
+                            fontFamily: '"Fira Code", "Courier New", monospace',
+                            fontSize: '0.8rem',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            m: 0,
+                            color: 'text.secondary',
+                        }}
+                    >
+                        {truncateText(logic.logic, 400)}
+                    </Typography>
+                </Paper>
+                <Box mt={2} display="flex" gap={2} flexWrap="wrap">
+                    <Chip
+                        icon={<InfoIcon fontSize="small" />}
+                        label={`Created: ${new Date(logic.createdAt).toLocaleDateString()}`}
+                        size="small"
+                        variant="outlined"
+                    />
+                    {logic.lastExecuted && (
+                        <Chip
+                            icon={<PlayArrowIcon fontSize="small" />}
+                            label={`Last run: ${new Date(logic.lastExecuted).toLocaleString()}`}
+                            size="small"
+                            variant="outlined"
+                            color="success"
+                        />
+                    )}
+                </Box>
+            </CardContent>
+        </Card>
     );
 }
 
 export default function Hooks() {
+    const theme = useTheme();
+    const [tabValue, setTabValue] = useState(0);
     const [variableNames, setVariableNames] = useRecoilState(variableNamesState);
     const setUpdateTrigger = useSetRecoilState(variableUpdateTriggerState);
-    const topNValue = useRecoilValue(topNState);
-    
-    // Use Recoil state for stored logics
+
     const [storedLogics, setStoredLogics] = useRecoilState(storedLogicsState);
-    
-    // Form states
+
     const [calculationLogic, setCalculationLogic] = useState('');
     const [variableName, setVariableName] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
-    
-    // UI states
-    const [isScopeListExpanded, setIsScopeListExpanded] = useState(false);
-    
-    // Recoil hooks for parameters and filters
+
+    const [isScopeExpanded, setIsScopeExpanded] = useState(false);
+
     const parameterNames = useRecoilValue(parameterNamesState);
     const filterNames = useRecoilValue(filterNamesState);
-    
-    // Setter for the variable atom
-    const setVariableAtom = useRecoilCallback(({ set }) => (varName: string, value: string) => {
-        set(variableAtomFamily(varName), value);
-    }, []);
 
-    // Initialize filter default values into the new DEDICATED LIVE FILTER FAMILY
-    const initializeFilterDefaults = useRecoilCallback(({ snapshot, set }) => async () => {
-      try {
-          for (const filterId of filterNames) {
-              const filterConfig = await snapshot.getPromise(filterConfigFamily(filterId));
-              
-              if (filterConfig?.defaultValues && filterConfig.defaultValues.length > 0 && filterConfig.variableName) {
-                  // Use variableName to set in liveFilterFamily
-                  set(liveFilterFamily(filterConfig.variableName), filterConfig.defaultValues);
-                  console.log(`✅ Initialized filter: ${filterConfig.variableName}`, filterConfig.defaultValues);
-              }
-          }
-      } catch (err) {
-          console.error('Error initializing filter defaults:', err);
-      }
-  }, [filterNames]);
+    const setVariableAtom = useRecoilCallback(
+        ({ set }) =>
+            (varName: string, value: string) => {
+                set(variableAtomFamily(varName), value);
+            },
+        []
+    );
 
-    // Run initialization on mount
+    const initializeFilterDefaults = useRecoilCallback(
+        ({ snapshot, set }) =>
+            async () => {
+                try {
+                    for (const filterId of filterNames) {
+                        const filterConfig = await snapshot.getPromise(filterConfigFamily(filterId));
+
+                        if (
+                            filterConfig?.defaultValues &&
+                            filterConfig.defaultValues.length > 0 &&
+                            filterConfig.variableName
+                        ) {
+                            set(liveFilterFamily(filterConfig.variableName), filterConfig.defaultValues);
+                            console.log(`✅ Initialized filter: ${filterConfig.variableName}`, filterConfig.defaultValues);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error initializing filter defaults:', err);
+                }
+            },
+        [filterNames]
+    );
+
     useEffect(() => {
         initializeFilterDefaults();
     }, [initializeFilterDefaults]);
 
-    // Function to get all variable and parameter values for sending to backend
-    // Function to get all variable and parameter values for sending to backend
-  const getAllValuesForBackend = useRecoilCallback(({ snapshot }) => () => {
-    const allVariables: Record<string, any> = {};
-    const allParameters: Record<string, any> = {};
-    const allFilters: Record<string, any> = {};
-    
-    // Get all computed variables
-    variableNames.forEach(varName => {
-        try {
-            const rawValue = snapshot.getLoadable(variableAtomFamily(varName)).contents;
-            const parsedValue = safeParse(rawValue);
-            if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
-                allVariables[varName] = parsedValue;
-            }
-        } catch (err) {
-            console.warn(`Failed to load variable ${varName}:`, err);
-        }
-    });
+    const executeSingleLogic = useRecoilCallback(
+        ({ set, snapshot }) =>
+            async (logic: StoredLogic) => {
+                try {
+                    const allVariables: Record<string, any> = {};
+                    const allParameters: Record<string, any> = {};
+                    const allFilters: Record<string, any> = {};
 
-    // 1. Get explicit parameter values
-    const filterNamesSet = new Set(filterNames);
-    
-    parameterNames.forEach(paramName => {
-        if (!filterNamesSet.has(paramName)) { 
-            try {
-                const rawValue = snapshot.getLoadable(parameterAtomFamily(paramName)).contents;
-                const parsedValue = safeParse(rawValue);
-                if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
-                    allParameters[paramName] = parsedValue;
+                    variableNames.forEach((varName) => {
+                        try {
+                            const rawValue = snapshot.getLoadable(variableAtomFamily(varName)).contents;
+                            const parsedValue = safeParse(rawValue);
+                            if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
+                                allVariables[varName] = parsedValue;
+                            }
+                        } catch (err) {
+                            console.warn(`[Hooks] Failed to load variable ${varName}:`, err);
+                        }
+                    });
+
+                    const filterNamesSet = new Set(filterNames);
+
+                    parameterNames.forEach((paramName) => {
+                        if (!filterNamesSet.has(paramName)) {
+                            try {
+                                const rawValue = snapshot.getLoadable(parameterAtomFamily(paramName)).contents;
+                                const parsedValue = safeParse(rawValue);
+                                if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
+                                    allParameters[paramName] = parsedValue;
+                                }
+                            } catch (err) {
+                                console.warn(`[Hooks] Failed to load explicit parameter ${paramName}:`, err);
+                            }
+                        }
+                    });
+
+                    filterNames.forEach((filterId) => {
+                        try {
+                            const filterConfig = snapshot.getLoadable(filterConfigFamily(filterId)).contents;
+
+                            if (filterConfig && filterConfig.variableName) {
+                                const selectedOptions = snapshot.getLoadable(
+                                    liveFilterFamily(filterConfig.variableName)
+                                ).contents;
+                                allFilters[filterConfig.variableName] = selectedOptions;
+
+                                console.log(`✅ [Hooks] Loaded filter: ${filterConfig.variableName}`, selectedOptions);
+                            }
+                        } catch (err) {
+                            console.warn(`[Hooks] Failed to load live filter value for ${filterId}:`, err);
+                        }
+                    });
+
+                    console.log(`🔄 [Hooks] Executing logic for: ${logic.variableName}`);
+                    console.log(`📦 [Hooks] Fresh variables:`, Object.keys(allVariables));
+                    console.log(`📦 [Hooks] Fresh parameters:`, Object.keys(allParameters));
+                    console.log(`📦 [Hooks] Fresh filters:`, Object.keys(allFilters));
+
+                    const response = await fetch('http://localhost:3002/api/calculate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            logic: logic.logic,
+                            existingVariables: allVariables,
+                            existingParameters: allParameters,
+                            existingFilters: allFilters,
+                            variableName: logic.variableName,
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || `HTTP error ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const calculatedValue = typeof result.value === 'string' ? safeParse(result.value) : result.value;
+
+                    console.log(
+                        `✅ [Hooks] Success for ${logic.variableName}:`,
+                        Array.isArray(calculatedValue) ? `Array with ${calculatedValue.length} items` : calculatedValue
+                    );
+
+                    set(variableAtomFamily(logic.variableName), JSON.stringify(calculatedValue));
+
+                    setVariableNames((prev) => {
+                        const newSet = new Set(prev);
+                        newSet.add(logic.variableName);
+                        return newSet;
+                    });
+
+                    setStoredLogics((prev) =>
+                        prev.map((l) => (l.id === logic.id ? { ...l, lastExecuted: Date.now() } : l))
+                    );
+
+                    return { success: true, result: calculatedValue };
+                } catch (err) {
+                    console.error(`❌ [Hooks] Failed to execute logic for ${logic.variableName}:`, err);
+                    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
                 }
-            } catch (err) {
-                console.warn(`Failed to load explicit parameter ${paramName}:`, err);
-            }
-        }
-    });
+            },
+        [variableNames, parameterNames, filterNames, setVariableNames, setStoredLogics]
+    );
 
-    // 2. Get live filter values using the variableName from filterConfig
-    filterNames.forEach(filterId => {
-        try {
-            // CRITICAL FIX: Get the filter config first to access variableName
-            const filterConfig = snapshot.getLoadable(filterConfigFamily(filterId)).contents;
-            
-            if (filterConfig && filterConfig.variableName) {
-                // Use variableName as the key to access liveFilterFamily
-                const selectedOptions = snapshot.getLoadable(liveFilterFamily(filterConfig.variableName)).contents;
-                
-                // Store using variableName (e.g., "filter_msl_extract_MOP")
-                allFilters[filterConfig.variableName] = selectedOptions;
-                
-                console.log(`✅ Loaded filter: ${filterConfig.variableName}`, selectedOptions);
-            } else {
-                console.warn(`⚠️ Filter config not found or missing variableName for filterId: ${filterId}`);
-            }
-        } catch (err) {
-            console.warn(`Failed to load live filter value for ${filterId}:`, err);
-        }
-    });
-  
-    // Always include topN in the available variables
-    allVariables['topN'] = topNValue;
-    
-    console.log('📦 All filters being sent:', allFilters);
-    
-    return { variables: allVariables, parameters: allParameters, filters: allFilters };
-  }, [variableNames, parameterNames, filterNames, topNValue]);
-
-    // Function to execute a single logic using useRecoilCallback
-    const executeSingleLogic = useRecoilCallback(({ set }) => async (logic: StoredLogic) => {
-        try {
-            const { variables, parameters, filters } = getAllValuesForBackend();
-            const response = await fetch('http://localhost:3002/api/calculate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    logic: logic.logic,
-                    existingVariables: variables,
-                    existingParameters: parameters, // Explicit Parameters
-                    existingFilters: filters,      // Explicit Filters (from dedicated state)
-                    variableName: logic.variableName
-                }),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || `HTTP error ${response.status}`);
-            }
-
-            const result = await response.json();
-            const calculatedValue = typeof result.value === 'string' ? safeParse(result.value) : result.value;
-
-            // Update the variable atom using the logic's variable name
-            set(variableAtomFamily(logic.variableName), JSON.stringify(calculatedValue));
-
-            // Update variable names set
-            setVariableNames(prev => {
-                const newSet = new Set(prev);
-                newSet.add(logic.variableName);
-                return newSet;
-            });
-
-            // Update last executed time in stored logics
-            setStoredLogics(prev => prev.map(l => 
-                l.id === logic.id ? { ...l, lastExecuted: Date.now() } : l
-            ));
-
-            return { success: true, result: calculatedValue };
-        } catch (err) {
-            console.error(`Failed to execute logic for ${logic.variableName}:`, err);
-            return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-        }
-    }, [getAllValuesForBackend, setVariableNames, setStoredLogics]);
-
-    // Manual recalculate all function (for button click)
     const manualRecalculateAll = useCallback(async () => {
         if (storedLogics.length === 0) return;
-        
+
         setIsLoading(true);
+        setError(null);
         try {
+            console.log(`🚀 [Hooks] Manual recalculation starting for ${storedLogics.length} logics...`);
+
+            const sortedLogics = [...storedLogics].sort((a, b) => a.createdAt - b.createdAt);
+            console.log(
+                `📋 [Hooks] Execution order:`,
+                sortedLogics.map((l) => l.variableName)
+            );
+
             const results = [];
-            for (const logic of storedLogics) {
+            for (const logic of sortedLogics) {
                 const result = await executeSingleLogic(logic);
                 results.push({ logic: logic.variableName, ...result });
             }
 
             setTimeout(() => {
-                setUpdateTrigger(prev => prev + 1);
+                setUpdateTrigger((prev) => prev + 1);
             }, 100);
 
-            console.log('Manual recalculation completed:', results);
+            console.log('✅ [Hooks] Manual recalculation completed:', results);
+            setSuccess('All calculations completed successfully!');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Recalculation failed');
         } finally {
             setIsLoading(false);
         }
     }, [storedLogics, executeSingleLogic, setUpdateTrigger]);
 
-    // Function to execute and store new calculation
-    const executeCalculation = useCallback(async () => {
-        if (!calculationLogic.trim() || !variableName.trim()) {
-            setError('Please fill in all fields');
-            return;
-        }
+    const executeCalculation = useRecoilCallback(
+        ({ snapshot }) =>
+            async () => {
+                if (!calculationLogic.trim() || !variableName.trim()) {
+                    setError('Please fill in all fields');
+                    return;
+                }
 
-        setIsLoading(true);
+                setIsLoading(true);
+                setError(null);
+                setSuccess(null);
+
+                try {
+                    const allVariables: Record<string, any> = {};
+                    const allParameters: Record<string, any> = {};
+                    const allFilters: Record<string, any> = {};
+
+                    variableNames.forEach((varName) => {
+                        try {
+                            const rawValue = snapshot.getLoadable(variableAtomFamily(varName)).contents;
+                            const parsedValue = safeParse(rawValue);
+                            if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
+                                allVariables[varName] = parsedValue;
+                            }
+                        } catch (err) {
+                            console.warn(`[Hooks] Failed to load variable ${varName}:`, err);
+                        }
+                    });
+
+                    const filterNamesSet = new Set(filterNames);
+
+                    parameterNames.forEach((paramName) => {
+                        if (!filterNamesSet.has(paramName)) {
+                            try {
+                                const rawValue = snapshot.getLoadable(parameterAtomFamily(paramName)).contents;
+                                const parsedValue = safeParse(rawValue);
+                                if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
+                                    allParameters[paramName] = parsedValue;
+                                }
+                            } catch (err) {
+                                console.warn(`[Hooks] Failed to load explicit parameter ${paramName}:`, err);
+                            }
+                        }
+                    });
+
+                    filterNames.forEach((filterId) => {
+                        try {
+                            const filterConfig = snapshot.getLoadable(filterConfigFamily(filterId)).contents;
+
+                            if (filterConfig && filterConfig.variableName) {
+                                const selectedOptions = snapshot.getLoadable(
+                                    liveFilterFamily(filterConfig.variableName)
+                                ).contents;
+                                allFilters[filterConfig.variableName] = selectedOptions;
+                            }
+                        } catch (err) {
+                            console.warn(`[Hooks] Failed to load live filter value for ${filterId}:`, err);
+                        }
+                    });
+
+                    const response = await fetch('http://localhost:3002/api/calculate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            logic: calculationLogic,
+                            existingVariables: allVariables,
+                            existingParameters: allParameters,
+                            existingFilters: allFilters,
+                            variableName,
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || `HTTP error ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const calculatedValue = typeof result.value === 'string' ? safeParse(result.value) : result.value;
+
+                    setVariableAtom(variableName, JSON.stringify(calculatedValue));
+
+                    setVariableNames((prev) => {
+                        const newSet = new Set(prev);
+                        newSet.add(variableName);
+                        return newSet;
+                    });
+
+                    const existingLogicIndex = storedLogics.findIndex((logic) => logic.variableName === variableName);
+
+                    if (existingLogicIndex !== -1) {
+                        setStoredLogics((prev) =>
+                            prev.map((logic, index) =>
+                                index === existingLogicIndex
+                                    ? {
+                                          ...logic,
+                                          logic: calculationLogic,
+                                          lastExecuted: Date.now(),
+                                      }
+                                    : logic
+                            )
+                        );
+                        setSuccess(`Logic for variable "${variableName}" updated successfully.`);
+                    } else {
+                        const newLogic: StoredLogic = {
+                            id: Date.now().toString(),
+                            variableName,
+                            logic: calculationLogic,
+                            createdAt: Date.now(),
+                            lastExecuted: Date.now(),
+                        };
+
+                        setStoredLogics((prev) => [...prev, newLogic]);
+                        setSuccess(`Variable "${variableName}" created and logic stored successfully.`);
+                    }
+
+                    setTimeout(() => {
+                        setUpdateTrigger((prev) => prev + 1);
+                    }, 100);
+
+                    setCalculationLogic('');
+                    setVariableName('');
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : 'Failed execution');
+                } finally {
+                    setIsLoading(false);
+                }
+            },
+        [
+            calculationLogic,
+            variableName,
+            variableNames,
+            parameterNames,
+            filterNames,
+            setVariableAtom,
+            setVariableNames,
+            setUpdateTrigger,
+            setStoredLogics,
+            storedLogics,
+        ]
+    );
+
+    const editStoredLogic = useCallback((logic: StoredLogic) => {
+        setCalculationLogic(logic.logic);
+        setVariableName(logic.variableName);
+        setTabValue(0);
         setError(null);
         setSuccess(null);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, []);
 
-        try {
-            const { variables, parameters, filters } = getAllValuesForBackend();
-            const response = await fetch('http://localhost:3002/api/calculate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    logic: calculationLogic,
-                    existingVariables: variables,
-                    existingParameters: parameters, // Explicit Parameters
-                    existingFilters: filters,      // Explicit Filters (from dedicated state)
-                    variableName
-                }),
-            });
+    const deleteStoredLogic = useRecoilCallback(
+        ({ reset }) =>
+            (id: string) => {
+                const logicToDelete = storedLogics.find((logic) => logic.id === id);
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || `HTTP error ${response.status}`);
-            }
+                if (logicToDelete) {
+                    reset(variableAtomFamily(logicToDelete.variableName));
 
-            const result = await response.json();
-            const calculatedValue = typeof result.value === 'string' ? safeParse(result.value) : result.value;
+                    setVariableNames((prev) => {
+                        const newSet = new Set(prev);
+                        newSet.delete(logicToDelete.variableName);
+                        return newSet;
+                    });
+                }
 
-            // Save in Recoil using the callback
-            setVariableAtom(variableName, JSON.stringify(calculatedValue));
+                setStoredLogics((prev) => prev.filter((logic) => logic.id !== id));
 
-            // Update variable names set
-            setVariableNames(prev => {
-                const newSet = new Set(prev);
-                newSet.add(variableName);
-                return newSet;
-            });
-
-            // Check if logic with same variable name already exists
-            const existingLogicIndex = storedLogics.findIndex(logic => logic.variableName === variableName);
-            
-            if (existingLogicIndex !== -1) {
-                // Update existing logic instead of creating new one
-                setStoredLogics(prev => prev.map((logic, index) => 
-                    index === existingLogicIndex 
-                    ? {
-                        ...logic,
-                        logic: calculationLogic,
-                        lastExecuted: Date.now()
-                      }
-                    : logic
-                ));
-                setSuccess(`Logic for variable "${variableName}" updated successfully.`);
-            } else {
-                // Create new logic
-                const newLogic: StoredLogic = {
-                    id: Date.now().toString(),
-                    variableName,
-                    logic: calculationLogic,
-                    createdAt: Date.now(),
-                    lastExecuted: Date.now()
-                };
-
-                setStoredLogics(prev => [...prev, newLogic]);
-                setSuccess(`Variable "${variableName}" created and logic stored successfully.`);
-            }
-
-            setTimeout(() => {
-                setUpdateTrigger(prev => prev + 1);
-            }, 100);
-
-            // Reset form
-            setCalculationLogic('');
-            setVariableName('');
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed execution');
-        } finally {
-            setIsLoading(false);
-        }
-    }, [
-        calculationLogic,
-        variableName,
-        setVariableAtom,
-        setVariableNames,
-        setUpdateTrigger,
-        getAllValuesForBackend,
-        setStoredLogics,
-        storedLogics
-    ]);
-
-    // Delete stored logic
-    const deleteStoredLogic = useRecoilCallback(({ reset }) => (id: string) => {
-        // Find the logic to get the variable name before deletion
-        const logicToDelete = storedLogics.find(logic => logic.id === id);
-        
-        if (logicToDelete) {
-            // Remove the variable from persistent storage
-            reset(variableAtomFamily(logicToDelete.variableName));
-            
-            // Remove from variable names set
-            setVariableNames(prev => {
-                const newSet = new Set(prev);
-                newSet.delete(logicToDelete.variableName);
-                return newSet;
-            });
-        }
-        
-        // Remove from stored logics
-        setStoredLogics(prev => prev.filter(logic => logic.id !== id));
-        
-        // Trigger update
-        setTimeout(() => {
-            setUpdateTrigger(prev => prev + 1);
-        }, 100);
-    }, [storedLogics, setVariableNames, setStoredLogics, setUpdateTrigger]);
-
-    // Execute single stored logic
-    const executeStoredLogic = useCallback(async (logic: StoredLogic) => {
-        setIsLoading(true);
-        try {
-            const result = await executeSingleLogic(logic);
-            if (result.success) {
-                setSuccess(`Logic for "${logic.variableName}" executed successfully.`);
                 setTimeout(() => {
-                    setUpdateTrigger(prev => prev + 1);
+                    setUpdateTrigger((prev) => prev + 1);
                 }, 100);
-            } else {
-                setError(result.error || 'Execution failed');
-            }
-        } finally {
-            setIsLoading(false);
-        }
-    }, [executeSingleLogic, setUpdateTrigger]);
 
-    // Download stored logic function
+                setSuccess(`Logic "${logicToDelete?.variableName}" deleted successfully.`);
+            },
+        [storedLogics, setVariableNames, setStoredLogics, setUpdateTrigger]
+    );
+
+    const executeStoredLogic = useCallback(
+        async (logic: StoredLogic) => {
+            setIsLoading(true);
+            setError(null);
+            try {
+                const result = await executeSingleLogic(logic);
+                if (result.success) {
+                    setSuccess(`Logic for "${logic.variableName}" executed successfully.`);
+                    setTimeout(() => {
+                        setUpdateTrigger((prev) => prev + 1);
+                    }, 100);
+                } else {
+                    setError(result.error || 'Execution failed');
+                }
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'Execution failed');
+            } finally {
+                setIsLoading(false);
+            }
+        },
+        [executeSingleLogic, setUpdateTrigger]
+    );
+
     const downloadStoredLogic = useCallback((logic: StoredLogic) => {
         const dataBlob = new Blob([logic.logic], { type: 'text/plain' });
         const url = URL.createObjectURL(dataBlob);
@@ -557,243 +793,328 @@ export default function Hooks() {
         URL.revokeObjectURL(url);
     }, []);
 
-    const handleInputChange =
-        (setter: React.Dispatch<React.SetStateAction<string>>) =>
-        (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-            setter(e.target.value);
-            if (error) setError(null);
-            if (success) setSuccess(null);
-        };
+    const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+        setTabValue(newValue);
+        setError(null);
+        setSuccess(null);
+    };
+
+    const sortedLogicsForDisplay = [...storedLogics].sort((a, b) => a.createdAt - b.createdAt);
 
     return (
-        <div className="p-6 w-full">
-            <h1 className="text-3xl font-bold mb-6 text-gray-800">Dynamic Calculation Engine</h1>
-            
-            {/* TopN Display */}
-            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
-                <div className="flex items-center gap-2">
-                    <span className="text-green-700 text-sm font-medium">Current TopN Value:</span>
-                    <span className="text-green-800 font-bold">{topNValue}</span>
-                    <span className="text-green-600 text-xs">
-                        (Calculations now run automatically when topN changes - no need to visit this page!)
-                    </span>
-                </div>
-            </div>
+        <Box sx={{ width: '100%', p: { xs: 2, md: 4 }, mx: 'auto' }}>
+            {/* Header */}
+            <Box mb={4}>
+                <Typography variant="h4" fontWeight="700" gutterBottom color="primary">
+                    Dynamic Calculation Engine
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                    Create, manage, and execute dynamic calculations with live data
+                </Typography>
+            </Box>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Form Section */}
-                <div className="bg-white rounded-lg shadow-lg p-6">
-                    <h2 className="text-xl font-semibold mb-4 text-gray-700">Create Calculation</h2>
-                    
-                    {/* Available Variables Display */}
-                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                        <div className="flex justify-between items-center mb-1">
-                            <div className="text-sm font-medium text-blue-800">
-                                Available Variables in Logic (Scope):
-                            </div>
-                            <button
-                                onClick={() => setIsScopeListExpanded(prev => !prev)}
-                                className="text-xs text-blue-700 hover:text-blue-900 font-semibold flex items-center gap-1 transition-all"
-                            >
-                                {isScopeListExpanded ? 'Hide Details' : 'Show Details'}
-                                <span className={`text-sm transform transition-transform ${isScopeListExpanded ? 'rotate-180' : 'rotate-0'}`}>▼</span> 
-                            </button>
-                        </div>
-                        
-                        {isScopeListExpanded && (
-                            <ul className="text-xs text-gray-700 space-y-1 ml-3 list-disc list-inside mt-2">
-                                <li>
-                                    <span className="font-semibold text-blue-900">Variables (Output):</span> 
-                                    <span className="font-mono text-gray-800">
-                                        topN, {variableNames.size > 0 ? Array.from(variableNames).join(', ') : 'None'}
-                                    </span>
-                                </li>
-                                <li>
-                                    <span className="font-semibold text-blue-900">Parameters (Explicit):</span> 
-                                    <span className="font-mono text-gray-800">
+            {/* Tabs */}
+            <Paper
+                elevation={0}
+                sx={{
+                    borderRadius: 2,
+                    border: `1px solid ${theme.palette.divider}`
+                }}
+            >
+                <Tabs
+                    value={tabValue}
+                    onChange={handleTabChange}
+                    variant="fullWidth"
+                    sx={{
+                        '& .MuiTab-root': {
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            fontSize: '0.95rem',
+                        },
+                    }}
+                >
+                    <Tab icon={<CodeIcon />} label="Create Calculation" iconPosition="start" />
+                    <Tab icon={<StorageIcon />} label={`Stored Logics (${storedLogics.length})`} iconPosition="start" />
+                    <Tab icon={<VisibilityIcon />} label="View Data" iconPosition="start" />
+                </Tabs>
+            </Paper>
+
+            {/* Global Alerts */}
+            {error && (
+                <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
+                    {error}
+                </Alert>
+            )}
+            {success && (
+                <Alert severity="success" onClose={() => setSuccess(null)} sx={{ mb: 2 }}>
+                    {success}
+                </Alert>
+            )}
+
+            {/* Tab 1: Create Calculation */}
+            <TabPanel value={tabValue} index={0}>
+                <Paper elevation={1} sx={{ p: 4, borderRadius: 2,boxShadow: 3 }}>
+                    <Typography variant="h6" fontWeight="600" gutterBottom>
+                        Create or Update Calculation
+                    </Typography>
+
+                    {/* Scope Accordion */}
+                    <Accordion
+                        expanded={isScopeExpanded}
+                        onChange={() => setIsScopeExpanded(!isScopeExpanded)}
+                        sx={{ mt: 3, mb: 3, boxShadow: 'none', border: `1px solid ${theme.palette.divider}` }}
+                    >
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                            <Typography variant="subtitle2" fontWeight="600" color="primary">
+                                📚 Available Variables in Logic (Scope)
+                            </Typography>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                            <Stack spacing={2}>
+                                <Box>
+                                    <Typography variant="body2" fontWeight="600" color="primary.dark" gutterBottom>
+                                        Variables (Calculated):
+                                    </Typography>
+                                    <Typography
+                                        variant="body2"
+                                        component="div"
+                                        sx={{
+                                            fontFamily: 'monospace',
+                                            bgcolor: alpha(theme.palette.grey[100], 0.5),
+                                            p: 1,
+                                            borderRadius: 1,
+                                        }}
+                                    >
+                                        {variableNames.size > 0 ? Array.from(variableNames).join(', ') : 'None'}
+                                    </Typography>
+                                </Box>
+                                <Box>
+                                    <Typography variant="body2" fontWeight="600" color="primary.dark" gutterBottom>
+                                        Parameters (Static):
+                                    </Typography>
+                                    <Typography
+                                        variant="body2"
+                                        component="div"
+                                        sx={{
+                                            fontFamily: 'monospace',
+                                            bgcolor: alpha(theme.palette.grey[100], 0.5),
+                                            p: 1,
+                                            borderRadius: 1,
+                                        }}
+                                    >
                                         {parameterNames.length > 0 ? Array.from(parameterNames).join(', ') : 'None'}
-                                    </span>
-                                </li>
-                                <li>
-                                    <span className="font-semibold text-blue-900">Filters/Hooks (Interactive):</span> 
-                                    <span className="font-mono text-gray-800">
+                                    </Typography>
+                                </Box>
+                                <Box>
+                                    <Typography variant="body2" fontWeight="600" color="primary.dark" gutterBottom>
+                                        Filters (Interactive):
+                                    </Typography>
+                                    <Typography
+                                        variant="body2"
+                                        component="div"
+                                        sx={{
+                                            fontFamily: 'monospace',
+                                            bgcolor: alpha(theme.palette.grey[100], 0.5),
+                                            p: 1,
+                                            borderRadius: 1,
+                                        }}
+                                    >
                                         {filterNames.length > 0 ? Array.from(filterNames).join(', ') : 'None'}
-                                    </span>
-                                </li>
-                            </ul>
-                        )}
-                        {!isScopeListExpanded && (
-                            <div className="text-xs text-gray-500 italic mt-2">
-                                Click 'Show Details' to view {1 + variableNames.size + parameterNames.length + filterNames.length} names available in the scope.
-                            </div>
-                        )}
-                        
-                        <Tooltip 
-                            content={`All inputs are passed to the backend's /api/calculate endpoint under distinct keys:\n\n1. existingVariables: Custom calculated variables (Variables tab).\n2. existingParameters: Explicitly defined user parameters (Parameters tab).\n3. existingFilters: Interactive selections from the Filter/Hook panel (e.g., 'hook_t2').`}
-                        >
-                            <div className="text-xs text-blue-500 mt-3 cursor-help hover:text-blue-700 font-semibold inline-block">
-                                Use these variable names directly in your calculation logic.
-                                <span className="ml-1 underline">View backend injection details.</span>
-                            </div>
-                        </Tooltip>
-                    </div>
+                                    </Typography>
+                                </Box>
+                            </Stack>
+                        </AccordionDetails>
+                    </Accordion>
 
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Calculation Logic
-                            </label>
-                            <textarea
-                                value={calculationLogic}
-                                onChange={handleInputChange(setCalculationLogic)}
-                                placeholder={variableNames.size > 0 
-                                    ? `Example: ${Array.from(variableNames)[0]}.slice(0, topN).map(x => x * 2)` 
-                                    : "Example: [1,2,3,4,5,6,7,8,9,10].slice(0, topN).map(x => x * 2)"}
-                                className="w-full p-3 border border-gray-300 rounded-md font-mono text-sm"
-                                rows={6}
-                            />
-                        </div>
-                        
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Variable Name</label>
-                            <input
-                                type="text"
-                                value={variableName}
-                                onChange={handleInputChange(setVariableName)}
-                                placeholder="e.g., processedData"
-                                className="w-full p-3 border border-gray-300 rounded-md"
-                                list="variable-suggestions"
-                            />
-                            <datalist id="variable-suggestions">
-                                {Array.from(variableNames).map(name => (
-                                    <option key={name} value={name} />
-                                ))}
-                            </datalist>
-                            {variableName && storedLogics.some(logic => logic.variableName === variableName) && (
-                                <div className="text-xs text-orange-600 mt-1">
-                                    ⚠️ Variable "{variableName}" already exists. Creating this will update the existing logic.
-                                </div>
-                            )}
-                        </div>
+                    {/* Form Fields */}
+                    <Stack spacing={3}>
 
-                        {error && <div className="bg-red-50 border text-red-700 px-4 py-3 rounded-md">{error}</div>}
-                        {success && <div className="bg-green-50 border text-green-700 px-4 py-3 rounded-md">{success}</div>}
-
-                        <button
-                            onClick={executeCalculation}
-                            disabled={isLoading}
-                            className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            {isLoading 
-                                ? 'Calculating...' 
-                                : (variableName && storedLogics.some(logic => logic.variableName === variableName))
-                                    ? `Update Logic for "${variableName}"`
-                                    : 'Execute & Store Calculation'
+                        <TextField
+                            label="Calculation Logic"
+                            fullWidth
+                            multiline
+                            rows={10}
+                            value={calculationLogic}
+                            onChange={(e) => setCalculationLogic(e.target.value)}
+                            placeholder={
+                                variableNames.size > 0
+                                    ? `Example: ${Array.from(variableNames)[0]}.map(x => x * 2)`
+                                    : 'Example: [1, 2, 3, 4, 5].map(x => x * 2)'
                             }
-                        </button>
+                            helperText="Write your JavaScript calculation logic here"
+                            InputProps={{
+                                sx: {
+                                    fontFamily: '"Fira Code", "Courier New", monospace',
+                                    fontSize: '0.9rem',
+                                    borderRadius: 1.5,
+                                },
+                            }}
+                        />
 
-                        {/* Manual Recalculate All Button */}
+                          <TextField
+                            label="Variable Name"
+                            fullWidth
+                            value={variableName}
+                            onChange={(e) => setVariableName(e.target.value)}
+                            placeholder="e.g., processedData"
+                            helperText={
+                                variableName && storedLogics.some((logic) => logic.variableName === variableName)
+                                    ? `⚠️ Variable "${variableName}" exists. This will update it.`
+                                    : 'Enter a unique name for your variable'
+                            }
+                            InputProps={{
+                                sx: { borderRadius: 1.5 },
+                            }}
+                        />
+
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                            <Button
+                                variant="contained"
+                                fullWidth
+                                size="large"
+                                onClick={executeCalculation}
+                                disabled={isLoading}
+                                startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />}
+                                sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}
+                            >
+                                {isLoading
+                                    ? 'Executing...'
+                                    : variableName && storedLogics.some((logic) => logic.variableName === variableName)
+                                    ? `Update "${variableName}"`
+                                    : 'Execute & Store'}
+                            </Button>
+
+                            {storedLogics.length > 0 && (
+                                <Button
+                                    variant="outlined"
+                                    fullWidth
+                                    size="large"
+                                    onClick={manualRecalculateAll}
+                                    disabled={isLoading}
+                                    startIcon={<RefreshIcon />}
+                                    sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}
+                                >
+                                    Recalculate All ({storedLogics.length})
+                                </Button>
+                            )}
+                        </Stack>
+                    </Stack>
+                </Paper>
+            </TabPanel>
+
+            {/* Tab 2: Stored Logics */}
+            <TabPanel value={tabValue} index={1}>
+                <Paper elevation={1} sx={{ p: 4, borderRadius: 2,boxShadow: 3 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                        <Box>
+                            <Typography variant="h6" fontWeight="600">
+                                Stored Logics ({storedLogics.length})
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Auto-recalculate when filters change
+                            </Typography>
+                        </Box>
                         {storedLogics.length > 0 && (
-                            <button
+                            <Button
+                                variant="contained"
                                 onClick={manualRecalculateAll}
                                 disabled={isLoading}
-                                className="w-full bg-orange-600 text-white py-2 px-4 rounded-md hover:bg-orange-700 disabled:opacity-50"
+                                startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
+                                sx={{ borderRadius: 1.5, textTransform: 'none' }}
                             >
-                                {isLoading ? 'Recalculating...' : `Manual Recalculate All (${storedLogics.length}) with topN=${topNValue}`}
-                            </button>
+                                Recalculate All
+                            </Button>
                         )}
-                    </div>
-                </div>
+                    </Box>
 
-                {/* Stored Logics Section */}
-                <div className="bg-white rounded-lg shadow-lg p-6">
-                    <h2 className="text-xl font-semibold mb-4 text-gray-700">
-                        Stored Logics ({storedLogics.length})
-                    </h2>
-                    <div className="text-xs text-gray-500 mb-4">
-                        These logics auto-recalculate globally when topN changes to {topNValue}
-                    </div>
                     {storedLogics.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500 italic">
-                            No stored logics yet. Create calculations to see them here.
-                        </div>
+                        <Box textAlign="center" py={10}>
+                            <StorageIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+                            <Typography variant="h6" color="text.secondary" gutterBottom>
+                                No Stored Logics Yet
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" mb={3}>
+                                Create your first calculation in the "Create Calculation" tab
+                            </Typography>
+                            <Button variant="contained" onClick={() => setTabValue(0)} sx={{ borderRadius: 1.5 }}>
+                                Create Calculation
+                            </Button>
+                        </Box>
                     ) : (
-                        <div className="space-y-3 max-h-[470px] overflow-y-auto">
-                            {storedLogics.map(logic => (
-                                <StoredLogicItem 
-                                    key={logic.id} 
-                                    logic={logic} 
-                                    onDelete={deleteStoredLogic}
-                                    onExecute={executeStoredLogic}
-                                    onDownload={downloadStoredLogic}
-                                />
-                            ))}
-                        </div>
+                        <>
+                            <Box sx={{ maxHeight: '65vh', overflowY: 'auto', pr: 1 }}>
+                                {sortedLogicsForDisplay.map((logic) => (
+                                    <StoredLogicItem
+                                        key={logic.id}
+                                        logic={logic}
+                                        onEdit={editStoredLogic}
+                                        onDelete={deleteStoredLogic}
+                                        onExecute={executeStoredLogic}
+                                        onDownload={downloadStoredLogic}
+                                    />
+                                ))}
+                            </Box>
+                            <Alert severity="info" icon={<InfoIcon />} sx={{ mt: 3 }}>
+                                Logics execute in creation order. Later variables can reference earlier ones.
+                            </Alert>
+                        </>
                     )}
-                </div>
+                </Paper>
+            </TabPanel>
 
-                {/* All Variables & Parameters Section */}
-                <div className="bg-white rounded-lg shadow-lg p-6">
-                    <h2 className="text-xl font-semibold mb-4 text-gray-700">
-                        All Variables, Parameters and Filters
-                    </h2>
-                    <div className="text-xs text-gray-500 mb-4">
-                        Variables from all sources (auto-updated globally)
-                    </div>
-                    <div className="space-y-3 max-h-[480px] overflow-y-auto">
-                        {/* Display topN as a special variable */}
-                        <div className="border border-gray-200 rounded-lg p-4 bg-green-50">
-                            <div className="flex items-center justify-between mb-2">
-                                <h3 className="font-medium text-gray-800">topN</h3>
-                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                                    number
-                                </span>
-                            </div>
-                            <div className="bg-white p-3 rounded border">
-                                <pre className="text-sm text-gray-700 whitespace-pre-wrap" style={{ margin: 0 }}>
-                                    {topNValue}
-                                </pre>
-                            </div>
-                            <div className="text-xs text-green-600 mt-1">
-                                Controlled by Filter Panel (Global)
-                            </div>
-                        </div>
+            {/* Tab 3: View Data - Only Variables and Filters */}
+            <TabPanel value={tabValue} index={2}>
+                <Grid container spacing={3}>
+                    {/* Variables Column */}
+                    <Grid size={{xs:12,md:6}}>
+                        <Paper elevation={1} sx={{ p: 3, borderRadius: 2, height: '100%', boxShadow: 3 }}>
+                            <Typography variant="h6" fontWeight="600" gutterBottom>
+                                Variables ({variableNames.size})
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" mb={3}>
+                                Calculated values from your logics
+                            </Typography>
+                            <Box sx={{ maxHeight: '70vh', overflowY: 'auto', pr: 1 }}>
+                                {variableNames.size === 0 ? (
+                                    <Box textAlign="center" py={8}>
+                                        <CodeIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
+                                        <Typography variant="body2" color="text.secondary">
+                                            No variables yet. Create calculations to see them here!
+                                        </Typography>
+                                    </Box>
+                                ) : (
+                                    Array.from(variableNames).map((name) => <VariableDisplay key={name} name={name} />)
+                                )}
+                            </Box>
+                        </Paper>
+                    </Grid>
 
-                        {/* Display custom variables */}
-                        {variableNames.size === 0 ? (
-                            <div className="text-center py-4 text-gray-500 italic">
-                                No custom variables yet. Create some calculations first!
-                            </div>
-                        ) : 
-                            (
-                            Array.from(variableNames).map(name => (
-                                <VariableDisplay key={name} name={name} />
-                            ))
-                        )}
-
-                        {/* Display User Parameters (Explicit) */}
-                        {parameterNames.length > 0 && (
-                            <>
-                                <h3 className="text-lg font-semibold mt-4 mb-2 text-gray-700 border-b border-gray-200 pb-1">User Parameters ({parameterNames.length})</h3>
-                                {Array.from(parameterNames).map(name => (
-                                    <ParameterDisplay key={name} name={name} />
-                                ))}
-                            </>
-                        )}
-                        
-                        {/* Display Filter/Hook Selections (Interactive) */}
-                        {filterNames.length > 0 && (
-                            <>
-                                <h3 className="text-lg font-semibold mt-4 mb-2 text-gray-700 border-b border-gray-200 pb-1">Filter/Hook Selections ({filterNames.length})</h3>
-                                {Array.from(filterNames).map(name => (
-                                    // These filters now read from the dedicated liveFilterFamily
-                                    <FilterDisplay key={name} name={name} /> 
-                                ))}
-                            </>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
+                    {/* Filters Column */}
+                    <Grid size={{xs:12,md:6}}>
+                        <Paper elevation={1} sx={{ p: 3, borderRadius: 2, height: '100%', boxShadow: 3 }}>
+                            <Typography variant="h6" fontWeight="600" gutterBottom>
+                                Active Filters ({filterNames.length})
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" mb={3}>
+                                Current filter selections
+                            </Typography>
+                            <Box sx={{ maxHeight: '70vh', overflowY: 'auto', pr: 1 }}>
+                                {filterNames.length === 0 ? (
+                                    <Box textAlign="center" py={8}>
+                                        <FilterListIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
+                                        <Typography variant="body2" color="text.secondary">
+                                            No filters configured
+                                        </Typography>
+                                    </Box>
+                                ) : (
+                                    Array.from(filterNames).map((name) => <FilterDisplay key={name} name={name} />)
+                                )}
+                            </Box>
+                        </Paper>
+                    </Grid>
+                </Grid>
+            </TabPanel>
+        </Box>
     );
 }
+

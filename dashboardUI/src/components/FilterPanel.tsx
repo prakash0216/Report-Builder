@@ -1,719 +1,688 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { useRecoilState } from 'recoil';
-import { topNState } from "../recoil/topN"; // Import the topN atom
-import axios from 'axios';
+import { useState, useEffect, useRef } from "react";
+import { useRecoilValue, useRecoilState } from 'recoil';
+import { 
+  Box, 
+  Select, 
+  MenuItem, 
+  Button, 
+  Paper, 
+  Typography, 
+  IconButton,
+  Chip,
+  FormControl,
+  InputLabel,
+  Checkbox,
+  FormGroup,
+  FormControlLabel,
+  Radio,
+  RadioGroup,
+  ListItemText,
+  Menu,
+} from '@mui/material';
+import { 
+  Close as CloseIcon,
+  DragIndicator as DragIndicatorIcon,
+  KeyboardArrowDown as KeyboardArrowDownIcon,
+} from '@mui/icons-material';
+import Draggable from 'react-draggable';
+import { allFiltersSelector, filterNamesState, filterConfigFamily } from "../recoil/FiltersFamily";
+import { liveFilterFamily } from "../recoil/LiveFilterFamily";
+import { atom } from 'recoil';
 
-interface MultiSelectFilterProps {
-  label: string;
-  options: Array<{
-    value: string;
-    label: string;
-  }>;
-  selectedValues: string[];
-  onChange: (selectedValues: string[]) => void;
-  onApply: (selectedValues: string[]) => void;
-  appliedValues: string[];
-  placeholder?: string;
-  className?: string;
-  isLoading?: boolean;
-}
-
-// Single Select Dropdown for TopN
-interface SingleSelectDropdownProps {
-  label: string;
-  options: Array<{
-    value: number;
-    label: string;
-  }>;
-  selectedValue: number;
-  onChange: (value: number) => void;
-  className?: string;
-}
-
-const SingleSelectDropdown: React.FC<SingleSelectDropdownProps> = ({
-  label,
-  options,
-  selectedValue,
-  onChange,
-  className = ""
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleOptionSelect = (value: number) => {
-    onChange(value);
-    setIsOpen(false);
-  };
-
-  const getDisplayText = () => {
-    const option = options.find(opt => opt.value === selectedValue);
-    return option ? option.label : `Top ${selectedValue}`;
-  };
-
-  return (
-    <div className={`relative ${className}`} ref={dropdownRef}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}
-      </label>
-      
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="relative w-full bg-white border border-gray-300 rounded-md shadow-sm px-3 py-2 text-left cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400 transition-colors"
-      >
-        <span className="block truncate text-sm text-gray-700">
-          {getDisplayText()}
-        </span>
-        <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-          <svg
-            className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${
-              isOpen ? 'rotate-180' : ''
-            }`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </span>
-      </button>
-
-      {isOpen && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-[200px] overflow-auto">
-          <div className="py-1">
-            {options.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => handleOptionSelect(option.value)}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${
-                  selectedValue === option.value ? 'bg-blue-50 text-blue-600' : 'text-gray-700'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const client = axios.create();
-
-const MultiSelectFilter: React.FC<MultiSelectFilterProps> = ({
-  label,
-  options,
-  selectedValues,
-  onChange,
-  onApply,
-  appliedValues,
-  placeholder = "(All)",
-  className = "",
-  isLoading = false
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleSelectAll = () => {
-    if (selectedValues.length === options.length) {
-      onChange([]);
-    } else {
-      onChange(options.map(option => option.value));
-    }
-  };
-
-  const handleOptionToggle = (value: string) => {
-    if (selectedValues.includes(value)) {
-      onChange(selectedValues.filter(v => v !== value));
-    } else {
-      onChange([...selectedValues, value]);
-    }
-  };
-
-  const getDisplayText = () => {
-    if (appliedValues.length === 0 || appliedValues.length === options.length) {
-      return placeholder;
-    }
-    if (appliedValues.length === 1) {
-      const option = options.find(opt => opt.value === appliedValues[0]);
-      return option ? option.label : appliedValues[0];
-    }
-    return `${appliedValues.length} selected`;
-  };
-
-  const hasChanges = JSON.stringify([...selectedValues].sort()) !== JSON.stringify([...appliedValues].sort());
-
-  const handleApply = () => {
-    onApply(selectedValues);
-    setIsOpen(false);
-  };
-
-  if (isLoading) {
-    return (
-      <div className={`relative ${className}`}>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {label}
-        </label>
-        <div className="relative w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm px-3 py-2">
-          <span className="block truncate text-sm text-gray-500">Loading...</span>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`relative ${className}`} ref={dropdownRef}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}
-      </label>
-      
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="relative w-full bg-white border border-gray-300 rounded-md shadow-sm px-3 py-2 text-left cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400 transition-colors"
-      >
-        <span className="block truncate text-sm text-gray-700">
-          {getDisplayText()}
-        </span>
-        <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-          <svg
-            className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${
-              isOpen ? 'rotate-180' : ''
-            }`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </span>
-      </button>
-
-      {isOpen && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-[600px] overflow-auto">
-          <div className="px-3 py-2 border-b border-gray-200">
-            <label className="flex items-center cursor-pointer hover:bg-gray-50 -mx-1 px-1 py-1 rounded">
-              <input
-                type="checkbox"
-                checked={selectedValues.length === options.length}
-                onChange={handleSelectAll}
-                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-              />
-              <span className="ml-2 text-sm font-medium text-gray-900">(All)</span>
-            </label>
-          </div>
-
-          <div className="py-1">
-            {options.map((option) => (
-              <label
-                key={option.value}
-                className="flex items-center px-3 py-2 cursor-pointer hover:bg-gray-50"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedValues.includes(option.value)}
-                  onChange={() => handleOptionToggle(option.value)}
-                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                />
-                <span className="ml-2 text-sm text-gray-700">{option.label}</span>
-              </label>
-            ))}
-          </div>
-
-          <div className="border-t border-gray-200 px-3 py-2 sticky bottom-0 bg-white z-10">
-            <div className="flex space-x-2">
-              <button
-                onClick={handleApply}
-                disabled={!hasChanges}
-                className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
-                  hasChanges 
-                    ? 'text-white bg-blue-500 hover:bg-blue-600' 
-                    : 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                }`}
-              >
-                Apply
-              </button>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="px-3 py-1.5 text-xs text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
-              >
-                Close
-              </button>
-            </div>
-            {hasChanges && (
-              <div className="mt-1 text-xs text-orange-600 text-center">
-                Click Apply to save changes
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Filter Selector Component
-interface FilterSelectorProps {
-  onApply: (selectedFilters: string[]) => void;
-  className?: string;
-}
-
-const FilterSelector: React.FC<FilterSelectorProps> = ({ onApply, className = "" }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Available filter options
-  const availableFilterOptions = [
-    { value: "mop", label: "Method of Payment" },
-    { value: "payer_name", label: "Payer Name" },
-    { value: "brand_generic_flag", label: "Brand Generic Flag" },
-    { value: "f_month_2", label: "Date" }
-  ];
-
-  // Initialize with all filters selected
-  const [selectedFilters, setSelectedFilters] = useState<string[]>(
-    availableFilterOptions.map(option => option.value)
-  );
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Auto-apply on component mount with all filters selected
-  useEffect(() => {
-    onApply(availableFilterOptions.map(option => option.value));
-  }, [onApply]);
-
-  const handleFilterToggle = (filterValue: string) => {
-    if (selectedFilters.includes(filterValue)) {
-      setSelectedFilters(selectedFilters.filter(f => f !== filterValue));
-    } else {
-      setSelectedFilters([...selectedFilters, filterValue]);
-    }
-  };
-
-  const handleSelectAll = () => {
-    if (selectedFilters.length === availableFilterOptions.length) {
-      setSelectedFilters([]);
-    } else {
-      setSelectedFilters(availableFilterOptions.map(option => option.value));
-    }
-  };
-
-  const handleApply = () => {
-    onApply(selectedFilters);
-    setIsOpen(false);
-  };
-
-  const getDisplayText = () => {
-    if (selectedFilters.length === 0) {
-      return "No Filters Selected";
-    }
-    if (selectedFilters.length === availableFilterOptions.length) {
-      return "All Filters Selected";
-    }
-    if (selectedFilters.length === 1) {
-      const option = availableFilterOptions.find(opt => opt.value === selectedFilters[0]);
-      return option ? option.label : selectedFilters[0];
-    }
-    return `${selectedFilters.length} filters selected`;
-  };
-
-  return (
-    <div className={`relative ${className}`} ref={dropdownRef}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        Column Filters to Display
-      </label>
-      
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="relative w-full bg-white border border-gray-300 rounded-md shadow-sm px-3 py-2 text-left cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400 transition-colors"
-      >
-        <span className="block truncate text-sm text-gray-700">
-          {getDisplayText()}
-        </span>
-        <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-          <svg
-            className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${
-              isOpen ? 'rotate-180' : ''
-            }`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </span>
-      </button>
-
-      {isOpen && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg">
-          <div className="px-3 py-2 border-b border-gray-200">
-            <label className="flex items-center cursor-pointer hover:bg-gray-50 -mx-1 px-1 py-1 rounded">
-              <input
-                type="checkbox"
-                checked={selectedFilters.length === availableFilterOptions.length}
-                onChange={handleSelectAll}
-                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-              />
-              <span className="ml-2 text-sm font-medium text-gray-900">Select All</span>
-            </label>
-          </div>
-
-          <div className="py-1">
-            {availableFilterOptions.map((option) => (
-              <label
-                key={option.value}
-                className="flex items-center px-3 py-2 cursor-pointer hover:bg-gray-50"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedFilters.includes(option.value)}
-                  onChange={() => handleFilterToggle(option.value)}
-                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                />
-                <span className="ml-2 text-sm text-gray-700">{option.label}</span>
-              </label>
-            ))}
-          </div>
-
-          <div className="border-t border-gray-200 px-3 py-2 bg-white">
-            <div className="flex space-x-2">
-              <button
-                onClick={handleApply}
-                className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-              >
-                Apply
-              </button>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="px-3 py-1.5 text-xs text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Updated FilterPanel with TopN Filter
 interface FilterPanelProps {
   showFilters: boolean;
-  onFiltersChange?: (filters: any) => void;
   topOffset?: string;
 }
 
-interface FilterOption {
-  value: string;
-  label: string;
+interface FilterPosition {
+  x: number;
+  y: number;
 }
 
-interface FilterData {
-  [key: string]: string[] | any;
-}
+// Recoil state for filter positions
+export const filterPositionsState = atom<Record<string, FilterPosition>>({
+  key: 'filterPositionsState',
+  default: {},
+});
 
+export const activeFilterIdsState = atom<string[]>({
+  key: 'activeFilterIdsState',
+  default: [],
+});
+
+// Compact Filter Item with Dropdown
+const CompactFilterItem: React.FC<{ 
+  variableName: string; 
+  onRemove: () => void;
+  position: FilterPosition;
+  onPositionChange: (pos: FilterPosition) => void;
+}> = ({ variableName, onRemove, position, onPositionChange }) => {
+  const filterConfig = useRecoilValue(filterConfigFamily(variableName));
+  const [liveValue, setLiveValue] = useRecoilState(liveFilterFamily(variableName));
+  const [tempValue, setTempValue] = useState<any[]>([]);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const nodeRef = useRef(null);
+
+  const isOpen = Boolean(anchorEl);
+
+  // Initialize with default values
+  useEffect(() => {
+    if (!liveValue && filterConfig?.defaultValues && filterConfig.defaultValues.length > 0) {
+      setLiveValue(filterConfig.defaultValues);
+      setTempValue(filterConfig.defaultValues);
+    } else if (liveValue) {
+      setTempValue(liveValue);
+    }
+  }, [liveValue, filterConfig, setLiveValue]);
+
+  if (!filterConfig) return null;
+
+  const selectedValues = tempValue || [];
+  const options = filterConfig.availableOptions || [];
+
+  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleApply = () => {
+    setLiveValue(tempValue);
+    handleClose();
+  };
+
+  const handleCancel = () => {
+    setTempValue(liveValue || []);
+    handleClose();
+  };
+
+  const getCategoryColor = (category: string) => {
+    switch (category.toLowerCase()) {
+      case 'params':
+        return { bgcolor: '#e8f5e9', color: '#2e7d32', borderColor: '#4caf50' };
+      case 'data-source':
+        return { bgcolor: '#f3e5f5', color: '#9c27b0', borderColor: '#ab47bc' };
+      case 'hooks':
+        return { bgcolor: '#fff3e0', color: '#ed6c02', borderColor: '#ff9800' };
+      default:
+        return { bgcolor: '#f5f5f5', color: '#616161', borderColor: '#9e9e9e' };
+    }
+  };
+
+  const categoryColor = getCategoryColor(filterConfig.category);
+
+  // Format display text
+  const getDisplayText = () => {
+    if (selectedValues.length === 0) return '(All)';
+    if (selectedValues.length === options.length) return '(All)';
+    if (selectedValues.length === 1) return selectedValues[0].label;
+    return `${selectedValues.length} selected`;
+  };
+
+  // Single selection (Radio)
+  const renderSingleSelect = () => {
+    const selectedValue = selectedValues.length > 0 ? selectedValues[0].value : '';
+
+    const handleChange = (option: any) => {
+      setTempValue([option]);
+    };
+
+    return (
+      <Box sx={{ width: 280, maxHeight: 400, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <Box sx={{ flexGrow: 1, overflow: 'auto', px: 1.5, py: 1, maxHeight: 'calc(400px - 60px)' }}>
+          <RadioGroup value={selectedValue}>
+            {options.map((option) => (
+              <FormControlLabel
+                key={option.value}
+                value={option.value}
+                control={<Radio size="small" />}
+                label={
+                  <Typography 
+                    variant="body2"
+                    sx={{ 
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      width: '100%',
+                    }}
+                    title={option.label}
+                  >
+                    {option.label}
+                  </Typography>
+                }
+                onChange={() => handleChange(option)}
+                sx={{ 
+                  py: 0.25,
+                  mr: 0,
+                  width: '100%',
+                  '&:hover': { bgcolor: 'action.hover' },
+                  borderRadius: 1,
+                  '& .MuiFormControlLabel-label': {
+                    width: 'calc(100% - 32px)',
+                    overflow: 'hidden',
+                  }
+                }}
+              />
+            ))}
+          </RadioGroup>
+        </Box>
+        <Box sx={{ p: 1.5, pt: 1, borderTop: 1, borderColor: 'divider', display: 'flex', gap: 1 }}>
+          <Button 
+            variant="outlined" 
+            size="small" 
+            fullWidth
+            onClick={handleCancel}
+          >
+            Cancel
+          </Button>
+          <Button 
+            variant="contained" 
+            size="small" 
+            fullWidth
+            onClick={handleApply}
+          >
+            Apply
+          </Button>
+        </Box>
+      </Box>
+    );
+  };
+
+  // Multi selection (Checkboxes)
+  const renderMultiSelect = () => {
+    const handleToggle = (option: any) => {
+      const isSelected = selectedValues.some((v: any) => v.value === option.value);
+      if (isSelected) {
+        setTempValue(selectedValues.filter((v: any) => v.value !== option.value));
+      } else {
+        setTempValue([...selectedValues, option]);
+      }
+    };
+
+    const handleSelectAll = () => {
+      if (selectedValues.length === options.length) {
+        setTempValue([]);
+      } else {
+        setTempValue(options);
+      }
+    };
+
+    const allSelected = selectedValues.length === options.length;
+    const someSelected = selectedValues.length > 0 && selectedValues.length < options.length;
+
+    return (
+      <Box sx={{ width: 280, maxHeight: 400, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Select All Checkbox Header */}
+        <Box sx={{ 
+          px: 1.5, 
+          py: 0.75, 
+          borderBottom: 1, 
+          borderColor: 'divider',
+          bgcolor: 'grey.50',
+        }}>
+          <FormControlLabel
+            control={
+              <Checkbox 
+                size="small"
+                checked={allSelected}
+                indeterminate={someSelected}
+                onChange={handleSelectAll}
+              />
+            }
+            label={<Typography variant="body2" fontWeight="600">(All)</Typography>}
+            sx={{ 
+              mr: 0,
+              width: '100%',
+              '& .MuiFormControlLabel-label': {
+                width: '100%',
+              }
+            }}
+          />
+        </Box>
+
+        {/* Scrollable Options */}
+        <Box sx={{ flexGrow: 1, overflow: 'auto', px: 1.5, py: 1, maxHeight: 'calc(400px - 100px)' }}>
+          <FormGroup sx={{ width: '100%' }}>
+            {options.map((option) => {
+              const isSelected = selectedValues.some((v: any) => v.value === option.value);
+              return (
+                <FormControlLabel
+                  key={option.value}
+                  control={
+                    <Checkbox 
+                      size="small"
+                      checked={isSelected}
+                      onChange={() => handleToggle(option)}
+                    />
+                  }
+                  label={
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        width: '100%',
+                      }}
+                      title={option.label}
+                    >
+                      {option.label}
+                    </Typography>
+                  }
+                  sx={{ 
+                    py: 0.25,
+                    mr: 0,
+                    width: '100%',
+                    '&:hover': { bgcolor: 'action.hover' },
+                    borderRadius: 1,
+                    '& .MuiFormControlLabel-label': {
+                      width: 'calc(100% - 32px)',
+                      overflow: 'hidden',
+                    }
+                  }}
+                />
+              );
+            })}
+          </FormGroup>
+        </Box>
+        
+        {/* Apply/Cancel Buttons */}
+        <Box sx={{ p: 1.5, pt: 1, borderTop: 1, borderColor: 'divider', display: 'flex', gap: 1 }}>
+          <Button 
+            variant="outlined" 
+            size="small" 
+            fullWidth
+            onClick={handleCancel}
+          >
+            Cancel
+          </Button>
+          <Button 
+            variant="contained" 
+            size="small" 
+            fullWidth
+            onClick={handleApply}
+          >
+            Apply
+          </Button>
+        </Box>
+      </Box>
+    );
+  };
+
+  return (
+    <Draggable
+      nodeRef={nodeRef}
+      handle=".drag-handle"
+      position={position}
+      onStop={(e, data) => {
+        onPositionChange({ x: data.x, y: data.y });
+      }}
+      bounds="parent"
+    >
+      <Paper
+        ref={nodeRef}
+        elevation={2}
+        sx={{
+          position: 'absolute',
+          width: 280, // Match the width of the add filter section
+          bgcolor: 'white',
+          border: 1,
+          borderColor: 'divider',
+          borderRadius: 1,
+          overflow: 'hidden',
+        }}
+      >
+        {/* Header with drag handle */}
+        <Box
+          className="drag-handle"
+          sx={{
+            bgcolor: '#f5f5f5',
+            borderBottom: 1,
+            borderColor: 'divider',
+            px: 1,
+            py: 0.5,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'move',
+            '&:hover': {
+              bgcolor: '#eeeeee',
+            },
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+            <DragIndicatorIcon sx={{ fontSize: 16, mr: 0.5, color: 'text.secondary' }} />
+            <Typography variant="caption" fontWeight="600" noWrap sx={{ flex: 1 }}>
+              {filterConfig.displayName}
+            </Typography>
+          </Box>
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            sx={{
+              p: 0.25,
+              ml: 0.5,
+              '&:hover': {
+                bgcolor: 'error.light',
+                color: 'error.main',
+              },
+            }}
+          >
+            <CloseIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Box>
+
+        {/* Dropdown selector */}
+        <Box
+          onClick={handleClick}
+          sx={{
+            px: 1.5,
+            py: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+            bgcolor: 'white',
+            '&:hover': {
+              bgcolor: 'action.hover',
+            },
+            borderLeft: 3,
+            borderColor: categoryColor.borderColor,
+          }}
+        >
+          <Typography variant="body2" noWrap sx={{ flex: 1, mr: 1 }}>
+            {getDisplayText()}
+          </Typography>
+          <KeyboardArrowDownIcon 
+            sx={{ 
+              fontSize: 18, 
+              color: 'text.secondary',
+              transform: isOpen ? 'rotate(180deg)' : 'rotate(0)',
+              transition: 'transform 0.2s',
+            }} 
+          />
+        </Box>
+
+        {/* Dropdown Menu */}
+        <Menu
+          anchorEl={anchorEl}
+          open={isOpen}
+          onClose={handleClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'left',
+          }}
+          disableAutoFocusItem
+          PaperProps={{
+            sx: {
+              mt: 0.5,
+              boxShadow: 3,
+              maxHeight: 400,
+              overflow: 'hidden',
+              width: 280,
+            },
+          }}
+          MenuListProps={{
+            sx: { p: 0, width: '100%' },
+          }}
+        >
+          {filterConfig.selectionType === 'single' ? renderSingleSelect() : renderMultiSelect()}
+        </Menu>
+      </Paper>
+    </Draggable>
+  );
+};
+
+// Main FilterPanel
 const FilterPanel: React.FC<FilterPanelProps> = ({ 
   showFilters, 
-  onFiltersChange, 
-  topOffset = '80px',
+  topOffset = '80px'
 }) => {
-  // TopN state using Recoil
-  const [topNValue, setTopNValue] = useRecoilState(topNState);
+  const [selectedFilter, setSelectedFilter] = useState<string>("");
+  const [activeFilterIds, setActiveFilterIds] = useRecoilState(activeFilterIdsState);
+  const [filterPositions, setFilterPositions] = useRecoilState(filterPositionsState);
+  
+  const allFilters = useRecoilValue(allFiltersSelector);
+  const filterNames = useRecoilValue(filterNamesState);
 
-  // TopN options - you can customize these values
-  const topNOptions = [
-    { value: 10, label: 'Top 10' },
-    { value: 15, label: 'Top 15' },
-    { value: 20, label: 'Top 20' },
-    { value: 25, label: 'Top 25' },
-    { value: 50, label: 'Top 50' }
-  ];
+  // Get all available filters sorted by category
+  const availableFilters = filterNames
+    .map(name => allFilters[name])
+    .filter(config => config)
+    .sort((a, b) => {
+      if (a.category !== b.category) {
+        return a.category.localeCompare(b.category);
+      }
+      return a.displayName.localeCompare(b.displayName);
+    });
 
-  // Loading states
-  const [isLoadingFilters, setIsLoadingFilters] = useState(false);
-  const [filterError, setFilterError] = useState<string | null>(null);
+  const handleAddFilter = () => {
+    if (!selectedFilter) return;
 
-  // Dynamic filter options from API
-  const [filterOptions, setFilterOptions] = useState<Record<string, FilterOption[]>>({});
-  const [activeFilters, setActiveFilters] = useState<string[]>([]); // Which filters to show
-
-  // STAGED SELECTIONS (user is selecting but not applied yet)
-  const [stagedFilters, setStagedFilters] = useState<Record<string, string[]>>({});
-
-  // APPLIED FILTERS (actually sent to parent and used for filtering)
-  const [appliedFilters, setAppliedFilters] = useState<Record<string, string[]>>({});
-
-  // API call to fetch filter options for selected filters
-  const fetchFilterOptions = useCallback(async (selectedFilters: string[]) => {
-    if (selectedFilters.length === 0) {
-      setFilterOptions({});
-      setActiveFilters([]);
+    // Check if filter already exists
+    if (activeFilterIds.includes(selectedFilter)) {
+      alert('This filter is already added!');
       return;
     }
 
-    setIsLoadingFilters(true);
-    setFilterError(null);
+    // Add to active filters
+    setActiveFilterIds([...activeFilterIds, selectedFilter]);
 
-    try {
-      const response = await client.post('/api/report-builder/get-filters', {
-        post_data: {
-          filters: selectedFilters.join(",")
-        }
+    // Set initial position (stagger vertically)
+    if (!filterPositions[selectedFilter]) {
+      setFilterPositions({
+        ...filterPositions,
+        [selectedFilter]: {
+          x: 10,
+          y: 10 + (activeFilterIds.length * 80),
+        },
       });
-
-      const result = response.data;
-      
-      if (result.ok && result.data) {
-        const processedOptions: Record<string, FilterOption[]> = {};
-
-        // Process the API response
-        result.data.forEach((filterObj: Record<string, FilterData>) => {
-          Object.entries(filterObj).forEach(([filterKey, filterData]) => {
-            // Convert the filter data to options format
-            if (Array.isArray(filterData)) {
-              processedOptions[filterKey] = filterData.map((item: string) => ({
-                value: item,
-                label: item.charAt(0).toUpperCase() + item.slice(1).replace(/_/g, ' ')
-              }));
-            } else if (typeof filterData === 'object') {
-              // Handle object-based filter data if needed
-              processedOptions[filterKey] = Object.keys(filterData).map(key => ({
-                value: key,
-                label: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')
-              }));
-            }
-          });
-        });
-
-        setFilterOptions(processedOptions);
-        setActiveFilters(selectedFilters);
-
-        // Initialize staged and applied filters with ALL OPTIONS SELECTED for new filters
-        const initialFilters: Record<string, string[]> = { ...stagedFilters, ...appliedFilters };
-        selectedFilters.forEach(key => {
-          if (!(key in initialFilters)) {
-            // Set all options as selected by default
-            initialFilters[key] = processedOptions[key] ? processedOptions[key].map(opt => opt.value) : [];
-          }
-        });
-        
-        setStagedFilters(prev => ({ ...prev, ...initialFilters }));
-        setAppliedFilters(prev => {
-          const newAppliedFilters = { ...prev, ...initialFilters };
-          
-          // Notify parent component with all filters selected
-          if (onFiltersChange) {
-            onFiltersChange(newAppliedFilters);
-          }
-          
-          return newAppliedFilters;
-        });
-
-      } else {
-        throw new Error(result.error || 'Failed to fetch filters');
-      }
-    } catch (error) {
-      console.error('Error fetching filter options:', error);
-      setFilterError(error instanceof Error ? error.message : 'Failed to load filters');
-    } finally {
-      setIsLoadingFilters(false);
     }
-  }, [onFiltersChange]);
 
-  // Handle filter selector apply
-  const handleFilterSelectorApply = useCallback((selectedFilters: string[]) => {
-    fetchFilterOptions(selectedFilters);
-  }, [fetchFilterOptions]);
-
-  // Individual apply handlers for each filter
-  const handleFilterApply = useCallback((filterKey: string, values: string[]) => {
-    setAppliedFilters(prev => {
-      const updated = { ...prev, [filterKey]: values };
-      
-      // Notify parent component
-      if (onFiltersChange) {
-        onFiltersChange(updated);
-      }
-      
-      return updated;
-    });
-  }, [onFiltersChange]);
-
-  // Update staged filter values
-  const handleFilterChange = useCallback((filterKey: string, values: string[]) => {
-    setStagedFilters(prev => ({
-      ...prev,
-      [filterKey]: values
-    }));
-  }, []);
-
-  // Handle TopN change
-  const handleTopNChange = useCallback((value: number) => {
-    setTopNValue(value);
-    console.log(`TopN changed to: ${value}`);
-  }, [setTopNValue]);
-
-  // Check if there are any applied filters
-  const hasActiveFilters = Object.values(appliedFilters).some(filterArray => 
-    Array.isArray(filterArray) && filterArray.length > 0
-  );
-
-  // Clear all filters
-  const clearAllFilters = useCallback(() => {
-    const clearedFilters: Record<string, string[]> = {};
-    activeFilters.forEach(key => {
-      clearedFilters[key] = [];
-    });
-    
-    setStagedFilters(clearedFilters);
-    setAppliedFilters(clearedFilters);
-
-    if (onFiltersChange) {
-      onFiltersChange(clearedFilters);
-    }
-  }, [activeFilters, onFiltersChange]);
-
-  // Get friendly label for filter key
-  const getFilterLabel = (filterKey: string): string => {
-    const labelMap: Record<string, string> = {
-      // Map actual API filter names to display labels
-      mop: "Method of Payment",
-      payer_name: "Payer Name", 
-      brand_generic_flag: "Brand Generic Flag",
-      f_month_2: "Date"
-    };
-    return labelMap[filterKey] || filterKey.charAt(0).toUpperCase() + filterKey.slice(1).replace(/_/g, ' ');
+    setSelectedFilter("");
   };
 
-  // Don't render if filters are hidden
+  const handleRemoveFilter = (filterId: string) => {
+    setActiveFilterIds(activeFilterIds.filter(id => id !== filterId));
+    const newPositions = { ...filterPositions };
+    delete newPositions[filterId];
+    setFilterPositions(newPositions);
+  };
+
+  const handlePositionChange = (filterId: string, position: FilterPosition) => {
+    setFilterPositions({
+      ...filterPositions,
+      [filterId]: position,
+    });
+  };
+
   if (!showFilters) return null;
 
   return (
-    <div 
-      className="fixed right-0 w-80 bg-white border-l border-gray-200 shadow-lg z-30 overflow-y-auto transition-transform duration-300 px-[10px]"
-      style={{
+    <Paper 
+      elevation={3}
+      sx={{
+        position: 'fixed',
+        right: 0,
         top: topOffset,
         height: `calc(100vh - ${topOffset})`,
-        transform: showFilters ? 'translateX(0)' : 'translateX(100%)'
+        width: 320,
+        borderLeft: 1,
+        borderColor: 'divider',
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'transform 0.3s',
+        transform: showFilters ? 'translateX(0)' : 'translateX(100%)',
+        zIndex: 30,
+        overflow: 'hidden',
+        padding: 0.5,
       }}
     >
-      <div className="p-4">
-        <div className="bg-gray-400 text-white text-center py-2 -mx-4 mb-4 rounded-t-lg relative">
-          <h2 className="text-sm font-medium">Filters</h2>
-        </div>
-
-        {/* TopN Filter */}
-        <div className="mb-6 p-3 bg-green-50 rounded-lg border border-green-200">
-          <SingleSelectDropdown
-            label="Top N Records"
-            options={topNOptions}
-            selectedValue={topNValue}
-            onChange={handleTopNChange}
-          />
-        </div>
+      {/* Header Section */}
+      <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'grey.50' }}>
+        <Box 
+          sx={{ 
+            bgcolor: 'primary.main', 
+            color: 'white', 
+            textAlign: 'center', 
+            py: 1,
+            mx: -2,
+            mt: -2,
+            mb: 2,
+          }}
+        >
+          <Typography variant="subtitle2" fontWeight="600">
+            Filters
+          </Typography>
+        </Box>
 
         {/* Filter Selector */}
-        <div className="mb-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <FilterSelector onApply={handleFilterSelectorApply} />
-        </div>
-
-        {/* Error Message */}
-        {filterError && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-sm text-red-600">{filterError}</p>
-            <button
-              onClick={() => fetchFilterOptions(activeFilters)}
-              className="mt-2 text-xs text-red-700 underline hover:no-underline"
+        <Paper sx={{ p: 2, bgcolor: '#e3f2fd', border: 1, borderColor: 'primary.light' }}>
+          <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
+            <InputLabel>Add Filter</InputLabel>
+            <Select
+              value={selectedFilter}
+              onChange={(e) => setSelectedFilter(e.target.value)}
+              label="Add Filter"
+              sx={{ bgcolor: 'white' }}
+              renderValue={(selected) => {
+                if (!selected) return <em>-- Select a filter --</em>;
+                const config = allFilters[selected];
+                return config?.displayName || selected;
+              }}
             >
-              Try again
-            </button>
-          </div>
-        )}
-        
-        {/* Dynamic Filter Sections */}
-        {activeFilters.length > 0 && (
-          <div className="space-y-4">
-            {activeFilters.map((filterKey) => (
-              <MultiSelectFilter
-                key={filterKey}
-                label={getFilterLabel(filterKey)}
-                options={filterOptions[filterKey] || []}
-                selectedValues={stagedFilters[filterKey] || []}
-                appliedValues={appliedFilters[filterKey] || []}
-                onChange={(values) => handleFilterChange(filterKey, values)}
-                onApply={(values) => handleFilterApply(filterKey, values)}
-                placeholder="(All)"
-                isLoading={isLoadingFilters}
+              <MenuItem value="">
+                <em>-- Select a filter --</em>
+              </MenuItem>
+              {availableFilters.map((config) => {
+                const getCategoryChipColor = (category: string) => {
+                  switch (category.toLowerCase()) {
+                    case 'params':
+                      return { bgcolor: '#e8f5e9', color: '#2e7d32' };
+                    case 'data-source':
+                      return { bgcolor: '#f3e5f5', color: '#9c27b0' };
+                    case 'hooks':
+                      return { bgcolor: '#fff3e0', color: '#ed6c02' };
+                    default:
+                      return { bgcolor: '#f5f5f5', color: '#616161' };
+                  }
+                };
+                
+                return (
+                  <MenuItem key={config.variableName} value={config.variableName}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                      <Chip 
+                        label={config.category} 
+                        size="small"
+                        sx={{ 
+                          ...getCategoryChipColor(config.category),
+                          fontSize: '0.65rem',
+                          height: 20,
+                          fontWeight: 600,
+                        }}
+                      />
+                      <Typography variant="body2">
+                        {config.displayName}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                );
+              })}
+            </Select>
+          </FormControl>
+          
+          <Button
+            fullWidth
+            variant="contained"
+            onClick={handleAddFilter}
+            disabled={!selectedFilter}
+            size="small"
+          >
+            Add Filter
+          </Button>
+        </Paper>
+      </Box>
+
+      {/* Draggable Filters Area */}
+      <Box 
+        sx={{ 
+          flexGrow: 1,
+          overflow: 'hidden',
+          bgcolor: 'grey.50',
+          position: 'relative',
+        }}
+      >
+        {activeFilterIds.length === 0 ? (
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              height: '100%',
+              textAlign: 'center',
+              p: 3,
+            }}
+          >
+            <Box>
+              <svg 
+                style={{ width: 48, height: 48, margin: '0 auto 8px', opacity: 0.4 }} 
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
+              </svg>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                No filters added yet
+              </Typography>
+              <Typography variant="caption" color="text.disabled">
+                Select a filter above to add
+              </Typography>
+            </Box>
+          </Box>
+        ) : (
+          <Box sx={{ position: 'relative', width: '100%', height: '100%', p: 1 }}>
+            {activeFilterIds.map((filterId) => (
+              <CompactFilterItem
+                key={filterId}
+                variableName={filterId}
+                onRemove={() => handleRemoveFilter(filterId)}
+                position={filterPositions[filterId] || { x: 10, y: 10 }}
+                onPositionChange={(pos) => handlePositionChange(filterId, pos)}
               />
             ))}
-          </div>
+          </Box>
         )}
+      </Box>
 
-        {/* No filters selected message */}
-        {activeFilters.length === 0 && !isLoadingFilters && (
-          <div className="text-center py-8">
-            <svg className="h-12 w-12 text-gray-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
-            </svg>
-            <p className="text-sm text-gray-600">Select filters above to start filtering your data</p>
-          </div>
-        )}
-
-        {/* Loading indicator */}
-        {isLoadingFilters && (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
-            <p className="text-sm text-gray-600">Loading filter options...</p>
-          </div>
-        )}
-
-        {/* Clear All Filters - only show if there are applied filters */}
-        {hasActiveFilters && (
-          <div className="mt-6 pt-4 border-t border-gray-200">
-            <button
-              onClick={clearAllFilters}
-              className="w-full px-3 py-2 text-sm text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
-            >
-              Clear All Filters
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+      {/* Instructions Footer */}
+      <Box 
+        sx={{ 
+          p: 1.5, 
+          bgcolor: '#fff3e0', 
+          borderTop: 1, 
+          borderColor: 'warning.light' 
+        }}
+      >
+        <Typography variant="caption" fontWeight="600" color="warning.dark" display="block" mb={0.5}>
+          💡 Tips
+        </Typography>
+        <Box component="ul" sx={{ m: 0, pl: 2, fontSize: '0.7rem', color: 'warning.dark' }}>
+          <li>Drag filters by header</li>
+          <li>Click to open dropdown menu</li>
+          <li>Apply changes with Apply button</li>
+        </Box>
+      </Box>
+    </Paper>
   );
 };
 
