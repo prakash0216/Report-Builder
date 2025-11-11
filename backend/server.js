@@ -1070,6 +1070,21 @@ app.get("/get-all-ds-names", async (req, res) => {
   }
 });
 
+app.post("/rename-data-source",async(req,res)=>{
+  const {oldName,newName}=req.body; 
+  if(!oldName || !newName){
+    return res.status(400).json({success:false,error:'Both oldName and newName are required'});
+  }
+  try{
+    const updateQuery=`UPDATE data_source_registry SET ds_name='${newName}' WHERE ds_name='${oldName}'`;
+    await dbClient.run(updateQuery);
+    return res.json({success:true,message:`Data source renamed from ${oldName} to ${newName}`});
+  }catch(err){
+    console.error("Error renaming data source:",err);
+    res.status(500).json({success:false,error:err.message});
+  }
+});
+
 app.post("/get-ds-column-names",async(req,res)=>{
   const ds_name=req.body.ds_name;
   if(!ds_name){

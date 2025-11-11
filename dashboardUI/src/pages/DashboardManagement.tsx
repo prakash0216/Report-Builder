@@ -1,103 +1,108 @@
-import React, { useRef, useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useRecoilState } from 'recoil'; 
-
+import { useRecoilState } from 'recoil';
 import { dashboardsManager, Dashboard } from '../recoil/Dashboards';
-
 import {
   Box,
-  Card,
-  CardContent,
-  CardActions,
-  Grid,
+  Container,
+  Paper,
   Typography,
+  TextField,
   Button,
   IconButton,
+  Card,
+  CardContent,
+  CardActionArea,
+  Grid,
+  Divider,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  Container,
   Chip,
-  Paper,
-  Fade,
-  Grow,
-  CardMedia,
-  Input
+  Tooltip,
+  AppBar,
+  Toolbar,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  Dashboard as DashboardIcon,
+  FolderOpen as FolderOpenIcon,
+  ChevronRight as ChevronRightIcon,
   BarChart as BarChartIcon,
-  ShowChart as ShowChartIcon,
   Warning as WarningIcon,
-  Image as ImageIcon,
-  Close as CloseIcon
 } from '@mui/icons-material';
 
-
-const DashboardsManagement = () => {
+const DashboardManagement: React.FC = () => {
+  const navigate = useNavigate();
   const [dashboards, setDashboards] = useRecoilState(dashboardsManager);
-  
-  const [openDialog, setOpenDialog] = useState(false);
+  const [selectedDashboard, setSelectedDashboard] = useState<Dashboard | null>(null);
+  const [newDashboardName, setNewDashboardName] = useState<string>('');
+  const [editingDashboard, setEditingDashboard] = useState<Dashboard | null>(null);
+  const [editName, setEditName] = useState<string>('');
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [deletingDashboard, setDeletingDashboard] = useState<Dashboard | null>(null);
-  const [editingDashboard, setEditingDashboard] = useState<Dashboard | null>(null);
-  const [formData, setFormData] = useState({ name: '', description: '', thumbnail: '' });
-  const [thumbnailPreview, setThumbnailPreview] = useState<string>('');
-  const dashId = useRef(1);
+  const dashIdRef = useRef(1);
 
-  const handleCreate = () => {
-    if (!formData.name.trim()) return;
+  // Create new dashboard
+  const handleCreateDashboard = () => {
+    if (!newDashboardName.trim()) return;
 
-    let newId = dashId.current.toString();
-    dashId.current += 1;
-    
     const newDashboard: Dashboard = {
-      id: newId,
-      name: formData.name,
-      description: formData.description,
-      thumbnail: formData.thumbnail,
+      id: dashIdRef.current.toString(),
+      name: newDashboardName,
+      description: '',
+      thumbnail: '',
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      chartsCount: 0
+      chartsCount: 0,
     };
-    
-    setDashboards(prevDashboards => [...prevDashboards, newDashboard]);
-    handleCloseDialog();
+
+    dashIdRef.current += 1;
+    setDashboards([...dashboards, newDashboard]);
+    setNewDashboardName('');
+    setSelectedDashboard(newDashboard);
   };
 
-  const handleEdit = (dashboard: Dashboard) => {
+  // Start editing dashboard
+  const handleEditStart = (dashboard: Dashboard) => {
     setEditingDashboard(dashboard);
-    setFormData({ 
-      name: dashboard.name, 
-      description: dashboard.description || '', 
-      thumbnail: dashboard.thumbnail || '' 
-    });
-    setThumbnailPreview(dashboard.thumbnail || '');
-    setOpenDialog(true);
+    setEditName(dashboard.name);
   };
 
-  const handleUpdate = () => {
-    if (!formData.name.trim() || !editingDashboard) return;
-    
-    setDashboards(prevDashboards => prevDashboards.map(d => 
-      d.id === editingDashboard.id
-        ? { 
-            ...d, 
-            name: formData.name, 
-            description: formData.description, 
-            thumbnail: formData.thumbnail,
-            updatedAt: Date.now() 
-          }
-        : d
-    ));
-    
-    handleCloseDialog();
+  // Save edited dashboard
+  const handleEditSave = () => {
+    if (!editName.trim() || !editingDashboard) return;
+
+    setDashboards(
+      dashboards.map((d) =>
+        d.id === editingDashboard.id
+          ? { ...d, name: editName, updatedAt: Date.now() }
+          : d
+      )
+    );
+
+    if (selectedDashboard?.id === editingDashboard.id) {
+      setSelectedDashboard({ ...editingDashboard, name: editName });
+    }
+
+    setEditingDashboard(null);
+    setEditName('');
   };
 
+  // Cancel editing
+  const handleEditCancel = () => {
+    setEditingDashboard(null);
+    setEditName('');
+  };
+
+  // Delete dashboard
   const handleDeleteClick = (dashboard: Dashboard) => {
     setDeletingDashboard(dashboard);
     setOpenDeleteDialog(true);
@@ -105,574 +110,368 @@ const DashboardsManagement = () => {
 
   const handleDeleteConfirm = () => {
     if (deletingDashboard) {
-      setDashboards(prevDashboards => prevDashboards.filter(d => d.id !== deletingDashboard.id));
+      setDashboards(dashboards.filter((d) => d.id !== deletingDashboard.id));
+      if (selectedDashboard?.id === deletingDashboard.id) {
+        setSelectedDashboard(null);
+      }
     }
     setOpenDeleteDialog(false);
     setDeletingDashboard(null);
   };
 
-  const handleDeleteCancel = () => {
-    setOpenDeleteDialog(false);
-    setDeletingDashboard(null);
-  };
-
-  const handleOpenDashboard = (id: string) => {
-    console.log(`Maps to dashboard: ${id}`);
-    alert(`This would navigate to /dashboard/${id}`);
-  };
-
-  const handleOpenDialog = () => {
-    setEditingDashboard(null);
-    setFormData({ name: '', description: '', thumbnail: '' });
-    setThumbnailPreview('');
-    setOpenDialog(true);
-  };
-
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-    setEditingDashboard(null);
-    setFormData({ name: '', description: '', thumbnail: '' });
-    setThumbnailPreview('');
-  };
-
-  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const url = e.target.value;
-    setFormData({ ...formData, thumbnail: url });
-    setThumbnailPreview(url);
+  // Navigate to views page
+  const handleDashboardClick = (dashboard: Dashboard) => {
+    navigate(`/dashboard/${dashboard.id}/views`);
   };
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
     });
   };
 
   return (
-    <Box sx={{ 
-      minHeight: '100vh',
-      bgcolor: '#f8f9fa'
-    }}>
-      <Container maxWidth={false} sx={{ py: 4, px: 3 }}>
-        {/* Header */}
-        <Box sx={{ 
-          mb: 4, 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 2
-        }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: 'grey.50' }}>
+      {/* Top Navigation Bar */}
+      <AppBar position="static" elevation={1} sx={{ bgcolor: 'white', color: 'text.primary' }}>
+        <Toolbar>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Box
               sx={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 borderRadius: 2,
-                p: 1.5,
+                p: 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
               }}
             >
-              <ShowChartIcon sx={{ fontSize: 32, color: 'white' }} />
+              <BarChartIcon sx={{ color: 'white', fontSize: 28 }} />
             </Box>
-            <Box>
-              <Typography 
-                variant="h4" 
-                fontWeight="700"
-                sx={{ color: '#1a1a2e', mb: 0.5 }}
-              >
-                Report Builder Intelligence
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Create, manage, and explore your analytics dashboards
-              </Typography>
-            </Box>
+            <Typography variant="h5" fontWeight={700} sx={{ color: '#1a1a2e' }}>
+              Chart Builder
+            </Typography>
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleOpenDialog}
-            size="large"
-            sx={{
-              px: 3,
-              py: 1.2,
-              borderRadius: 2,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
-              textTransform: 'none',
-              fontSize: '0.95rem',
-              fontWeight: 600,
-              '&:hover': {
-                background: 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)',
-                boxShadow: '0 6px 16px rgba(102, 126, 234, 0.4)',
-                transform: 'translateY(-2px)'
-              },
-              transition: 'all 0.3s ease'
-            }}
-          >
-            New Dashboard
-          </Button>
-        </Box>
+        </Toolbar>
+      </AppBar>
 
-        {/* Dashboard Grid */}
-        {dashboards.length > 0 ? (
-          <Grid container spacing={3}>
-            {dashboards.map((dashboard, index) => (
-              <Grid size={{xs:12,sm:6,md:4}} key={dashboard.id}>
-                <Card 
-                  sx={{ 
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    borderRadius: 3,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    border: '1px solid #e8e8e8',
-                    overflow: 'hidden',
-                    '&:hover': {
-                      boxShadow: '0 8px 24px rgba(102, 126, 234, 0.15)',
-                      transform: 'translateY(-4px)',
-                      borderColor: '#667eea'
-                    }
-                  }}
+      {/* Main Content */}
+      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* Left Sidebar - Dashboard List */}
+        <Paper
+          elevation={2}
+          sx={{
+            width: 320,
+            display: 'flex',
+            flexDirection: 'column',
+            borderRadius: 0,
+            borderRight: 1,
+            borderColor: 'divider',
+          }}
+        >
+          {/* Sidebar Header */}
+          <Box sx={{ p: 2.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'grey.50' }}>
+            <Typography variant="h6" fontWeight={600} gutterBottom>
+              Dashboards
+            </Typography>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Enter dashboard name"
+              value={newDashboardName}
+              onChange={(e) => setNewDashboardName(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleCreateDashboard()}
+              sx={{ mb: 1 }}
+            />
+            <Button
+              fullWidth
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleCreateDashboard}
+              disabled={!newDashboardName.trim()}
+              sx={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
+            >
+              Create Dashboard
+            </Button>
+          </Box>
+
+          {/* Dashboard List */}
+          <List sx={{ flex: 1, overflow: 'auto', p: 1 }}>
+            {dashboards.length === 0 ? (
+              <Box sx={{ textAlign: 'center', py: 4, px: 2 }}>
+                <FolderOpenIcon sx={{ fontSize: 48, color: 'grey.400', mb: 1 }} />
+                <Typography variant="body2" color="text.secondary">
+                  No dashboards yet. Create your first dashboard above.
+                </Typography>
+              </Box>
+            ) : (
+              dashboards.map((dashboard) => (
+                <ListItem
+                  key={dashboard.id}
+                  disablePadding
+                  sx={{ mb: 1 }}
+                  secondaryAction={
+                    editingDashboard?.id !== dashboard.id && (
+                      <Box>
+                        <Tooltip title="Edit">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditStart(dashboard);
+                            }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteClick(dashboard);
+                            }}
+                            sx={{ color: 'error.main' }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    )
+                  }
                 >
-                  {/* Thumbnail */}
-                  {dashboard.thumbnail ? (
-                    <Box
-                      onClick={() => handleOpenDashboard(dashboard.id)}
-                      sx={{
-                        height: 300,
-                        width: '100%',
-                        cursor: 'pointer',
-                        overflow: 'hidden',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        bgcolor: '#f5f5f5'
-                      }}
-                    >
-                      <img
-                        src={dashboard.thumbnail}
-                        alt={dashboard.name}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'contain'
+                  {editingDashboard?.id === dashboard.id ? (
+                    <Box sx={{ width: '100%', px: 2, py: 1 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') handleEditSave();
+                          if (e.key === 'Escape') handleEditCancel();
                         }}
+                        autoFocus
                       />
+                      <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                        <Button size="small" variant="contained" onClick={handleEditSave}>
+                          Save
+                        </Button>
+                        <Button size="small" variant="outlined" onClick={handleEditCancel}>
+                          Cancel
+                        </Button>
+                      </Box>
                     </Box>
                   ) : (
-                    <Box
-                      onClick={() => handleOpenDashboard(dashboard.id)}
+                    <ListItemButton
+                      selected={selectedDashboard?.id === dashboard.id}
+                      onClick={() => setSelectedDashboard(dashboard)}
                       sx={{
-                        height: 300,
-                        background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s ease',
-                        '&:hover': {
-                          background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%)'
-                        }
+                        borderRadius: 1,
+                        '&.Mui-selected': {
+                          bgcolor: 'primary.light',
+                          color: 'primary.contrastText',
+                          '&:hover': {
+                            bgcolor: 'primary.main',
+                          },
+                        },
                       }}
                     >
-                      <BarChartIcon sx={{ fontSize: 64, color: '#667eea', opacity: 0.5 }} />
-                    </Box>
-                  )}
-
-                  <CardContent 
-                    sx={{ flexGrow: 1, cursor: 'pointer', p: 2.5 }}
-                    onClick={() => handleOpenDashboard(dashboard.id)}
-                  >
-                    <Typography variant="h6" fontWeight="600" sx={{ mb: 1, color: '#1a1a2e' }}>
-                      {dashboard.name}
-                    </Typography>
-                    
-                    {dashboard.description && (
-                      <Typography 
-                        variant="body2" 
-                        color="text.secondary"
-                        sx={{ 
-                          mb: 2,
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                          lineHeight: 1.5,
-                          minHeight: '3em'
+                      <DashboardIcon sx={{ mr: 2, fontSize: 20 }} />
+                      <ListItemText
+                        primary={dashboard.name}
+                        secondary={formatDate(dashboard.updatedAt)}
+                        primaryTypographyProps={{
+                          fontWeight: 600,
+                          noWrap: true,
                         }}
-                      >
-                        {dashboard.description}
+                        secondaryTypographyProps={{
+                          sx: {
+                            color: selectedDashboard?.id === dashboard.id ? 'inherit' : 'text.secondary',
+                            opacity: selectedDashboard?.id === dashboard.id ? 0.8 : 1,
+                          },
+                        }}
+                      />
+                    </ListItemButton>
+                  )}
+                </ListItem>
+              ))
+            )}
+          </List>
+        </Paper>
+
+        {/* Right Content - Dashboard Details */}
+        <Box sx={{ flex: 1, overflow: 'auto', p: 4 }}>
+          {selectedDashboard ? (
+            <Box>
+              {/* Dashboard Header */}
+              <Box sx={{ mb: 4 }}>
+                <Typography variant="h4" fontWeight={700} gutterBottom sx={{ color: '#1a1a2e' }}>
+                  {selectedDashboard.name}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                  <Chip
+                    label={`Created ${formatDate(selectedDashboard.createdAt)}`}
+                    size="small"
+                    sx={{ bgcolor: 'grey.200' }}
+                  />
+                  <Chip
+                    label={`Updated ${formatDate(selectedDashboard.updatedAt)}`}
+                    size="small"
+                    sx={{ bgcolor: 'grey.200' }}
+                  />
+                </Box>
+                <Divider />
+              </Box>
+
+              {/* Dashboard Card - Click to go to views */}
+              <Card
+                sx={{
+                  maxWidth: 600,
+                  borderRadius: 3,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  border: 2,
+                  borderColor: 'primary.light',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    transform: 'translateY(-4px)',
+                    boxShadow: '0 8px 24px rgba(102, 126, 234, 0.2)',
+                    borderColor: 'primary.main',
+                  },
+                }}
+              >
+                <CardActionArea onClick={() => handleDashboardClick(selectedDashboard)}>
+                  <Box
+                    sx={{
+                      height: 200,
+                      background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative',
+                    }}
+                  >
+                    <DashboardIcon sx={{ fontSize: 80, color: '#667eea', opacity: 0.5 }} />
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        top: 16,
+                        right: 16,
+                        bgcolor: 'white',
+                        borderRadius: 2,
+                        px: 2,
+                        py: 0.5,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.5,
+                      }}
+                    >
+                      <Typography variant="caption" fontWeight={600} color="primary">
+                        Click to view
                       </Typography>
-                    )}
-                    
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      <Chip 
-                        label={`${dashboard.chartsCount} charts`} 
+                      <ChevronRightIcon fontSize="small" color="primary" />
+                    </Box>
+                  </Box>
+                  <CardContent sx={{ p: 3 }}>
+                    <Typography variant="h5" fontWeight={600} gutterBottom>
+                      Open Dashboard Views
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Access all views and reports for this dashboard. Create and manage different
+                      perspectives of your data.
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Chip
+                        icon={<FolderOpenIcon />}
+                        label="Views"
                         size="small"
                         sx={{
                           bgcolor: 'rgba(102, 126, 234, 0.1)',
                           color: '#667eea',
                           fontWeight: 600,
-                          fontSize: '0.75rem'
                         }}
                       />
-                      <Chip 
-                        label={formatDate(dashboard.updatedAt)} 
+                      <Chip
+                        label={`${selectedDashboard.chartsCount} Charts`}
                         size="small"
-                        sx={{
-                          bgcolor: '#f0f0f0',
-                          color: '#666',
-                          fontWeight: 500,
-                          fontSize: '0.75rem'
-                        }}
+                        sx={{ bgcolor: 'grey.200' }}
                       />
                     </Box>
                   </CardContent>
-                  
-                  <CardActions sx={{ justifyContent: 'flex-end', p: 2, pt: 0, gap: 0.5 }}>
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEdit(dashboard);
-                      }}
-                      sx={{
-                        color: '#667eea',
-                        '&:hover': {
-                          bgcolor: 'rgba(102, 126, 234, 0.1)'
-                        }
-                      }}
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteClick(dashboard);
-                      }}
-                      sx={{
-                        color: '#f44336',
-                        '&:hover': {
-                          bgcolor: 'rgba(244, 67, 54, 0.1)'
-                        }
-                      }}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </CardActions>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-        ) : (
-          <Paper
-            elevation={0}
+                </CardActionArea>
+              </Card>
+            </Box>
+          ) : (
+            // Empty State
+            <Box
+              sx={{
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Box sx={{ textAlign: 'center', maxWidth: 400 }}>
+                <DashboardIcon sx={{ fontSize: 80, color: 'grey.400', mb: 2 }} />
+                <Typography variant="h5" fontWeight={600} gutterBottom sx={{ color: '#1a1a2e' }}>
+                  Select a Dashboard
+                </Typography>
+                <Typography variant="body1" color="text.secondary">
+                  Choose a dashboard from the left sidebar to view and manage its views, or create a
+                  new dashboard to get started.
+                </Typography>
+              </Box>
+            </Box>
+          )}
+        </Box>
+      </Box>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={openDeleteDialog}
+        onClose={() => setOpenDeleteDialog(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box
             sx={{
-              textAlign: 'center',
-              py: 8,
-              px: 4,
-              borderRadius: 3,
-              border: '2px dashed #e0e0e0',
-              bgcolor: 'white'
+              bgcolor: 'rgba(244, 67, 54, 0.1)',
+              borderRadius: '50%',
+              p: 1.5,
+              display: 'flex',
             }}
           >
-            <Box
-              sx={{
-                display: 'inline-flex',
-                p: 3,
-                borderRadius: '50%',
-                bgcolor: 'rgba(102, 126, 234, 0.1)',
-                mb: 2
-              }}
-            >
-              <BarChartIcon sx={{ fontSize: 56, color: '#667eea' }} />
-            </Box>
-            <Typography variant="h5" fontWeight="600" gutterBottom sx={{ color: '#1a1a2e' }}>
-              No dashboards yet
-            </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
-              Start building your first dashboard to visualize and analyze your data
-            </Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleOpenDialog}
-              size="large"
-              sx={{
-                px: 4,
-                py: 1.2,
-                borderRadius: 2,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
-                textTransform: 'none',
-                fontSize: '1rem',
-                fontWeight: 600,
-                '&:hover': {
-                  background: 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)',
-                  boxShadow: '0 6px 16px rgba(102, 126, 234, 0.4)',
-                  transform: 'translateY(-2px)'
-                },
-                transition: 'all 0.3s ease'
-              }}
-            >
-              Create Your First Dashboard
-            </Button>
-          </Paper>
-        )}
-
-        {/* Create/Edit Dialog */}
-        <Dialog 
-          open={openDialog} 
-          onClose={handleCloseDialog}
-          maxWidth="sm"
-          fullWidth
-          PaperProps={{
-            sx: {
-              borderRadius: 3,
-              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)'
-            }
-          }}
-        >
-          <DialogTitle sx={{ 
-            pb: 2, 
-            pt: 3,
-            px: 3,
-            fontSize: '1.5rem',
-            fontWeight: 700,
-            color: '#1a1a2e'
-          }}>
-            {editingDashboard ? 'Edit Dashboard' : 'Create New Dashboard'}
-          </DialogTitle>
-          <DialogContent sx={{ px: 3, pt: 2 }}>
-            <TextField
-              autoFocus
-              margin="normal"
-              label="Dashboard Name"
-              fullWidth
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Enter dashboard name"
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#667eea',
-                    borderWidth: 2
-                  }
-                },
-                '& .MuiInputLabel-root.Mui-focused': {
-                  color: '#667eea'
-                }
-              }}
-            />
-            <TextField
-              margin="normal"
-              label="Description"
-              fullWidth
-              multiline
-              rows={3}
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Describe what this dashboard will track..."
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#667eea',
-                    borderWidth: 2
-                  }
-                },
-                '& .MuiInputLabel-root.Mui-focused': {
-                  color: '#667eea'
-                }
-              }}
-            />
-            
-            {/* Thumbnail URL Input */}
-            <TextField
-              margin="normal"
-              label="Thumbnail URL (Optional)"
-              fullWidth
-              value={formData.thumbnail}
-              onChange={handleThumbnailChange}
-              placeholder="https://example.com/image.jpg"
-              InputProps={{
-                startAdornment: <ImageIcon sx={{ mr: 1, color: '#667eea' }} />
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#667eea',
-                    borderWidth: 2
-                  }
-                },
-                '& .MuiInputLabel-root.Mui-focused': {
-                  color: '#667eea'
-                }
-              }}
-            />
-            
-            {/* Thumbnail Preview */}
-            {thumbnailPreview && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                  Preview:
-                </Typography>
-                <Box
-                  sx={{
-                    position: 'relative',
-                    width: '100%',
-                    height: 180,
-                    borderRadius: 2,
-                    overflow: 'hidden',
-                    border: '1px solid #e0e0e0'
-                  }}
-                >
-                  <img
-                    src={thumbnailPreview}
-                    alt="Thumbnail preview"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover'
-                    }}
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                      e.currentTarget.parentElement!.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; background: #f5f5f5; color: #999;">Invalid image URL</div>';
-                    }}
-                  />
-                </Box>
-              </Box>
-            )}
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 3, pt: 2, gap: 1 }}>
-            <Button 
-              onClick={handleCloseDialog}
-              sx={{
-                borderRadius: 2,
-                px: 3,
-                textTransform: 'none',
-                fontWeight: 600,
-                color: '#666'
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={editingDashboard ? handleUpdate : handleCreate}
-              variant="contained"
-              disabled={!formData.name.trim()}
-              sx={{
-                borderRadius: 2,
-                px: 4,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                textTransform: 'none',
-                fontWeight: 600,
-                '&:hover': {
-                  background: 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)'
-                },
-                '&:disabled': {
-                  background: '#ccc'
-                }
-              }}
-            >
-              {editingDashboard ? 'Update' : 'Create'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* Delete Confirmation Dialog */}
-        <Dialog
-          open={openDeleteDialog}
-          onClose={handleDeleteCancel}
-          maxWidth="xs"
-          fullWidth
-          PaperProps={{
-            sx: {
-              borderRadius: 3,
-              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)'
-            }
-          }}
-        >
-          <DialogTitle sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 2,
-            pb: 2,
-            pt: 3,
-            px: 3
-          }}>
-            <Box
-              sx={{
-                bgcolor: 'rgba(244, 67, 54, 0.1)',
-                borderRadius: '50%',
-                p: 1.5,
-                display: 'flex'
-              }}
-            >
-              <WarningIcon sx={{ color: '#f44336', fontSize: 28 }} />
-            </Box>
-            <Typography variant="h6" fontWeight="700" sx={{ color: '#1a1a2e' }}>
-              Delete Dashboard
-            </Typography>
-          </DialogTitle>
-          <DialogContent sx={{ px: 3, pb: 2 }}>
-            <Typography variant="body1" color="text.secondary">
-              Are you sure you want to delete{' '}
-              <strong style={{ color: '#1a1a2e' }}>
-                "{deletingDashboard?.name}"
-              </strong>
-              ? This action cannot be undone.
-            </Typography>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-            <Button
-              onClick={handleDeleteCancel}
-              variant="outlined"
-              sx={{
-                borderRadius: 2,
-                px: 3,
-                textTransform: 'none',
-                fontWeight: 600,
-                borderColor: '#ddd',
-                color: '#666',
-                '&:hover': {
-                  borderColor: '#bbb',
-                  bgcolor: 'rgba(0, 0, 0, 0.02)'
-                }
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleDeleteConfirm}
-              variant="contained"
-              sx={{
-                borderRadius: 2,
-                px: 4,
-                bgcolor: '#f44336',
-                textTransform: 'none',
-                fontWeight: 600,
-                '&:hover': {
-                  bgcolor: '#d32f2f'
-                }
-              }}
-            >
-              Delete
-            </Button>
-          </DialogActions>
-        </Dialog>
-      </Container>
+            <WarningIcon sx={{ color: 'error.main' }} />
+          </Box>
+          <Typography variant="h6" fontWeight={700}>
+            Delete Dashboard
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" color="text.secondary">
+            Are you sure you want to delete{' '}
+            <strong style={{ color: '#1a1a2e' }}>"{deletingDashboard?.name}"</strong>? This will also
+            delete all associated views and charts. This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button variant="outlined" onClick={() => setOpenDeleteDialog(false)}>
+            Cancel
+          </Button>
+          <Button variant="contained" color="error" onClick={handleDeleteConfirm}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
 
-export default DashboardsManagement;
+export default DashboardManagement;

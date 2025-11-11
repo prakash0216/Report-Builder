@@ -28,6 +28,7 @@ import Draggable from 'react-draggable';
 import { allFiltersSelector, filterNamesState, filterConfigFamily } from "../recoil/FiltersFamily";
 import { liveFilterFamily } from "../recoil/LiveFilterFamily";
 import { atom } from 'recoil';
+import { IsEditModeState } from "../recoil/IsEditeMode";
 
 interface FilterPanelProps {
   showFilters: boolean;
@@ -64,6 +65,8 @@ const CompactFilterItem: React.FC<{
   const nodeRef = useRef(null);
 
   const isOpen = Boolean(anchorEl);
+
+  const isEditMode=useRecoilValue(IsEditModeState);
 
   // Initialize with default values
   useEffect(() => {
@@ -320,6 +323,7 @@ const CompactFilterItem: React.FC<{
         onPositionChange({ x: data.x, y: data.y });
       }}
       bounds="parent"
+      disabled={!isEditMode}
     >
       <Paper
         ref={nodeRef}
@@ -358,7 +362,8 @@ const CompactFilterItem: React.FC<{
               {filterConfig.displayName}
             </Typography>
           </Box>
-          <IconButton
+          {isEditMode && (
+            <IconButton
             size="small"
             onClick={(e) => {
               e.stopPropagation();
@@ -375,6 +380,7 @@ const CompactFilterItem: React.FC<{
           >
             <CloseIcon sx={{ fontSize: 16 }} />
           </IconButton>
+          )}
         </Box>
 
         {/* Dropdown selector */}
@@ -453,6 +459,8 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
   
   const allFilters = useRecoilValue(allFiltersSelector);
   const filterNames = useRecoilValue(filterNamesState);
+
+  const isEdit=useRecoilValue(IsEditModeState);
 
   // Get all available filters sorted by category
   const availableFilters = filterNames
@@ -665,7 +673,8 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
       </Box>
 
       {/* Instructions Footer */}
-      <Box 
+      {isEdit && (
+        <Box 
         sx={{ 
           p: 1.5, 
           bgcolor: '#fff3e0', 
@@ -681,7 +690,8 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
           <li>Click to open dropdown menu</li>
           <li>Apply changes with Apply button</li>
         </Box>
-      </Box>
+        </Box>
+      )}
     </Paper>
   );
 };

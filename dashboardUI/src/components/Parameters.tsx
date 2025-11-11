@@ -3,7 +3,11 @@ import { useRecoilState, useRecoilValue, useResetRecoilState } from 'recoil';
 import { motion, AnimatePresence } from 'framer-motion';
 import { parameterAtomFamily } from '../recoil/ParameterFamliy';
 import { parameterNamesState } from '../recoil/ParameterTracker';
-import { arrayParameterNamesSelector,arrayOfArrayParameterNamesSelector,arrayOfObjectsParameterNamesSelector } from '../recoil/ParameterTracker';
+import {
+  arrayParameterNamesSelector,
+  arrayOfArrayParameterNamesSelector,
+  arrayOfObjectsParameterNamesSelector,
+} from '../recoil/ParameterTracker';
 import {
   Box,
   Button,
@@ -12,38 +16,110 @@ import {
   List,
   ListItem,
   IconButton,
-  Collapse,
+  Collapse, // Already imported, now used for the alert
   Divider,
+  Tooltip,
+  Alert, // Already imported
 } from '@mui/material';
+// Snackbar import is no longer needed
 import {
   Add as AddIcon,
   Clear as ClearIcon,
   KeyboardArrowDown as ExpandMoreIcon,
   KeyboardArrowRight as ChevronRightIcon,
-  Done as DoneIcon,
+  Check as CheckIcon,
+  Close as CloseIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
+
+// --- Interface for Alert State ---
+interface AlertState {
+  show: boolean;
+  message: string;
+  severity: 'success' | 'error' | 'warning' | 'info';
+}
 
 export default function AddParameterMui() {
   const [selectedParam, setSelectedParam] = useState<string>('');
   const [newParamName, setNewParamName] = useState<string>('');
-  const [parameterNames, setParameterNames] = useRecoilState(parameterNamesState);
+  const [parameterNames, setParameterNames] =
+    useRecoilState(parameterNamesState);
   const [isParamsCollapsed, setIsParamsCollapsed] = useState<boolean>(false);
+  const [editingParam, setEditingParam] = useState<string | null>(null);
+  const [editedParamName, setEditedParamName] = useState<string>('');
 
+  // --- Alert State ---
+  const [alert, setAlert] = useState<AlertState>({
+    show: false,
+    message: '',
+    severity: 'success',
+  });
 
   // Use a special state for the parameter value based on selection
   const [parameterValue, setParameterValue] = useRecoilState(
-    selectedParam ? parameterAtomFamily(selectedParam) : parameterAtomFamily('__placeholder__')
+    selectedParam
+      ? parameterAtomFamily(selectedParam)
+      : parameterAtomFamily('__placeholder__')
   );
 
-  // Use a separate reset hook for cleanup
-  const resetParameterValue = useResetRecoilState(parameterAtomFamily(selectedParam));
+  const resetParameterValue = useResetRecoilState(
+    parameterAtomFamily(selectedParam)
+  );
+
+  // --- Updated Show Alert Function (with auto-hide) ---
+  const showAlert = (
+    message: string,
+    severity: AlertState['severity'] = 'success'
+  ) => {
+    setAlert({ show: true, message, severity });
+    // Auto-hide after 4 seconds
+    setTimeout(() => {
+      setAlert((prev) => ({ ...prev, show: false }));
+    }, 4000);
+  };
+
+  // handleCloseAlert function is no longer needed
 
   const addParameter = (): void => {
     if (newParamName && !parameterNames.includes(newParamName)) {
       setParameterNames((prev: string[]) => [...prev, newParamName]);
       setSelectedParam(newParamName);
       setNewParamName('');
+      showAlert(`Parameter "${newParamName}" added successfully`, 'success');
     }
+  };
+
+  const startEditingParam = (paramName: string): void => {
+    setEditingParam(paramName);
+    setEditedParamName(paramName);
+  };
+
+  const saveEditedParam = (): void => {
+    if (!editedParamName.trim() || editedParamName === editingParam) {
+      setEditingParam(null);
+      return;
+    }
+
+    if (parameterNames.includes(editedParamName)) {
+      showAlert('Parameter name already exists', 'error');
+      return;
+    }
+
+    setParameterNames((prev: string[]) =>
+      prev.map((name) => (name === editingParam ? editedParamName : name))
+    );
+
+    if (selectedParam === editingParam) {
+      setSelectedParam(editedParamName);
+    }
+
+    showAlert(`Parameter renamed to "${editedParamName}"`, 'success');
+    setEditingParam(null);
+  };
+
+  const cancelEditingParam = (): void => {
+    setEditingParam(null);
+    setEditedParamName('');
   };
 
   const removeParameter = (paramName: string): void => {
@@ -51,22 +127,28 @@ export default function AddParameterMui() {
       resetParameterValue();
       setSelectedParam('');
     }
-    setParameterNames((prev: string[]) => prev.filter((name) => name !== paramName));
+    setParameterNames((prev: string[]) =>
+      prev.filter((name) => name !== paramName)
+    );
+    showAlert(`Parameter "${paramName}" removed successfully`, 'success');
   };
 
-  // Auto-select first parameter if none are selected
   useEffect(() => {
     if (!selectedParam && parameterNames.length > 0) {
       setSelectedParam(parameterNames[0]);
     }
   }, [parameterNames, selectedParam]);
 
-  // console.log('Array Parameters:', useRecoilValue(arrayParameterNamesSelector));
-  // console.log('Array of Array Parameters:', useRecoilValue(arrayOfArrayParameterNamesSelector));
-  // console.log('Array of Object Parameters:', useRecoilValue(arrayOfObjectsParameterNamesSelector));
-
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 2, p: 2, height: '100vh' }}>
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(12, 1fr)',
+        gap: 2,
+        p: 2,
+        height: '100vh',
+      }}
+    >
       {/* Parameters Panel */}
       <Box
         sx={{
@@ -108,12 +190,45 @@ export default function AddParameterMui() {
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.2 }}
-              style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                flex: 1,
+                overflow: 'hidden',
+              }}
             >
-              <Box sx={{ p: 2, flex: 1, overflow: 'hidden' }}>
+              <Box sx={{ p: 2, flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                
+                {/* --- In-Panel Alert --- */}
+                <Collapse in={alert.show}>
+                  <Alert
+                    severity={alert.severity}
+                    // Add a close button for manual dismissal
+                    onClose={() => {
+                      setAlert((prev) => ({ ...prev, show: false }));
+                    }}
+                    sx={{ mb: 2 }}
+                  >
+                    {alert.message}
+                  </Alert>
+                </Collapse>
+                {/* ---------------------- */}
+
                 {/* Add new parameter */}
-                <Box sx={{ mb: 2, p: 2, bgcolor: 'white', borderRadius: 1, border: 1, borderColor: 'grey.300' }}>
-                  <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'medium' }}>
+                <Box
+                  sx={{
+                    mb: 2,
+                    p: 2,
+                    bgcolor: 'white',
+                    borderRadius: 1,
+                    border: 1,
+                    borderColor: 'grey.300',
+                  }}
+                >
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ mb: 1, fontWeight: 'medium' }}
+                  >
                     Add New Parameter
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 1 }}>
@@ -124,12 +239,16 @@ export default function AddParameterMui() {
                       value={newParamName}
                       onChange={(e) => setNewParamName(e.target.value)}
                       placeholder="e.g., userId, limit, sortOrder"
-                      onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && addParameter()}
+                      onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) =>
+                        e.key === 'Enter' && addParameter()
+                      }
                     />
                     <Button
                       variant="contained"
                       onClick={addParameter}
-                      disabled={!newParamName || parameterNames.includes(newParamName)}
+                      disabled={
+                        !newParamName || parameterNames.includes(newParamName)
+                      }
                       startIcon={<AddIcon />}
                     >
                       Add
@@ -140,7 +259,11 @@ export default function AddParameterMui() {
                 {/* List of parameters */}
                 <Box sx={{ flex: 1, overflowY: 'auto' }}>
                   {parameterNames.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontStyle: 'italic' }}
+                    >
                       No parameters yet
                     </Typography>
                   ) : (
@@ -152,28 +275,126 @@ export default function AddParameterMui() {
                           sx={{
                             mb: 1,
                             borderRadius: 1,
-                            bgcolor: selectedParam === param ? 'primary.main' : 'primary.light',
+                            bgcolor:
+                              selectedParam === param
+                                ? 'primary.main'
+                                : 'primary.light',
                             color: 'white',
                             '&:hover': { bgcolor: 'primary.dark' },
-                            cursor: 'pointer',
+                            cursor:
+                              editingParam === param ? 'default' : 'pointer',
                           }}
-                          onClick={() => setSelectedParam(param)}
+                          onClick={() =>
+                            editingParam !== param && setSelectedParam(param)
+                          }
                         >
-                          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', py: 1, px: 2 }}>
-                            <Typography sx={{ flexGrow: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {param}
-                            </Typography>
-                            <IconButton
-                              edge="end"
-                              aria-label="delete"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeParameter(param);
-                              }}
-                              sx={{ color: 'white', '&:hover': { color: 'red' } }}
-                            >
-                              <ClearIcon fontSize="small" />
-                            </IconButton>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              width: '100%',
+                              py: 1,
+                              px: 2,
+                              gap: 1,
+                            }}
+                          >
+                            {editingParam === param ? (
+                              <>
+                                <TextField
+                                  size="small"
+                                  value={editedParamName}
+                                  onChange={(e) =>
+                                    setEditedParamName(e.target.value)
+                                  }
+                                  onClick={(e) => e.stopPropagation()}
+                                  onKeyPress={(e) => {
+                                    e.stopPropagation();
+                                    if (e.key === 'Enter') saveEditedParam();
+                                    if (e.key === 'Escape') cancelEditingParam();
+                                  }}
+                                  autoFocus
+                                  sx={{
+                                    flexGrow: 1,
+                                    '& .MuiInputBase-root': {
+                                      color: 'primary.main',
+                                      bgcolor: 'white',
+                                    },
+                                  }}
+                                />
+                                <Tooltip title="Save">
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      saveEditedParam();
+                                    }}
+                                    sx={{
+                                      color: 'white',
+                                      '&:hover': { color: 'success.light' },
+                                    }}
+                                  >
+                                    <CheckIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Cancel">
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      cancelEditingParam();
+                                    }}
+                                    sx={{
+                                      color: 'white',
+                                      '&:hover': { color: 'error.light' },
+                                    }}
+                                  >
+                                    <CloseIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </>
+                            ) : (
+                              <>
+                                <Typography
+                                  sx={{
+                                    flexGrow: 1,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                  }}
+                                >
+                                  {param}
+                                </Typography>
+                                <Tooltip title="Edit name">
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startEditingParam(param);
+                                    }}
+                                    sx={{
+                                      color: 'white',
+                                      '&:hover': { color: 'warning.light' },
+                                    }}
+                                  >
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Remove">
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeParameter(param);
+                                    }}
+                                    sx={{
+                                      color: 'white',
+                                      '&:hover': { color: 'error.light' },
+                                    }}
+                                  >
+                                    <ClearIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </>
+                            )}
                           </Box>
                         </ListItem>
                       ))}
@@ -196,7 +417,8 @@ export default function AddParameterMui() {
                 variant={selectedParam === param ? 'contained' : 'text'}
                 onClick={() => setSelectedParam(param)}
                 sx={{
-                  bgcolor: selectedParam === param ? 'primary.main' : 'primary.light',
+                  bgcolor:
+                    selectedParam === param ? 'primary.main' : 'primary.light',
                   color: 'white',
                   '&:hover': { bgcolor: 'primary.dark' },
                 }}
@@ -209,9 +431,21 @@ export default function AddParameterMui() {
       </Box>
 
       {/* Main Content Area */}
-      <Box sx={{ gridColumn: 'span 9', display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box
+        sx={{ gridColumn: 'span 9', display: 'flex', flexDirection: 'column', gap: 2 }}
+      >
         {/* Parameter Editor */}
-        <Box sx={{ flex: 1, minHeight: 0, border: 1, borderColor: 'grey.300', borderRadius: 1, p: 2, bgcolor: 'white' }}>
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            border: 1,
+            borderColor: 'grey.300',
+            borderRadius: 1,
+            p: 2,
+            bgcolor: 'white',
+          }}
+        >
           {selectedParam ? (
             <AnimatePresence mode="wait">
               <motion.div
@@ -220,12 +454,28 @@ export default function AddParameterMui() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3 }}
-                style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}
+                style={{
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2,
+                }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    mb: 1,
+                  }}
+                >
                   <Typography variant="h6" sx={{ fontWeight: 'medium' }}>
                     Editing Parameter:{' '}
-                    <Typography component="span" color="primary.main" sx={{ fontWeight: 'bold' }}>
+                    <Typography
+                      component="span"
+                      color="primary.main"
+                      sx={{ fontWeight: 'bold' }}
+                    >
                       {selectedParam}
                     </Typography>
                   </Typography>
@@ -233,10 +483,12 @@ export default function AddParameterMui() {
                   {/* Always show "Auto Saved" message */}
                   <div className="flex justify-center">
                     <div className="flex items-center space-x-1 bg-green-50 px-3 py-1 rounded-full">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span className="text-sm text-green-700 font-medium">Auto-saved</span>
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-sm text-green-700 font-medium">
+                        Auto-saved
+                      </span>
                     </div>
-                </div>
+                  </div>
                   <Typography variant="body2" color="text.secondary">
                     Available in Hooks as: <code>{selectedParam}</code>
                   </Typography>
@@ -249,11 +501,11 @@ export default function AddParameterMui() {
                   value={parameterValue}
                   onChange={(e) => setParameterValue(e.target.value)}
                   placeholder={`Enter a value for ${selectedParam}...
-                    Examples:
-                    - JSON: {"key": "value"}
-                    - String: "example string"
-                    - Number: 123
-                    - Boolean: true`}
+                  Examples:
+                  - JSON: {"key": "value"}
+                  - String: "example string"
+                  - Number: 123
+                  - Boolean: true`}
                   sx={{ flex: 1, fontFamily: 'monospace' }}
                   InputProps={{
                     sx: { height: '100%' },
@@ -265,17 +517,32 @@ export default function AddParameterMui() {
               </motion.div>
             </AnimatePresence>
           ) : (
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', bgcolor: 'grey.50', border: 1, borderColor: 'grey.300', borderRadius: 1 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                bgcolor: 'grey.50',
+                border: 1,
+                borderColor: 'grey.300',
+                borderRadius: 1,
+              }}
+            >
               <Box sx={{ textAlign: 'center', color: 'text.secondary' }}>
                 <Typography variant="h6" sx={{ mb: 1 }}>
                   No parameter selected
                 </Typography>
-                <Typography variant="body2">Add a new parameter or select an existing one to start editing</Typography>
+                <Typography variant="body2">
+                  Add a new parameter or select an existing one to start
+                  editing
+                </Typography>
               </Box>
             </Box>
           )}
         </Box>
       </Box>
+
     </Box>
   );
 }
