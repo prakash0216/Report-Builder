@@ -27,6 +27,7 @@ import {
   MiscellaneousServices as MiscellaneousServicesIcon,
   CloudQueue,
   Storage,
+  Visibility,
 } from '@mui/icons-material';
 import JsCompiler from "../components/JsCompiler";
 import AddDataSource from "../components/AddDataSource";
@@ -35,7 +36,10 @@ import Hooks from '../components/Hooks';
 import SnowflakeConnector from '../components/SnowflakeConnector';
 import Parameters from '../components/Parameters';
 import Filters from '../components/Filters';
-import { Others } from '../components/Others';
+// import { Others } from '../components/Others';
+import {IsVisible} from "../components/IsVisible";
+import { CardArrangement } from '../components/CardArrangement';
+import Others from '../components/Others';
 
 // Define the available tabs
 type TabKey = 'connectionManager' | 'parameters' | 'dataSource' | 'filters' | 'hooks' | 'highChart' | 'others';

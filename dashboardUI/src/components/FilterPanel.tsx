@@ -29,6 +29,7 @@ import { allFiltersSelector, filterNamesState, filterConfigFamily } from "../rec
 import { liveFilterFamily } from "../recoil/LiveFilterFamily";
 import { atom } from 'recoil';
 import { IsEditModeState } from "../recoil/IsEditeMode";
+import { localStorageEffect } from "../recoil/persistence";
 
 interface FilterPanelProps {
   showFilters: boolean;
@@ -44,11 +45,18 @@ interface FilterPosition {
 export const filterPositionsState = atom<Record<string, FilterPosition>>({
   key: 'filterPositionsState',
   default: {},
+  effects: [
+    localStorageEffect('filterPositions')
+  ]
+
 });
 
 export const activeFilterIdsState = atom<string[]>({
   key: 'activeFilterIdsState',
   default: [],
+  effects: [
+    localStorageEffect('activeFilterIds')
+  ]
 });
 
 // Compact Filter Item with Dropdown
@@ -536,7 +544,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
       }}
     >
       {/* Header Section */}
-      <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'grey.50' }}>
+      <Box sx={{ p: 2, borderBottom: isEdit? 1 : 0, borderColor: 'divider', bgcolor: 'grey.50' }}>
         <Box 
           sx={{ 
             bgcolor: 'primary.main', 
@@ -545,7 +553,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
             py: 1,
             mx: -2,
             mt: -2,
-            mb: 2,
+            mb: isEdit ? 2 : -1.5,
           }}
         >
           <Typography variant="subtitle2" fontWeight="600">
@@ -554,70 +562,72 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
         </Box>
 
         {/* Filter Selector */}
-        <Paper sx={{ p: 2, bgcolor: '#e3f2fd', border: 1, borderColor: 'primary.light' }}>
-          <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
-            <InputLabel>Add Filter</InputLabel>
-            <Select
-              value={selectedFilter}
-              onChange={(e) => setSelectedFilter(e.target.value)}
-              label="Add Filter"
-              sx={{ bgcolor: 'white' }}
-              renderValue={(selected) => {
-                if (!selected) return <em>-- Select a filter --</em>;
-                const config = allFilters[selected];
-                return config?.displayName || selected;
-              }}
-            >
-              <MenuItem value="">
-                <em>-- Select a filter --</em>
-              </MenuItem>
-              {availableFilters.map((config) => {
-                const getCategoryChipColor = (category: string) => {
-                  switch (category.toLowerCase()) {
-                    case 'params':
-                      return { bgcolor: '#e8f5e9', color: '#2e7d32' };
-                    case 'data-source':
-                      return { bgcolor: '#f3e5f5', color: '#9c27b0' };
-                    case 'hooks':
-                      return { bgcolor: '#fff3e0', color: '#ed6c02' };
-                    default:
-                      return { bgcolor: '#f5f5f5', color: '#616161' };
-                  }
-                };
-                
-                return (
-                  <MenuItem key={config.variableName} value={config.variableName}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                      <Chip 
-                        label={config.category} 
-                        size="small"
-                        sx={{ 
-                          ...getCategoryChipColor(config.category),
-                          fontSize: '0.65rem',
-                          height: 20,
-                          fontWeight: 600,
-                        }}
-                      />
-                      <Typography variant="body2">
-                        {config.displayName}
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                );
-              })}
-            </Select>
-          </FormControl>
+        {isEdit && (
+          <Paper sx={{ p: 2, bgcolor: '#e3f2fd', border: 1, borderColor: 'primary.light' }}>
+            <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
+              <InputLabel>Add Filter</InputLabel>
+              <Select
+                value={selectedFilter}
+                onChange={(e) => setSelectedFilter(e.target.value)}
+                label="Add Filter"
+                sx={{ bgcolor: 'white' }}
+                renderValue={(selected) => {
+                  if (!selected) return <em>-- Select a filter --</em>;
+                  const config = allFilters[selected];
+                  return config?.displayName || selected;
+                }}
+              >
+                <MenuItem value="">
+                  <em>-- Select a filter --</em>
+                </MenuItem>
+                {availableFilters.map((config) => {
+                  const getCategoryChipColor = (category: string) => {
+                    switch (category.toLowerCase()) {
+                      case 'params':
+                        return { bgcolor: '#e8f5e9', color: '#2e7d32' };
+                      case 'data-source':
+                        return { bgcolor: '#f3e5f5', color: '#9c27b0' };
+                      case 'hooks':
+                        return { bgcolor: '#fff3e0', color: '#ed6c02' };
+                      default:
+                        return { bgcolor: '#f5f5f5', color: '#616161' };
+                    }
+                  };
+                  
+                  return (
+                    <MenuItem key={config.variableName} value={config.variableName}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                        <Chip 
+                          label={config.category} 
+                          size="small"
+                          sx={{ 
+                            ...getCategoryChipColor(config.category),
+                            fontSize: '0.65rem',
+                            height: 20,
+                            fontWeight: 600,
+                          }}
+                        />
+                        <Typography variant="body2">
+                          {config.displayName}
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  );
+                })}
+              </Select>
+            </FormControl>
           
-          <Button
-            fullWidth
-            variant="contained"
-            onClick={handleAddFilter}
-            disabled={!selectedFilter}
-            size="small"
-          >
-            Add Filter
-          </Button>
-        </Paper>
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={handleAddFilter}
+              disabled={!selectedFilter}
+              size="small"
+            >
+              Add Filter
+            </Button>
+          </Paper>
+        )}
       </Box>
 
       {/* Draggable Filters Area */}

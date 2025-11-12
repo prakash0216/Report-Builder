@@ -1,87 +1,79 @@
 // src/recoil/DashboardVisibility.ts
 import { atom, selectorFamily } from 'recoil';
-import { liveFilterFamily } from './LiveFilterFamily';
+import { variableAtomFamily } from './VariableFamily';
 
-// Store visibility conditions per chart ID
-export interface ChartVisibilityCondition {
-  filterName: string;  // e.g., "param_metric"
-  filterValue: string; // e.g., "MOP"
-}
-
-// State: Map of chartId -> array of conditions
-export const chartVisibilityConditionsState = atom<Record<string, ChartVisibilityCondition[]>>({
-  key: 'chartVisibilityConditionsState',
+// Store ONE boolean variable name per chart ID
+// If the variable evaluates to true, the chart is HIDDEN
+export const chartVisibilityVariableState = atom<Record<string, string>>({
+  key: 'chartVisibilityVariableState',
   default: {},
   effects: [
     ({ setSelf, onSet }) => {
       // Load from localStorage
-      const saved = localStorage.getItem('chart-visibility-conditions');
+      const saved = localStorage.getItem('chart-visibility-variables');
       if (saved) {
         try {
           setSelf(JSON.parse(saved));
         } catch (e) {
-          console.error('Failed to load visibility conditions:', e);
+          console.error('Failed to load visibility variables:', e);
         }
       }
 
       // Save to localStorage on changes
       onSet((newValue, _, isReset) => {
         if (isReset) {
-          localStorage.removeItem('chart-visibility-conditions');
+          localStorage.removeItem('chart-visibility-variables');
         } else {
-          localStorage.setItem('chart-visibility-conditions', JSON.stringify(newValue));
+          localStorage.setItem('chart-visibility-variables', JSON.stringify(newValue));
         }
       });
     },
   ],
 });
 
+// Helper to safely parse variable values
+const safeParse = (value: string): any => {
+  try {
+    return JSON.parse(value);
+  } catch {
+    try {
+      return Function('"use strict";return (' + value + ')')();
+    } catch {
+      return value;
+    }
+  }
+};
+
 // Selector: Check if a specific chart should be visible
+// Returns FALSE if chart should be HIDDEN (when variable === true)
+// Returns TRUE if chart should be VISIBLE (when variable === false or undefined)
 export const isChartVisibleSelector = selectorFamily<boolean, string>({
   key: 'isChartVisibleSelector',
   get: (chartId: string) => ({ get }) => {
-    const allConditions = get(chartVisibilityConditionsState);
-    const conditions = allConditions[chartId];
+    const visibilityVariables = get(chartVisibilityVariableState);
+    const variableName = visibilityVariables[chartId];
     
-    // No conditions = always visible
-    if (!conditions || conditions.length === 0) {
+    // No variable assigned = always visible
+    if (!variableName) {
       return true;
     }
     
-    // Check each condition
-    for (const condition of conditions) {
-      try {
-        const filterValue = get(liveFilterFamily(condition.filterName));
-        
-        // Extract actual values from filter
-        let actualValues: string[] = [];
-        
-        if (Array.isArray(filterValue)) {
-          // Multi-select: get all selected values
-          actualValues = filterValue.map((v: any) => {
-            if (typeof v === 'object' && v.value !== undefined) {
-              return String(v.value);
-            }
-            return String(v);
-          });
-        } else if (filterValue && typeof filterValue === 'object' && filterValue.value !== undefined) {
-          // Single select with object
-          actualValues = [String(filterValue.value)];
-        } else if (filterValue !== null && filterValue !== undefined) {
-          // Primitive value
-          actualValues = [String(filterValue)];
-        }
-        
-        // If any selected value matches the condition value -> HIDE
-        if (actualValues.some(val => val === condition.filterValue)) {
-          return false; // HIDE this chart
-        }
-      } catch (e) {
-        console.warn(`Error checking filter ${condition.filterName}:`, e);
+    try {
+      // Get the variable value
+      const rawValue = get(variableAtomFamily(variableName));
+      const parsedValue = safeParse(rawValue);
+      
+      // If variable is true, HIDE the chart
+      // If variable is false/undefined/null, SHOW the chart
+      if (parsedValue === true) {
+        return false; // HIDE
       }
+      
+      return true; // SHOW
+    } catch (e) {
+      console.warn(`Error checking visibility variable ${variableName} for chart ${chartId}:`, e);
+      // On error, default to visible
+      return true;
     }
-    
-    // All conditions checked, none matched -> VISIBLE
-    return true;
   },
 });

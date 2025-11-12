@@ -435,32 +435,35 @@ export default function DropDragDashboard() {
 
       <div className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-6 py-4 shadow-sm">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Report Builder Intelligence</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              {isEditMode ? "Edit mode: Drag, resize, and configure your charts" : "View mode: Dashboard is locked"}
-              {isEditMode && (
-                <span className="ml-4 text-xs bg-gray-100 px-2 py-1 rounded">
-                  Variables: {Object.keys(availableVariables).length} |
-                  Charts: {layouts[currentBreakpoint]?.length || 0} total
-                  {Object.values(chartVisibility).filter(v => v === false).length > 0 && (
-                    <span className="ml-2 text-yellow-700 font-semibold">
-                      ({Object.values(chartVisibility).filter(v => v === false).length} would be hidden in view mode)
-                    </span>
-                  )} | Filters: {filterNames.length}
-                </span>
-              )}
-              {!isEditMode && (
-                <span className="ml-4 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                  Showing {visibleCharts.length} of {layouts[currentBreakpoint]?.length || 0} charts
-                  {hiddenChartCount > 0 && (
-                    <span className="ml-2 text-yellow-700 font-semibold">
-                      ({hiddenChartCount} hidden by filters)
-                    </span>
-                  )}
-                </span>
-              )}
-            </p>
+          <div className="flex items-center">
+            <img src="RBI.png" alt="Logo" className="h-16 w-16 inline-block mr-1" />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Report Builder Intelligence</h1>
+              <p className="text-sm text-gray-600 mt-1">
+                {isEditMode ? "Edit mode: Drag, resize, and configure your charts" : "View mode: Dashboard is locked"}
+                {isEditMode && (
+                  <span className="ml-4 text-xs bg-gray-100 px-2 py-1 rounded">
+                    Variables: {Object.keys(availableVariables).length} |
+                    Charts: {layouts[currentBreakpoint]?.length || 0} total
+                    {Object.values(chartVisibility).filter(v => v === false).length > 0 && (
+                      <span className="ml-2 text-yellow-700 font-semibold">
+                        ({Object.values(chartVisibility).filter(v => v === false).length} would be hidden in view mode)
+                      </span>
+                    )} | Filters: {filterNames.length}
+                  </span>
+                )}
+                {!isEditMode && (
+                  <span className="ml-4 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                    Showing {visibleCharts.length} of {layouts[currentBreakpoint]?.length || 0} charts
+                    {hiddenChartCount > 0 && (
+                      <span className="ml-2 text-yellow-700 font-semibold">
+                        ({hiddenChartCount} hidden by filters)
+                      </span>
+                    )}
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center space-x-3">
