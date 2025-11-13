@@ -151,7 +151,7 @@ export function IsVisible() {
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
           <VisibilityIcon sx={{ mr: 2, color: 'primary.main', fontSize: 40 }} />
           <Box sx={{ flex: 1 }}>
-            <Typography variant="h4" fontWeight={700}>
+            <Typography variant="h5" fontWeight={600}>
               Chart Visibility Control
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
