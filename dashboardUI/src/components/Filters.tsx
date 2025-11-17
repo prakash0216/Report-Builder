@@ -40,8 +40,6 @@ import { parameterAtomFamily } from '../recoil/ParameterFamliy';
 import { variableAtomFamily } from '../recoil/VariableFamily';
 import { hooksArraySelector,hooksArrayOfArraySelector,hooksArrayOfObjectsSelector } from '../recoil/Variabletracker';
 import axios from 'axios';
-import { json } from 'stream/consumers';
-import { set } from 'lodash';
 
 type Category = 'params' | 'filters' | 'hooks';
 
@@ -76,15 +74,12 @@ const CascadingDropdown: React.FC = () => {
     
     // ==================== CATEGORY & TYPE SELECTION ====================
     const [mainCategory, setMainCategory] = useState<string>('');
-    const [paramType, setParamType] = useState<string>(''); // Only used for 'params' category
+    const [paramType, setParamType] = useState<string>('');
     
     // ==================== PARAMETER/FILTER SELECTION ====================
-    // For 'params': selectedParamName holds the parameter name from Recoil
-    // For 'filters': selectedFilterColumn holds the column name from the data source
-    // For 'hooks': selectedHookName holds the hook name
-    const [selectedParamName, setSelectedParamName] = useState<string>(''); // For params category
-    const [selectedFilterColumn, setSelectedFilterColumn] = useState<string>(''); // For filters category
-    const [selectedHookName, setSelectedHookName] = useState<string>(''); // For hooks category
+    const [selectedParamName, setSelectedParamName] = useState<string>('');
+    const [selectedFilterColumn, setSelectedFilterColumn] = useState<string>('');
+    const [selectedHookName, setSelectedHookName] = useState<string>('');
     
     // ==================== FILTER-SPECIFIC STATE ====================
     const [selectedDataSource, setSelectedDataSource] = useState<string>('');
@@ -140,7 +135,7 @@ const CascadingDropdown: React.FC = () => {
         set(filterConfigFamily(variableName), null);
     }, []);    
 
-    // ==================== UTILITY FUNCTIONS FOR PARAMS AND HOOKS ====================
+    // ==================== UTILITY FUNCTIONS ====================
     const lengthOfFirstElementOfArrayOfArrayParameter = (): number => {
         const valueToCheck = mainCategory === 'hooks' ? hooksValueToInspect : paramValueToInspect;
         const typeToCheck = mainCategory === 'hooks' ? hookType : paramType;
@@ -200,7 +195,7 @@ const CascadingDropdown: React.FC = () => {
     const resetAllSelections = () => {
         setMainCategory('');
         setParamType('');
-        sethookType('');  // ✅ ADD THIS LINE
+        sethookType('');
         setSelectedParamName('');
         setSelectedFilterColumn('');
         setSelectedHookName('');
@@ -211,7 +206,7 @@ const CascadingDropdown: React.FC = () => {
         setEditingId(null);
     };
 
-    // ==================== API FUNCTIONS WITH OPTIMIZATIONS ====================
+    // ==================== API FUNCTIONS ====================
     const fetchDataSources = async () => {
         setIsLoadingDataSources(true);
         try {
@@ -221,7 +216,6 @@ const CascadingDropdown: React.FC = () => {
             }
         } catch (error) {
             console.error("Error fetching data source names:", error);
-            // Fallback for demonstration
             setAvailableDataSources(['Customer_DB', 'Sales_Data', 'HR_Records']); 
         } finally {
             setIsLoadingDataSources(false);
@@ -232,7 +226,7 @@ const CascadingDropdown: React.FC = () => {
         if (!dsName) return;
         
         setIsLoadingFilterColumns(true);
-        setAvailableFilterColumns([]); // Clear immediately
+        setAvailableFilterColumns([]);
         
         try {
             const response = await axios.post("http://localhost:3002/get-ds-column-names", { ds_name: dsName });
@@ -241,7 +235,6 @@ const CascadingDropdown: React.FC = () => {
             }
         } catch (err) {
             console.error("Error fetching column names for DS:", err);
-            // Fallback for demonstration
             if (dsName === 'Customer_DB') {
                 setAvailableFilterColumns(['region_id', 'segment', 'is_active']);
             } else if (dsName === 'Sales_Data') {
@@ -258,7 +251,7 @@ const CascadingDropdown: React.FC = () => {
         if (!dsName || !columnName) return;
         
         setIsLoadingColumnValues(true);
-        setAvailableFilterColumnValues([]); // Clear immediately
+        setAvailableFilterColumnValues([]);
         
         try {
             const response = await axios.post("http://localhost:3002/get-distinct-column-values", {
@@ -270,7 +263,6 @@ const CascadingDropdown: React.FC = () => {
             }
         } catch (err) {
             console.error("Error fetching distinct column values:", err);
-            // Fallback for demonstration
             if (columnName === 'region_id') {
                 setAvailableFilterColumnValues(['North', 'South', 'East', 'West']);
             } else if (columnName === 'product_type') {
@@ -283,24 +275,19 @@ const CascadingDropdown: React.FC = () => {
         }
     };
 
-    // ==================== EFFECT HOOKS WITH DEBOUNCING ====================
-    
-    // Fetch data sources on component mount
+    // ==================== EFFECT HOOKS ====================
     useEffect(() => {
         fetchDataSources();
     }, []);
 
-    // Reset complex type mappings when param selection changes
     useEffect(() => {
         resetComplexTypeMappings();
     }, [selectedParamName, paramType]);
 
-    // Reset complex type mappings when hook selection changes
     useEffect(() => {
         resetComplexTypeMappings();
     }, [selectedHookName, hookType]);
 
-    // Fetch filter columns when data source changes (with debouncing)
     useEffect(() => {
         if (mainCategory === 'data-source' && selectedDataSource) {
             setAvailableFilterColumns([]);
@@ -314,7 +301,6 @@ const CascadingDropdown: React.FC = () => {
         }
     }, [selectedDataSource, mainCategory]);
 
-    // Fetch column values when filter column changes (with debouncing)
     useEffect(() => {
         if (mainCategory === 'data-source' && selectedDataSource && selectedFilterColumn) {
             setAvailableFilterColumnValues([]);
@@ -329,7 +315,6 @@ const CascadingDropdown: React.FC = () => {
     }, [selectedDataSource, selectedFilterColumn, mainCategory]);
 
     // ==================== HANDLERS ====================
-    
     const handleMainCategoryChange = (event: SelectChangeEvent<string>) => {
         const newCategory = event.target.value;
         setMainCategory(newCategory);
@@ -409,7 +394,7 @@ const CascadingDropdown: React.FC = () => {
         setDefaultMultiValues([]);
     };
     
-    // ==================== COMPLEX TYPE MAPPING HANDLERS FOR PARAMS ====================
+    // ==================== COMPLEX TYPE MAPPING HANDLERS ====================
     const handleArrayOfArrayLabelChange = (event: SelectChangeEvent<number>) => {
         setArrayOfArrayLabelIndex(Number(event.target.value));
     };
@@ -426,7 +411,6 @@ const CascadingDropdown: React.FC = () => {
         setArrayOfObjectValueKey(event.target.value);
     };
 
-    // ==================== COMPLEX TYPE MAPPING HANDLERS FOR Hooks ====================
     const handleHooksArrayOfArrayLabelChange = (event: SelectChangeEvent<number>) => {
         setHooksArrayOfArrayLabelIndex(Number(event.target.value));
     };
@@ -451,9 +435,8 @@ const CascadingDropdown: React.FC = () => {
         );
     };
 
-    // ==================== GET AVAILABLE VALUES FOR DEFAULT SELECTION ====================
+    // ==================== GET AVAILABLE VALUES ====================
     const getAvailableValues = (): DefaultValueOption[] => {
-        // 1. FILTERS CATEGORY: Use fetched column values
         if (mainCategory === 'data-source' && selectedFilterColumn) {
             if (availableFilterColumnValues.length > 0) {
                 return availableFilterColumnValues.map(item => ({ 
@@ -464,7 +447,6 @@ const CascadingDropdown: React.FC = () => {
             return [];
         } 
         
-        // 2. HOOKS CATEGORY: Usually no options needed
         else if (mainCategory === 'hooks') {
             if (!hooksValueToInspect || !selectedHookName) {
                 return [];
@@ -500,9 +482,7 @@ const CascadingDropdown: React.FC = () => {
                 console.error(`Failed to parse available options string for hooks ${hookType}:`, e);
             }
         }
-        
 
-        // 3. PARAMS CATEGORY: Parse from Recoil state
         if (!paramValueToInspect || !selectedParamName || mainCategory !== 'params') {
             return [];
         }
@@ -624,7 +604,6 @@ const CascadingDropdown: React.FC = () => {
             setParamType(resolvedParamType);
             setSelectedParamName(config.paramName);
             
-            // Set params mappings
             setArrayOfArrayLabelIndex(config.labelIndex !== undefined ? config.labelIndex : '');
             setArrayOfArrayValueIndex(config.valueIndex !== undefined ? config.valueIndex : '');
             setArrayOfObjectLabelKey(config.labelKey || '');
@@ -639,7 +618,6 @@ const CascadingDropdown: React.FC = () => {
             sethookType(resolvedHookType);
             setSelectedHookName(config.paramName);
             
-            // Set hooks mappings
             setHooksArrayOfArrayLabelIndex(config.labelIndex !== undefined ? config.labelIndex : '');
             setHooksArrayOfArrayValueIndex(config.valueIndex !== undefined ? config.valueIndex : '');
             setHooksArrayOfObjectLabelKey(config.labelKey || '');
@@ -690,17 +668,14 @@ const CascadingDropdown: React.FC = () => {
         const filterIds = Object.keys(allFilters);
         const isDuplicate = !editingId && filterIds.includes(variableName);
         
-        // Basic validation: category, display name, variable name, and no duplicates
         if (!mainCategory || !displayName.trim() || !variableName.trim() || isDuplicate) {
             return false;
         }
     
-        // Check if a selection has been made based on category
         if (mainCategory === 'params' && !selectedParamName) return false;
         if (mainCategory === 'data-source' && (!selectedDataSource || !selectedFilterColumn)) return false;
         if (mainCategory === 'hooks' && !selectedHookName) return false;
     
-        // PARAMS category-specific validation
         if (mainCategory === 'params') {
             if (!paramType) return false;
             
@@ -714,7 +689,6 @@ const CascadingDropdown: React.FC = () => {
             if (!isComplexMappingValid) return false;
         }
     
-        // HOOKS category-specific validation
         if (mainCategory === 'hooks') {
             if (!hookType) return false;
             
@@ -728,16 +702,13 @@ const CascadingDropdown: React.FC = () => {
             if (!isComplexMappingValid) return false;
         }
     
-        // Options and default value check
         const availableOptions = getAvailableValues();
         const needsOptions = mainCategory === 'params' || mainCategory === 'data-source' || mainCategory === 'hooks';
         
-        // Check if options are available (only for categories that need them)
         if (needsOptions && availableOptions.length === 0) {
             return false;
         }
     
-        // Check if at least one default value is selected
         const isDefaultValueSelected = selectionType === 'single' 
             ? defaultSingleValue !== ''
             : defaultMultiValues.length > 0;
@@ -749,13 +720,10 @@ const CascadingDropdown: React.FC = () => {
         return true;
     };
 
-    const getCategoryColor = (category: string): 'primary' | 'secondary' | 'info' | 'default' => {
-        const colors: Record<string, 'primary' | 'secondary' | 'info' | 'default'> = {
-            params: 'primary',
-            'data-source': 'secondary',
-            hooks: 'info',
-        };
-        return colors[category] || 'default';
+    const getCategoryColor = (category: string) => {
+        return category === 'params' ? '#667eea' :
+               category === 'data-source' ? '#f093fb' :
+               category === 'hooks' ? '#4facfe' : '#94a3b8';
     };
 
     const savedConfigs = Object.values(allFilters);
@@ -767,7 +735,6 @@ const CascadingDropdown: React.FC = () => {
     );
 
     // ==================== HELPER COMPONENTS ====================
-    
     const ComplexMappingDropdowns = () => {
         const inProp = mainCategory === 'params' && !!selectedParamName && (paramType === 'arrayOfArray' || paramType === 'arrayOfObjects');
         
@@ -776,25 +743,62 @@ const CascadingDropdown: React.FC = () => {
             
             return (
                 <Collapse in={inProp}>
-                    <Box>
+                    <Box
+                        sx={{
+                            p: 2.5,
+                            background: 'linear-gradient(135deg, rgba(224, 231, 255, 0.3) 0%, rgba(199, 210, 254, 0.3) 100%)',
+                            borderRadius: 2,
+                            border: '1px solid rgba(102, 126, 234, 0.3)',
+                        }}
+                    >
                         <Typography 
                             variant="body2" 
-                            fontWeight={600} 
-                            color="text.primary" 
+                            fontWeight={700} 
                             mb={2}
-                            sx={{ borderBottom: '1px solid #ccc', pb: 0.5 }}
+                            sx={{
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                backgroundClip: 'text',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                            }}
                         >
                             Array Mapping Configuration
                         </Typography>
                         
                         {(arrayOfArrayLabelIndex === '' || arrayOfArrayValueIndex === '') && (
-                            <Alert severity="info" sx={{ mb: 2 }}>
+                            <Alert 
+                                severity="info" 
+                                sx={{ 
+                                    mb: 2,
+                                    borderRadius: 2,
+                                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                                    background: 'linear-gradient(135deg, rgba(224, 242, 254, 0.5) 0%, rgba(186, 230, 253, 0.5) 100%)',
+                                }}
+                            >
                                 Please select both the <strong>Label Index</strong> and the <strong>Value Index</strong> for the dropdown options to become active.
                             </Alert>
                         )}
 
                         <Box display="flex" gap={2}>
-                            <FormControl fullWidth>
+                            <FormControl 
+                                fullWidth
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        '& fieldset': {
+                                            borderColor: 'rgba(102, 126, 234, 0.3)',
+                                        },
+                                        '&:hover fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                        '&.Mui-focused fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                    },
+                                    '& .MuiInputLabel-root.Mui-focused': {
+                                        color: '#667eea',
+                                    },
+                                }}
+                            >
                                 <InputLabel id="array-of-array-label-dropdown-label">Label Index *</InputLabel>
                                 <Select
                                     label="Label Index *"
@@ -818,7 +822,25 @@ const CascadingDropdown: React.FC = () => {
                                 )}
                             </FormControl>
 
-                            <FormControl fullWidth>
+                            <FormControl 
+                                fullWidth
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        '& fieldset': {
+                                            borderColor: 'rgba(102, 126, 234, 0.3)',
+                                        },
+                                        '&:hover fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                        '&.Mui-focused fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                    },
+                                    '& .MuiInputLabel-root.Mui-focused': {
+                                        color: '#667eea',
+                                    },
+                                }}
+                            >
                                 <InputLabel id="array-of-array-value-dropdown-label">Value Index *</InputLabel>
                                 <Select
                                     label="Value Index *"
@@ -845,25 +867,62 @@ const CascadingDropdown: React.FC = () => {
             
             return (
                 <Collapse in={inProp}>
-                    <Box>
+                    <Box
+                        sx={{
+                            p: 2.5,
+                            background: 'linear-gradient(135deg, rgba(224, 231, 255, 0.3) 0%, rgba(199, 210, 254, 0.3) 100%)',
+                            borderRadius: 2,
+                            border: '1px solid rgba(102, 126, 234, 0.3)',
+                        }}
+                    >
                         <Typography 
                             variant="body2" 
-                            fontWeight={600} 
-                            color="text.primary" 
+                            fontWeight={700} 
                             mb={2}
-                            sx={{ borderBottom: '1px solid #ccc', pb: 0.5 }}
+                            sx={{
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                backgroundClip: 'text',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                            }}
                         >
                             Array Mapping Configuration
                         </Typography>
                             
                         {(!arrayOfObjectLabelKey || !arrayOfObjectValueKey) && (
-                            <Alert severity="info" sx={{ mb: 2 }}>
+                            <Alert 
+                                severity="info" 
+                                sx={{ 
+                                    mb: 2,
+                                    borderRadius: 2,
+                                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                                    background: 'linear-gradient(135deg, rgba(224, 242, 254, 0.5) 0%, rgba(186, 230, 253, 0.5) 100%)',
+                                }}
+                            >
                                 Please select both the <strong>Label Key</strong> and the <strong>Value Key</strong> for the dropdown options to become active.
                             </Alert>
                         )}
 
                         <Box display="flex" gap={2}>
-                            <FormControl fullWidth>
+                            <FormControl 
+                                fullWidth
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        '& fieldset': {
+                                            borderColor: 'rgba(102, 126, 234, 0.3)',
+                                        },
+                                        '&:hover fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                        '&.Mui-focused fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                    },
+                                    '& .MuiInputLabel-root.Mui-focused': {
+                                        color: '#667eea',
+                                    },
+                                }}
+                            >
                                 <InputLabel id="array-of-objects-label-dropdown-label">Label Key *</InputLabel>
                                 <Select
                                     label="Label Key *"
@@ -887,7 +946,25 @@ const CascadingDropdown: React.FC = () => {
                                 )}
                             </FormControl>
 
-                            <FormControl fullWidth>
+                            <FormControl 
+                                fullWidth
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        '& fieldset': {
+                                            borderColor: 'rgba(102, 126, 234, 0.3)',
+                                        },
+                                        '&:hover fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                        '&.Mui-focused fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                    },
+                                    '& .MuiInputLabel-root.Mui-focused': {
+                                        color: '#667eea',
+                                    },
+                                }}
+                            >
                                 <InputLabel id="array-of-objects-value-dropdown-label">Value Key *</InputLabel>
                                 <Select
                                     label="Value Key *"
@@ -921,29 +998,66 @@ const CascadingDropdown: React.FC = () => {
             
             return (
                 <Collapse in={inProp}>
-                    <Box>
+                    <Box
+                        sx={{
+                            p: 2.5,
+                            background: 'linear-gradient(135deg, rgba(224, 231, 255, 0.3) 0%, rgba(199, 210, 254, 0.3) 100%)',
+                            borderRadius: 2,
+                            border: '1px solid rgba(102, 126, 234, 0.3)',
+                        }}
+                    >
                         <Typography 
                             variant="body2" 
-                            fontWeight={600} 
-                            color="text.primary" 
+                            fontWeight={700} 
                             mb={2}
-                            sx={{ borderBottom: '1px solid #ccc', pb: 0.5 }}
+                            sx={{
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                backgroundClip: 'text',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                            }}
                         >
                             Array Mapping Configuration
                         </Typography>
                         
                         {(hooksArrayOfArrayLabelIndex === '' || hooksArrayOfArrayValueIndex === '') && (
-                            <Alert severity="info" sx={{ mb: 2 }}>
+                            <Alert 
+                                severity="info" 
+                                sx={{ 
+                                    mb: 2,
+                                    borderRadius: 2,
+                                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                                    background: 'linear-gradient(135deg, rgba(224, 242, 254, 0.5) 0%, rgba(186, 230, 253, 0.5) 100%)',
+                                }}
+                            >
                                 Please select both the <strong>Label Index</strong> and the <strong>Value Index</strong> for the dropdown options to become active.
                             </Alert>
                         )}
 
                         <Box display="flex" gap={2}>
-                            <FormControl fullWidth>
-                                <InputLabel id="array-of-array-label-dropdown-label">Label Index *</InputLabel>
+                            <FormControl 
+                                fullWidth
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        '& fieldset': {
+                                            borderColor: 'rgba(102, 126, 234, 0.3)',
+                                        },
+                                        '&:hover fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                        '&.Mui-focused fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                    },
+                                    '& .MuiInputLabel-root.Mui-focused': {
+                                        color: '#667eea',
+                                    },
+                                }}
+                            >
+                                <InputLabel id="hooks-array-of-array-label-dropdown-label">Label Index *</InputLabel>
                                 <Select
                                     label="Label Index *"
-                                    labelId="array-of-array-label-dropdown-label"
+                                    labelId="hooks-array-of-array-label-dropdown-label"
                                     value={hooksArrayOfArrayLabelIndex === '' ? '' : hooksArrayOfArrayLabelIndex}
                                     onChange={(e) => handleHooksArrayOfArrayLabelChange(e as SelectChangeEvent<number>)}
                                     disabled={!lengthOfFirstElementOfArrayOfArray}
@@ -963,11 +1077,29 @@ const CascadingDropdown: React.FC = () => {
                                 )}
                             </FormControl>
 
-                            <FormControl fullWidth>
-                                <InputLabel id="array-of-array-value-dropdown-label">Value Index *</InputLabel>
+                            <FormControl 
+                                fullWidth
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        '& fieldset': {
+                                            borderColor: 'rgba(102, 126, 234, 0.3)',
+                                        },
+                                        '&:hover fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                        '&.Mui-focused fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                    },
+                                    '& .MuiInputLabel-root.Mui-focused': {
+                                        color: '#667eea',
+                                    },
+                                }}
+                            >
+                                <InputLabel id="hooks-array-of-array-value-dropdown-label">Value Index *</InputLabel>
                                 <Select
                                     label="Value Index *"
-                                    labelId="array-of-array-value-dropdown-label"
+                                    labelId="hooks-array-of-array-value-dropdown-label"
                                     value={hooksArrayOfArrayValueIndex === '' ? '' : hooksArrayOfArrayValueIndex}
                                     onChange={(e) => handleHooksArrayOfArrayValueChange(e as SelectChangeEvent<number>)}
                                     disabled={!lengthOfFirstElementOfArrayOfArray}
@@ -990,29 +1122,66 @@ const CascadingDropdown: React.FC = () => {
             
             return (
                 <Collapse in={inProp}>
-                    <Box>
+                    <Box
+                        sx={{
+                            p: 2.5,
+                            background: 'linear-gradient(135deg, rgba(224, 231, 255, 0.3) 0%, rgba(199, 210, 254, 0.3) 100%)',
+                            borderRadius: 2,
+                            border: '1px solid rgba(102, 126, 234, 0.3)',
+                        }}
+                    >
                         <Typography 
                             variant="body2" 
-                            fontWeight={600} 
-                            color="text.primary" 
+                            fontWeight={700} 
                             mb={2}
-                            sx={{ borderBottom: '1px solid #ccc', pb: 0.5 }}
+                            sx={{
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                backgroundClip: 'text',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                            }}
                         >
                             Array Mapping Configuration
                         </Typography>
                             
                         {(!hooksArrayOfObjectLabelKey || !hooksArrayOfObjectValueKey) && (
-                            <Alert severity="info" sx={{ mb: 2 }}>
+                            <Alert 
+                                severity="info" 
+                                sx={{ 
+                                    mb: 2,
+                                    borderRadius: 2,
+                                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                                    background: 'linear-gradient(135deg, rgba(224, 242, 254, 0.5) 0%, rgba(186, 230, 253, 0.5) 100%)',
+                                }}
+                            >
                                 Please select both the <strong>Label Key</strong> and the <strong>Value Key</strong> for the dropdown options to become active.
                             </Alert>
                         )}
 
                         <Box display="flex" gap={2}>
-                            <FormControl fullWidth>
-                                <InputLabel id="array-of-objects-label-dropdown-label">Label Key *</InputLabel>
+                            <FormControl 
+                                fullWidth
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        '& fieldset': {
+                                            borderColor: 'rgba(102, 126, 234, 0.3)',
+                                        },
+                                        '&:hover fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                        '&.Mui-focused fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                    },
+                                    '& .MuiInputLabel-root.Mui-focused': {
+                                        color: '#667eea',
+                                    },
+                                }}
+                            >
+                                <InputLabel id="hooks-array-of-objects-label-dropdown-label">Label Key *</InputLabel>
                                 <Select
                                     label="Label Key *"
-                                    labelId="array-of-objects-label-dropdown-label"
+                                    labelId="hooks-array-of-objects-label-dropdown-label"
                                     value={hooksArrayOfObjectLabelKey}
                                     onChange={handleHooksArrayOfObjectLabelChange}
                                     disabled={keyOptions.length === 0}
@@ -1032,11 +1201,29 @@ const CascadingDropdown: React.FC = () => {
                                 )}
                             </FormControl>
 
-                            <FormControl fullWidth>
-                                <InputLabel id="array-of-objects-value-dropdown-label">Value Key *</InputLabel>
+                            <FormControl 
+                                fullWidth
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        '& fieldset': {
+                                            borderColor: 'rgba(102, 126, 234, 0.3)',
+                                        },
+                                        '&:hover fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                        '&.Mui-focused fieldset': {
+                                            borderColor: '#667eea',
+                                        },
+                                    },
+                                    '& .MuiInputLabel-root.Mui-focused': {
+                                        color: '#667eea',
+                                    },
+                                }}
+                            >
+                                <InputLabel id="hooks-array-of-objects-value-dropdown-label">Value Key *</InputLabel>
                                 <Select
                                     label="Value Key *"
-                                    labelId="array-of-objects-value-dropdown-label"
+                                    labelId="hooks-array-of-objects-value-dropdown-label"
                                     value={hooksArrayOfObjectValueKey}
                                     onChange={handleHooksArrayOfObjectValueChange}
                                     disabled={keyOptions.length === 0}
@@ -1058,18 +1245,28 @@ const CascadingDropdown: React.FC = () => {
         return null;
     };
 
-    const availableOptions: DefaultValueOption[] = getAvailableValues(); 
+    const availableOptions: DefaultValueOption[] = getAvailableValues();
 
     // ==================== RENDER ====================
     return (
-        <Container maxWidth={false} disableGutters sx={{ py: 3, px: 3, bgcolor: 'grey.50', minHeight: '100vh' }}>
+        <Container 
+            maxWidth={false} 
+            disableGutters 
+            sx={{ 
+                py: 3, 
+                px: 3, 
+                background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+                minHeight: '100vh' 
+            }}
+        >
             <Fade in={!!successMessage}>
                 <Alert 
                     severity="success" 
                     sx={{ 
                         mb: 3, 
                         display: successMessage ? 'flex' : 'none',
-                        boxShadow: 2,
+                        borderRadius: 2,
+                        boxShadow: '0 4px 15px rgba(102, 126, 234, 0.2)',
                     }}
                     icon={<CheckCircleIcon />}
                 >
@@ -1080,17 +1277,44 @@ const CascadingDropdown: React.FC = () => {
             <Grid container spacing={3}>
                 {/* LEFT COLUMN - CREATE/EDIT FORM */}
                 <Grid size={{xs:12,md:6}}>
-                    <Card elevation={3} sx={{ position: 'sticky', top: 16 }}>
+                    <Card 
+                        elevation={0}
+                        sx={{ 
+                            position: 'sticky', 
+                            top: 16,
+                            background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+                            backdropFilter: 'blur(10px)',
+                            border: '1px solid rgba(102, 126, 234, 0.2)',
+                            borderRadius: 3,
+                            boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
+                        }}
+                    >
                         <CardContent sx={{ p: 3 }}>
                             <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-                                <Typography variant="h5" fontWeight={700} color="primary.main">
+                                <Typography 
+                                    variant="h5" 
+                                    fontWeight={700}
+                                    sx={{
+                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                        backgroundClip: 'text',
+                                        WebkitBackgroundClip: 'text',
+                                        WebkitTextFillColor: 'transparent',
+                                    }}
+                                >
                                     {editingId ? 'Edit Filter' : 'Create New Filter'}
                                 </Typography>
                                 {editingId && (
                                     <Button
                                         size="small"
                                         onClick={handleCancelEdit}
-                                        sx={{ textTransform: 'none' }}
+                                        sx={{ 
+                                            textTransform: 'none',
+                                            color: '#667eea',
+                                            fontWeight: 600,
+                                            '&:hover': {
+                                                bgcolor: 'rgba(102, 126, 234, 0.05)',
+                                            }
+                                        }}
                                     >
                                         Cancel Edit
                                     </Button>
@@ -1101,14 +1325,25 @@ const CascadingDropdown: React.FC = () => {
                                 
                                 {/* 1. MAIN CATEGORY SELECTION */}
                                 <FormControl fullWidth>
-                                    <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                                    <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
                                         Main Category *
                                     </FormLabel>
                                     <Select
                                         value={mainCategory}
                                         onChange={handleMainCategoryChange}
                                         displayEmpty
-                                        sx={{ bgcolor: 'white' }}
+                                        sx={{ 
+                                            bgcolor: 'white',
+                                            '& .MuiOutlinedInput-notchedOutline': {
+                                                borderColor: 'rgba(102, 126, 234, 0.3)',
+                                            },
+                                            '&:hover .MuiOutlinedInput-notchedOutline': {
+                                                borderColor: '#667eea',
+                                            },
+                                            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                                borderColor: '#667eea',
+                                            },
+                                        }}
                                     >
                                         <MenuItem value="" disabled>Select a category...</MenuItem>
                                         <MenuItem value="params">📊 Params</MenuItem>
@@ -1121,14 +1356,25 @@ const CascadingDropdown: React.FC = () => {
                                 {mainCategory === 'params' && (
                                     <Collapse in={mainCategory === 'params'}>
                                         <FormControl fullWidth>
-                                            <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                                            <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
                                                 Parameter Type *
                                             </FormLabel>
                                             <Select
                                                 value={paramType}
                                                 onChange={handleParamTypeChange}
                                                 displayEmpty
-                                                sx={{ bgcolor: 'white' }}
+                                                sx={{ 
+                                                    bgcolor: 'white',
+                                                    '& .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: 'rgba(102, 126, 234, 0.3)',
+                                                    },
+                                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                }}
                                             >
                                                 <MenuItem value="" disabled>Choose a Parameter type...</MenuItem>
                                                 <MenuItem value="array">Array</MenuItem>
@@ -1139,18 +1385,29 @@ const CascadingDropdown: React.FC = () => {
                                     </Collapse>
                                 )}
 
-                                {/* 2B. PARAMS CATEGORY - PARAMETER NAME */}
+                                {/* Parameter selection fields for each type */}
                                 {mainCategory === 'params' && paramType === 'array' && (
                                     <Collapse in={!!paramType}>
                                         <FormControl fullWidth>
-                                            <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                                            <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
                                                 Select Array Parameter *
                                             </FormLabel>
                                             <Select
                                                 value={selectedParamName}
                                                 onChange={handleParamNameChange}
                                                 displayEmpty
-                                                sx={{ bgcolor: 'white' }}
+                                                sx={{ 
+                                                    bgcolor: 'white',
+                                                    '& .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: 'rgba(102, 126, 234, 0.3)',
+                                                    },
+                                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                }}
                                             >
                                                 <MenuItem value="" disabled>Choose an array parameter...</MenuItem>
                                                 {arrayParameters.map((param:string) => (
@@ -1171,14 +1428,25 @@ const CascadingDropdown: React.FC = () => {
                                 {mainCategory === 'params' && paramType === 'arrayOfArray' && (
                                     <Collapse in={!!paramType}>
                                         <FormControl fullWidth>
-                                            <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                                            <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
                                                 Select Array of Array Param *
                                             </FormLabel>
                                             <Select
                                                 value={selectedParamName}
                                                 onChange={handleParamNameChange}
                                                 displayEmpty
-                                                sx={{ bgcolor: 'white' }}
+                                                sx={{ 
+                                                    bgcolor: 'white',
+                                                    '& .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: 'rgba(102, 126, 234, 0.3)',
+                                                    },
+                                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                }}
                                             >
                                                 <MenuItem value="" disabled>Choose an array of array parameter...</MenuItem>
                                                 {arrayOfArrayParameters.map((param:string) => (
@@ -1199,14 +1467,25 @@ const CascadingDropdown: React.FC = () => {
                                 {mainCategory === 'params' && paramType === 'arrayOfObjects' && (
                                     <Collapse in={!!paramType}>
                                         <FormControl fullWidth>
-                                            <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
-                                                Select Array of Objects Paramter *
+                                            <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
+                                                Select Array of Objects Parameter *
                                             </FormLabel>
                                             <Select
                                                 value={selectedParamName}
                                                 onChange={handleParamNameChange}
                                                 displayEmpty
-                                                sx={{ bgcolor: 'white' }}
+                                                sx={{ 
+                                                    bgcolor: 'white',
+                                                    '& .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: 'rgba(102, 126, 234, 0.3)',
+                                                    },
+                                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                }}
                                             >
                                                 <MenuItem value="" disabled>Choose an array of objects Parameter...</MenuItem>
                                                 {arrayOfObjectParameters.map((param: string) => (
@@ -1224,18 +1503,29 @@ const CascadingDropdown: React.FC = () => {
                                     </Collapse>
                                 )}
 
-                                {/* 3A. FILTERS CATEGORY - DATA SOURCE SELECTION */}
+                                {/* DATA SOURCE CATEGORY */}
                                 {mainCategory === 'data-source' && (
                                     <Collapse in={mainCategory === 'data-source'}>
                                         <FormControl fullWidth>
-                                            <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                                            <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
                                                 Select Data Source *
                                             </FormLabel>
                                             <Select
                                                 value={selectedDataSource}
                                                 onChange={handleDataSourceChange}
                                                 displayEmpty
-                                                sx={{ bgcolor: 'white' }}
+                                                sx={{ 
+                                                    bgcolor: 'white',
+                                                    '& .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: 'rgba(102, 126, 234, 0.3)',
+                                                    },
+                                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                }}
                                                 disabled={isLoadingDataSources}
                                             >
                                                 <MenuItem value="" disabled>
@@ -1249,7 +1539,7 @@ const CascadingDropdown: React.FC = () => {
                                             </Select>
                                             {isLoadingDataSources && (
                                                 <Box display="flex" alignItems="center" gap={1} mt={1}>
-                                                    <CircularProgress size={16} />
+                                                    <CircularProgress size={16} sx={{ color: '#667eea' }} />
                                                     <Typography variant="caption" color="text.secondary">
                                                         Loading data sources...
                                                     </Typography>
@@ -1264,19 +1554,29 @@ const CascadingDropdown: React.FC = () => {
                                     </Collapse>
                                 )}
 
-                                {/* 3B. FILTERS CATEGORY - COLUMN SELECTION */}
                                 {mainCategory === 'data-source' && selectedDataSource && (
                                     <Collapse in={!!selectedDataSource}>
                                         <Box>
                                             <FormControl fullWidth>
-                                                <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                                                <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
                                                     Select Filter Column *
                                                 </FormLabel>
                                                 <Select
                                                     value={selectedFilterColumn}
                                                     onChange={handleFilterColumnChange}
                                                     displayEmpty
-                                                    sx={{ bgcolor: 'white' }}
+                                                    sx={{ 
+                                                        bgcolor: 'white',
+                                                        '& .MuiOutlinedInput-notchedOutline': {
+                                                            borderColor: 'rgba(102, 126, 234, 0.3)',
+                                                        },
+                                                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                                                            borderColor: '#667eea',
+                                                        },
+                                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                                            borderColor: '#667eea',
+                                                        },
+                                                    }}
                                                     disabled={isLoadingFilterColumns || availableFilterColumns.length === 0}
                                                 >
                                                     <MenuItem value="" disabled>
@@ -1290,7 +1590,7 @@ const CascadingDropdown: React.FC = () => {
                                                 </Select>
                                                 {isLoadingFilterColumns && (
                                                     <Box display="flex" alignItems="center" gap={1} mt={1}>
-                                                        <CircularProgress size={16} />
+                                                        <CircularProgress size={16} sx={{ color: '#667eea' }} />
                                                         <Typography variant="caption" color="text.secondary">
                                                             Loading columns...
                                                         </Typography>
@@ -1303,7 +1603,17 @@ const CascadingDropdown: React.FC = () => {
                                                 )}
                                             </FormControl>
                                             {!selectedFilterColumn && !isLoadingFilterColumns && availableFilterColumns.length > 0 && (
-                                                <Alert severity="info" sx={{ mt: 2, py: 0.5, px: 1 }}>
+                                                <Alert 
+                                                    severity="info" 
+                                                    sx={{ 
+                                                        mt: 2, 
+                                                        py: 0.5, 
+                                                        px: 1,
+                                                        borderRadius: 2,
+                                                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                                                        background: 'linear-gradient(135deg, rgba(224, 242, 254, 0.5) 0%, rgba(186, 230, 253, 0.5) 100%)',
+                                                    }}
+                                                >
                                                     <Typography variant="caption">
                                                         Select a column name to fetch its distinct values and enable the <strong>Default Value</strong> section.
                                                     </Typography>
@@ -1313,18 +1623,29 @@ const CascadingDropdown: React.FC = () => {
                                     </Collapse>
                                 )}
 
-                                {/* 4. HOOKS CATEGORY - HOOK SELECTION */}
+                                {/* HOOKS CATEGORY */}
                                 {mainCategory === 'hooks' && (
                                     <Collapse in={mainCategory === 'hooks'}>
                                         <FormControl fullWidth>
-                                            <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                                            <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
                                                 Calculation Type *
                                             </FormLabel>
                                             <Select
                                                 value={hookType}
                                                 onChange={handleHookTypeChange}
                                                 displayEmpty
-                                                sx={{ bgcolor: 'white' }}
+                                                sx={{ 
+                                                    bgcolor: 'white',
+                                                    '& .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: 'rgba(102, 126, 234, 0.3)',
+                                                    },
+                                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                }}
                                             >
                                                 <MenuItem value="" disabled>Choose a calculation type...</MenuItem>
                                                 <MenuItem value="array">Array</MenuItem>
@@ -1335,18 +1656,28 @@ const CascadingDropdown: React.FC = () => {
                                     </Collapse>
                                 )}
 
-                                {/* 4A. PARAMS CATEGORY - PARAMETER NAME */}
                                 {mainCategory === 'hooks' && hookType === 'array' && (
                                     <Collapse in={!!hookType}>
                                         <FormControl fullWidth>
-                                            <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                                            <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
                                                 Select Array Calculation *
                                             </FormLabel>
                                             <Select
                                                 value={selectedHookName}
                                                 onChange={handleHookNameChange}
                                                 displayEmpty
-                                                sx={{ bgcolor: 'white' }}
+                                                sx={{ 
+                                                    bgcolor: 'white',
+                                                    '& .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: 'rgba(102, 126, 234, 0.3)',
+                                                    },
+                                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                }}
                                             >
                                                 <MenuItem value="" disabled>Choose an array calculation...</MenuItem>
                                                 {hooksArrayVariables.map((hook:string) => (
@@ -1367,14 +1698,25 @@ const CascadingDropdown: React.FC = () => {
                                 {mainCategory === 'hooks' && hookType === 'arrayOfArray' && (
                                     <Collapse in={!!hookType}>
                                         <FormControl fullWidth>
-                                            <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                                            <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
                                                 Select Array of Array Calculation *
                                             </FormLabel>
                                             <Select
                                                 value={selectedHookName}
                                                 onChange={handleHookNameChange}
                                                 displayEmpty
-                                                sx={{ bgcolor: 'white' }}
+                                                sx={{ 
+                                                    bgcolor: 'white',
+                                                    '& .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: 'rgba(102, 126, 234, 0.3)',
+                                                    },
+                                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                }}
                                             >
                                                 <MenuItem value="" disabled>Choose an array of array hook...</MenuItem>
                                                 {hooksArrayOfArrayVariables.map((hook:string) => (
@@ -1395,14 +1737,25 @@ const CascadingDropdown: React.FC = () => {
                                 {mainCategory === 'hooks' && hookType === 'arrayOfObjects' && (
                                     <Collapse in={!!hookType}>
                                         <FormControl fullWidth>
-                                            <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                                            <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
                                                 Select Array of Objects Calculations *
                                             </FormLabel>
                                             <Select
                                                 value={selectedHookName}
                                                 onChange={handleHookNameChange}
                                                 displayEmpty
-                                                sx={{ bgcolor: 'white' }}
+                                                sx={{ 
+                                                    bgcolor: 'white',
+                                                    '& .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: 'rgba(102, 126, 234, 0.3)',
+                                                    },
+                                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                                        borderColor: '#667eea',
+                                                    },
+                                                }}
                                             >
                                                 <MenuItem value="" disabled>Choose an array of objects calculations...</MenuItem>
                                                 {hooksArrayOfObjectVariables.map((hook: string) => (
@@ -1420,19 +1773,18 @@ const CascadingDropdown: React.FC = () => {
                                     </Collapse>
                                 )}
 
-                                {/* 5. COMPLEX MAPPING DROPDOWNS (for params amd hooks) */}
+                                {/* COMPLEX MAPPING DROPDOWNS */}
                                 {ComplexMappingDropdowns()}
-
                                 {ComplexHookMappingDropdowns()}
 
-                                {/* 6. CONFIGURATION FIELDS */}
+                                {/* CONFIGURATION FIELDS */}
                                 {((mainCategory === 'params' && selectedParamName) || 
                                   (mainCategory === 'data-source' && selectedFilterColumn) || 
                                   (mainCategory === 'hooks' && selectedHookName && hookType)) && (
                                     <Collapse in={true}>
                                         <Box display="flex" flexDirection="column" gap={3}>
                                             <FormControl fullWidth>
-                                                <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                                                <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
                                                     Display Name *
                                                 </FormLabel>
                                                 <TextField
@@ -1440,7 +1792,20 @@ const CascadingDropdown: React.FC = () => {
                                                     onChange={(e) => setDisplayName(e.target.value)}
                                                     placeholder="e.g., Top Payer"
                                                     fullWidth
-                                                    sx={{ bgcolor: 'white' }}
+                                                    sx={{ 
+                                                        bgcolor: 'white',
+                                                        '& .MuiOutlinedInput-root': {
+                                                            '& fieldset': {
+                                                                borderColor: 'rgba(102, 126, 234, 0.3)',
+                                                            },
+                                                            '&:hover fieldset': {
+                                                                borderColor: '#667eea',
+                                                            },
+                                                            '&.Mui-focused fieldset': {
+                                                                borderColor: '#667eea',
+                                                            },
+                                                        },
+                                                    }}
                                                 />
                                                 <Typography variant="caption" color="text.secondary" mt={0.5}>
                                                     User-facing label for this filter
@@ -1448,22 +1813,40 @@ const CascadingDropdown: React.FC = () => {
                                             </FormControl>
 
                                             <FormControl fullWidth>
-                                                <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                                                <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
                                                     Variable Name (ID) *
                                                 </FormLabel>
                                                 <TextField
                                                     value={variableName}
                                                     onChange={(e) => setVariableName(e.target.value)}
                                                     fullWidth
-                                                    sx={{ bgcolor: editingId ? 'grey.100' : 'white' }}
+                                                    sx={{ 
+                                                        bgcolor: editingId ? 'grey.100' : 'white',
+                                                        '& .MuiOutlinedInput-root': {
+                                                            '& fieldset': {
+                                                                borderColor: 'rgba(102, 126, 234, 0.3)',
+                                                            },
+                                                            '&:hover fieldset': {
+                                                                borderColor: '#667eea',
+                                                            },
+                                                            '&.Mui-focused fieldset': {
+                                                                borderColor: '#667eea',
+                                                            },
+                                                        },
+                                                    }}
                                                     slotProps={{
                                                         input: {
                                                             startAdornment: (
                                                                 <Typography
                                                                     component="span"
                                                                     fontWeight={700}
-                                                                    color="primary.main"
-                                                                    mr={0.5}
+                                                                    sx={{
+                                                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                                                        backgroundClip: 'text',
+                                                                        WebkitBackgroundClip: 'text',
+                                                                        WebkitTextFillColor: 'transparent',
+                                                                        mr: 0.5
+                                                                    }}
                                                                 >
                                                                     $
                                                                 </Typography>
@@ -1487,7 +1870,7 @@ const CascadingDropdown: React.FC = () => {
                                             </FormControl>
 
                                             <FormControl>
-                                                <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                                                <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
                                                     Selection Type *
                                                 </FormLabel>
                                                 <RadioGroup
@@ -1501,41 +1884,52 @@ const CascadingDropdown: React.FC = () => {
                                                 >
                                                     <FormControlLabel
                                                         value="single"
-                                                        control={<Radio />}
+                                                        control={<Radio sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }} />}
                                                         label="Single Select"
                                                         sx={{ 
-                                                            bgcolor: selectionType === 'single' ? 'primary.50' : 'transparent',
-                                                            borderRadius: 1,
-                                                            px: 1,
+                                                            bgcolor: selectionType === 'single' ? 'rgba(102, 126, 234, 0.1)' : 'transparent',
+                                                            borderRadius: 2,
+                                                            px: 2,
                                                             mr: 2,
+                                                            border: '1px solid',
+                                                            borderColor: selectionType === 'single' ? '#667eea' : 'transparent',
                                                         }}
                                                     />
                                                     <FormControlLabel
                                                         value="multi"
-                                                        control={<Radio />}
+                                                        control={<Radio sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }} />}
                                                         label="Multi Select"
                                                         sx={{ 
-                                                            bgcolor: selectionType === 'multi' ? 'primary.50' : 'transparent',
-                                                            borderRadius: 1,
-                                                            px: 1,
+                                                            bgcolor: selectionType === 'multi' ? 'rgba(102, 126, 234, 0.1)' : 'transparent',
+                                                            borderRadius: 2,
+                                                            px: 2,
+                                                            border: '1px solid',
+                                                            borderColor: selectionType === 'multi' ? '#667eea' : 'transparent',
                                                         }}
                                                     />
                                                 </RadioGroup>
                                             </FormControl>
 
                                             <FormControl fullWidth>
-                                                <FormLabel sx={{ mb: 1, fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                                                <FormLabel sx={{ mb: 1, fontWeight: 700, fontSize: '0.875rem', color: '#1e293b' }}>
                                                     Default Value(s) *
                                                 </FormLabel>
                                                 {isLoadingColumnValues ? (
-                                                    <Box display="flex" alignItems="center" gap={2} p={2} bgcolor="white" borderRadius={1} border={1} borderColor="grey.300">
-                                                        <CircularProgress size={24} />
+                                                    <Box display="flex" alignItems="center" gap={2} p={2} bgcolor="white" borderRadius={2} border="1px solid rgba(102, 126, 234, 0.3)">
+                                                        <CircularProgress size={24} sx={{ color: '#667eea' }} />
                                                         <Typography variant="body2" color="text.secondary">
                                                             Loading column values...
                                                         </Typography>
                                                     </Box>
                                                 ) : availableOptions.length === 0 ? (
-                                                    <Alert severity="warning">
+                                                    <Alert 
+                                                        severity="warning"
+                                                        sx={{
+                                                            borderRadius: 2,
+                                                            border: '1px solid rgba(245, 158, 11, 0.3)',
+                                                            background: 'linear-gradient(135deg, rgba(254, 243, 199, 0.3) 0%, rgba(253, 224, 71, 0.3) 100%)',
+                                                        }}
+                                                    >
                                                         No options available for default value selection. Select the necessary mappings/parameters first.
                                                     </Alert>
                                                 ) : selectionType === 'single' ? (
@@ -1543,7 +1937,18 @@ const CascadingDropdown: React.FC = () => {
                                                         value={defaultSingleValue}
                                                         onChange={(e) => setDefaultSingleValue(e.target.value)}
                                                         displayEmpty
-                                                        sx={{ bgcolor: 'white' }}
+                                                        sx={{ 
+                                                            bgcolor: 'white',
+                                                            '& .MuiOutlinedInput-notchedOutline': {
+                                                                borderColor: 'rgba(102, 126, 234, 0.3)',
+                                                            },
+                                                            '&:hover .MuiOutlinedInput-notchedOutline': {
+                                                                borderColor: '#667eea',
+                                                            },
+                                                            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                                                borderColor: '#667eea',
+                                                            },
+                                                        }}
                                                         disabled={availableOptions.length === 0}
                                                     >
                                                         <MenuItem value="" disabled>Select default value...</MenuItem>
@@ -1558,9 +1963,8 @@ const CascadingDropdown: React.FC = () => {
                                                         sx={{
                                                             p: 2,
                                                             bgcolor: 'white',
-                                                            borderRadius: 1,
-                                                            border: 1,
-                                                            borderColor: 'grey.300',
+                                                            borderRadius: 2,
+                                                            border: '1px solid rgba(102, 126, 234, 0.3)',
                                                             maxHeight: 200,
                                                             overflow: 'auto',
                                                         }}
@@ -1572,6 +1976,10 @@ const CascadingDropdown: React.FC = () => {
                                                                     <Checkbox
                                                                         checked={defaultMultiValues.includes(option.value)}
                                                                         onChange={() => handleMultiSelectChange(option.value)}
+                                                                        sx={{ 
+                                                                            color: '#667eea', 
+                                                                            '&.Mui-checked': { color: '#667eea' } 
+                                                                        }}
                                                                     />
                                                                 }
                                                                 label={option.label.toString()}
@@ -1595,8 +2003,15 @@ const CascadingDropdown: React.FC = () => {
                                                 sx={{ 
                                                     mt: 1, 
                                                     py: 1.5,
-                                                    fontWeight: 600,
+                                                    fontWeight: 700,
                                                     fontSize: '1rem',
+                                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                                    '&:hover': {
+                                                        background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                                                    },
+                                                    '&.Mui-disabled': {
+                                                        background: '#e2e8f0',
+                                                    },
                                                 }}
                                             >
                                                 {editingId ? 'Update Filter' : 'Save Configuration'}
@@ -1610,18 +2025,39 @@ const CascadingDropdown: React.FC = () => {
                 </Grid>
 
                 {/* RIGHT COLUMN - SAVED FILTERS LIST */}
-                <Grid size={{xs:12,md:6}} >
-                    <Card elevation={3}>
+                <Grid size={{xs:12,md:6}}>
+                    <Card 
+                        elevation={0}
+                        sx={{
+                            background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+                            backdropFilter: 'blur(10px)',
+                            border: '1px solid rgba(102, 126, 234, 0.2)',
+                            borderRadius: 3,
+                            boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
+                        }}
+                    >
                         <CardContent sx={{ p: 3 }}>
                             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                                <Typography variant="h5" fontWeight={700} color="primary.main">
+                                <Typography 
+                                    variant="h5" 
+                                    fontWeight={700}
+                                    sx={{
+                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                        backgroundClip: 'text',
+                                        WebkitBackgroundClip: 'text',
+                                        WebkitTextFillColor: 'transparent',
+                                    }}
+                                >
                                     Saved Filters
                                 </Typography>
                                 <Chip 
                                     label={filteredConfigs.length} 
-                                    color="primary" 
                                     size="small"
-                                    sx={{ fontWeight: 600 }}
+                                    sx={{ 
+                                        fontWeight: 700,
+                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                        color: 'white',
+                                    }}
                                 />
                             </Box>
 
@@ -1632,16 +2068,44 @@ const CascadingDropdown: React.FC = () => {
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     fullWidth
                                     size="small"
-                                    sx={{ mb: 2, bgcolor: 'white' }}
+                                    sx={{ 
+                                        mb: 2, 
+                                        bgcolor: 'white',
+                                        '& .MuiOutlinedInput-root': {
+                                            '& fieldset': {
+                                                borderColor: 'rgba(102, 126, 234, 0.3)',
+                                            },
+                                            '&:hover fieldset': {
+                                                borderColor: '#667eea',
+                                            },
+                                            '&.Mui-focused fieldset': {
+                                                borderColor: '#667eea',
+                                            },
+                                        },
+                                    }}
                                 />
                             )}
 
                             {filteredConfigs.length === 0 ? (
-                                <Box textAlign="center" py={8} color="text.secondary">
-                                    <Typography variant="h6" fontWeight={500} mb={1}>
+                                <Box textAlign="center" py={8}>
+                                    <Box
+                                        sx={{
+                                            width: 80,
+                                            height: 80,
+                                            margin: '0 auto 24px',
+                                            borderRadius: '50%',
+                                            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                        }}
+                                    >
+                                        <Typography sx={{ fontSize: 40 }}>🔍</Typography>
+                                    </Box>
+                                    <Typography variant="h6" fontWeight={600} mb={1} color="#475569">
                                         {searchTerm ? 'No filters found' : 'No filters configured yet'}
                                     </Typography>
-                                    <Typography variant="body2">
+                                    <Typography variant="body2" color="#94a3b8">
                                         {searchTerm 
                                             ? 'Try a different search term' 
                                             : 'Create your first filter using the form'}
@@ -1650,182 +2114,214 @@ const CascadingDropdown: React.FC = () => {
                             ) : (
                                 <Box sx={{ maxHeight: '78vh', overflowY: 'auto', pr: 1 }}>
                                     <Box display="flex" flexDirection="column" gap={2}>
-                                        {filteredConfigs.map((config: SavedFilterConfig) => (
-                                            <Card
-                                                key={config.variableName}
-                                                variant="outlined"
-                                                sx={{
-                                                    bgcolor: 'white',
-                                                    border: 2,
-                                                    borderColor: editingId === config.variableName ? 'primary.main' : 'grey.200',
-                                                    transition: 'all 0.2s',
-                                                    '&:hover': {
-                                                        boxShadow: 3,
-                                                        borderColor: 'primary.light',
-                                                    },
-                                                }}
-                                            >
-                                                <CardContent sx={{ p: 2 }}>
-                                                    <Box
-                                                        display="flex"
-                                                        justifyContent="space-between"
-                                                        alignItems="flex-start"
-                                                        mb={1.5}
-                                                    >
-                                                        <Box flex={1}>
-                                                            <Typography variant="h6" fontWeight={700} mb={0.5}>
-                                                                {config.displayName}
-                                                            </Typography>
-                                                            <Box display="flex" gap={1} alignItems="center" flexWrap="wrap">
-                                                                <Chip
-                                                                    label={config.category}
-                                                                    size="small"
-                                                                    color={getCategoryColor(config.category)}
-                                                                    sx={{ fontSize: '0.75rem', height: 22 }}
-                                                                />
-                                                                {config.category === 'filters' && config.dsName && (
+                                        {filteredConfigs.map((config: SavedFilterConfig) => {
+                                            const categoryColor = getCategoryColor(config.category);
+                                            return (
+                                                <Card
+                                                    key={config.variableName}
+                                                    variant="outlined"
+                                                    sx={{
+                                                        bgcolor: 'white',
+                                                        border: '2px solid',
+                                                        borderColor: editingId === config.variableName ? '#667eea' : 'rgba(102, 126, 234, 0.2)',
+                                                        borderRadius: 2,
+                                                        transition: 'all 0.2s',
+                                                        '&:hover': {
+                                                            boxShadow: '0 4px 15px rgba(102, 126, 234, 0.2)',
+                                                            borderColor: '#667eea',
+                                                        },
+                                                    }}
+                                                >
+                                                    <CardContent sx={{ p: 2 }}>
+                                                        <Box
+                                                            display="flex"
+                                                            justifyContent="space-between"
+                                                            alignItems="flex-start"
+                                                            mb={1.5}
+                                                        >
+                                                            <Box flex={1}>
+                                                                <Typography variant="h6" fontWeight={700} mb={0.5} color="#1e293b">
+                                                                    {config.displayName}
+                                                                </Typography>
+                                                                <Box display="flex" gap={1} alignItems="center" flexWrap="wrap">
                                                                     <Chip
-                                                                        label={`DS: ${config.dsName}`}
+                                                                        label={config.category}
                                                                         size="small"
-                                                                        color="default"
-                                                                        sx={{ fontSize: '0.75rem', height: 22 }}
+                                                                        sx={{ 
+                                                                            fontSize: '0.75rem', 
+                                                                            height: 22, 
+                                                                            fontWeight: 600,
+                                                                            background: `linear-gradient(135deg, ${categoryColor} 0%, ${categoryColor}dd 100%)`,
+                                                                            color: 'white',
+                                                                        }}
                                                                     />
-                                                                )}
-                                                                <Typography variant="caption" color="text.secondary">
-                                                                    {config.paramName}
-                                                                </Typography>
+                                                                   
+                                                                    {config.category === 'filters' && config.dsName && (
+                                                                        <Chip
+                                                                            label={`DS: ${config.dsName}`}
+                                                                            size="small"
+                                                                            sx={{ 
+                                                                                fontSize: '0.75rem', 
+                                                                                height: 22,
+                                                                                bgcolor: 'rgba(102, 126, 234, 0.1)',
+                                                                                color: '#667eea',
+                                                                                fontWeight: 600,
+                                                                            }}
+                                                                        />
+                                                                    )}
+                                                                    <Typography variant="caption" color="text.secondary" fontWeight={500}>
+                                                                        {config.paramName}
+                                                                    </Typography>
+                                                                </Box>
                                                             </Box>
-                                                        </Box>
-                                                        <Box display="flex" gap={0.5}>
-                                                            <Tooltip title="Edit">
+                                                            <Box display="flex" gap={0.5}>
+                                                                <Tooltip title="Edit">
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        onClick={() => handleEditFilter(config)}
+                                                                        sx={{
+                                                                            bgcolor: 'rgba(102, 126, 234, 0.1)',
+                                                                            color: '#667eea',
+                                                                            '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.2)' },
+                                                                        }}
+                                                                    >
+                                                                        <EditIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                </Tooltip>
+                                                                <Tooltip title="Delete">
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        onClick={() => handleDeleteFilter(config.variableName)}
+                                                                        sx={{
+                                                                            bgcolor: 'rgba(239, 68, 68, 0.1)',
+                                                                            color: '#ef4444',
+                                                                            '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.2)' },
+                                                                        }}
+                                                                    >
+                                                                        <DeleteIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                </Tooltip>
                                                                 <IconButton
                                                                     size="small"
-                                                                    onClick={() => handleEditFilter(config)}
+                                                                    onClick={() => toggleFilterExpanded(config.variableName)}
                                                                     sx={{
-                                                                        bgcolor: 'primary.50',
-                                                                        color: 'primary.main',
-                                                                        '&:hover': { bgcolor: 'primary.100' },
+                                                                        color: '#667eea',
                                                                     }}
                                                                 >
-                                                                    <EditIcon fontSize="small" />
+                                                                    {expandedFilters.has(config.variableName) ? (
+                                                                        <ExpandLessIcon fontSize="small" />
+                                                                    ) : (
+                                                                        <ExpandMoreIcon fontSize="small" />
+                                                                    )}
                                                                 </IconButton>
-                                                            </Tooltip>
-                                                            <Tooltip title="Delete">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => handleDeleteFilter(config.variableName)}
-                                                                    sx={{
-                                                                        bgcolor: 'error.50',
-                                                                        color: 'error.main',
-                                                                        '&:hover': { bgcolor: 'error.100' },
-                                                                    }}
-                                                                >
-                                                                    <DeleteIcon fontSize="small" />
-                                                                </IconButton>
-                                                            </Tooltip>
-                                                            <IconButton
-                                                                size="small"
-                                                                onClick={() => toggleFilterExpanded(config.variableName)}
-                                                            >
-                                                                {expandedFilters.has(config.variableName) ? (
-                                                                    <ExpandLessIcon fontSize="small" />
-                                                                ) : (
-                                                                    <ExpandMoreIcon fontSize="small" />
-                                                                )}
-                                                            </IconButton>
-                                                        </Box>
-                                                    </Box>
-
-                                                    <Divider sx={{ my: 1.5 }} />
-
-                                                    <Box display="flex" flexDirection="column" gap={1}>
-                                                        <Box display="flex" alignItems="center" justifyContent="space-between">
-                                                            <Box display="flex" alignItems="center" gap={1} flex={1}>
-                                                                <Typography
-                                                                    variant="body2"
-                                                                    fontWeight={600}
-                                                                    color="text.secondary"
-                                                                    sx={{ minWidth: 70 }}
-                                                                >
-                                                                    Variable:
-                                                                </Typography>
-                                                                <Typography
-                                                                    component="code"
-                                                                    variant="body2"
-                                                                    sx={{
-                                                                        px: 1,
-                                                                        py: 0.5,
-                                                                        bgcolor: 'grey.100',
-                                                                        borderRadius: 0.5,
-                                                                        fontFamily: 'monospace',
-                                                                        fontSize: '0.8rem',
-                                                                    }}
-                                                                >
-                                                                    {`\${${config.variableName}}`}
-                                                                </Typography>
                                                             </Box>
                                                         </Box>
 
-                                                        <Collapse in={expandedFilters.has(config.variableName)}>
-                                                            <Box display="flex" flexDirection="column" gap={1} mt={1}>
-                                                                <Box display="flex" alignItems="center" gap={1}>
+                                                        <Divider sx={{ my: 1.5, borderColor: 'rgba(102, 126, 234, 0.2)' }} />
+
+                                                        <Box display="flex" flexDirection="column" gap={1}>
+                                                            <Box display="flex" alignItems="center" justifyContent="space-between">
+                                                                <Box display="flex" alignItems="center" gap={1} flex={1}>
                                                                     <Typography
                                                                         variant="body2"
-                                                                        fontWeight={600}
-                                                                        color="text.secondary"
+                                                                        fontWeight={700}
+                                                                        color="#64748b"
                                                                         sx={{ minWidth: 70 }}
                                                                     >
-                                                                        Type:
+                                                                        Variable:
                                                                     </Typography>
-                                                                    <Chip
-                                                                        label={config.selectionType === 'single' ? 'Single Select' : 'Multi Select'}
-                                                                        size="small"
-                                                                        variant="outlined"
-                                                                        sx={{ fontSize: '0.75rem', height: 22 }}
-                                                                    />
-                                                                </Box>
-
-                                                                <Box display="flex" alignItems="flex-start" gap={1}>
                                                                     <Typography
+                                                                        component="code"
                                                                         variant="body2"
-                                                                        fontWeight={600}
-                                                                        color="text.secondary"
-                                                                        sx={{ minWidth: 70, mt: 0.5 }}
+                                                                        sx={{
+                                                                            px: 1.5,
+                                                                            py: 0.5,
+                                                                            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                                                                            borderRadius: 1,
+                                                                            fontFamily: 'monospace',
+                                                                            fontSize: '0.8rem',
+                                                                            color: '#667eea',
+                                                                            fontWeight: 600,
+                                                                        }}
                                                                     >
-                                                                        Defaults:
-                                                                    </Typography>
-                                                                    <Box display="flex" flexWrap="wrap" gap={0.75}>
-                                                                        {config.defaultValues.map((val: DefaultValueOption, index: number) => (
-                                                                            <Chip
-                                                                                key={index}
-                                                                                label={JSON.stringify(val)}
-                                                                                size="small"
-                                                                                color="success"
-                                                                                sx={{ fontSize: '0.75rem', height: 22, mt: 0.5 }}
-                                                                            />
-                                                                        ))}
-                                                                    </Box>
-                                                                </Box>
-
-                                                                <Box display="flex" alignItems="flex-start" gap={1}>
-                                                                    <Typography
-                                                                        variant="body2"
-                                                                        fontWeight={600}
-                                                                        color="text.secondary"
-                                                                        sx={{ minWidth: 70, mt: 0.5 }}
-                                                                    >
-                                                                        Options:
-                                                                    </Typography>
-                                                                    <Typography variant="body2" color="text.secondary" sx={{mt:0.5}}>
-                                                                        {config.availableOptions.length} available
+                                                                        {`\${${config.variableName}}`}
                                                                     </Typography>
                                                                 </Box>
                                                             </Box>
-                                                        </Collapse>
-                                                    </Box>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
+
+                                                            <Collapse in={expandedFilters.has(config.variableName)}>
+                                                                <Box display="flex" flexDirection="column" gap={1} mt={1}>
+                                                                    <Box display="flex" alignItems="center" gap={1}>
+                                                                        <Typography
+                                                                            variant="body2"
+                                                                            fontWeight={700}
+                                                                            color="#64748b"
+                                                                            sx={{ minWidth: 70 }}
+                                                                        >
+                                                                            Type:
+                                                                        </Typography>
+                                                                        <Chip
+                                                                            label={config.selectionType === 'single' ? 'Single Select' : 'Multi Select'}
+                                                                            size="small"
+                                                                            variant="outlined"
+                                                                            sx={{ 
+                                                                                fontSize: '0.75rem', 
+                                                                                height: 22,
+                                                                                borderColor: '#667eea',
+                                                                                color: '#667eea',
+                                                                                fontWeight: 600,
+                                                                            }}
+                                                                        />
+                                                                    </Box>
+
+                                                                    <Box display="flex" alignItems="flex-start" gap={1}>
+                                                                        <Typography
+                                                                            variant="body2"
+                                                                            fontWeight={700}
+                                                                            color="#64748b"
+                                                                            sx={{ minWidth: 70, mt: 0.5 }}
+                                                                        >
+                                                                            Defaults:
+                                                                        </Typography>
+                                                                        <Box display="flex" flexWrap="wrap" gap={0.75}>
+                                                                            {config.defaultValues.map((val: DefaultValueOption, index: number) => (
+                                                                                <Chip
+                                                                                    key={index}
+                                                                                    label={JSON.stringify(val)}
+                                                                                    size="small"
+                                                                                    sx={{ 
+                                                                                        fontSize: '0.75rem', 
+                                                                                        height: 22, 
+                                                                                        mt: 0.5,
+                                                                                        background: 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)',
+                                                                                        color: 'white',
+                                                                                        fontWeight: 600,
+                                                                                    }}
+                                                                                />
+                                                                            ))}
+                                                                        </Box>
+                                                                    </Box>
+
+                                                                    <Box display="flex" alignItems="flex-start" gap={1}>
+                                                                        <Typography
+                                                                            variant="body2"
+                                                                            fontWeight={700}
+                                                                            color="#64748b"
+                                                                            sx={{ minWidth: 70, mt: 0.5 }}
+                                                                        >
+                                                                            Options:
+                                                                        </Typography>
+                                                                        <Typography variant="body2" color="text.secondary" sx={{mt:0.5, fontWeight: 600}}>
+                                                                            {config.availableOptions.length} available
+                                                                        </Typography>
+                                                                    </Box>
+                                                                </Box>
+                                                            </Collapse>
+                                                        </Box>
+                                                    </CardContent>
+                                                </Card>
+                                            );
+                                        })}
                                     </Box>
                                 </Box>
                             )}

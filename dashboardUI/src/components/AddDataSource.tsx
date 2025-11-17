@@ -28,7 +28,7 @@ import {
   InputLabel,
   Select,
   Tooltip,
-  Alert, // Added for in-panel alerts
+  Alert,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -287,22 +287,24 @@ export default function AddDataSourceMui() {
       sx={{
         display: 'grid',
         gridTemplateColumns: 'repeat(12, 1fr)',
-        gap: 2,
-        p: 2,
-        height: '100vh',
+        gap: 3,
+        p: 3,
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
       }}
     >
       {/* Data Sources Panel */}
       <Box
         sx={{
           gridColumn: 'span 3',
-          bgcolor: 'grey.100',
-          border: 1,
-          borderColor: 'grey.300',
-          borderRadius: 1,
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(102, 126, 234, 0.2)',
+          borderRadius: 3,
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
+          boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)'
         }}
       >
         {/* Header */}
@@ -311,18 +313,24 @@ export default function AddDataSourceMui() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            p: 2,
-            borderBottom: 1,
-            borderColor: 'grey.300',
+            p: 2.5,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             cursor: 'pointer',
-            '&:hover': { bgcolor: 'grey.200' },
+            borderRadius: '12px 12px 0 0',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+            },
           }}
           onClick={() => setIsDataSourcesCollapsed(!isDataSourcesCollapsed)}
         >
-          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: 'white', letterSpacing: 0.5 }}>
             Data Sources
           </Typography>
-          {isDataSourcesCollapsed ? <ChevronRightIcon /> : <ExpandMoreIcon />}
+          {isDataSourcesCollapsed ? (
+            <ChevronRightIcon sx={{ color: 'white' }} />
+          ) : (
+            <ExpandMoreIcon sx={{ color: 'white' }} />
+          )}
         </Box>
 
         {/* Collapsible Content */}
@@ -342,7 +350,7 @@ export default function AddDataSourceMui() {
             >
               <Box
                 sx={{
-                  p: 2,
+                  p: 2.5,
                   flex: 1,
                   overflow: 'hidden',
                   display: 'flex',
@@ -356,7 +364,11 @@ export default function AddDataSourceMui() {
                     onClose={() => {
                       setAlert((prev) => ({ ...prev, show: false }));
                     }}
-                    sx={{ mb: 2 }}
+                    sx={{ 
+                      mb: 2,
+                      borderRadius: 2,
+                      boxShadow: '0 4px 15px rgba(102, 126, 234, 0.1)',
+                    }}
                   >
                     {alert.message}
                   </Alert>
@@ -364,14 +376,29 @@ export default function AddDataSourceMui() {
                 {/* ---------------------- */}
 
                 {/* Add new data source */}
-                <Paper variant="outlined" sx={{ mb: 2, p: 2 }}>
+                <Box
+                  sx={{
+                    mb: 2.5,
+                    p: 2.5,
+                    background: 'linear-gradient(135deg, rgba(224, 231, 255, 0.3) 0%, rgba(199, 210, 254, 0.3) 100%)',
+                    borderRadius: 2,
+                    border: '1px solid rgba(102, 126, 234, 0.3)',
+                  }}
+                >
                   <Typography
                     variant="subtitle1"
-                    sx={{ mb: 1, fontWeight: 'medium' }}
+                    sx={{
+                      mb: 1.5,
+                      fontWeight: 700,
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      backgroundClip: 'text',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                    }}
                   >
                     Add New Source
                   </Typography>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Box sx={{ display: 'flex', gap: 1.5 }}>
                     <TextField
                       fullWidth
                       size="small"
@@ -382,6 +409,21 @@ export default function AddDataSourceMui() {
                       onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) =>
                         e.key === 'Enter' && addDataSource()
                       }
+                      sx={{
+                        bgcolor: 'white',
+                        borderRadius: 1.5,
+                        '& .MuiOutlinedInput-root': {
+                          '& fieldset': {
+                            borderColor: 'rgba(102, 126, 234, 0.3)',
+                          },
+                          '&:hover fieldset': {
+                            borderColor: '#667eea',
+                          },
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#667eea',
+                          },
+                        },
+                      }}
                     />
                     <Button
                       variant="contained"
@@ -390,23 +432,58 @@ export default function AddDataSourceMui() {
                         !newDSName || dataSourceNames.includes(newDSName)
                       }
                       startIcon={<AddIcon />}
-                      sx={{ minWidth: 'auto' }}
+                      sx={{
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        '&:hover': {
+                          background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                        },
+                        '&.Mui-disabled': {
+                          background: '#e2e8f0',
+                        },
+                        fontWeight: 600,
+                        px: 2.5,
+                      }}
                     >
                       Add
                     </Button>
                   </Box>
-                </Paper>
+                </Box>
 
                 {/* List of data sources */}
                 <Box sx={{ flex: 1, overflowY: 'auto' }}>
                   {dataSourceNames.length === 0 ? (
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontStyle: 'italic' }}
+                    <Box
+                      sx={{
+                        textAlign: 'center',
+                        py: 4,
+                        px: 2,
+                      }}
                     >
-                      No data sources yet
-                    </Typography>
+                      <Box
+                        sx={{
+                          width: 64,
+                          height: 64,
+                          margin: '0 auto 16px',
+                          borderRadius: '50%',
+                          background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <DataObjectIcon sx={{ fontSize: 32, color: '#667eea', opacity: 0.6 }} />
+                      </Box>
+                      <Typography
+                        variant="body2"
+                        color="#64748b"
+                        sx={{ fontWeight: 600 }}
+                      >
+                        No data sources yet
+                      </Typography>
+                      <Typography variant="caption" color="#94a3b8">
+                        Create your first data source above
+                      </Typography>
+                    </Box>
                   ) : (
                     <List disablePadding>
                       {dataSourceNames.map((ds: string) => (
@@ -414,15 +491,23 @@ export default function AddDataSourceMui() {
                           key={ds}
                           disablePadding
                           sx={{
-                            mb: 1,
-                            borderRadius: 1,
-                            bgcolor:
+                            mb: 1.5,
+                            borderRadius: 2,
+                            background:
                               selectedDS === ds
-                                ? 'primary.main'
-                                : 'primary.light',
-                            color: 'white',
-                            '&:hover': { bgcolor: 'primary.dark' },
+                                ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                                : 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                            color: selectedDS === ds ? 'white' : '#667eea',
+                            border: '1px solid',
+                            borderColor: selectedDS === ds ? 'transparent' : 'rgba(102, 126, 234, 0.3)',
+                            boxShadow: selectedDS === ds ? '0 4px 15px rgba(102, 126, 234, 0.3)' : 'none',
+                            '&:hover': {
+                              background: selectedDS === ds
+                                ? 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)'
+                                : 'linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%)',
+                            },
                             cursor: editingDS === ds ? 'default' : 'pointer',
+                            transition: 'all 0.2s',
                           }}
                           onClick={() => editingDS !== ds && setSelectedDS(ds)}
                         >
@@ -431,7 +516,7 @@ export default function AddDataSourceMui() {
                               display: 'flex',
                               alignItems: 'center',
                               width: '100%',
-                              py: 1,
+                              py: 1.5,
                               px: 2,
                               gap: 1,
                             }}
@@ -452,8 +537,9 @@ export default function AddDataSourceMui() {
                                   sx={{
                                     flexGrow: 1,
                                     '& .MuiInputBase-root': {
-                                      color: 'primary.main',
+                                      color: '#667eea',
                                       bgcolor: 'white',
+                                      fontWeight: 600,
                                     },
                                   }}
                                 />
@@ -465,8 +551,8 @@ export default function AddDataSourceMui() {
                                       saveEditedDS();
                                     }}
                                     sx={{
-                                      color: 'white',
-                                      '&:hover': { color: 'success.light' },
+                                      color: '#10b981',
+                                      '&:hover': { bgcolor: 'rgba(16, 185, 129, 0.1)' },
                                     }}
                                   >
                                     <CheckIcon fontSize="small" />
@@ -480,8 +566,8 @@ export default function AddDataSourceMui() {
                                       cancelEditingDS();
                                     }}
                                     sx={{
-                                      color: 'white',
-                                      '&:hover': { color: 'error.light' },
+                                      color: '#ef4444',
+                                      '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' },
                                     }}
                                   >
                                     <CloseIcon fontSize="small" />
@@ -495,6 +581,7 @@ export default function AddDataSourceMui() {
                                     flexGrow: 1,
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
+                                    fontWeight: 600,
                                   }}
                                 >
                                   {ds}
@@ -507,8 +594,9 @@ export default function AddDataSourceMui() {
                                       startEditingDS(ds);
                                     }}
                                     sx={{
-                                      color: 'white',
-                                      '&:hover': { color: 'warning.light' },
+                                      color: 'inherit',
+                                      opacity: 0.8,
+                                      '&:hover': { opacity: 1, bgcolor: 'rgba(255, 255, 255, 0.1)' },
                                     }}
                                   >
                                     <EditIcon fontSize="small" />
@@ -522,8 +610,9 @@ export default function AddDataSourceMui() {
                                       removeDataSource(ds);
                                     }}
                                     sx={{
-                                      color: 'white',
-                                      '&:hover': { color: 'error.light' },
+                                      color: 'inherit',
+                                      opacity: 0.8,
+                                      '&:hover': { opacity: 1, bgcolor: 'rgba(255, 255, 255, 0.1)' },
                                     }}
                                   >
                                     <ClearIcon fontSize="small" />
@@ -544,21 +633,26 @@ export default function AddDataSourceMui() {
 
         {/* Always visible data source names when collapsed */}
         <Collapse in={isDataSourcesCollapsed}>
-          <Box sx={{ p: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          <Box sx={{ p: 2, display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
             {dataSourceNames.map((ds: string) => (
               <Button
                 key={ds}
                 size="small"
-                variant={selectedDS === ds ? 'contained' : 'text'}
+                variant={selectedDS === ds ? 'contained' : 'outlined'}
                 onClick={() => setSelectedDS(ds)}
                 sx={{
-                  bgcolor:
-                    selectedDS === ds ? 'primary.main' : 'primary.light',
-                  color: 'white',
-                  '&:hover': { bgcolor: 'primary.dark' },
-                  minWidth: 'auto',
-                  px: 2,
-                  py: 1,
+                  background:
+                    selectedDS === ds
+                      ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                      : 'transparent',
+                  color: selectedDS === ds ? 'white' : '#667eea',
+                  borderColor: '#667eea',
+                  fontWeight: 600,
+                  '&:hover': {
+                    background: selectedDS === ds
+                      ? 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)'
+                      : 'rgba(102, 126, 234, 0.05)',
+                  },
                 }}
               >
                 {ds}
@@ -570,45 +664,75 @@ export default function AddDataSourceMui() {
 
       {/* Right Side Content */}
       <Box
-        sx={{ gridColumn: 'span 9', display: 'flex', flexDirection: 'column', gap: 2 }}
+        sx={{ gridColumn: 'span 9', display: 'flex', flexDirection: 'column', gap: 3 }}
       >
         {!selectedDS ? (
-          /* Empty State - No Data Source Selected */
-          <Paper
+          
+          <Box
             sx={{
               flex: 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+              backdropFilter: 'blur(10px)',
+              border: '2px dashed rgba(102, 126, 234, 0.3)',
+              borderRadius: 3,
+              boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
             }}
           >
             <Box
-              sx={{ textAlign: 'center', color: 'text.secondary', maxWidth: 400 }}
+              sx={{ textAlign: 'center', maxWidth: 500, px: 4 }}
             >
-              <DataObjectIcon sx={{ fontSize: 64, color: 'grey.400', mb: 2 }} />
-              <Typography variant="h5" sx={{ mb: 1, fontWeight: 'medium' }}>
+              <Box
+                sx={{
+                  width: 96,
+                  height: 96,
+                  margin: '0 auto 24px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <DataObjectIcon sx={{ fontSize: 48, color: '#667eea', opacity: 0.6 }} />
+              </Box>
+              <Typography 
+                variant="h5" 
+                sx={{ 
+                  mb: 2, 
+                  fontWeight: 700,
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}
+              >
                 No Data Source Selected
               </Typography>
-              <Typography variant="body1" sx={{ mb: 2 }}>
+              <Typography variant="body1" sx={{ mb: 2, color: '#64748b' }}>
                 Select an existing data source from the left panel or create a
                 new one to start building your queries.
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="#94a3b8">
                 Once a data source is selected, you'll be able to write and
                 execute SQL queries to interact with your data.
               </Typography>
             </Box>
-          </Paper>
+          </Box>
         ) : (
           <>
             {/* SQL Query Section */}
             <Paper
-              elevation={2}
+              elevation={0}
               sx={{
                 p: 3,
-                border: 1,
-                borderColor: 'primary.light',
-                borderRadius: 2,
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(102, 126, 234, 0.2)',
+                borderRadius: 3,
+                boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
               }}
             >
               <Box
@@ -616,24 +740,44 @@ export default function AddDataSourceMui() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  mb: 2,
+                  mb: 3,
+                  pb: 2,
+                  borderBottom: '2px solid',
+                  borderImage: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%) 1',
                   flexWrap: 'wrap',
                   gap: 2,
                 }}
               >
                 {/* Left side: Title */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <DataObjectIcon sx={{ color: 'primary.main' }} />
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    SQL Query Editor
-                    <Typography
-                      component="span"
-                      color="primary.main"
-                      sx={{ ml: 1, fontWeight: 'bold' }}
-                    >
-                      ({selectedDS})
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Box
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 2,
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)',
+                    }}
+                  >
+                    <DataObjectIcon sx={{ color: 'white', fontSize: 24 }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                      SQL Query Editor
                     </Typography>
-                  </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: '#667eea',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {selectedDS}
+                    </Typography>
+                  </Box>
                 </Box>
 
                 {/* Right side: Controls */}
@@ -643,11 +787,43 @@ export default function AddDataSourceMui() {
                     alignItems: 'center',
                     gap: 2,
                     flexWrap: 'wrap',
-                    ml: 'auto',
                   }}
                 >
+                  <Button
+                    variant="contained"
+                    sx={{ 
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    borderRadius: 2,
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    '&:hover': {
+                        background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                    },
+                    }}
+                >
+                    Generate Queries with AI
+                </Button>
                   {/* Connection Name Dropdown */}
-                  <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <FormControl 
+                    size="small" 
+                    sx={{ 
+                      minWidth: 180,
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': {
+                          borderColor: 'rgba(102, 126, 234, 0.3)',
+                        },
+                        '&:hover fieldset': {
+                          borderColor: '#667eea',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#667eea',
+                        },
+                      },
+                      '& .MuiInputLabel-root.Mui-focused': {
+                        color: '#667eea',
+                      },
+                    }}
+                  >
                     <InputLabel id="connection-select-label">
                       Connection
                     </InputLabel>
@@ -669,7 +845,26 @@ export default function AddDataSourceMui() {
                   </FormControl>
 
                   {/* Connection Type Dropdown */}
-                  <FormControl size="small" sx={{ minWidth: 120 }}>
+                  <FormControl 
+                    size="small" 
+                    sx={{ 
+                      minWidth: 120,
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': {
+                          borderColor: 'rgba(102, 126, 234, 0.3)',
+                        },
+                        '&:hover fieldset': {
+                          borderColor: '#667eea',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#667eea',
+                        },
+                      },
+                      '& .MuiInputLabel-root.Mui-focused': {
+                        color: '#667eea',
+                      },
+                    }}
+                  >
                     <InputLabel id="connection-type-label">Type</InputLabel>
                     <Select
                       labelId="connection-type-label"
@@ -698,10 +893,16 @@ export default function AddDataSourceMui() {
                     }
                     sx={{
                       px: 3,
-                      fontWeight: 600,
-                      boxShadow: 2,
+                      py: 1.25,
+                      fontWeight: 700,
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)',
                       '&:hover': {
-                        boxShadow: 4,
+                        background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                        boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)',
+                      },
+                      '&.Mui-disabled': {
+                        background: '#e2e8f0',
                       },
                     }}
                   >
@@ -714,27 +915,25 @@ export default function AddDataSourceMui() {
               <Box
                 sx={{
                   position: 'relative',
-                  border: 2,
-                  borderColor: 'grey.300',
+                  border: '2px solid rgba(102, 126, 234, 0.3)',
                   borderRadius: 2,
                   overflow: 'hidden',
                   '&:focus-within': {
-                    borderColor: 'primary.main',
-                    boxShadow: '0 0 0 3px rgba(25, 118, 210, 0.1)',
+                    borderColor: '#667eea',
+                    boxShadow: '0 0 0 3px rgba(102, 126, 234, 0.1)',
                   },
                 }}
               >
-                {/* Line numbers placeholder - could be enhanced */}
+                {/* Line numbers */}
                 <Box
                   sx={{
                     position: 'absolute',
                     left: 0,
                     top: 0,
                     bottom: 0,
-                    width: 40,
-                    bgcolor: 'grey.100',
-                    borderRight: 1,
-                    borderColor: 'grey.300',
+                    width: 48,
+                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                    borderRight: '1px solid rgba(102, 126, 234, 0.2)',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -747,10 +946,11 @@ export default function AddDataSourceMui() {
                       key={i + 1}
                       variant="caption"
                       sx={{
-                        color: 'text.secondary',
+                        color: '#94a3b8',
                         fontFamily: 'monospace',
                         fontSize: '0.75rem',
                         lineHeight: 1.5,
+                        fontWeight: 600,
                       }}
                     >
                       {i + 1}
@@ -778,10 +978,10 @@ Press Ctrl+Enter to execute"
                       fontFamily: '"Fira Code", "Courier New", monospace',
                       fontSize: '0.9rem',
                       lineHeight: 1.5,
-                      pl: 6,
+                      pl: 7,
                       pr: 2,
                       py: 1.5,
-                      bgcolor: 'grey.50',
+                      bgcolor: 'white',
                     },
                     '& .MuiInputBase-root:before, & .MuiInputBase-root:after': {
                       display: 'none',
@@ -797,15 +997,16 @@ Press Ctrl+Enter to execute"
                 <Box
                   sx={{
                     position: 'absolute',
-                    bottom: 8,
-                    right: 8,
-                    bgcolor: 'rgba(0, 0, 0, 0.6)',
+                    bottom: 12,
+                    right: 12,
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                     color: 'white',
-                    px: 1.5,
-                    py: 0.5,
-                    borderRadius: 1,
+                    px: 2,
+                    py: 0.75,
+                    borderRadius: 1.5,
                     fontSize: '0.75rem',
-                    fontWeight: 500,
+                    fontWeight: 600,
+                    boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
                   }}
                 >
                   Ctrl + Enter to execute
@@ -815,30 +1016,44 @@ Press Ctrl+Enter to execute"
 
             {/* Results Table Section */}
             <Paper
+              elevation={0}
               sx={{
                 flex: 1,
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
+                maxWidth:'100%',
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(102, 126, 234, 0.2)',
+                borderRadius: 3,
+                boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
               }}
             >
               {/* Header */}
               <Box
                 sx={{
-                  p: 2,
-                  bgcolor: 'grey.50',
-                  borderBottom: 1,
-                  borderColor: 'grey.300',
+                  p: 2.5,
+                  background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                  borderBottom: '1px solid rgba(102, 126, 234, 0.2)',
                 }}
               >
-                <Typography variant="h6" sx={{ fontWeight: 'medium' }}>
+                <Typography 
+                  variant="h6" 
+                  sx={{ 
+                    fontWeight: 700,
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    backgroundClip: 'text',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}
+                >
                   Query Results
                 </Typography>
                 {queryResult && queryResult.success && (
                   <Typography
                     variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 0.5 }}
+                    sx={{ mt: 0.5, color: '#64748b', fontWeight: 500 }}
                   >
                     {queryResult.rowCount} row(s) returned
                   </Typography>
@@ -847,11 +1062,16 @@ Press Ctrl+Enter to execute"
 
               {/* Error Display */}
               {error && (
-                <Box sx={{ p: 2, bgcolor: 'error.50' }}>
+                <Box 
+                  sx={{ 
+                    p: 2.5,
+                    background: 'linear-gradient(135deg, rgba(254, 226, 226, 0.5) 0%, rgba(254, 202, 202, 0.5) 100%)',
+                    border: '1px solid #fca5a5',
+                  }}
+                >
                   <Typography
                     variant="body2"
-                    color="error.main"
-                    sx={{ fontWeight: 500 }}
+                    sx={{ fontWeight: 600, color: '#dc2626' }}
                   >
                     <strong>Error:</strong> {error}
                   </Typography>
@@ -869,11 +1089,10 @@ Press Ctrl+Enter to execute"
                   }}
                 >
                   <Box sx={{ textAlign: 'center' }}>
-                    <CircularProgress size={48} />
+                    <CircularProgress size={56} sx={{ color: '#667eea' }} />
                     <Typography
                       variant="body2"
-                      color="text.secondary"
-                      sx={{ mt: 2 }}
+                      sx={{ mt: 2, color: '#64748b', fontWeight: 600 }}
                     >
                       Executing query...
                     </Typography>
@@ -891,11 +1110,25 @@ Press Ctrl+Enter to execute"
                     justifyContent: 'center',
                   }}
                 >
-                  <Box sx={{ textAlign: 'center', color: 'text.secondary' }}>
-                    <Typography variant="h6" sx={{ mb: 1 }}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Box
+                      sx={{
+                        width: 80,
+                        height: 80,
+                        margin: '0 auto 24px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <PlayArrowIcon sx={{ fontSize: 40, color: '#667eea', opacity: 0.6 }} />
+                    </Box>
+                    <Typography variant="h6" sx={{ mb: 1, fontWeight: 700, color: '#475569' }}>
                       No query results yet
                     </Typography>
-                    <Typography variant="body2">
+                    <Typography variant="body2" color="#94a3b8">
                       Execute a SQL query to see results here
                     </Typography>
                   </Box>
@@ -905,7 +1138,15 @@ Press Ctrl+Enter to execute"
               {/* Results Table */}
               {queryResult && queryResult.success && !isLoading && (
                 <>
-                  <TableContainer sx={{ flex: 1 }}>
+                  <TableContainer 
+                  sx={{ 
+                    flex: 1,
+                    overflow:'auto',
+                    maxWidth: '100%', 
+                    '& .MuiTable-root': { 
+                      tableLayout: 'fixed', 
+                    } 
+                    }}>
                     <Table stickyHeader>
                       <TableHead>
                         <TableRow>
@@ -913,10 +1154,14 @@ Press Ctrl+Enter to execute"
                             <TableCell
                               key={column}
                               sx={{
-                                fontWeight: 'bold',
-                                bgcolor: 'grey.100',
-                                borderBottom: 2,
-                                borderColor: 'grey.300',
+                                fontWeight: 700,
+                                background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                                borderBottom: '2px solid rgba(102, 126, 234, 0.3)',
+                                color: '#1e293b',
+                                maxWidth: 200, 
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis', 
+                                whiteSpace: 'nowrap', 
                               }}
                             >
                               {column}
@@ -928,10 +1173,20 @@ Press Ctrl+Enter to execute"
                         {paginatedData.map((row, rowIndex) => (
                           <TableRow
                             key={rowIndex}
-                            sx={{ '&:hover': { bgcolor: 'grey.50' } }}
+                            sx={{ 
+                              '&:hover': { 
+                                bgcolor: 'rgba(102, 126, 234, 0.05)',
+                              } 
+                            }}
                           >
                             {tableColumns.map((column) => (
-                              <TableCell key={column}>
+                              <TableCell key={column} 
+                                sx={{ color: '#475569',    
+                                maxWidth: 200, 
+                                overflow: 'hidden', 
+                                textOverflow: 'ellipsis', 
+                                whiteSpace: 'nowrap',
+                             }}>
                                 {typeof row[column] === 'object'
                                   ? JSON.stringify(row[column])
                                   : String(row[column] ?? '')}
@@ -951,7 +1206,14 @@ Press Ctrl+Enter to execute"
                     rowsPerPage={rowsPerPage}
                     onRowsPerPageChange={handleChangeRowsPerPage}
                     rowsPerPageOptions={[5, 10, 25, 50, 100]}
-                    sx={{ borderTop: 1, borderColor: 'grey.300' }}
+                    sx={{ 
+                      borderTop: '1px solid rgba(102, 126, 234, 0.2)',
+                      background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                      '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                        color: '#64748b',
+                        fontWeight: 600,
+                      }
+                    }}
                   />
                 </>
               )}

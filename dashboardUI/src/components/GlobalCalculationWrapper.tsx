@@ -26,9 +26,9 @@ const GlobalCalculationWrapper: React.FC<GlobalCalculationWrapperProps> = ({ chi
           <div className="bg-white rounded-lg p-6 shadow-xl flex items-center space-x-4 max-w-md mx-4">
             <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
             <div>
-              <h3 className="font-medium text-gray-900">Updating Variables</h3>
+              <h3 className="font-medium text-gray-900">Building the data</h3>
               <p className="text-sm text-gray-600 mt-1">
-                Recalculating with updated filters...
+                Updating Variables
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 Charts will update automatically when complete

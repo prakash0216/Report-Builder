@@ -47,16 +47,53 @@ interface ConnectorType {
   id: string;
   name: string;
   description: string;
-  color: 'primary' | 'warning' | 'info' | 'success' | 'error' | 'secondary';
+  color: string;
+  gradient: string;
 }
 
 const connectorTypes: ConnectorType[] = [
-  { id: "snowflake", name: "Snowflake", description: "Connect to Snowflake data warehouse", color: "primary" },
-  { id: "mysql", name: "MySQL", description: "Connect to MySQL database", color: "warning" },
-  { id: "postgresql", name: "PostgreSQL", description: "Connect to PostgreSQL database", color: "info" },
-  { id: "mongodb", name: "MongoDB", description: "Connect to MongoDB database", color: "success" },
-  { id: "oracle", name: "Oracle", description: "Connect to Oracle database", color: "error" },
-  { id: "redshift", name: "Amazon Redshift", description: "Connect to Amazon Redshift", color: "secondary" }
+  { 
+    id: "snowflake", 
+    name: "Snowflake", 
+    description: "Connect to Snowflake data warehouse", 
+    color: "#667eea",
+    gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+  },
+  { 
+    id: "mysql", 
+    name: "MySQL", 
+    description: "Connect to MySQL database", 
+    color: "#f093fb",
+    gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
+  },
+  { 
+    id: "postgresql", 
+    name: "PostgreSQL", 
+    description: "Connect to PostgreSQL database", 
+    color: "#4facfe",
+    gradient: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
+  },
+  { 
+    id: "mongodb", 
+    name: "MongoDB", 
+    description: "Connect to MongoDB database", 
+    color: "#43e97b",
+    gradient: "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)"
+  },
+  { 
+    id: "oracle", 
+    name: "Oracle", 
+    description: "Connect to Oracle database", 
+    color: "#fa709a",
+    gradient: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)"
+  },
+  { 
+    id: "redshift", 
+    name: "Amazon Redshift", 
+    description: "Connect to Amazon Redshift", 
+    color: "#764ba2",
+    gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+  }
 ];
 
 const ConnectorManager: React.FC = () => {
@@ -120,7 +157,6 @@ const ConnectorManager: React.FC = () => {
   const [isSnowflakeConnectionValid, setIsSnowflakeConnectionValid] = useState<boolean>(false);
   const [isEditSnowflakeConnectionValid, setIsEditSnowflakeConnectionValid] = useState<boolean>(false);
   
-
   const filteredConnectors = connectorTypes.filter((connector) =>
     connector.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     connector.description.toLowerCase().includes(searchTerm.toLowerCase())
@@ -505,176 +541,98 @@ const ConnectorManager: React.FC = () => {
     page * rowsPerPage + rowsPerPage
   );
 
+  const inputSx = {
+    '& .MuiOutlinedInput-root': {
+      '& fieldset': { borderColor: 'rgba(102, 126, 234, 0.3)' },
+      '&:hover fieldset': { borderColor: '#667eea' },
+      '&.Mui-focused fieldset': { borderColor: '#667eea' },
+    },
+    '& .MuiInputLabel-root.Mui-focused': { color: '#667eea' },
+  };
+
   const renderConnectionsTable = () => (
-    <Paper sx={{ mt: 2, p: 2 }}>
-      <Typography variant="h6" mb={2}>
+    <Paper elevation={0} sx={{ mt: 3, p: 3, background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)', backdropFilter: 'blur(10px)', border: '1px solid rgba(102, 126, 234, 0.2)', borderRadius: 3, boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)' }}>
+      <Typography variant="h6" mb={2} sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 700 }}>
         Saved Connections ({connections.length} total)
       </Typography>
-      <TableContainer sx={{ maxHeight: 400 }}>
+      <TableContainer sx={{ maxHeight: 400, borderRadius: 2 }}>
         <Table stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>Connection Name</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Account</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Username</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Authenticator</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Private Key</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Warehouse</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Database</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Schema</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Type</TableCell>
-              <TableCell align="center" sx={{ fontWeight: 'bold' }}>Actions</TableCell>
+              {['Connection Name', 'Account', 'Username', 'Authenticator', 'Private Key', 'Warehouse', 'Database', 'Schema', 'Type', 'Actions'].map(header => (
+                <TableCell key={header} align={header === 'Actions' ? 'center' : 'left'} sx={{ fontWeight: 700, background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', color: '#1e293b' }}>{header}</TableCell>
+              ))}
             </TableRow>
           </TableHead>
           <TableBody>
             {paginatedConnections.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={10} align="center">
-                  <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-                    No connections found. Add your first connection above.
-                  </Typography>
-                </TableCell>
-              </TableRow>
+              <TableRow><TableCell colSpan={10} align="center"><Box sx={{ py: 4 }}><Box sx={{ width: 64, height: 64, margin: '0 auto 16px', borderRadius: '50%', background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Storage sx={{ fontSize: 32, color: '#667eea', opacity: 0.6 }} /></Box><Typography variant="body2" color="#94a3b8" fontWeight={500}>No connections found. Add your first connection above.</Typography></Box></TableCell></TableRow>
             ) : (
               paginatedConnections.map((connection) => (
-                <TableRow key={connection.id} hover>
-                  <TableCell>{connection.connectionName}</TableCell>
-                  <TableCell>{connection.account}</TableCell>
-                  <TableCell>{connection.username}</TableCell>
-                  <TableCell>{connection.authenticator}</TableCell>
-                  <TableCell>
-                    {connection.privateKeyFileName || 
-                     (connection.privateKey?.name) || 
-                     'Not Uploaded'}
-                  </TableCell>
-                  <TableCell>{connection.warehouse}</TableCell>
-                  <TableCell>{connection.database}</TableCell>
-                  <TableCell>{connection.schema}</TableCell>
-                  <TableCell>
-                    {connection.type === "snowflake" ? (
-                      <Chip label="Snowflake" color="primary" size="small" />
-                    ) : (
-                      connection.type
-                    )}
-                  </TableCell>
+                <TableRow key={connection.id} hover sx={{ '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.05)' } }}>
+                  <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>{connection.connectionName}</TableCell>
+                  <TableCell sx={{ color: '#475569' }}>{connection.account}</TableCell>
+                  <TableCell sx={{ color: '#475569' }}>{connection.username}</TableCell>
+                  <TableCell sx={{ color: '#475569' }}>{connection.authenticator}</TableCell>
+                  <TableCell sx={{ color: '#475569' }}>{connection.privateKeyFileName || (connection.privateKey?.name) || 'Not Uploaded'}</TableCell>
+                  <TableCell sx={{ color: '#475569' }}>{connection.warehouse}</TableCell>
+                  <TableCell sx={{ color: '#475569' }}>{connection.database}</TableCell>
+                  <TableCell sx={{ color: '#475569' }}>{connection.schema}</TableCell>
+                  <TableCell>{connection.type === "snowflake" ? <Chip label="Snowflake" size="small" sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', fontWeight: 600 }} /> : connection.type}</TableCell>
                   <TableCell align="center">
-                    <Tooltip title="Edit connection">
-                      <IconButton color="primary" onClick={() => handleEdit(connection)} size="small">
-                        <Edit fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete connection">
-                      <IconButton 
-                        color="error" 
-                        onClick={() => handleDeleteClick(connection)} 
-                        size="small"
-                        disabled={isDeletingConnection === connection.id}
-                      >
-                        {isDeletingConnection === connection.id ? (
-                          <CircularProgress size={16} />
-                        ) : (
-                          <Delete fontSize="small" />
-                        )}
-                      </IconButton>
-                    </Tooltip>
+                    <Tooltip title="Edit connection"><IconButton onClick={() => handleEdit(connection)} size="small" sx={{ color: '#667eea', '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.1)' } }}><Edit fontSize="small" /></IconButton></Tooltip>
+                    <Tooltip title="Delete connection"><IconButton onClick={() => handleDeleteClick(connection)} size="small" disabled={isDeletingConnection === connection.id} sx={{ color: '#ef4444', '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' } }}>{isDeletingConnection === connection.id ? <CircularProgress size={16} sx={{ color: '#ef4444' }} /> : <Delete fontSize="small" />}</IconButton></Tooltip>
                   </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
-        {paginatedConnections.length > 0 && (
-          <TablePagination
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            component="div"
-            count={connections.length}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={handleChangePage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
-          />
-        )}
+        {paginatedConnections.length > 0 && <TablePagination rowsPerPageOptions={[5, 10, 25, 50]} component="div" count={connections.length} rowsPerPage={rowsPerPage} page={page} onPageChange={handleChangePage} onRowsPerPageChange={handleChangeRowsPerPage} sx={{ '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': { color: '#64748b', fontWeight: 500 } }} />}
       </TableContainer>
     </Paper>
   );
 
   return (
-    <Box sx={{ width: '100%', p: 3 }}>
+    <Box sx={{ width: '100%', p: 3, background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' }}>
       {alert.show && (
-        <Alert severity={alert.severity} sx={{ mb: 2 }} onClose={() => setAlert(prev => ({ ...prev, show: false }))}>
-          {alert.message}
-        </Alert>
+        <Alert severity={alert.severity} sx={{ mb: 3, borderRadius: 2, border: '1px solid', borderColor: alert.severity === 'success' ? 'rgba(16, 185, 129, 0.3)' : alert.severity === 'error' ? 'rgba(239, 68, 68, 0.3)' : alert.severity === 'warning' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(59, 130, 246, 0.3)', background: alert.severity === 'success' ? 'linear-gradient(135deg, rgba(209, 250, 229, 0.5) 0%, rgba(167, 243, 208, 0.5) 100%)' : alert.severity === 'error' ? 'linear-gradient(135deg, rgba(254, 226, 226, 0.5) 0%, rgba(254, 202, 202, 0.5) 100%)' : alert.severity === 'warning' ? 'linear-gradient(135deg, rgba(254, 243, 199, 0.3) 0%, rgba(253, 224, 71, 0.3) 100%)' : 'linear-gradient(135deg, rgba(224, 242, 254, 0.5) 0%, rgba(186, 230, 253, 0.5) 100%)', boxShadow: '0 4px 15px rgba(102, 126, 234, 0.2)' }} onClose={() => setAlert(prev => ({ ...prev, show: false }))}>{alert.message}</Alert>
       )}
 
       {currentView === 'selection' && (
         <Box>
-          <Paper sx={{ mb: 3, p: 2 }}>
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <Search sx={{ color: 'gray.400', mr: 1 }} />
-              <TextField
-                fullWidth
-                variant="standard"
-                placeholder="Search for connectors... (e.g., snowflake, mysql, postgresql)"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          <Paper elevation={0} sx={{ mb: 4, p: 3, background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)', backdropFilter: 'blur(10px)', border: '1px solid rgba(102, 126, 234, 0.2)', borderRadius: 3, boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)' }}>
+            <Stack direction="row" alignItems="center" spacing={2}>
+              <Box sx={{ width: 48, height: 48, borderRadius: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)' }}><Search sx={{ color: 'white', fontSize: 24 }} /></Box>
+              <TextField fullWidth variant="standard" placeholder="Search for connectors... (e.g., snowflake, mysql, postgresql)" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'rgba(102, 126, 234, 0.3)' }, '& .MuiInput-underline:hover:before': { borderBottomColor: '#667eea' }, '& .MuiInput-underline:after': { borderBottomColor: '#667eea' } }} />
             </Stack>
           </Paper>
 
-          <Grid container spacing={2}>
+          <Grid container spacing={3}>
             {filteredConnectors.map((connector) => (
               <Grid size={{ xs: 12, sm: 6, md: 4 }} key={connector.id}>
-                <Paper
-                  elevation={3}
-                  onClick={() => handleConnectorSelect(connector.id)}
-                  sx={{
-                    p: 3,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    transition: 'all 0.3s',
-                    '&:hover': { boxShadow: 6, transform: 'scale(1.03)' }
-                  }}
-                >
-                  <Chip
-                    icon={<Storage sx={{ color: '#fff' }} />}
-                    label={connector.name}
-                    color={connector.color}
-                    sx={{ mb: 2, width: 100, height: 40, fontWeight: 700, color: '#fff' }}
-                  />
-                  <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                    {connector.name}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" textAlign="center">
-                    {connector.description}
-                  </Typography>
+                <Paper elevation={0} onClick={() => handleConnectorSelect(connector.id)} sx={{ p: 4, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'all 0.3s', background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)', backdropFilter: 'blur(10px)', border: '1px solid rgba(102, 126, 234, 0.2)', borderRadius: 3, '&:hover': { boxShadow: '0 12px 40px rgba(102, 126, 234, 0.25)', transform: 'translateY(-4px)', border: '1px solid rgba(102, 126, 234, 0.4)' } }}>
+                  <Box sx={{ width: 80, height: 80, borderRadius: 3, background: connector.gradient, display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2, boxShadow: `0 8px 24px ${connector.color}40` }}><Storage sx={{ color: 'white', fontSize: 40 }} /></Box>
+                  <Typography variant="h6" sx={{ mb: 1, fontWeight: 700, color: '#1e293b' }}>{connector.name}</Typography>
+                  <Typography variant="body2" color="#64748b" textAlign="center" fontWeight={500}>{connector.description}</Typography>
                 </Paper>
               </Grid>
             ))}
           </Grid>
+          
           {filteredConnectors.length === 0 && (
-            <Box sx={{ textAlign: 'center', py: 6 }}>
-              <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
-                No connectors found matching "{searchTerm}"
-              </Typography>
-              <Typography color="text.secondary">
-                Try searching for: snowflake, mysql, postgresql, mongodb, oracle, redshift
-              </Typography>
+            <Box sx={{ textAlign: 'center', py: 8 }}>
+              <Box sx={{ width: 80, height: 80, margin: '0 auto 24px', borderRadius: '50%', background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Search sx={{ fontSize: 40, color: '#667eea', opacity: 0.6 }} /></Box>
+              <Typography variant="h6" color="#475569" sx={{ mb: 2, fontWeight: 700 }}>No connectors found matching "{searchTerm}"</Typography>
+              <Typography color="#94a3b8" fontWeight={500}>Try searching for: snowflake, mysql, postgresql, mongodb, oracle, redshift</Typography>
             </Box>
           )}
 
           {connections.length > 0 && (
             <>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1} mt={4}>
-                <Typography variant="h6">Existing Connections ({connections.length})</Typography>
-                <Button
-                  variant="outlined"
-                  startIcon={showTable ? <VisibilityOff /> : <Visibility />}
-                  onClick={() => setShowTable(prev => !prev)}
-                >
-                  {showTable ? 'Hide' : 'Show'} Connections
-                </Button>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2} mt={5}>
+                <Typography variant="h6" sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 700 }}>Existing Connections ({connections.length})</Typography>
+                <Button variant="outlined" startIcon={showTable ? <VisibilityOff /> : <Visibility />} onClick={() => setShowTable(prev => !prev)} sx={{ borderColor: '#667eea', color: '#667eea', fontWeight: 600, borderRadius: 2, '&:hover': { borderColor: '#5568d3', bgcolor: 'rgba(102, 126, 234, 0.05)' } }}>{showTable ? 'Hide' : 'Show'} Connections</Button>
               </Stack>
               {showTable && renderConnectionsTable()}
             </>
@@ -684,231 +642,42 @@ const ConnectorManager: React.FC = () => {
 
       {currentView === 'snowflake' && (
         <Box>
-          <Stack
-            direction="row"
-            alignItems="center"
-            sx={{
-              borderBottom: 1,
-              borderColor: 'divider',
-              pb: 2,
-              position: 'relative',
-              minHeight: 56,
-            }}
-          >
-            <Button
-              onClick={handleBackToSelection}
-              startIcon={<ArrowBack />}
-              sx={{ position: 'absolute', left: 0 }}
-              variant="text"
-              color="primary"
-            >
-              Back to Connectors
-            </Button>
-            <Typography
-              variant="h5"
-              fontWeight={600}
-              color="text.primary"
-              sx={{
-                width: '100%',
-                textAlign: 'center',
-                pointerEvents: 'none',
-              }}
-            >
-              Configure Snowflake Connection
-            </Typography>
+          <Stack direction="row" alignItems="center" sx={{ borderBottom: '2px solid', borderImage: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%) 1', pb: 3, position: 'relative', minHeight: 64, mb: 4 }}>
+            <Button onClick={handleBackToSelection} startIcon={<ArrowBack />} sx={{ position: 'absolute', left: 0, color: '#667eea', fontWeight: 600, borderRadius: 2, '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.05)' } }} variant="text">Back to Connectors</Button>
+            <Typography variant="h4" fontWeight={700} sx={{ width: '100%', textAlign: 'center', pointerEvents: 'none', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Configure Snowflake Connection</Typography>
           </Stack>
 
-          <Alert severity="info" icon={<Info />} sx={{ mt: 3, mb: 2 }}>
-            <Typography variant="body2" fontWeight="medium" mb={0.5}>
-              Important Tips:
-            </Typography>
-            <Typography variant="body2" component="div">
-              • Fill in all required fields before testing the connection<br />
-              • Use the <strong>"Check Snowflake Connection"</strong> button to verify your credentials<br />
-              • The <strong>"Add Connection"</strong> button will be enabled only after a successful connection check<br />
-              • Keep your private key file secure and never share it
-            </Typography>
+          <Alert severity="info" icon={<Info />} sx={{ mb: 3, borderRadius: 2, border: '1px solid rgba(59, 130, 246, 0.3)', background: 'linear-gradient(135deg, rgba(224, 242, 254, 0.5) 0%, rgba(186, 230, 253, 0.5) 100%)' }}>
+            <Typography variant="body2" fontWeight="700" mb={1} color="#0c4a6e">Important Tips:</Typography>
+            <Typography variant="body2" component="div" color="#0c4a6e" fontWeight={500}>• Fill in all required fields before testing the connection<br />• Use the <strong>"Check Snowflake Connection"</strong> button to verify your credentials<br />• The <strong>"Add Connection"</strong> button will be enabled only after a successful connection check<br />• Keep your private key file secure and never share it</Typography>
           </Alert>
 
-          <Paper sx={{ mb: 4, p: 3 }}>
+          <Paper elevation={0} sx={{ mb: 4, p: 4, background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)', backdropFilter: 'blur(10px)', border: '1px solid rgba(102, 126, 234, 0.2)', borderRadius: 3, boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)' }}>
             <form onSubmit={handleSubmit}>
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    required
-                    label="Connection Name"
-                    name="connectionName"
-                    value={formData.connectionName}
-                    onChange={handleInputChange}
-                    variant="outlined"
-                    helperText="A unique name to identify this connection"
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    required
-                    label="Account"
-                    name="account"
-                    value={formData.account}
-                    onChange={handleInputChange}
-                    variant="outlined"
-                    helperText="Your Snowflake account identifier"
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    required
-                    label="Username"
-                    name="username"
-                    value={formData.username}
-                    onChange={handleInputChange}
-                    variant="outlined"
-                    helperText="Your Snowflake username"
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Authenticator</InputLabel>
-                    <Select
-                      label="Authenticator"
-                      name="authenticator"
-                      value={formData.authenticator}
-                      onChange={handleSelectChange}
-                    >
-                      <MenuItem value="SNOWFLAKE_JWT">SNOWFLAKE_JWT</MenuItem>
-                      <MenuItem value="SNOWFLAKE">SNOWFLAKE</MenuItem>
-                      <MenuItem value="OAUTH">OAUTH</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
+              <Grid container spacing={3}>
+                <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Connection Name" name="connectionName" value={formData.connectionName} onChange={handleInputChange} variant="outlined" helperText="A unique name to identify this connection" sx={inputSx} /></Grid>
+                <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Account" name="account" value={formData.account} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake account identifier" sx={inputSx} /></Grid>
+                <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Username" name="username" value={formData.username} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake username" sx={inputSx} /></Grid>
+                <Grid size={{ xs: 12, sm: 6 }}><FormControl fullWidth required sx={inputSx}><InputLabel>Authenticator</InputLabel><Select label="Authenticator" name="authenticator" value={formData.authenticator} onChange={handleSelectChange}><MenuItem value="SNOWFLAKE_JWT">SNOWFLAKE_JWT</MenuItem><MenuItem value="SNOWFLAKE">SNOWFLAKE</MenuItem><MenuItem value="OAUTH">OAUTH</MenuItem></Select></FormControl></Grid>
 
                 <Grid size={{ xs: 12 }}>
-                  <Box
-                    sx={{
-                      border: '2px dashed',
-                      borderColor: formData.privateKey ? 'primary.main' : 'grey.400',
-                      borderRadius: 2,
-                      p: 1,
-                      textAlign: 'center',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 1,
-                      minHeight: 140,
-                      bgcolor: formData.privateKey ? 'action.hover' : 'transparent'
-                    }}
-                  >
-                    <Typography variant="body2" fontWeight="medium">
-                      Upload Private Key *
-                    </Typography>
-
-                    <Button
-                      variant="outlined"
-                      component="label"
-                      sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 1, px: 3 }}
-                    >
-                      <CloudUpload sx={{ fontSize: 20, color: 'grey.500' }} />
-                      <Typography variant="body2" fontWeight="medium">
-                        Choose File
-                      </Typography>
-                      <input
-                        type="file"
-                        accept=".der,.pem,.key,.p8"
-                        hidden
-                        onChange={handleFileUpload}
-                      />
-                    </Button>
-
-                    {formData.privateKey && (
-                      <Typography variant="caption" color="primary" sx={{ mt: 1, fontWeight: 600 }}>
-                        ✓ Selected: {formData.privateKey.name}
-                      </Typography>
-                    )}
-
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0 }}>
-                      Accepted formats: .der, .pem, .key, .p8
-                    </Typography>
+                  <Box sx={{ border: '2px dashed', borderColor: formData.privateKey ? '#667eea' : 'rgba(102, 126, 234, 0.3)', borderRadius: 3, p: 4, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 180, background: formData.privateKey ? 'linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)' : 'transparent' }}>
+                    <Typography variant="h6" fontWeight="700" color={formData.privateKey ? '#667eea' : '#64748b'}>Upload Private Key *</Typography>
+                    <Button variant="contained" component="label" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2, px: 5, borderRadius: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)' } }}><CloudUpload sx={{ fontSize: 32, mb: 1 }} /><Typography variant="body1" fontWeight="700">Choose File</Typography><input type="file" accept=".der,.pem,.key,.p8" hidden onChange={handleFileUpload} /></Button>
+                    {formData.privateKey && <Box sx={{ mt: 1, p: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: 2, width: '100%', maxWidth: 400 }}><Typography variant="body1" sx={{ color: 'white', fontWeight: 700 }}>✓ Selected: {formData.privateKey.name}</Typography></Box>}
+                    <Typography variant="caption" color="#94a3b8" fontWeight={500}>Accepted formats: .der, .pem, .key, .p8</Typography>
                   </Box>
                 </Grid>
 
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    required
-                    label="Warehouse"
-                    name="warehouse"
-                    value={formData.warehouse}
-                    onChange={handleInputChange}
-                    variant="outlined"
-                    helperText="Your Snowflake warehouse name"
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    required
-                    label="Database"
-                    name="database"
-                    value={formData.database}
-                    onChange={handleInputChange}
-                    variant="outlined"
-                    helperText="Your Snowflake database name"
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    required
-                    label="Schema"
-                    name="schema"
-                    value={formData.schema}
-                    onChange={handleInputChange}
-                    variant="outlined"
-                    helperText="Your Snowflake schema name"
-                  />
-                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Warehouse" name="warehouse" value={formData.warehouse} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake warehouse name" sx={inputSx} /></Grid>
+                <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Database" name="database" value={formData.database} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake database name" sx={inputSx} /></Grid>
+                <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Schema" name="schema" value={formData.schema} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake schema name" sx={inputSx} /></Grid>
 
                 <Grid size={{ xs: 12 }}>
-                  <Stack direction="row" spacing={2} flexWrap="wrap" gap={1}>
-                    <Tooltip title={!formData.privateKey ? "Please upload a private key file first" : "Test your connection credentials"}>
-                      <span>
-                        <Button
-                          variant='contained'
-                          color={isSnowflakeConnectionValid ? 'success' : 'secondary'}
-                          type="button" 
-                          startIcon={isCheckingConnection ? <CircularProgress size={16} color="inherit" /> : (isSnowflakeConnectionValid ? <Check /> : <Close />)}
-                          onClick={CheckSnowflakeConnection}
-                          disabled={isCheckingConnection || isAddingConnection || !formData.privateKey || !formData.connectionName || !formData.account || !formData.username || !formData.authenticator || !formData.warehouse || !formData.database || !formData.schema}
-                        >
-                          {isCheckingConnection ? 'Checking...' : (isSnowflakeConnectionValid ? 'Connection Valid ✓' : 'Check Connection')}
-                        </Button>
-                      </span>
-                    </Tooltip>
-                    <Tooltip title={!isSnowflakeConnectionValid ? "Please check connection first" : "Add this connection to your saved connections"}>
-                      <span>
-                        <Button
-                          variant="contained"
-                          color="primary"
-                          type="submit"
-                          startIcon={isAddingConnection ? <CircularProgress size={16} color="inherit" /> : <Add />}
-                          disabled={isAddingConnection || !formData.privateKey || !isSnowflakeConnectionValid}
-                        >
-                          {isAddingConnection ? 'Adding...' : 'Add Connection'}
-                        </Button>
-                      </span>
-                    </Tooltip>
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      startIcon={showTable ? <VisibilityOff /> : <Visibility />}
-                      onClick={() => setShowTable(prev => !prev)}
-                    >
-                      {showTable ? "Hide" : "Show"} Connections
-                    </Button>
+                  <Stack direction="row" spacing={2} flexWrap="wrap" gap={2}>
+                    <Tooltip title={!formData.privateKey ? "Please upload a private key file first" : "Test your connection credentials"}><span><Button variant='contained' type="button" startIcon={isCheckingConnection ? <CircularProgress size={16} color="inherit" /> : (isSnowflakeConnectionValid ? <Check /> : <Close />)} onClick={CheckSnowflakeConnection} disabled={isCheckingConnection || isAddingConnection || !formData.privateKey || !formData.connectionName || !formData.account || !formData.username || !formData.authenticator || !formData.warehouse || !formData.database || !formData.schema} sx={{ borderRadius: 2, fontWeight: 700, background: isSnowflakeConnectionValid ? 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)' : 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)', '&:hover': { background: isSnowflakeConnectionValid ? 'linear-gradient(135deg, #059669 0%, #0d9488 100%)' : 'linear-gradient(135deg, #64748b 0%, #475569 100%)' } }}>{isCheckingConnection ? 'Checking...' : (isSnowflakeConnectionValid ? 'Connection Valid ✓' : 'Check Connection')}</Button></span></Tooltip>
+                    <Tooltip title={!isSnowflakeConnectionValid ? "Please check connection first" : "Add this connection to your saved connections"}><span><Button variant="contained" type="submit" startIcon={isAddingConnection ? <CircularProgress size={16} color="inherit" /> : <Add />} disabled={isAddingConnection || !formData.privateKey || !isSnowflakeConnectionValid} sx={{ borderRadius: 2, fontWeight: 700, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)' } }}>{isAddingConnection ? 'Adding...' : 'Add Connection'}</Button></span></Tooltip>
+                    <Button variant="outlined" startIcon={showTable ? <VisibilityOff /> : <Visibility />} onClick={() => setShowTable(prev => !prev)} sx={{ borderRadius: 2, fontWeight: 700, borderColor: '#667eea', color: '#667eea', '&:hover': { borderColor: '#5568d3', bgcolor: 'rgba(102, 126, 234, 0.05)' } }}>{showTable ? "Hide" : "Show"} Connections</Button>
                   </Stack>
                 </Grid>
               </Grid>
@@ -919,228 +688,48 @@ const ConnectorManager: React.FC = () => {
         </Box>
       )}
 
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="lg" fullWidth>
-        <DialogTitle>
-          Edit Connection
-          <IconButton
-            onClick={() => setOpenDialog(false)}
-            sx={{ position: 'absolute', right: 16, top: 16 }}
-          >
-            <Close />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          <Alert severity="warning" icon={<Warning />} sx={{ mb: 2 }}>
-            <Typography variant="body2" fontWeight="medium" mb={0.5}>
-              Security Requirement:
-            </Typography>
-            <Typography variant="body2">
-              You <strong>must upload a new private key file</strong> to update this connection. This is required for security purposes.<br />
-              After uploading, use <strong>"Check Connection"</strong> to verify before saving.
-            </Typography>
-          </Alert>
-
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                required
-                label="Connection Name"
-                name="connectionName"
-                value={editData.connectionName || ''}
-                onChange={handleEditInputChange}
-                variant="outlined"
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                required
-                label="Account"
-                name="account"
-                value={editData.account || ''}
-                onChange={handleEditInputChange}
-                variant="outlined"
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                required
-                label="Username"
-                name="username"
-                value={editData.username || ''}
-                onChange={handleEditInputChange}
-                variant="outlined"
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl fullWidth required>
-                <InputLabel>Authenticator</InputLabel>
-                <Select
-                  label="Authenticator"
-                  name="authenticator"
-                  value={editData.authenticator || ''}
-                  onChange={handleEditSelectChange}
-                >
-                  <MenuItem value="SNOWFLAKE_JWT">SNOWFLAKE_JWT</MenuItem>
-                  <MenuItem value="SNOWFLAKE">SNOWFLAKE</MenuItem>
-                  <MenuItem value="OAUTH">OAUTH</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: 3, boxShadow: '0 8px 32px rgba(102, 126, 234, 0.2)' } }}>
+        <DialogTitle sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', fontWeight: 700 }}>Edit Connection<IconButton onClick={() => setOpenDialog(false)} sx={{ position: 'absolute', right: 16, top: 16, color: 'white', '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.1)' } }}><Close /></IconButton></DialogTitle>
+        <DialogContent dividers sx={{ p: 3 }}>
+          <Alert severity="warning" icon={<Warning />} sx={{ mb: 3, borderRadius: 2, border: '1px solid rgba(245, 158, 11, 0.3)', background: 'linear-gradient(135deg, rgba(254, 243, 199, 0.3) 0%, rgba(253, 224, 71, 0.3) 100%)' }}><Typography variant="body2" fontWeight="700" mb={1} color="#92400e">Security Requirement:</Typography><Typography variant="body2" color="#92400e" fontWeight={500}>You <strong>must upload a new private key file</strong> to update this connection. This is required for security purposes.<br />After uploading, use <strong>"Check Connection"</strong> to verify before saving.</Typography></Alert>
+          
+          <Grid container spacing={3}>
+            <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Connection Name" name="connectionName" value={editData.connectionName || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
+            <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Account" name="account" value={editData.account || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
+            <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Username" name="username" value={editData.username || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
+            <Grid size={{ xs: 12, sm: 6 }}><FormControl fullWidth required sx={inputSx}><InputLabel>Authenticator</InputLabel><Select label="Authenticator" name="authenticator" value={editData.authenticator || ''} onChange={handleEditSelectChange}><MenuItem value="SNOWFLAKE_JWT">SNOWFLAKE_JWT</MenuItem><MenuItem value="SNOWFLAKE">SNOWFLAKE</MenuItem><MenuItem value="OAUTH">OAUTH</MenuItem></Select></FormControl></Grid>
+            
             <Grid size={{ xs: 12 }}>
-              <Box
-                sx={{
-                  border: '2px dashed',
-                  borderColor: editData.privateKey ? 'success.main' : 'warning.main',
-                  borderRadius: 2,
-                  p: 1,
-                  textAlign: 'center',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 1,
-                  minHeight: 160,
-                  bgcolor: editData.privateKey ? 'success.50' : 'warning.50'
-                }}
-              >
-                <Typography variant="body2" fontWeight="bold" color={editData.privateKey ? 'success.main' : 'warning.main'}>
-                  {editData.privateKey ? '✓ New Private Key Uploaded' : '⚠ Upload New Private Key (Required) *'}
-                </Typography>
-
-                <Button
-                  variant="contained"
-                  component="label"
-                  color={editData.privateKey ? 'success' : 'warning'}
-                  sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 1.5, px: 4 }}
-                >
-                  <CloudUpload sx={{ fontSize: 24, mb: 0.5 }} />
-                  <Typography variant="body2" fontWeight="bold">
-                    {editData.privateKey ? 'Change File' : 'Choose New File'}
-                  </Typography>
-                  <input
-                    type="file"
-                    accept=".der,.pem,.key,.p8"
-                    hidden
-                    onChange={handleEditFileUpload}
-                  />
-                </Button>
-
-                {editData.privateKey && (
-                  <Box sx={{ mt: 1, p: 1, bgcolor: 'success.100', borderRadius: 1, width: '100%' }}>
-                    <Typography variant="body2" color="success.dark" fontWeight="600" textAlign="center">
-                      New file: {editData.privateKey.name}
-                    </Typography>
-                  </Box>
-                )}
-
-                {!editData.privateKey && existingPrivateKeyFileName && (
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>
-                    Previous file: {existingPrivateKeyFileName} (will be replaced)
-                  </Typography>
-                )}
-
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                  Accepted formats: .der, .pem, .key, .p8
-                </Typography>
+              <Box sx={{ border: '2px dashed', borderColor: editData.privateKey ? '#10b981' : '#f59e0b', borderRadius: 3, p: 4, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 200, background: editData.privateKey ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(20, 184, 166, 0.05) 100%)' : 'linear-gradient(135deg, rgba(254, 243, 199, 0.3) 0%, rgba(253, 224, 71, 0.3) 100%)' }}>
+                <Typography variant="h6" fontWeight="700" color={editData.privateKey ? '#10b981' : '#f59e0b'}>{editData.privateKey ? '✓ New Private Key Uploaded' : '⚠ Upload New Private Key (Required) *'}</Typography>
+                <Button variant="contained" component="label" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2.5, px: 6, borderRadius: 2, background: editData.privateKey ? 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)' : 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)', '&:hover': { background: editData.privateKey ? 'linear-gradient(135deg, #059669 0%, #0d9488 100%)' : 'linear-gradient(135deg, #ea580c 0%, #dc2626 100%)' } }}><CloudUpload sx={{ fontSize: 36, mb: 1 }} /><Typography variant="body1" fontWeight="700">{editData.privateKey ? 'Change File' : 'Choose New File'}</Typography><input type="file" accept=".der,.pem,.key,.p8" hidden onChange={handleEditFileUpload} /></Button>
+                {editData.privateKey && <Box sx={{ mt: 1, p: 2, background: 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)', borderRadius: 2, width: '100%', maxWidth: 500 }}><Typography variant="body1" sx={{ color: 'white', fontWeight: 700 }}>New file: {editData.privateKey.name}</Typography></Box>}
+                {!editData.privateKey && existingPrivateKeyFileName && <Typography variant="caption" color="#64748b" fontStyle="italic" fontWeight={500}>Previous file: {existingPrivateKeyFileName} (will be replaced)</Typography>}
+                <Typography variant="caption" color="#94a3b8" fontWeight={500}>Accepted formats: .der, .pem, .key, .p8</Typography>
               </Box>
             </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                required
-                label="Warehouse"
-                name="warehouse"
-                value={editData.warehouse || ''}
-                onChange={handleEditInputChange}
-                variant="outlined"
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                required
-                label="Database"
-                name="database"
-                value={editData.database || ''}
-                onChange={handleEditInputChange}
-                variant="outlined"
-              />
-            </Grid>
-            <Grid size={{ xs: 12 }}>
-              <TextField
-                fullWidth
-                required
-                label="Schema"
-                name="schema"
-                value={editData.schema || ''}
-                onChange={handleEditInputChange}
-                variant="outlined"
-              />
-            </Grid>
+            
+            <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Warehouse" name="warehouse" value={editData.warehouse || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
+            <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Database" name="database" value={editData.database || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
+            <Grid size={{ xs: 12 }}><TextField fullWidth required label="Schema" name="schema" value={editData.schema || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
           </Grid>
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setOpenDialog(false)} startIcon={<Close />} variant="outlined">
-            Cancel
-          </Button>
-          <Tooltip title={!editData.privateKey ? "Please upload a new private key file first" : "Test your connection before saving"}>
-            <span>
-              <Button
-                variant='contained'
-                color={isEditSnowflakeConnectionValid ? 'success' : 'secondary'}
-                type="button"
-                startIcon={isEditCheckingConnection ? <CircularProgress size={16} color="inherit" /> : (isEditSnowflakeConnectionValid ? <Check /> : <Close />)}
-                onClick={checkEditSnowFlakeConnection}
-                disabled={isEditCheckingConnection || isEditingConnection || !editData.privateKey ||!editData.account || !editData.username || !editData.authenticator || !editData.warehouse || !editData.database || !editData.schema}
-              >
-                {isEditCheckingConnection ? 'Checking...' : (isEditSnowflakeConnectionValid ? 'Connection Valid ✓' : 'Check Connection')}
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip title={!editData.privateKey ? "Upload a new private key first" : !isEditSnowflakeConnectionValid ? "Check connection first" : "Save your changes"}>
-            <span>
-              <Button 
-                onClick={handleSaveEdit} 
-                startIcon={isEditingConnection ? <CircularProgress size={16} color="inherit" /> : <Save />} 
-                variant="contained" 
-                color="primary"
-                disabled={isEditingConnection || !editData.privateKey || !isEditSnowflakeConnectionValid}
-              >
-                {isEditingConnection ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </span>
-          </Tooltip>
+        <DialogActions sx={{ px: 3, py: 2.5, background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+          <Button onClick={() => setOpenDialog(false)} startIcon={<Close />} variant="outlined" sx={{ borderRadius: 2, fontWeight: 600, borderColor: '#cbd5e1', color: '#64748b', '&:hover': { borderColor: '#94a3b8', bgcolor: '#f1f5f9' } }}>Cancel</Button>
+          <Tooltip title={!editData.privateKey ? "Please upload a new private key file first" : "Test your connection before saving"}><span><Button variant='contained' type="button" startIcon={isEditCheckingConnection ? <CircularProgress size={16} color="inherit" /> : (isEditSnowflakeConnectionValid ? <Check /> : <Close />)} onClick={checkEditSnowFlakeConnection} disabled={isEditCheckingConnection || isEditingConnection || !editData.privateKey ||!editData.account || !editData.username || !editData.authenticator || !editData.warehouse || !editData.database || !editData.schema} sx={{ borderRadius: 2, fontWeight: 700, background: isEditSnowflakeConnectionValid ? 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)' : 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)', '&:hover': { background: isEditSnowflakeConnectionValid ? 'linear-gradient(135deg, #059669 0%, #0d9488 100%)' : 'linear-gradient(135deg, #64748b 0%, #475569 100%)' } }}>{isEditCheckingConnection ? 'Checking...' : (isEditSnowflakeConnectionValid ? 'Connection Valid ✓' : 'Check Connection')}</Button></span></Tooltip>
+          <Tooltip title={!editData.privateKey ? "Upload a new private key first" : !isEditSnowflakeConnectionValid ? "Check connection first" : "Save your changes"}><span><Button onClick={handleSaveEdit} startIcon={isEditingConnection ? <CircularProgress size={16} color="inherit" /> : <Save />} variant="contained" disabled={isEditingConnection || !editData.privateKey || !isEditSnowflakeConnectionValid} sx={{ borderRadius: 2, fontWeight: 700, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)' } }}>{isEditingConnection ? 'Saving...' : 'Save Changes'}</Button></span></Tooltip>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={deleteDialogOpen} onClose={handleCancelDelete} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ color: 'error.main' }}>
-          Confirm Delete
-        </DialogTitle>
+      <Dialog open={deleteDialogOpen} onClose={handleCancelDelete} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3, boxShadow: '0 8px 32px rgba(239, 68, 68, 0.2)' } }}>
+        <DialogTitle sx={{ color: '#dc2626', fontWeight: 700 }}>Confirm Delete</DialogTitle>
         <DialogContent>
-          <Typography variant="body1" sx={{ mb: 2 }}>
-            Are you sure you want to delete the connection <strong>"{connectionToDelete?.connectionName}"</strong>?
-          </Typography>
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            This action cannot be undone. All configuration data for this connection will be permanently removed.
-          </Alert>
+          <Typography variant="body1" sx={{ mb: 2, color: '#1e293b' }}>Are you sure you want to delete the connection <strong>"{connectionToDelete?.connectionName}"</strong>?</Typography>
+          <Alert severity="warning" sx={{ mt: 2, borderRadius: 2, border: '1px solid rgba(245, 158, 11, 0.3)', background: 'linear-gradient(135deg, rgba(254, 243, 199, 0.3) 0%, rgba(253, 224, 71, 0.3) 100%)' }}>This action cannot be undone. All configuration data for this connection will be permanently removed.</Alert>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancelDelete} variant="outlined">
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleConfirmDelete} 
-            color="error" 
-            variant="contained"
-            startIcon={isDeletingConnection ? <CircularProgress size={16} color="inherit" /> : <Delete />}
-            disabled={isDeletingConnection !== null}
-          >
-            {isDeletingConnection ? 'Deleting...' : 'Delete Connection'}
-          </Button>
+        <DialogActions sx={{ px: 3, py: 2.5, background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+          <Button onClick={handleCancelDelete} variant="outlined" sx={{ borderRadius: 2, fontWeight: 600, borderColor: '#cbd5e1', color: '#64748b', '&:hover': { borderColor: '#94a3b8', bgcolor: '#f1f5f9' } }}>Cancel</Button>
+          <Button onClick={handleConfirmDelete} variant="contained" startIcon={isDeletingConnection ? <CircularProgress size={16} color="inherit" /> : <Delete />} disabled={isDeletingConnection !== null} sx={{ borderRadius: 2, fontWeight: 700, background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', '&:hover': { background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)' } }}>{isDeletingConnection ? 'Deleting...' : 'Delete Connection'}</Button>
         </DialogActions>
       </Dialog>
     </Box>

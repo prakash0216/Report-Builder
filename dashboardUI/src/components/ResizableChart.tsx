@@ -1,13 +1,44 @@
 import React, { useEffect, useRef, useCallback } from "react";
 import Highcharts from "highcharts";
-import Highcharts3D from 'highcharts/highcharts-3d';
 import HighchartsReact from "highcharts-react-official";
+
+// Use require for modules to avoid TypeScript issues
+const HighchartsExporting = require('highcharts/modules/exporting');
+const HighchartsExportData = require('highcharts/modules/export-data');
+const HighchartsOfflineExporting = require('highcharts/modules/offline-exporting');
+
+
+// Initialize modules - wrap in try-catch and use type assertion
+try {
+  if (typeof HighchartsExporting === 'function') {
+    HighchartsExporting(Highcharts);
+  }
+} catch (e) {
+  console.warn('Exporting module initialization failed:', e);
+}
+
+try {
+  if (typeof HighchartsExportData === 'function') {
+    HighchartsExportData(Highcharts);
+  }
+} catch (e) {
+  console.warn('Export data module initialization failed:', e);
+}
+
+try {
+  if (typeof HighchartsOfflineExporting === 'function') {
+    HighchartsOfflineExporting(Highcharts);
+  }
+} catch (e) {
+  console.warn('Offline exporting module initialization failed:', e);
+}
 
 interface ResizableChartProps {
   options: Highcharts.Options;
+  showExport?: boolean; // Add prop to control export visibility
 }
 
-const ResizableChart: React.FC<ResizableChartProps> = ({ options }) => {
+const ResizableChart: React.FC<ResizableChartProps> = ({ options, showExport = false }) => {
   const chartComponentRef = useRef<HighchartsReact.RefObject>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -161,7 +192,7 @@ const ResizableChart: React.FC<ResizableChartProps> = ({ options }) => {
     }, 100);
   }, []);
 
-  // Enhanced options for better responsiveness
+  // Enhanced options for better responsiveness and export functionality
   const enhancedOptions = React.useMemo(() => ({
     ...options,
     chart: {
@@ -174,7 +205,48 @@ const ResizableChart: React.FC<ResizableChartProps> = ({ options }) => {
       },
     },
     credits: {
-      enabled: false // Remove Highcharts.com copyright
+      enabled: false, // Remove Highcharts.com copyright
+      ...options.credits,
+    },
+    // Export configuration - only enabled when showExport is true
+    exporting: showExport ? {
+      enabled: true,
+      buttons: {
+        contextButton: {
+          menuItems: [
+            'viewFullscreen',
+            'printChart',
+            'separator',
+            'downloadPNG',
+            'downloadJPEG',
+            'downloadPDF',
+            'downloadSVG',
+            'separator',
+            'downloadCSV',
+            'downloadXLS',
+          ],
+          theme: {
+            fill: 'transparent',
+            stroke: '#cccccc',
+            states: {
+              hover: {
+                fill: '#f0f0f0',
+              },
+              select: {
+                fill: '#e0e0e0',
+              }
+            }
+          }
+        },
+      },
+      // Use chart title as filename if available
+      filename: options.title?.text ? 
+        (typeof options.title.text === 'string' ? options.title.text.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'chart') 
+        : 'chart',
+      // Merge with user-provided exporting options
+      ...options.exporting,
+    } : {
+      enabled: false, // Disable export button when showExport is false
     },
     // Responsive configuration
     responsive: {
@@ -195,7 +267,7 @@ const ResizableChart: React.FC<ResizableChartProps> = ({ options }) => {
       }],
       ...options.responsive?.rules && { rules: options.responsive.rules }
     }
-  }), [options]);
+  }), [options, showExport]);
 
   return (
     <div 

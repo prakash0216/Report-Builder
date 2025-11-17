@@ -16,12 +16,11 @@ import {
   List,
   ListItem,
   IconButton,
-  Collapse, // Already imported, now used for the alert
+  Collapse,
   Divider,
   Tooltip,
-  Alert, // Already imported
+  Alert,
 } from '@mui/material';
-// Snackbar import is no longer needed
 import {
   Add as AddIcon,
   Clear as ClearIcon,
@@ -77,8 +76,6 @@ export default function AddParameterMui() {
       setAlert((prev) => ({ ...prev, show: false }));
     }, 4000);
   };
-
-  // handleCloseAlert function is no longer needed
 
   const addParameter = (): void => {
     if (newParamName && !parameterNames.includes(newParamName)) {
@@ -144,22 +141,24 @@ export default function AddParameterMui() {
       sx={{
         display: 'grid',
         gridTemplateColumns: 'repeat(12, 1fr)',
-        gap: 2,
-        p: 2,
+        gap: 3,
+        p: 3,
         height: '100vh',
+        background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
       }}
     >
       {/* Parameters Panel */}
       <Box
         sx={{
           gridColumn: 'span 3',
-          bgcolor: 'grey.100',
-          border: 1,
-          borderColor: 'grey.300',
-          borderRadius: 1,
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(102, 126, 234, 0.2)',
+          borderRadius: 3,
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
+          boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
         }}
       >
         {/* Header */}
@@ -168,18 +167,24 @@ export default function AddParameterMui() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            p: 2,
-            borderBottom: 1,
-            borderColor: 'grey.300',
+            p: 2.5,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             cursor: 'pointer',
-            '&:hover': { bgcolor: 'grey.200' },
+            borderRadius: '12px 12px 0 0',
+            '&:hover': { 
+              background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+            },
           }}
           onClick={() => setIsParamsCollapsed(!isParamsCollapsed)}
         >
-          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: 'white', letterSpacing: 0.5 }}>
             Parameters
           </Typography>
-          {isParamsCollapsed ? <ChevronRightIcon /> : <ExpandMoreIcon />}
+          {isParamsCollapsed ? (
+            <ChevronRightIcon sx={{ color: 'white' }} />
+          ) : (
+            <ExpandMoreIcon sx={{ color: 'white' }} />
+          )}
         </Box>
 
         {/* Collapsible Content */}
@@ -197,17 +202,20 @@ export default function AddParameterMui() {
                 overflow: 'hidden',
               }}
             >
-              <Box sx={{ p: 2, flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ p: 2.5, flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 
                 {/* --- In-Panel Alert --- */}
                 <Collapse in={alert.show}>
                   <Alert
                     severity={alert.severity}
-                    // Add a close button for manual dismissal
                     onClose={() => {
                       setAlert((prev) => ({ ...prev, show: false }));
                     }}
-                    sx={{ mb: 2 }}
+                    sx={{ 
+                      mb: 2,
+                      borderRadius: 2,
+                      boxShadow: '0 4px 15px rgba(102, 126, 234, 0.1)',
+                    }}
                   >
                     {alert.message}
                   </Alert>
@@ -217,21 +225,27 @@ export default function AddParameterMui() {
                 {/* Add new parameter */}
                 <Box
                   sx={{
-                    mb: 2,
-                    p: 2,
-                    bgcolor: 'white',
-                    borderRadius: 1,
-                    border: 1,
-                    borderColor: 'grey.300',
+                    mb: 2.5,
+                    p: 2.5,
+                    background: 'linear-gradient(135deg, rgba(224, 231, 255, 0.3) 0%, rgba(199, 210, 254, 0.3) 100%)',
+                    borderRadius: 2,
+                    border: '1px solid rgba(102, 126, 234, 0.3)',
                   }}
                 >
                   <Typography
                     variant="subtitle1"
-                    sx={{ mb: 1, fontWeight: 'medium' }}
+                    sx={{ 
+                      mb: 1.5, 
+                      fontWeight: 700,
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      backgroundClip: 'text',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                    }}
                   >
                     Add New Parameter
                   </Typography>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Box sx={{ display: 'flex', gap: 1.5 }}>
                     <TextField
                       fullWidth
                       size="small"
@@ -242,6 +256,21 @@ export default function AddParameterMui() {
                       onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) =>
                         e.key === 'Enter' && addParameter()
                       }
+                      sx={{
+                        bgcolor: 'white',
+                        borderRadius: 1.5,
+                        '& .MuiOutlinedInput-root': {
+                          '& fieldset': {
+                            borderColor: 'rgba(102, 126, 234, 0.3)',
+                          },
+                          '&:hover fieldset': {
+                            borderColor: '#667eea',
+                          },
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#667eea',
+                          },
+                        },
+                      }}
                     />
                     <Button
                       variant="contained"
@@ -250,6 +279,17 @@ export default function AddParameterMui() {
                         !newParamName || parameterNames.includes(newParamName)
                       }
                       startIcon={<AddIcon />}
+                      sx={{
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        '&:hover': {
+                          background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                        },
+                        '&.Mui-disabled': {
+                          background: '#e2e8f0',
+                        },
+                        fontWeight: 600,
+                        px: 2.5,
+                      }}
                     >
                       Add
                     </Button>
@@ -259,13 +299,38 @@ export default function AddParameterMui() {
                 {/* List of parameters */}
                 <Box sx={{ flex: 1, overflowY: 'auto' }}>
                   {parameterNames.length === 0 ? (
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontStyle: 'italic' }}
+                    <Box
+                      sx={{
+                        textAlign: 'center',
+                        py: 4,
+                        px: 2,
+                      }}
                     >
-                      No parameters yet
-                    </Typography>
+                      <Box
+                        sx={{
+                          width: 64,
+                          height: 64,
+                          margin: '0 auto 16px',
+                          borderRadius: '50%',
+                          background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <AddIcon sx={{ fontSize: 32, color: '#667eea', opacity: 0.6 }} />
+                      </Box>
+                      <Typography
+                        variant="body2"
+                        color="#64748b"
+                        sx={{ fontWeight: 600 }}
+                      >
+                        No parameters yet
+                      </Typography>
+                      <Typography variant="caption" color="#94a3b8">
+                        Create your first parameter above
+                      </Typography>
+                    </Box>
                   ) : (
                     <List sx={{ p: 0 }}>
                       {parameterNames.map((param) => (
@@ -273,16 +338,24 @@ export default function AddParameterMui() {
                           key={param}
                           disablePadding
                           sx={{
-                            mb: 1,
-                            borderRadius: 1,
-                            bgcolor:
+                            mb: 1.5,
+                            borderRadius: 2,
+                            background:
                               selectedParam === param
-                                ? 'primary.main'
-                                : 'primary.light',
-                            color: 'white',
-                            '&:hover': { bgcolor: 'primary.dark' },
+                                ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                                : 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                            color: selectedParam === param ? 'white' : '#667eea',
+                            border: '1px solid',
+                            borderColor: selectedParam === param ? 'transparent' : 'rgba(102, 126, 234, 0.3)',
+                            boxShadow: selectedParam === param ? '0 4px 15px rgba(102, 126, 234, 0.3)' : 'none',
+                            '&:hover': { 
+                              background: selectedParam === param
+                                ? 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)'
+                                : 'linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%)',
+                            },
                             cursor:
                               editingParam === param ? 'default' : 'pointer',
+                            transition: 'all 0.2s',
                           }}
                           onClick={() =>
                             editingParam !== param && setSelectedParam(param)
@@ -293,7 +366,7 @@ export default function AddParameterMui() {
                               display: 'flex',
                               alignItems: 'center',
                               width: '100%',
-                              py: 1,
+                              py: 1.5,
                               px: 2,
                               gap: 1,
                             }}
@@ -316,8 +389,9 @@ export default function AddParameterMui() {
                                   sx={{
                                     flexGrow: 1,
                                     '& .MuiInputBase-root': {
-                                      color: 'primary.main',
+                                      color: '#667eea',
                                       bgcolor: 'white',
+                                      fontWeight: 600,
                                     },
                                   }}
                                 />
@@ -329,8 +403,8 @@ export default function AddParameterMui() {
                                       saveEditedParam();
                                     }}
                                     sx={{
-                                      color: 'white',
-                                      '&:hover': { color: 'success.light' },
+                                      color: '#10b981',
+                                      '&:hover': { bgcolor: 'rgba(16, 185, 129, 0.1)' },
                                     }}
                                   >
                                     <CheckIcon fontSize="small" />
@@ -344,8 +418,8 @@ export default function AddParameterMui() {
                                       cancelEditingParam();
                                     }}
                                     sx={{
-                                      color: 'white',
-                                      '&:hover': { color: 'error.light' },
+                                      color: '#ef4444',
+                                      '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' },
                                     }}
                                   >
                                     <CloseIcon fontSize="small" />
@@ -359,6 +433,7 @@ export default function AddParameterMui() {
                                     flexGrow: 1,
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
+                                    fontWeight: 600,
                                   }}
                                 >
                                   {param}
@@ -371,8 +446,9 @@ export default function AddParameterMui() {
                                       startEditingParam(param);
                                     }}
                                     sx={{
-                                      color: 'white',
-                                      '&:hover': { color: 'warning.light' },
+                                      color: 'inherit',
+                                      opacity: 0.8,
+                                      '&:hover': { opacity: 1, bgcolor: 'rgba(255, 255, 255, 0.1)' },
                                     }}
                                   >
                                     <EditIcon fontSize="small" />
@@ -386,8 +462,9 @@ export default function AddParameterMui() {
                                       removeParameter(param);
                                     }}
                                     sx={{
-                                      color: 'white',
-                                      '&:hover': { color: 'error.light' },
+                                      color: 'inherit',
+                                      opacity: 0.8,
+                                      '&:hover': { opacity: 1, bgcolor: 'rgba(255, 255, 255, 0.1)' },
                                     }}
                                   >
                                     <ClearIcon fontSize="small" />
@@ -408,19 +485,27 @@ export default function AddParameterMui() {
 
         {/* Always visible parameter names when collapsed */}
         <Collapse in={isParamsCollapsed}>
-          <Divider sx={{ my: 1 }} />
-          <Box sx={{ p: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          <Divider sx={{ borderColor: 'rgba(102, 126, 234, 0.2)' }} />
+          <Box sx={{ p: 2, display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
             {parameterNames.map((param) => (
               <Button
                 key={param}
                 size="small"
-                variant={selectedParam === param ? 'contained' : 'text'}
+                variant={selectedParam === param ? 'contained' : 'outlined'}
                 onClick={() => setSelectedParam(param)}
                 sx={{
-                  bgcolor:
-                    selectedParam === param ? 'primary.main' : 'primary.light',
-                  color: 'white',
-                  '&:hover': { bgcolor: 'primary.dark' },
+                  background:
+                    selectedParam === param 
+                      ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                      : 'transparent',
+                  color: selectedParam === param ? 'white' : '#667eea',
+                  borderColor: '#667eea',
+                  fontWeight: 600,
+                  '&:hover': { 
+                    background: selectedParam === param
+                      ? 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)'
+                      : 'rgba(102, 126, 234, 0.05)',
+                  },
                 }}
               >
                 {param}
@@ -432,18 +517,19 @@ export default function AddParameterMui() {
 
       {/* Main Content Area */}
       <Box
-        sx={{ gridColumn: 'span 9', display: 'flex', flexDirection: 'column', gap: 2 }}
+        sx={{ gridColumn: 'span 9', display: 'flex', flexDirection: 'column', gap: 3 }}
       >
         {/* Parameter Editor */}
         <Box
           sx={{
             flex: 1,
             minHeight: 0,
-            border: 1,
-            borderColor: 'grey.300',
-            borderRadius: 1,
-            p: 2,
-            bgcolor: 'white',
+            border: '1px solid rgba(102, 126, 234, 0.2)',
+            borderRadius: 3,
+            p: 3,
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
           }}
         >
           {selectedParam ? (
@@ -458,7 +544,7 @@ export default function AddParameterMui() {
                   height: '100%',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 2,
+                  gap: 16,
                 }}
               >
                 <Box
@@ -466,49 +552,105 @@ export default function AddParameterMui() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    mb: 1,
+                    pb: 2,
+                    borderBottom: '2px solid',
+                    borderImage: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%) 1',
                   }}
                 >
-                  <Typography variant="h6" sx={{ fontWeight: 'medium' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: '#1e293b' }}>
                     Editing Parameter:{' '}
                     <Typography
                       component="span"
-                      color="primary.main"
-                      sx={{ fontWeight: 'bold' }}
+                      sx={{ 
+                        fontWeight: 700,
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        backgroundClip: 'text',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                      }}
                     >
                       {selectedParam}
                     </Typography>
                   </Typography>
 
-                  {/* Always show "Auto Saved" message */}
-                  <div className="flex justify-center">
-                    <div className="flex items-center space-x-1 bg-green-50 px-3 py-1 rounded-full">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-sm text-green-700 font-medium">
-                        Auto-saved
-                      </span>
-                    </div>
-                  </div>
-                  <Typography variant="body2" color="text.secondary">
-                    Available in Hooks as: <code>{selectedParam}</code>
+                  {/* Auto Saved indicator */}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      px: 2,
+                      py: 1,
+                      borderRadius: 2,
+                      background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(20, 184, 166, 0.1) 100%)',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        bgcolor: '#10b981',
+                      }}
+                    />
+                    <Typography variant="body2" sx={{ color: '#059669', fontWeight: 600 }}>
+                      Auto-saved
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <Box
+                  sx={{
+                    mb: 1,
+                    p: 1.5,
+                    borderRadius: 2,
+                    background: 'linear-gradient(135deg, rgba(224, 231, 255, 0.3) 0%, rgba(199, 210, 254, 0.3) 100%)',
+                    border: '1px solid rgba(102, 126, 234, 0.2)',
+                  }}
+                >
+                  <Typography variant="body2" sx={{ color: '#64748b', fontWeight: 500 }}>
+                    Available in Hooks as: <code style={{ 
+                      padding: '2px 8px', 
+                      borderRadius: '4px', 
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: 'white',
+                      fontWeight: 600,
+                    }}>{selectedParam}</code>
                   </Typography>
                 </Box>
+
                 <TextField
                   fullWidth
                   multiline
-                  rows={10}
+                  rows={15}
                   variant="outlined"
                   value={parameterValue}
                   onChange={(e) => setParameterValue(e.target.value)}
                   placeholder={`Enter a value for ${selectedParam}...
-                  Examples:
-                  - JSON: {"key": "value"}
-                  - String: "example string"
-                  - Number: 123
-                  - Boolean: true`}
-                  sx={{ flex: 1, fontFamily: 'monospace' }}
+
+Examples:
+- JSON: {"key": "value"}
+- String: "example string"
+- Number: 123
+- Boolean: true`}
+                  sx={{ 
+                    flex: 1, 
+                    fontFamily: 'monospace',
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': {
+                        borderColor: 'rgba(102, 126, 234, 0.3)',
+                      },
+                      '&:hover fieldset': {
+                        borderColor: '#667eea',
+                      },
+                      '&.Mui-focused fieldset': {
+                        borderColor: '#667eea',
+                      },
+                    },
+                  }}
                   InputProps={{
-                    sx: { height: '100%' },
+                    sx: { height: '100%', alignItems: 'flex-start' },
                   }}
                   inputProps={{
                     sx: { height: '100% !important' },
@@ -523,26 +665,44 @@ export default function AddParameterMui() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 height: '100%',
-                bgcolor: 'grey.50',
-                border: 1,
-                borderColor: 'grey.300',
-                borderRadius: 1,
+                background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.5) 0%, rgba(241, 245, 249, 0.5) 100%)',
+                border: '2px dashed rgba(102, 126, 234, 0.3)',
+                borderRadius: 2,
               }}
             >
-              <Box sx={{ textAlign: 'center', color: 'text.secondary' }}>
-                <Typography variant="h6" sx={{ mb: 1 }}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Box
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    margin: '0 auto 24px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <EditIcon sx={{ fontSize: 40, color: '#667eea', opacity: 0.6 }} />
+                </Box>
+                <Typography 
+                  variant="h6" 
+                  sx={{ 
+                    mb: 1,
+                    fontWeight: 700,
+                    color: '#475569',
+                  }}
+                >
                   No parameter selected
                 </Typography>
-                <Typography variant="body2">
-                  Add a new parameter or select an existing one to start
-                  editing
+                <Typography variant="body2" color="#94a3b8">
+                  Add a new parameter or select an existing one to start editing
                 </Typography>
               </Box>
             </Box>
           )}
         </Box>
       </Box>
-
     </Box>
   );
 }

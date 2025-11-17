@@ -138,41 +138,99 @@ export function IsVisible() {
   };
 
   return (
-    <Box sx={{ p: 3, minHeight: '100vh', bgcolor: 'grey.50' }} >
+    <Box sx={{ p: 3 }}>
       {/* Success Message */}
       {successMessage && (
-        <Alert severity="success" sx={{ mb: 3 }}>
+        <Alert 
+          severity="success" 
+          sx={{ 
+            mb: 3,
+            borderRadius: 2,
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            background: 'linear-gradient(135deg, rgba(209, 250, 229, 0.5) 0%, rgba(167, 243, 208, 0.5) 100%)',
+          }}
+        >
           {successMessage}
         </Alert>
       )}
 
-      <Paper elevation={3} sx={{ p: 4, mb: 3,  }}>
+      <Paper 
+        elevation={0} 
+        sx={{ 
+          p: 4, 
+          mb: 3,
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(102, 126, 234, 0.2)',
+          borderRadius: 3,
+          boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
+        }}
+      >
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <VisibilityIcon sx={{ mr: 2, color: 'primary.main', fontSize: 40 }} />
+          <Box
+            sx={{
+              width: 56,
+              height: 56,
+              borderRadius: 2,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+              mr: 2,
+            }}
+          >
+            <VisibilityIcon sx={{ color: 'white', fontSize: 32 }} />
+          </Box>
           <Box sx={{ flex: 1 }}>
-            <Typography variant="h5" fontWeight={600}>
+            <Typography 
+              variant="h5" 
+              fontWeight={700}
+              sx={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
               Chart Visibility Control
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Chart ID: <Chip label={id || 'Not specified'} size="small" color="primary" />
+            <Typography variant="body2" color="#64748b" sx={{ mt: 0.5, fontWeight: 500 }}>
+              Chart ID: <Chip 
+                label={id || 'Not specified'} 
+                size="small"
+                sx={{
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white',
+                  fontWeight: 600,
+                }}
+              />
             </Typography>
           </Box>
         </Box>
 
-        <Divider sx={{ mb: 4 }} />
+        <Divider sx={{ mb: 4, borderColor: 'rgba(102, 126, 234, 0.2)' }} />
 
         {/* Instructions */}
-        <Alert severity="info" sx={{ mb: 4 }}>
-          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+        <Alert 
+          severity="info" 
+          sx={{ 
+            mb: 4,
+            borderRadius: 2,
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            background: 'linear-gradient(135deg, rgba(224, 242, 254, 0.5) 0%, rgba(186, 230, 253, 0.5) 100%)',
+          }}
+        >
+          <Typography variant="subtitle1" fontWeight={700} gutterBottom color="#0c4a6e">
             📌 How it works:
           </Typography>
-          <Typography variant="body2" component="div">
+          <Typography variant="body2" component="div" color="#0c4a6e" fontWeight={500}>
             • Select a <strong>boolean variable</strong> from your calculations
             <br />
-            • When the variable is <code>true</code> → Chart is <strong>HIDDEN</strong>
+            • When the variable is <code style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '2px 6px', borderRadius: 4 }}>true</code> → Chart is <strong>HIDDEN</strong>
             <br />
-            • When the variable is <code>false</code> → Chart is <strong>VISIBLE</strong>
+            • When the variable is <code style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '2px 6px', borderRadius: 4 }}>false</code> → Chart is <strong>VISIBLE</strong>
             <br />
             • By default (no variable selected) → Chart is always <strong>VISIBLE</strong>
           </Typography>
@@ -183,34 +241,71 @@ export function IsVisible() {
           variant="outlined" 
           sx={{ 
             mb: 4, 
-            bgcolor: 'primary.50', 
-            borderColor: 'primary.light',
-            borderWidth: 2,
+            borderRadius: 2,
+            border: '2px solid rgba(102, 126, 234, 0.3)',
+            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)',
           }}
         >
           <CardContent sx={{ p: 3 }}>
-            <Typography variant="h6" fontWeight={600} gutterBottom color="primary.dark">
+            <Typography 
+              variant="h6" 
+              fontWeight={700} 
+              gutterBottom
+              sx={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
               Select Visibility Variable
             </Typography>
             
             {booleanVariables.length === 0 ? (
-              <Alert severity="warning" sx={{ mt: 2 }}>
-                <Typography variant="body2">
+              <Alert 
+                severity="warning" 
+                sx={{ 
+                  mt: 2,
+                  borderRadius: 2,
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  background: 'linear-gradient(135deg, rgba(254, 243, 199, 0.3) 0%, rgba(253, 224, 71, 0.3) 100%)',
+                }}
+              >
+                <Typography variant="body2" fontWeight={500}>
                   No boolean variables found. Please create boolean variables in the <strong>Hooks</strong> section first.
                 </Typography>
                 <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                  Example: Create a calculation like <code>param_metric === "MOP"</code> that returns true/false
+                  Example: Create a calculation like <code style={{ background: 'rgba(245, 158, 11, 0.2)', padding: '2px 6px', borderRadius: 4 }}>param_metric === "MOP"</code> that returns true/false
                 </Typography>
               </Alert>
             ) : (
               <>
-                <FormControl fullWidth sx={{ mt: 2 }}>
+                <FormControl 
+                  fullWidth 
+                  sx={{ 
+                    mt: 2,
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': {
+                        borderColor: 'rgba(102, 126, 234, 0.3)',
+                      },
+                      '&:hover fieldset': {
+                        borderColor: '#667eea',
+                      },
+                      '&.Mui-focused fieldset': {
+                        borderColor: '#667eea',
+                      },
+                    },
+                    '& .MuiInputLabel-root.Mui-focused': {
+                      color: '#667eea',
+                    },
+                  }}
+                >
                   <InputLabel>Boolean Variable</InputLabel>
                   <Select
                     value={selectedVariable}
                     label="Boolean Variable"
                     onChange={(e) => setSelectedVariable(e.target.value)}
-                    sx={{ bgcolor: 'white' }}
+                    sx={{ bgcolor: 'white', borderRadius: 1.5 }}
                   >
                     <MenuItem value="">
                       <em>None - Always Visible</em>
@@ -218,13 +313,19 @@ export function IsVisible() {
                     {booleanVariables.map((variable) => (
                       <MenuItem key={variable.name} value={variable.name}>
                         <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                          <Typography sx={{ flex: 1 }}>{variable.name}</Typography>
+                          <Typography sx={{ flex: 1, fontWeight: 500 }}>{variable.name}</Typography>
                           <Chip
                             label={variable.currentValue ? 'true' : 'false'}
                             size="small"
-                            color={variable.currentValue ? 'success' : 'default'}
                             icon={variable.currentValue ? <CheckCircleIcon /> : <CancelIcon />}
-                            sx={{ ml: 1 }}
+                            sx={{
+                              ml: 1,
+                              background: variable.currentValue 
+                                ? 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)'
+                                : 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)',
+                              color: 'white',
+                              fontWeight: 600,
+                            }}
                           />
                         </Box>
                       </MenuItem>
@@ -232,7 +333,7 @@ export function IsVisible() {
                   </Select>
                 </FormControl>
 
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                <Typography variant="caption" color="#64748b" sx={{ mt: 1, display: 'block', fontWeight: 500 }}>
                   💡 Showing only boolean variables ({booleanVariables.length} found)
                 </Typography>
               </>
@@ -242,35 +343,95 @@ export function IsVisible() {
 
         {/* Current Selection Preview */}
         {selectedVariable && (
-          <Card variant="outlined" sx={{ mb: 4, bgcolor: 'success.50', borderColor: 'success.light' }}>
+          <Card 
+            variant="outlined" 
+            sx={{ 
+              mb: 4, 
+              borderRadius: 2,
+              border: '2px solid rgba(16, 185, 129, 0.3)',
+              background: 'linear-gradient(135deg, rgba(209, 250, 229, 0.3) 0%, rgba(167, 243, 208, 0.3) 100%)',
+            }}
+          >
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={600} color="success.dark" gutterBottom>
+              <Typography 
+                variant="subtitle1" 
+                fontWeight={700} 
+                gutterBottom
+                sx={{
+                  background: 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}
+              >
                 📋 Current Rule Preview
               </Typography>
-              <Box sx={{ mt: 2, p: 2, bgcolor: 'white', borderRadius: 1, border: '1px dashed', borderColor: 'success.main' }}>
+              <Box 
+                sx={{ 
+                  mt: 2, 
+                  p: 2, 
+                  bgcolor: 'white', 
+                  borderRadius: 2, 
+                  border: '2px dashed rgba(16, 185, 129, 0.5)',
+                }}
+              >
                 <Stack spacing={1.5}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Typography variant="body2" fontWeight={600}>When:</Typography>
-                    <Chip label={selectedVariable} color="primary" size="small" />
-                    <Typography variant="body2" fontWeight={600}>=</Typography>
-                    <Chip label="true" color="success" size="small" icon={<CheckCircleIcon />} />
+                    <Typography variant="body2" fontWeight={700}>When:</Typography>
+                    <Chip 
+                      label={selectedVariable}
+                      size="small"
+                      sx={{
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: 'white',
+                        fontWeight: 600,
+                      }}
+                    />
+                    <Typography variant="body2" fontWeight={700}>=</Typography>
+                    <Chip 
+                      label="true"
+                      size="small" 
+                      icon={<CheckCircleIcon />}
+                      sx={{
+                        background: 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)',
+                        color: 'white',
+                        fontWeight: 600,
+                      }}
+                    />
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Typography variant="body2" fontWeight={600}>Then:</Typography>
-                    <Typography variant="body2" color="error.main" fontWeight={600}>
+                    <Typography variant="body2" fontWeight={700}>Then:</Typography>
+                    <Typography variant="body2" fontWeight={700} color="#ef4444">
                       Chart {id} will be HIDDEN
                     </Typography>
                   </Box>
-                  <Divider />
+                  <Divider sx={{ borderColor: 'rgba(16, 185, 129, 0.3)' }} />
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Typography variant="body2" fontWeight={600}>When:</Typography>
-                    <Chip label={selectedVariable} color="primary" size="small" />
-                    <Typography variant="body2" fontWeight={600}>=</Typography>
-                    <Chip label="false" color="default" size="small" icon={<CancelIcon />} />
+                    <Typography variant="body2" fontWeight={700}>When:</Typography>
+                    <Chip 
+                      label={selectedVariable}
+                      size="small"
+                      sx={{
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: 'white',
+                        fontWeight: 600,
+                      }}
+                    />
+                    <Typography variant="body2" fontWeight={700}>=</Typography>
+                    <Chip 
+                      label="false"
+                      size="small" 
+                      icon={<CancelIcon />}
+                      sx={{
+                        background: 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)',
+                        color: 'white',
+                        fontWeight: 600,
+                      }}
+                    />
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Typography variant="body2" fontWeight={600}>Then:</Typography>
-                    <Typography variant="body2" color="success.main" fontWeight={600}>
+                    <Typography variant="body2" fontWeight={700}>Then:</Typography>
+                    <Typography variant="body2" fontWeight={700} color="#10b981">
                       Chart {id} will be VISIBLE
                     </Typography>
                   </Box>
@@ -282,9 +443,26 @@ export function IsVisible() {
 
         {/* Current Variable Value */}
         {selectedVariable && (
-          <Card variant="outlined" sx={{ mb: 4 }}>
+          <Card 
+            variant="outlined" 
+            sx={{ 
+              mb: 4,
+              borderRadius: 2,
+              border: '1px solid rgba(102, 126, 234, 0.2)',
+            }}
+          >
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+              <Typography 
+                variant="subtitle1" 
+                fontWeight={700} 
+                gutterBottom
+                sx={{
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}
+              >
                 🔍 Current Value
               </Typography>
               <VariableValueDisplay variableName={selectedVariable} />
@@ -296,22 +474,38 @@ export function IsVisible() {
         <Stack direction="row" spacing={2}>
           <Button
             variant="contained"
-            color="success"
             size="large"
             startIcon={<SaveIcon />}
             onClick={handleSave}
             fullWidth
-            sx={{ py: 1.5 }}
+            sx={{ 
+              py: 1.5,
+              fontWeight: 700,
+              borderRadius: 2,
+              background: 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #059669 0%, #0d9488 100%)',
+              },
+            }}
           >
             Save Visibility Rule
           </Button>
           {selectedVariable && (
             <Button
               variant="outlined"
-              color="warning"
               size="large"
               startIcon={<ClearIcon />}
               onClick={handleClear}
+              sx={{
+                borderRadius: 2,
+                fontWeight: 700,
+                borderColor: '#f59e0b',
+                color: '#f59e0b',
+                '&:hover': {
+                  borderColor: '#d97706',
+                  bgcolor: 'rgba(245, 158, 11, 0.05)',
+                },
+              }}
             >
               Clear
             </Button>
@@ -320,18 +514,45 @@ export function IsVisible() {
       </Paper>
 
       {/* Documentation */}
-      <Paper elevation={1} sx={{ p: 4, bgcolor: 'grey.50' }}>
-        <Typography variant="h6" fontWeight={600} gutterBottom>
+      <Paper 
+        elevation={0} 
+        sx={{ 
+          p: 4,
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(102, 126, 234, 0.2)',
+          borderRadius: 3,
+          boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
+        }}
+      >
+        <Typography 
+          variant="h6" 
+          fontWeight={700} 
+          gutterBottom
+          sx={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}
+        >
           📚 Examples
         </Typography>
         
         <Stack spacing={3} sx={{ mt: 3 }}>
           <Box>
-            <Typography variant="subtitle2" fontWeight={600} color="primary.main" gutterBottom>
+            <Typography variant="subtitle2" fontWeight={700} color="#667eea" gutterBottom>
               Example 1: Hide chart when MOP is selected
             </Typography>
-            <Paper sx={{ p: 2, bgcolor: 'white' }}>
-              <Typography variant="body2" component="pre" sx={{ fontFamily: 'monospace', m: 0 }}>
+            <Paper 
+              sx={{ 
+                p: 2, 
+                bgcolor: 'white',
+                borderRadius: 2,
+                border: '1px solid rgba(102, 126, 234, 0.2)',
+              }}
+            >
+              <Typography variant="body2" component="pre" sx={{ fontFamily: 'monospace', m: 0, color: '#475569' }}>
                 {`// In Hooks, create this variable:
 Variable Name: hideForMOP
 Logic: param_metric === "MOP"
@@ -343,11 +564,18 @@ Result: Chart hides when metric filter = "MOP"`}
           </Box>
 
           <Box>
-            <Typography variant="subtitle2" fontWeight={600} color="primary.main" gutterBottom>
+            <Typography variant="subtitle2" fontWeight={700} color="#667eea" gutterBottom>
               Example 2: Hide for multiple conditions
             </Typography>
-            <Paper sx={{ p: 2, bgcolor: 'white' }}>
-              <Typography variant="body2" component="pre" sx={{ fontFamily: 'monospace', m: 0 }}>
+            <Paper 
+              sx={{ 
+                p: 2, 
+                bgcolor: 'white',
+                borderRadius: 2,
+                border: '1px solid rgba(102, 126, 234, 0.2)',
+              }}
+            >
+              <Typography variant="body2" component="pre" sx={{ fontFamily: 'monospace', m: 0, color: '#475569' }}>
                 {`// In Hooks, create this variable:
 Variable Name: hideForSpecificMetrics
 Logic: ["MOP", "PAYER_NAME"].includes(param_metric)
@@ -359,11 +587,18 @@ Result: Chart hides when metric is MOP OR PAYER_NAME`}
           </Box>
 
           <Box>
-            <Typography variant="subtitle2" fontWeight={600} color="primary.main" gutterBottom>
+            <Typography variant="subtitle2" fontWeight={700} color="#667eea" gutterBottom>
               Example 3: Complex condition
             </Typography>
-            <Paper sx={{ p: 2, bgcolor: 'white' }}>
-              <Typography variant="body2" component="pre" sx={{ fontFamily: 'monospace', m: 0 }}>
+            <Paper 
+              sx={{ 
+                p: 2, 
+                bgcolor: 'white',
+                borderRadius: 2,
+                border: '1px solid rgba(102, 126, 234, 0.2)',
+              }}
+            >
+              <Typography variant="body2" component="pre" sx={{ fontFamily: 'monospace', m: 0, color: '#475569' }}>
                 {`// In Hooks, create this variable:
 Variable Name: hideForAdvancedCondition
 Logic: param_metric === "MOP" && param_region.includes("North")
@@ -391,44 +626,82 @@ function VariableValueDisplay({ variableName }: { variableName: string }) {
       <Paper 
         sx={{ 
           p: 3, 
-          bgcolor: isBoolean 
-            ? (currentValue ? 'error.50' : 'success.50')
-            : 'grey.100',
-          border: 2,
-          borderColor: isBoolean
-            ? (currentValue ? 'error.main' : 'success.main')
-            : 'grey.300',
+          borderRadius: 2,
+          border: '2px solid',
+          borderColor: isBoolean 
+            ? (currentValue ? 'rgba(239, 68, 68, 0.5)' : 'rgba(16, 185, 129, 0.5)')
+            : 'rgba(148, 163, 184, 0.5)',
+          background: isBoolean 
+            ? (currentValue 
+                ? 'linear-gradient(135deg, rgba(254, 226, 226, 0.3) 0%, rgba(254, 202, 202, 0.3) 100%)'
+                : 'linear-gradient(135deg, rgba(209, 250, 229, 0.3) 0%, rgba(167, 243, 208, 0.3) 100%)')
+            : 'linear-gradient(135deg, rgba(241, 245, 249, 0.5) 0%, rgba(226, 232, 240, 0.5) 100%)',
         }}
       >
         <Stack spacing={2}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography variant="body2" fontWeight={600}>
+            <Typography variant="body2" fontWeight={700}>
               Variable:
             </Typography>
-            <Chip label={variableName} color="primary" />
-          </Box>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography variant="body2" fontWeight={600}>
-              Current Value:
-            </Typography>
-            <Chip
-              label={String(currentValue)}
-              color={isBoolean ? (currentValue ? 'error' : 'success') : 'default'}
-              icon={isBoolean ? (currentValue ? <CheckCircleIcon /> : <CancelIcon />) : undefined}
+            <Chip 
+              label={variableName}
+              sx={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                fontWeight: 600,
+              }}
             />
           </Box>
           
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography variant="body2" fontWeight={600}>
+            <Typography variant="body2" fontWeight={700}>
+              Current Value:
+            </Typography>
+            <Chip
+              label={String(currentValue)}
+              icon={isBoolean ? (currentValue ? <CheckCircleIcon /> : <CancelIcon />) : undefined}
+              sx={{
+                background: isBoolean 
+                  ? (currentValue 
+                      ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+                      : 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)')
+                  : 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)',
+                color: 'white',
+                fontWeight: 600,
+              }}
+            />
+          </Box>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="body2" fontWeight={700}>
               Type:
             </Typography>
-            <Chip label={typeof currentValue} size="small" />
+            <Chip 
+              label={typeof currentValue} 
+              size="small"
+              sx={{
+                borderColor: '#667eea',
+                color: '#667eea',
+                fontWeight: 600,
+              }}
+              variant="outlined"
+            />
           </Box>
           
           {isBoolean && (
-            <Alert severity={currentValue ? 'error' : 'success'} sx={{ mt: 2 }}>
-              <Typography variant="body2" fontWeight={600}>
+            <Alert 
+              severity={currentValue ? 'error' : 'success'} 
+              sx={{ 
+                mt: 2,
+                borderRadius: 2,
+                border: '1px solid',
+                borderColor: currentValue ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)',
+                background: currentValue
+                  ? 'linear-gradient(135deg, rgba(254, 226, 226, 0.5) 0%, rgba(254, 202, 202, 0.5) 100%)'
+                  : 'linear-gradient(135deg, rgba(209, 250, 229, 0.5) 0%, rgba(167, 243, 208, 0.5) 100%)',
+              }}
+            >
+              <Typography variant="body2" fontWeight={700}>
                 {currentValue 
                   ? '❌ Chart is currently HIDDEN (variable is true)'
                   : '✅ Chart is currently VISIBLE (variable is false)'
@@ -438,8 +711,16 @@ function VariableValueDisplay({ variableName }: { variableName: string }) {
           )}
           
           {!isBoolean && (
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              <Typography variant="body2">
+            <Alert 
+              severity="warning" 
+              sx={{ 
+                mt: 2,
+                borderRadius: 2,
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                background: 'linear-gradient(135deg, rgba(254, 243, 199, 0.3) 0%, rgba(253, 224, 71, 0.3) 100%)',
+              }}
+            >
+              <Typography variant="body2" fontWeight={500}>
                 ⚠️ This variable is not boolean. It may not work as expected for visibility control.
               </Typography>
             </Alert>

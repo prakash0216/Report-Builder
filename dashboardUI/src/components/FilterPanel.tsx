@@ -112,13 +112,13 @@ const CompactFilterItem: React.FC<{
   const getCategoryColor = (category: string) => {
     switch (category.toLowerCase()) {
       case 'params':
-        return { bgcolor: '#e8f5e9', color: '#2e7d32', borderColor: '#4caf50' };
+        return { bgcolor: '#f0fdf4', color: '#16a34a', borderColor: '#4ade80' };
       case 'data-source':
-        return { bgcolor: '#f3e5f5', color: '#9c27b0', borderColor: '#ab47bc' };
+        return { bgcolor: '#faf5ff', color: '#9333ea', borderColor: '#c084fc' };
       case 'hooks':
-        return { bgcolor: '#fff3e0', color: '#ed6c02', borderColor: '#ff9800' };
+        return { bgcolor: '#fff7ed', color: '#ea580c', borderColor: '#fb923c' };
       default:
-        return { bgcolor: '#f5f5f5', color: '#616161', borderColor: '#9e9e9e' };
+        return { bgcolor: '#f8fafc', color: '#64748b', borderColor: '#cbd5e1' };
     }
   };
 
@@ -148,7 +148,7 @@ const CompactFilterItem: React.FC<{
               <FormControlLabel
                 key={option.value}
                 value={option.value}
-                control={<Radio size="small" />}
+                control={<Radio size="small" sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }} />}
                 label={
                   <Typography 
                     variant="body2"
@@ -168,7 +168,7 @@ const CompactFilterItem: React.FC<{
                   py: 0.25,
                   mr: 0,
                   width: '100%',
-                  '&:hover': { bgcolor: 'action.hover' },
+                  '&:hover': { bgcolor: '#f0f4ff' },
                   borderRadius: 1,
                   '& .MuiFormControlLabel-label': {
                     width: 'calc(100% - 32px)',
@@ -179,12 +179,20 @@ const CompactFilterItem: React.FC<{
             ))}
           </RadioGroup>
         </Box>
-        <Box sx={{ p: 1.5, pt: 1, borderTop: 1, borderColor: 'divider', display: 'flex', gap: 1 }}>
+        <Box sx={{ p: 1.5, pt: 1, borderTop: 1, borderColor: '#e2e8f0', display: 'flex', gap: 1 }}>
           <Button 
             variant="outlined" 
             size="small" 
             fullWidth
             onClick={handleCancel}
+            sx={{
+              borderColor: '#cbd5e1',
+              color: '#64748b',
+              '&:hover': {
+                borderColor: '#94a3b8',
+                bgcolor: '#f8fafc',
+              }
+            }}
           >
             Cancel
           </Button>
@@ -193,6 +201,12 @@ const CompactFilterItem: React.FC<{
             size="small" 
             fullWidth
             onClick={handleApply}
+            sx={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+              }
+            }}
           >
             Apply
           </Button>
@@ -230,8 +244,8 @@ const CompactFilterItem: React.FC<{
           px: 1.5, 
           py: 0.75, 
           borderBottom: 1, 
-          borderColor: 'divider',
-          bgcolor: 'grey.50',
+          borderColor: '#e2e8f0',
+          background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
         }}>
           <FormControlLabel
             control={
@@ -240,6 +254,11 @@ const CompactFilterItem: React.FC<{
                 checked={allSelected}
                 indeterminate={someSelected}
                 onChange={handleSelectAll}
+                sx={{ 
+                  color: '#667eea', 
+                  '&.Mui-checked': { color: '#667eea' },
+                  '&.MuiCheckbox-indeterminate': { color: '#667eea' }
+                }}
               />
             }
             label={<Typography variant="body2" fontWeight="600">(All)</Typography>}
@@ -266,6 +285,10 @@ const CompactFilterItem: React.FC<{
                       size="small"
                       checked={isSelected}
                       onChange={() => handleToggle(option)}
+                      sx={{ 
+                        color: '#667eea', 
+                        '&.Mui-checked': { color: '#667eea' }
+                      }}
                     />
                   }
                   label={
@@ -286,7 +309,7 @@ const CompactFilterItem: React.FC<{
                     py: 0.25,
                     mr: 0,
                     width: '100%',
-                    '&:hover': { bgcolor: 'action.hover' },
+                    '&:hover': { bgcolor: '#f0f4ff' },
                     borderRadius: 1,
                     '& .MuiFormControlLabel-label': {
                       width: 'calc(100% - 32px)',
@@ -300,12 +323,20 @@ const CompactFilterItem: React.FC<{
         </Box>
         
         {/* Apply/Cancel Buttons */}
-        <Box sx={{ p: 1.5, pt: 1, borderTop: 1, borderColor: 'divider', display: 'flex', gap: 1 }}>
+        <Box sx={{ p: 1.5, pt: 1, borderTop: 1, borderColor: '#e2e8f0', display: 'flex', gap: 1 }}>
           <Button 
             variant="outlined" 
             size="small" 
             fullWidth
             onClick={handleCancel}
+            sx={{
+              borderColor: '#cbd5e1',
+              color: '#64748b',
+              '&:hover': {
+                borderColor: '#94a3b8',
+                bgcolor: '#f8fafc',
+              }
+            }}
           >
             Cancel
           </Button>
@@ -314,6 +345,12 @@ const CompactFilterItem: React.FC<{
             size="small" 
             fullWidth
             onClick={handleApply}
+            sx={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+              }
+            }}
           >
             Apply
           </Button>
@@ -335,24 +372,24 @@ const CompactFilterItem: React.FC<{
     >
       <Paper
         ref={nodeRef}
-        elevation={2}
+        elevation={0}
         sx={{
           position: 'absolute',
-          width: 280, // Match the width of the add filter section
-          bgcolor: 'white',
-          border: 1,
-          borderColor: 'divider',
-          borderRadius: 1,
+          width: 280,
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(102, 126, 234, 0.2)',
+          borderRadius: 2,
           overflow: 'hidden',
+          boxShadow: '0 8px 32px rgba(102, 126, 234, 0.15)',
         }}
       >
         {/* Header with drag handle */}
         <Box
           className="drag-handle"
           sx={{
-            bgcolor: '#f5f5f5',
-            borderBottom: 1,
-            borderColor: 'divider',
+            background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+            borderBottom: '1px solid #e2e8f0',
             px: 1,
             py: 0.5,
             display: 'flex',
@@ -360,13 +397,24 @@ const CompactFilterItem: React.FC<{
             justifyContent: 'space-between',
             cursor: 'move',
             '&:hover': {
-              bgcolor: '#eeeeee',
+              background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
             },
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
-            <DragIndicatorIcon sx={{ fontSize: 16, mr: 0.5, color: 'text.secondary' }} />
-            <Typography variant="caption" fontWeight="600" noWrap sx={{ flex: 1 }}>
+            <DragIndicatorIcon sx={{ fontSize: 16, mr: 0.5, color: '#667eea' }} />
+            <Typography 
+              variant="caption" 
+              fontWeight="700" 
+              noWrap 
+              sx={{ 
+                flex: 1,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
               {filterConfig.displayName}
             </Typography>
           </Box>
@@ -380,9 +428,10 @@ const CompactFilterItem: React.FC<{
             sx={{
               p: 0.25,
               ml: 0.5,
+              color: '#64748b',
               '&:hover': {
-                bgcolor: 'error.light',
-                color: 'error.main',
+                bgcolor: '#fee2e2',
+                color: '#dc2626',
               },
             }}
           >
@@ -403,19 +452,19 @@ const CompactFilterItem: React.FC<{
             cursor: 'pointer',
             bgcolor: 'white',
             '&:hover': {
-              bgcolor: 'action.hover',
+              bgcolor: '#f8fafc',
             },
             borderLeft: 3,
             borderColor: categoryColor.borderColor,
           }}
         >
-          <Typography variant="body2" noWrap sx={{ flex: 1, mr: 1 }}>
+          <Typography variant="body2" noWrap sx={{ flex: 1, mr: 1, fontWeight: 500 }}>
             {getDisplayText()}
           </Typography>
           <KeyboardArrowDownIcon 
             sx={{ 
               fontSize: 18, 
-              color: 'text.secondary',
+              color: '#667eea',
               transform: isOpen ? 'rotate(180deg)' : 'rotate(0)',
               transition: 'transform 0.2s',
             }} 
@@ -439,10 +488,14 @@ const CompactFilterItem: React.FC<{
           PaperProps={{
             sx: {
               mt: 0.5,
-              boxShadow: 3,
+              boxShadow: '0 8px 32px rgba(102, 126, 234, 0.2)',
               maxHeight: 400,
               overflow: 'hidden',
               width: 280,
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(102, 126, 234, 0.1)',
+              borderRadius: 2,
             },
           }}
           MenuListProps={{
@@ -525,15 +578,16 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
 
   return (
     <Paper 
-      elevation={3}
+      elevation={0}
       sx={{
         position: 'fixed',
         right: 0,
         top: topOffset,
         height: `calc(100vh - ${topOffset})`,
         width: 320,
-        borderLeft: 1,
-        borderColor: 'divider',
+        background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.95) 100%)',
+        backdropFilter: 'blur(10px)',
+        borderLeft: '1px solid rgba(102, 126, 234, 0.2)',
         display: 'flex',
         flexDirection: 'column',
         transition: 'transform 0.3s',
@@ -544,33 +598,54 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
       }}
     >
       {/* Header Section */}
-      <Box sx={{ p: 2, borderBottom: isEdit? 1 : 0, borderColor: 'divider', bgcolor: 'grey.50' }}>
+      <Box sx={{ p: 2, pt:isEdit?7:3, borderBottom: isEdit? '1px solid #e2e8f0' : 0 }}>
         <Box 
           sx={{ 
-            bgcolor: 'primary.main', 
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: 'white', 
             textAlign: 'center', 
-            py: 1,
+            py: 1.25,
             mx: -2,
             mt: -2,
             mb: isEdit ? 2 : -1.5,
+            boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)',
           }}
         >
-          <Typography variant="subtitle2" fontWeight="600">
-            Filters
+          <Typography variant="subtitle2" fontWeight="700" letterSpacing={0.5}>
+            FILTERS
           </Typography>
         </Box>
 
         {/* Filter Selector */}
         {isEdit && (
-          <Paper sx={{ p: 2, bgcolor: '#e3f2fd', border: 1, borderColor: 'primary.light' }}>
+          <Paper 
+            elevation={0}
+            sx={{ 
+              p: 2, 
+              background: 'linear-gradient(135deg, rgba(224, 231, 255, 0.3) 0%, rgba(199, 210, 254, 0.3) 100%)',
+              border: '1px solid rgba(102, 126, 234, 0.3)',
+              borderRadius: 2,
+            }}
+          >
             <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
-              <InputLabel>Add Filter</InputLabel>
+              <InputLabel sx={{ color: '#667eea', '&.Mui-focused': { color: '#667eea' } }}>Add Filter</InputLabel>
               <Select
                 value={selectedFilter}
                 onChange={(e) => setSelectedFilter(e.target.value)}
                 label="Add Filter"
-                sx={{ bgcolor: 'white' }}
+                sx={{ 
+                  bgcolor: 'white',
+                  borderRadius: 1.5,
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(102, 126, 234, 0.3)',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#667eea',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#667eea',
+                  }
+                }}
                 renderValue={(selected) => {
                   if (!selected) return <em>-- Select a filter --</em>;
                   const config = allFilters[selected];
@@ -584,15 +659,17 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   const getCategoryChipColor = (category: string) => {
                     switch (category.toLowerCase()) {
                       case 'params':
-                        return { bgcolor: '#e8f5e9', color: '#2e7d32' };
+                        return { bgcolor: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac' };
                       case 'data-source':
-                        return { bgcolor: '#f3e5f5', color: '#9c27b0' };
+                        return { bgcolor: '#faf5ff', color: '#9333ea', border: '1px solid #d8b4fe' };
                       case 'hooks':
-                        return { bgcolor: '#fff3e0', color: '#ed6c02' };
+                        return { bgcolor: '#fff7ed', color: '#ea580c', border: '1px solid #fdba74' };
                       default:
-                        return { bgcolor: '#f5f5f5', color: '#616161' };
+                        return { bgcolor: '#f8fafc', color: '#64748b', border: '1px solid #cbd5e1' };
                     }
                   };
+                  
+                  const chipColor = getCategoryChipColor(config.category);
                   
                   return (
                     <MenuItem key={config.variableName} value={config.variableName}>
@@ -601,13 +678,13 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                           label={config.category} 
                           size="small"
                           sx={{ 
-                            ...getCategoryChipColor(config.category),
+                            ...chipColor,
                             fontSize: '0.65rem',
                             height: 20,
-                            fontWeight: 600,
+                            fontWeight: 700,
                           }}
                         />
-                        <Typography variant="body2">
+                        <Typography variant="body2" fontWeight={500}>
                           {config.displayName}
                         </Typography>
                       </Box>
@@ -623,6 +700,17 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
               onClick={handleAddFilter}
               disabled={!selectedFilter}
               size="small"
+              sx={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                fontWeight: 600,
+                borderRadius: 1.5,
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                },
+                '&.Mui-disabled': {
+                  background: '#e2e8f0',
+                }
+              }}
             >
               Add Filter
             </Button>
@@ -635,7 +723,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
         sx={{ 
           flexGrow: 1,
           overflow: 'hidden',
-          bgcolor: 'grey.50',
+          background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.5) 0%, rgba(241, 245, 249, 0.5) 100%)',
           position: 'relative',
         }}
       >
@@ -651,18 +739,32 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
             }}
           >
             <Box>
-              <svg 
-                style={{ width: 48, height: 48, margin: '0 auto 8px', opacity: 0.4 }} 
-                fill="none" 
-                viewBox="0 0 24 24" 
-                stroke="currentColor"
+              <Box
+                sx={{
+                  width: 64,
+                  height: 64,
+                  margin: '0 auto 16px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
-              </svg>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
+                <svg 
+                  style={{ width: 32, height: 32, opacity: 0.6 }} 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="#667eea"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
+                </svg>
+              </Box>
+              <Typography variant="body2" color="#475569" gutterBottom fontWeight={600}>
                 No filters added yet
               </Typography>
-              <Typography variant="caption" color="text.disabled">
+              <Typography variant="caption" color="#94a3b8">
                 Select a filter above to add
               </Typography>
             </Box>
@@ -681,27 +783,6 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
           </Box>
         )}
       </Box>
-
-      {/* Instructions Footer */}
-      {isEdit && (
-        <Box 
-        sx={{ 
-          p: 1.5, 
-          bgcolor: '#fff3e0', 
-          borderTop: 1, 
-          borderColor: 'warning.light' 
-        }}
-      >
-        <Typography variant="caption" fontWeight="600" color="warning.dark" display="block" mb={0.5}>
-          💡 Tips
-        </Typography>
-        <Box component="ul" sx={{ m: 0, pl: 2, fontSize: '0.7rem', color: 'warning.dark' }}>
-          <li>Drag filters by header</li>
-          <li>Click to open dropdown menu</li>
-          <li>Apply changes with Apply button</li>
-        </Box>
-        </Box>
-      )}
     </Paper>
   );
 };

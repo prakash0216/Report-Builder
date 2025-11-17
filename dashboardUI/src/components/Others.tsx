@@ -44,22 +44,48 @@ export default function Others() {
   };
 
   return (
-    <Box sx={{ width: '100%', minHeight: '100vh', bgcolor: 'grey.50', p: 3 }}>
-      <Box >
-        <Paper elevation={2} sx={{ borderRadius: 2, overflow: 'hidden' }}>
+    <Box 
+      sx={{ 
+        width: '100%', 
+        minHeight: '100vh', 
+        background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+        p: 3,
+      }}
+    >
+      <Box>
+        <Paper 
+          elevation={0} 
+          sx={{ 
+            borderRadius: 3, 
+            overflow: 'hidden',
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(102, 126, 234, 0.2)',
+            boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
+          }}
+        >
           <Tabs
             value={tabValue}
             onChange={handleTabChange}
             variant="fullWidth"
             sx={{
-              borderBottom: 1,
-              borderColor: 'divider',
-              bgcolor: 'background.paper',
+              borderBottom: '1px solid rgba(102, 126, 234, 0.2)',
               '& .MuiTab-root': {
                 textTransform: 'none',
-                fontWeight: 600,
+                fontWeight: 700,
                 fontSize: '0.95rem',
                 py: 2,
+                color: '#64748b',
+                '&.Mui-selected': {
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                },
+              },
+              '& .MuiTabs-indicator': {
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                height: 3,
               },
             }}
           >

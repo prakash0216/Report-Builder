@@ -36,7 +36,6 @@ import Hooks from '../components/Hooks';
 import SnowflakeConnector from '../components/SnowflakeConnector';
 import Parameters from '../components/Parameters';
 import Filters from '../components/Filters';
-// import { Others } from '../components/Others';
 import {IsVisible} from "../components/IsVisible";
 import { CardArrangement } from '../components/CardArrangement';
 import Others from '../components/Others';
@@ -50,6 +49,7 @@ interface Tab {
   label: string;
   icon: React.ComponentType<{ sx?: any }>;
   component: React.ComponentType;
+  color: string;
 }
 
 // Define the URL params type
@@ -65,68 +65,89 @@ const NavBar: React.FC<{ chartId: string }> = ({ chartId }) => {
   return (
     <AppBar 
       position="sticky" 
-      color="default" 
-      elevation={1}
+      elevation={0}
       sx={{ 
-        bgcolor: 'white',
-        borderBottom: 1,
-        borderColor: 'divider',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        boxShadow: '0 4px 20px 0 rgba(102, 126, 234, 0.3)',
       }}
     >
-      <Toolbar sx={{ justifyContent: 'space-between', minHeight: { xs: 64, sm: 70 } }}>
+      <Toolbar sx={{ justifyContent: 'space-between', minHeight: { xs: 70, sm: 76 }, px: { xs: 2, sm: 4 } }}>
         {/* Left section */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Button 
             startIcon={<ArrowBackIcon />}
             onClick={() => navigate("/dashboards")}
             sx={{ 
-              color: 'text.secondary',
+              color: 'white',
+              textTransform: 'none',
+              fontWeight: 500,
+              bgcolor: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(10px)',
+              px: 2.5,
+              py: 1,
+              borderRadius: 2,
               '&:hover': {
-                color: 'text.primary',
+                bgcolor: 'rgba(255, 255, 255, 0.2)',
               }
             }}
           >
             <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
-              Back to Charts
+              Back to Dashboard
+            </Box>
+            <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
+              Back
             </Box>
           </Button>
           
-          <Divider orientation="vertical" flexItem sx={{ height: 24, alignSelf: 'center' }} />
+          <Divider 
+            orientation="vertical" 
+            flexItem 
+            sx={{ 
+              height: 32, 
+              alignSelf: 'center',
+              bgcolor: 'rgba(255, 255, 255, 0.2)',
+              borderColor: 'rgba(255, 255, 255, 0.2)'
+            }} 
+          />
           
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <Box 
               sx={{ 
-                bgcolor: 'primary.main', 
-                p: 1, 
-                borderRadius: 1.5,
+                background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                p: 1.5,
+                borderRadius: 2,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                boxShadow: '0 4px 15px rgba(245, 87, 108, 0.3)',
               }}
             >
-              <BarChartIcon sx={{ color: 'white', fontSize: 20 }} />
+              <BarChartIcon sx={{ color: 'white', fontSize: 24 }} />
             </Box>
             <Box>
-              <Typography variant="h6" fontWeight={600} color="text.primary">
+              <Typography 
+                variant="h6" 
+                fontWeight={700} 
+                sx={{ 
+                  color: 'white',
+                  letterSpacing: 0.5,
+                  fontSize: { xs: '1rem', sm: '1.25rem' }
+                }}
+              >
                 Chart Editor
               </Typography>
-              <Typography variant="subtitle1" color="text.secondary">
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  color: 'rgba(255, 255, 255, 0.8)',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                }}
+              >
                 ID: {chartId}
               </Typography>
             </Box>
           </Box>
-        </Box>
-
-        {/* Center section - Auto-saved status (placeholder) */}
-        <Box sx={{ display: { xs: 'none', md: 'flex' }, justifyContent: 'center' }}>
-          <Chip 
-            label="" 
-            size="small"
-            sx={{ 
-              bgcolor: 'success.50',
-              visibility: 'hidden', // Hidden as per original
-            }}
-          />
         </Box>
 
         {/* Right section */}
@@ -137,11 +158,22 @@ const NavBar: React.FC<{ chartId: string }> = ({ chartId }) => {
             onClick={() => navigate("/dashboards")}
             sx={{ 
               textTransform: 'none',
-              fontWeight: 500,
+              fontWeight: 600,
               borderRadius: 2,
+              px: 3,
+              py: 1.25,
+              bgcolor: 'white',
+              color: '#667eea',
+              boxShadow: '0 4px 15px rgba(255, 255, 255, 0.3)',
+              '&:hover': {
+                bgcolor: 'rgba(255, 255, 255, 0.95)',
+                transform: 'translateY(-2px)',
+                boxShadow: '0 6px 20px rgba(255, 255, 255, 0.4)',
+              },
+              transition: 'all 0.3s ease',
             }}
           >
-            Save
+            Save Changes
           </Button>
         </Box>
       </Toolbar>
@@ -177,49 +209,56 @@ const EditChart: React.FC = () => {
   const { id } = useParams<ChartParams>();
   const [activeTabIndex, setActiveTabIndex] = useState<number>(0);
 
-  // Tab configuration
+  // Tab configuration with colors
   const tabs: Tab[] = [
     {
-      key: 'connectionManager',
-      label: 'Connection Manager',
-      icon: SnowflakeIcon,
-      component: SnowflakeConnector
-    },
-    {
-      key: 'parameters',
-      label: 'Parameters',
-      icon: TuneIcon,
-      component: Parameters
-    },
-    {
-      key: 'dataSource',
-      label: 'Data Source',
-      icon: CloudQueue,
-      component: AddDataSource
-    },
-    {
-      key: 'filters',
-      label: 'Filters',
-      icon: FilterAltIcon,
-      component: Filters
+      key: 'highChart',
+      label: 'Viz Config',
+      icon: BarChartIcon,
+      component: HighChartField,
+      color: '#764ba2'
     },
     {
       key: 'hooks',
       label: 'Calculations',
       icon: BoltIcon,
-      component: Hooks
+      component: Hooks,
+      color: '#fa709a'
     },
     {
-      key: 'highChart',
-      label: 'Chart Config',
-      icon: BarChartIcon,
-      component: HighChartField
+      key: 'parameters',
+      label: 'Parameters',
+      icon: TuneIcon,
+      component: Parameters,
+      color: '#f093fb'
+    },
+    {
+      key: 'filters',
+      label: 'Filters',
+      icon: FilterAltIcon,
+      component: Filters,
+      color: '#43e97b'
     },
     {
       key: 'others',
-      label: 'Others',
+      label: 'Card Configuration',
       icon: MiscellaneousServicesIcon,
-      component: Others
+      component: Others,
+      color: '#ffd89b'
+    },
+    {
+      key: 'dataSource',
+      label: 'Data Source',
+      icon: CloudQueue,
+      component: AddDataSource,
+      color: '#4facfe'
+    },
+    {
+      key: 'connectionManager',
+      label: 'Connections',
+      icon: SnowflakeIcon,
+      component: SnowflakeConnector,
+      color: '#667eea'
     }
   ];
 
@@ -228,32 +267,13 @@ const EditChart: React.FC = () => {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'grey.50' }}>
+    <Box sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' }}>
       {/* Navigation Bar */}
       <NavBar chartId={id || 'No ID provided'} />
       
       {/* Main Content */}
-      <Container maxWidth={false} sx={{ py: 3 }}>
+      <Container maxWidth={false} sx={{ py:4 }}>
         {/* Header Section */}
-        <Paper 
-          elevation={0}
-          sx={{ 
-            mb: 4, 
-            p: 3,
-            border: 1,
-            borderColor: 'divider',
-            borderRadius: 2,
-          }}
-        >
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="h4" fontWeight={700} color="text.primary" gutterBottom>
-              Chart Configuration
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Configure your chart's connections, parameters, data sources, filters, hooks, and visualization settings
-            </Typography>
-          </Box>
-        </Paper>
 
         {/* Tabs Container */}
         <Box sx={{ width: '100%' }}>
@@ -261,43 +281,50 @@ const EditChart: React.FC = () => {
           <Paper 
             elevation={0}
             sx={{ 
-              borderRadius: '8px 8px 0 0',
-              borderBottom: 1,
-              borderColor: 'divider',
+              borderRadius: '16px 16px 0 0',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              overflow: 'hidden',
             }}
           >
             <Tabs
               value={activeTabIndex}
               onChange={handleTabChange}
-              // variant="scrollable"
-              // scrollButtons="auto"
-              allowScrollButtonsMobile
               centered
               sx={{
-                bgcolor: 'grey.100',
-                borderRadius: '8px 8px 0 0',
-                px: 0.5,
-                py: 0.5,
-                minHeight: 48,
+                px: 2,
+                py: 1.5,
+                minHeight: 64,
                 '& .MuiTabs-indicator': {
-                  height: 3,
-                  borderRadius: '3px 3px 0 0',
+                  height: 4,
+                  borderRadius: '4px 4px 0 0',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                },
+                '& .MuiTabs-scrollButtons': {
+                  color: '#667eea',
+                  '&.Mui-disabled': {
+                    opacity: 0.3,
+                  }
                 },
                 '& .MuiTab-root': {
                   textTransform: 'none',
-                  fontWeight: 500,
-                  fontSize: '0.875rem',
-                  minHeight: 48,
-                  color: 'text.secondary',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  minHeight: 64,
+                  px: 3,
+                  py: 2,
+                  color: '#6b7280',
+                  borderRadius: 2,
+                  transition: 'all 0.3s ease',
                   '&.Mui-selected': {
-                    color: 'primary.main',
-                    bgcolor: 'white',
-                    borderRadius: '6px 6px 0 0',
-                    boxShadow: '0 -1px 3px rgba(0,0,0,0.05)',
+                    color: '#667eea',
+                    background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                    boxShadow: '0 4px 15px rgba(102, 126, 234, 0.2)',
                   },
                   '&:hover': {
-                    bgcolor: 'grey.50',
-                    color: 'text.primary',
+                    background: 'rgba(102, 126, 234, 0.05)',
+                    color: '#667eea',
                   },
                 },
               }}
@@ -308,9 +335,35 @@ const EditChart: React.FC = () => {
                   <Tab
                     key={tab.key}
                     label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <IconComponent sx={{ fontSize: 18 }} />
-                        <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 32,
+                            height: 32,
+                            borderRadius: '8px',
+                            background: activeTabIndex === index 
+                              ? `linear-gradient(135deg, ${tab.color} 0%, ${tab.color}dd 100%)`
+                              : 'rgba(102, 126, 234, 0.1)',
+                            transition: 'all 0.3s ease',
+                          }}
+                        >
+                          <IconComponent 
+                            sx={{ 
+                              fontSize: 18,
+                              color: activeTabIndex === index ? 'white' : tab.color,
+                            }} 
+                          />
+                        </Box>
+                        <Box 
+                          component="span" 
+                          sx={{ 
+                            display: { xs: 'none', sm: 'inline' },
+                            fontWeight: activeTabIndex === index ? 700 : 600,
+                          }}
+                        >
                           {tab.label}
                         </Box>
                       </Box>
@@ -327,10 +380,14 @@ const EditChart: React.FC = () => {
           <Paper 
             elevation={0}
             sx={{ 
-              borderRadius: '0 0 8px 8px',
-              border: 1,
+              borderRadius: '0 0 16px 16px',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
               borderTop: 0,
-              borderColor: 'divider',
+              p: 4,
+              minHeight: 500,
+              boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
             }}
           >
             {tabs.map((tab, index) => {
@@ -349,241 +406,3 @@ const EditChart: React.FC = () => {
 };
 
 export default EditChart;
-
-
-// import React, { useState } from 'react';
-// import { useParams, useNavigate } from "react-router-dom";
-// import { 
-//   Database, 
-//   Code, 
-//   BarChart3,
-//   Zap,
-//   Save,
-//   ArrowLeft,
-//   Filter,
-//   Snowflake,
-//   SlidersHorizontal
-// } from 'lucide-react';
-// import JsCompiler from "../components/JsCompiler";
-// import AddDataSource from "../components/AddDataSource";
-// import HighChartField from "../components/HighChartField";
-// import Hooks from '../components/Hooks';
-// import SnowflakeConnector from '../components/SnowflakeConnector';
-// import Parameters from '../components/Parameters';
-// import Filters from '../components/Filters';
-// import { MiscellaneousServices, MiscellaneousServicesSharp } from '@mui/icons-material';
-// import { Others } from '../components/Others';
-
-// // Define the available tabs
-// type TabKey = 'connectionManager' | 'parameters' | 'dataSource' | 'filters' | 'hooks' | 'highChart' | 'others';
-
-// // Tab configuration
-// interface Tab {
-//   key: TabKey;
-//   label: string;
-//   icon: React.ComponentType<{ className?: string }>;
-//   component: React.ComponentType;
-// }
-
-// // Define the URL params type
-// interface ChartParams {
-//   id: string;
-//   [key: string]: string | undefined;
-// }
-
-// // Navigation Bar Component
-// const NavBar: React.FC<{ chartId: string }> = ({ chartId }) => {
-//   const navigate = useNavigate();
-
-//   return (
-//     <nav className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
-//       <div className="px-4 sm:px-6 lg:px-8">
-//         <div className="grid grid-cols-3 items-center h-16">
-//           {/* Left section */}
-//           <div className="flex items-center space-x-4">
-//             <button 
-//               onClick={() => navigate("/dashboards")}
-//               className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors"
-//             >
-//               <ArrowLeft className="h-5 w-5" />
-//               <span className="hidden sm:inline">Back to Charts</span>
-//             </button>
-            
-//             <div className="h-6 border-l border-gray-300"></div>
-            
-//             <div className="flex items-center space-x-3">
-//               <div className="bg-blue-600 p-2 rounded-lg">
-//                 <BarChart3 className="h-5 w-5 text-white" />
-//               </div>
-//               <div>
-//                 <h1 className="text-lg font-semibold text-gray-900">Chart Editor</h1>
-//                 <p className="text-sm text-gray-500">ID: {chartId}</p>
-//               </div>
-//             </div>
-//           </div>
-
-//           {/* Center section - Auto-saved status */}
-//           <div className="flex justify-center">
-//             <div className="flex items-center space-x-1 bg-green-50 px-3 py-1 rounded-full">
-              
-//             </div>
-//           </div>
-
-//           {/* Right section */}
-//           <div className="flex justify-end items-center">
-//             <button 
-//               onClick={() => navigate("/dashboards")}
-//               className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
-//             >
-//               <Save className="h-4 w-4" />
-//               <span>Save</span>
-//             </button>
-//           </div>
-//         </div>
-//       </div>
-//     </nav>
-//   );
-// };
-
-// // Tab Button Component
-// interface TabButtonProps {
-//   tab: Tab;
-//   isActive: boolean;
-//   onClick: () => void;
-// }
-
-// const TabButton: React.FC<TabButtonProps> = ({ tab, isActive, onClick }) => {
-//   const Icon = tab.icon;
-  
-//   return (
-//     <button
-//       onClick={onClick}
-//       className={`
-//         flex items-center space-x-2 px-4 py-3 text-sm font-medium rounded-t-lg transition-all duration-200
-//         ${isActive 
-//           ? 'bg-white text-blue-600 border-b-2 border-blue-600 shadow-sm' 
-//           : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
-//         }
-//       `}
-//       type="button"
-//     >
-//       <Icon className="h-4 w-4" />
-//       <span className="hidden sm:inline">{tab.label}</span>
-//     </button>
-//   );
-// };
-
-// // Tab Content Component
-// interface TabContentProps {
-//   children: React.ReactNode;
-// }
-
-// const TabContent: React.FC<TabContentProps> = ({ children }) => {
-//   return (
-//     <div className="bg-white rounded-b-lg rounded-tr-lg border border-gray-200 shadow-sm min-h-[500px]">
-//       {children}
-//     </div>
-//   );
-// };
-
-// const EditChart: React.FC = () => {
-//   const { id } = useParams<ChartParams>();
-  
-//   // State to manage active tab
-//   const [activeTab, setActiveTab] = useState<TabKey>('connectionManager');
-
-//   // Tab configuration
-//   const tabs: Tab[] = [
-//     {
-//       key: 'connectionManager',
-//       label: 'Connection Manager',
-//       icon: Snowflake,
-//       component: SnowflakeConnector
-//     },
-//     {
-//       key: 'parameters',
-//       label: 'Parameters',
-//       icon: SlidersHorizontal,
-//       component: Parameters
-//     },
-//     {
-//       key: 'dataSource',
-//       label: 'Data Source',
-//       icon: Database,
-//       component: AddDataSource
-//     },
-//     {
-//       key: 'filters',
-//       label: 'Filters',
-//       icon: Filter,
-//       component: Filters
-//     },
-//     {
-//       key: 'hooks',
-//       label: 'Calculations',
-//       icon: Zap,
-//       component: Hooks
-//     },
-//     {
-//       key: 'highChart',
-//       label: 'Chart Config',
-//       icon: BarChart3,
-//       component: HighChartField
-//     },
-//     {
-//       key:'others',
-//       label:'Others',
-//       icon: MiscellaneousServicesSharp,
-//       component: Others
-//     }
-//   ];
-
-//   // Get the active tab component
-//   const ActiveComponent = tabs.find(tab => tab.key === activeTab)?.component || SnowflakeConnector;
-
-//   return (
-//     <div className="min-h-screen bg-gray-50">
-//       {/* Navigation Bar */}
-//       <NavBar chartId={id || 'No ID provided'} />
-      
-//       {/* Main Content */}
-//       <div className="p-6 w-full mx-auto">
-//         {/* Header Section */}
-//         <div className="mb-8">
-//           <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-//             <div className="text-center">
-//               <h2 className="text-3xl font-bold text-gray-900 mb-3">
-//                 Chart Configuration
-//               </h2>
-//               <p className="text-gray-600 text-lg">
-//                 Configure your chart's connections, parameters, data sources, filters, hooks, and visualization settings
-//               </p>
-//             </div>
-//           </div>
-//         </div>
-
-//         {/* Tabs Container */}
-//         <div className="w-full">
-//           {/* Tab Navigation */}
-//           <div className="flex flex-wrap justify-center gap-1 bg-gray-100 p-1 rounded-t-lg border-b border-gray-200">
-//             {tabs.map((tab) => (
-//               <TabButton
-//                 key={tab.key}
-//                 tab={tab}
-//                 isActive={activeTab === tab.key}
-//                 onClick={() => setActiveTab(tab.key)}
-//               />
-//             ))}
-//           </div>
-
-//           {/* Tab Content */}
-//           <TabContent>
-//             <ActiveComponent />
-//           </TabContent>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default EditChart;

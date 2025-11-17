@@ -14,7 +14,7 @@ import { variableAtomFamily } from '../recoil/VariableFamily';
 import { filterNamesState } from '../recoil/FiltersFamily';
 import { isChartVisibleSelector, chartDynamicDimensionsSelector } from '../recoil/DashboardVisibility';
 import { IsEditModeState } from "../recoil/IsEditeMode";
-
+import { dahboardNameMain } from "../recoil/DashboardName";
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
 interface ChartConfigData {
@@ -68,6 +68,11 @@ export default function DropDragDashboard() {
   const [chartDimensions, setChartDimensions] = useState<Record<string, { width: number; height: number } | null>>({});
 
   const [compactType, setCompactType] = useState<"vertical" | "horizontal" | null>("horizontal");
+ 
+  // NEW: Dashboard naming
+  const [dashboardName, setDashboardName] = useRecoilState(dahboardNameMain);
+  const [isEditingName, setIsEditingName] = useState<boolean>(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   // Track previous visibility to detect when charts reappear
   const prevVisibilityRef = useRef<Record<string, boolean>>({});
@@ -75,6 +80,51 @@ export default function DropDragDashboard() {
   // Flag to ignore auto-compact layout changes
   const ignoreNextLayoutChange = useRef<boolean>(false);
   const visibilityChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [selectedView, setSelectedView] = useState<string>("dashboardName");
+  const [selectedCustomView,setSelectedCustomView]=useState<string>("default")
+  const [selectDownloadOption,setSelectedDownloadOption]=useState<string>("jpeg")
+  const [selectedBranch,setSelectedbranch]=useState<string>("createBranch")
+
+  const [views] = useState([
+    { id: "dashboardName", name:dashboardName},
+    { id: "view-1", name: "View 1" },
+    { id: "view-2", name: "View 2" },
+    { id: "view-3", name: "View 3" },
+  ]);
+
+  const [customViews]=useState([
+    { id: "default", name: "Default" },
+    { id: "cust-view-1", name: "Custom Filter View 1" },
+    { id: "cust-view-2", name: "Custom Filter View 2" },
+    { id: "cust-view-3", name: "Custom Filter View 3" },
+  ])
+
+  const [downloadOptions]=useState([
+    { id: "png", name: "PNG" },
+    { id: "jpeg", name: "JPEG" },
+    { id: "pdf", name: "PDF" },
+    { id: "svg", name: "SVG" },
+    { id: "csv", name: "CSV" },
+    { id: "Xls", name: "XLS" },
+  ])
+
+  const [branchOptions]=useState([
+    { id: "createBranch", name: "Create Branch" },
+    { id: "branch5", name: "Claims Volume b1" },
+    { id: "branch4", name: "Claims Volume b2" },
+    { id: "branch1", name: "Project Volume b1" },
+    { id: "branch2", name: "Custom Comparison b1" },
+    { id: "branch3", name: "Patient Provider b1" }
+  ])
+
+  // Focus name input when editing
+  useEffect(() => {
+    if (isEditingName && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [isEditingName]);
 
   const getAllVariables = useRecoilCallback(({ snapshot }) => async (): Promise<Record<string, any>> => {
     const variables: Record<string, any> = {};
@@ -269,7 +319,6 @@ export default function DropDragDashboard() {
 
   type ResizeHandleAxis = 's' | 'n' | 'se' | 'ne' | 'w' | 'e' | 'sw' | 'nw';
 
-
   const [tempCompactType, setTempCompactType] = useState<"vertical" | "horizontal" | null>("horizontal");
   const [mounted, setMounted] = useState(false);
   const [currentBreakpoint, setCurrentBreakpoint] = useState("lg");
@@ -439,7 +488,7 @@ export default function DropDragDashboard() {
       x: item.x,
       y: item.y,
       w: 6,
-      h: 2,
+      h: 4,
       static: false,
     };
 
@@ -526,7 +575,7 @@ export default function DropDragDashboard() {
     return () => clearTimeout(timer);
   }, [isEditMode, chartVisibility]);
 
-  const filterPanelTopOffset: string = isEditMode ? '204px' : '90px';
+  const filterPanelTopOffset: string = isEditMode ? '155px' : '111px';
 
   // Get grid style with dynamic dimensions for VIEW mode
   const getGridItemStyle = (item: Layout) => {
@@ -544,58 +593,68 @@ export default function DropDragDashboard() {
     return (
       <>
         {isEditMode && (
-          <div className="absolute top-2 right-2 flex space-x-1" style={{ zIndex: 9999, pointerEvents: 'auto' }}>
+          <div className="absolute top-3 right-3 flex items-center gap-1.5" style={{ zIndex: 9999, pointerEvents: 'auto' }}>
             <button
               type="button"
-              className="non-draggable-visibility-btn bg-purple-500 hover:bg-purple-600 text-white px-2 py-1 rounded text-xs transition-colors flex items-center justify-center"
-              onClick={(e) => handleVisibilityClick(e, item.i)}
+              className="non-draggable-visibility-btn group relative bg-slate-100/90 backdrop-blur-sm hover:bg-indigo-100 text-slate-700 hover:text-indigo-700 p-2 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-slate-300/50 hover:border-indigo-400"
+              // onClick={(e) => handleVisibilityClick(e, item.i)}
+              disabled 
               onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
-              title="Manage Visibility"
+              title="Local Filters"
               style={{ pointerEvents: 'auto', cursor: 'pointer', position: 'relative', zIndex: 10000 }}
             >
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 4H21L14 11V18L10 21V11L3 4Z" />
               </svg>
             </button>
             <button
               type="button"
-              className="non-draggable-edit-btn bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs transition-colors flex items-center justify-center"
+              className="non-draggable-edit-btn group relative bg-slate-100/90 backdrop-blur-sm hover:bg-blue-100 text-slate-700 hover:text-blue-700 p-2 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-slate-300/50 hover:border-blue-400"
               onClick={(e) => handleEditClick(e, item.i)}
               onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
               title="Edit Chart"
               style={{ pointerEvents: 'auto', cursor: 'pointer', position: 'relative', zIndex: 10000 }}
             >
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
             <button
               type="button"
-              className="non-draggable-close-btn bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm transition-colors"
+              className="non-draggable-close-btn group relative bg-slate-100/90 backdrop-blur-sm hover:bg-red-100 text-slate-700 hover:text-red-700 p-2 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-slate-300/50 hover:border-red-400"
               onClick={(e) => handleRemoveClick(e, item.i)}
               onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
               title="Remove Chart"
               style={{ pointerEvents: 'auto', cursor: 'pointer', position: 'relative', zIndex: 10000 }}
             >
-              ×
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         )}
 
-        <div className="flex-1 p-2" style={{ minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 0 }}>
+        <div className="flex-1 p-4" style={{ minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 0 }}>
           {chartConfig ? (
             <ResizableChart key={`${item.i}-${variableUpdateTrigger}`} options={chartConfig} />
           ) : (
-            <div className="h-full flex items-center justify-center bg-gray-50 rounded border-2 border-dashed border-gray-300">
-              <div className="text-center">
-                <svg className="h-10 w-10 text-gray-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2 2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                <h3 className="text-sm font-medium text-gray-900 mb-1">Empty Chart</h3>
-                <p className="text-xs text-gray-500 mb-3">Click Edit to configure this chart</p>
+            <div className="h-full flex items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 rounded-xl border-2 border-dashed border-slate-300">
+              <div className="text-center px-6 py-8">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 mb-4">
+                  <svg className="h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2 2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-semibold text-slate-800 mb-2">Configure Your Chart</h3>
+                <p className="text-sm text-slate-600 mb-4 max-w-xs mx-auto">This chart is ready to be configured with your data and visualizations</p>
                 {isEditMode && (
-                  <button onClick={(e) => handleEditClick(e, item.i)} className="text-xs text-blue-600 hover:text-blue-800 underline">
+                  <button 
+                    onClick={(e) => handleEditClick(e, item.i)} 
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
                     Configure Chart
                   </button>
                 )}
@@ -608,99 +667,330 @@ export default function DropDragDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div 
+      className="min-h-screen"
+      style={{
+        background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+      }}
+    >
       <FilterPanel showFilters={showFilters} topOffset={filterPanelTopOffset} />
 
-      <div className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-6 py-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <img src="RBI.png" alt="Logo" className="h-16 w-16 inline-block mr-1" />
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Report Builder Intelligence</h1>
-              <p className="text-sm text-gray-600 mt-1">
-                {isEditMode ? "Edit mode: Drag, resize, and configure your charts" : "View mode: Dashboard is locked"}
-                <span className="ml-4 text-xs bg-gray-100 px-2 py-1 rounded">
-                  Variables: {Object.keys(availableVariables).length} |
-                  Visible: {visibleCharts.length} | Hidden: {hiddenChartCount} | Filters: {filterNames.length}
-                </span>
-              </p>
+      {/* Beautiful Purple Gradient Navbar - Matching EditChart */}
+      <div 
+        className="fixed top-0 left-0 right-0 z-50"
+        style={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          boxShadow: '0 4px 20px 0 rgba(102, 126, 234, 0.3)',
+        }}
+      >
+        <div className="px-6 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div 
+                className="flex items-center justify-center w-12 h-12 rounded-xl shadow-lg"
+                style={{
+                  background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                  boxShadow: '0 4px 15px rgba(245, 87, 108, 0.3)',
+                }}
+              >
+                <img src="RBI.png" alt="Logo" className="h-8 w-8" />
+              </div>
+              <div>
+                <h1 
+                  className="text-xl font-bold leading-tight drop-shadow-md"
+                  style={{ color: 'white', letterSpacing: '0.5px' }}
+                >
+                  Report Builder Intelligence
+                </h1>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-xs font-medium" style={{ color: 'rgba(255, 255, 255, 0.9)' }}>
+                    {isEditMode ? (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: '#fde047' }}></span>
+                        Edit Mode
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#86efac' }}></span>
+                        View Mode
+                      </span>
+                    )}
+                  </p>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '10px' }}>•</span>
+                  <div className="flex items-center gap-2">
+                    <span 
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white font-semibold backdrop-blur-sm"
+                      style={{ 
+                        fontSize: '10px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                      }}
+                    >
+                      <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                      {Object.keys(availableVariables).length}
+                    </span>
+                    <span 
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white font-semibold backdrop-blur-sm"
+                      style={{ 
+                        fontSize: '10px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                      }}
+                    >
+                      <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      {visibleCharts.length}
+                    </span>
+                    {hiddenChartCount > 0 && (
+                      <span 
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white font-semibold backdrop-blur-sm"
+                        style={{ 
+                          fontSize: '10px',
+                          backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                        }}
+                      >
+                        {hiddenChartCount}
+                      </span>
+                    )}
+                    <span 
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white font-semibold backdrop-blur-sm"
+                      style={{ 
+                        fontSize: '10px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                      }}
+                    >
+                      <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 7V4z" />
+                      </svg>
+                      {filterNames.length}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`px-4 py-2 rounded-lg transition-colors flex items-center relative ${
-                showFilters ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
-              </svg>
-              Filters
-            </button>
-
-            {isEditMode && (
-              <button onClick={toggleCompactType} className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-                Layout: {compactType === null ? "Free (Locked)" : compactType === "vertical" ? "Vertical" : "Horizontal"}
+            <div className="flex items-center gap-2">
+              <div className="mr-1">
+                <select
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedbranch(e.target.value)}
+                  className="bg-white/10 text-white text-sm px-3 py-1.5 rounded-lg border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/50 backdrop-blur-sm"
+                  style={{
+                    backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%)',
+                  }}
+                >
+                  {branchOptions.map((branch) => (
+                    <option 
+                      key={branch.id} 
+                      value={branch.id}
+                      style={{
+                        backgroundColor: '#667eea',
+                        color: 'white',
+                      }}
+                    >
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 backdrop-blur-sm ${
+                  showFilters 
+                    ? "text-white shadow-lg" 
+                    : "text-white hover:bg-white/20 border"
+                }`}
+                style={{
+                  backgroundColor: showFilters ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.1)',
+                  borderColor: showFilters ? 'transparent' : 'rgba(255, 255, 255, 0.2)',
+                }}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 7V4z" />
+                </svg>
+                Filters
+                {filterNames.length > 0 && (
+                  <span 
+                    className="inline-flex items-center justify-center min-w-[18px] h-4 px-1 rounded-full text-[10px] font-bold"
+                    style={{
+                      backgroundColor: showFilters ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.2)',
+                    }}
+                  >
+                    {filterNames.length}
+                  </span>
+                )}
               </button>
-            )}
 
-            <button
-              onClick={toggleEditMode}
-              className={`px-6 py-2 rounded-lg transition-colors flex items-center ${
-                isEditMode ? "bg-green-500 text-white hover:bg-green-600" : "bg-blue-500 text-white hover:bg-blue-600"
-              }`}
-            >
-              {isEditMode ? (
-                <>
-                  <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              {isEditMode && (
+                <button 
+                  onClick={toggleCompactType} 
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg hover:bg-white/20 border backdrop-blur-sm transition-all duration-200"
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                  }}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1v-3z" />
                   </svg>
-                  Save Dashboard
-                </>
-              ) : (
-                <>
-                  <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  Edit Dashboard
-                </>
+                  {compactType === null ? "Free" : compactType === "vertical" ? "Vertical" : "Horizontal"}
+                </button>
               )}
-            </button>
+
+              <button
+                onClick={toggleEditMode}
+                className={`inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 shadow-lg ${
+                  isEditMode 
+                    ? "text-white shadow-green-500/50" 
+                    : "text-purple-600 shadow-white/50 hover:shadow-white/70"
+                }`}
+                style={{
+                  background: isEditMode 
+                    ? 'linear-gradient(to right, #10b981, #14b8a6)'
+                    : 'white',
+                }}
+              >
+                {isEditMode ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Save
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {isEditMode && (
-        <div className="fixed top-20 left-0 right-0 z-40 bg-white border-b border-gray-200 px-6 py-4 shadow-sm" style={{ top: '88px' }}>
-          <div className="flex items-center space-x-4">
-            <div
-              className="droppable-element flex items-center justify-center bg-blue-50 border-2 border-dashed border-blue-300 rounded-lg px-4 py-3 cursor-grab hover:bg-blue-100 transition-colors select-none"
-              draggable={true}
-              unselectable="on"
-              onDragStart={(e) => {
-                e.dataTransfer.setData("text/plain", "");
-                e.dataTransfer.effectAllowed = "move";
-                setTimeout(() => { e.dataTransfer.dropEffect = "move"; }, 0);
+      {/* Dashboard Name Section - Visible in both Edit and View modes */}
+      <div 
+        className="fixed left-0 right-0 z-40"
+        style={{
+          top: '68px',
+          background: 'linear-gradient(135deg, #e0e7ff 0%, #ddd6fe 100%)',
+          borderBottom: '2px solid rgba(139, 92, 246, 0.3)',
+          boxShadow: '0 2px 12px rgba(139, 92, 246, 0.15)',
+        }}
+      >
+        <div className="px-6 py-2 flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div 
+              className="flex items-center justify-center w-7 h-7 rounded-lg"
+              style={{
+                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(124, 58, 237, 0.15) 100%)',
               }}
-              onDragEnd={(e) => { e.preventDefault(); }}
             >
-              <svg className="h-5 w-5 text-blue-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              <svg className="w-4 h-4 text-indigo-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <span className="text-blue-700 font-medium">Drag to add new chart</span>
             </div>
-            <div className="text-sm text-gray-500">
-              Drag the element above into the grid to create a new chart widget
+            <span className="text-sm font-semibold text-indigo-900">Dashboard:</span>
+          </div>
+          
+          {isEditingName ? (
+            <input
+              ref={nameInputRef}
+              type="text"
+              value={dashboardName}
+              onChange={(e) => setDashboardName(e.target.value)}
+              onBlur={() => setIsEditingName(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') setIsEditingName(false);
+                if (e.key === 'Escape') {
+                  setDashboardName("My Dashboard");
+                  setIsEditingName(false);
+                }
+              }}
+              className="text-base font-bold text-gray-900 bg-white border-2 border-indigo-500 outline-none px-3 py-1 rounded-lg shadow-sm"
+              style={{ minWidth: '200px', maxWidth: '400px' }}
+            />
+          ) : (
+            <button
+              onClick={() => setIsEditingName(true)}
+              className="text-base font-bold text-indigo-900 hover:text-indigo-700 transition-colors px-3 py-1 rounded-lg hover:bg-white/40 border border-transparent hover:border-indigo-300"
+            >
+              {dashboardName}
+            </button>
+          )}
+          
+          <button
+            onClick={() => setIsEditingName(true)}
+            className="p-1 text-indigo-600 hover:text-indigo-700 hover:bg-white/40 rounded transition-colors"
+            title="Edit name"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Edit Mode Toolbar - Compact Inline */}
+      {isEditMode && (
+        <div 
+          className="fixed left-0 right-0 z-40"
+          style={{
+            top: '111px',
+            background: 'linear-gradient(135deg,rgb(204, 204, 224) 0%,rgb(205, 195, 250) 100%)',
+            borderBottom: '1px solid rgba(139, 92, 246, 0.2)',
+            boxShadow: '0 2px 8px rgba(139, 92, 246, 0.1)',
+          }}
+        >
+          <div className="px-6 py-2">
+            <div className="flex items-center justify-between">
+              {/* Left - Drag and Drop */}
+              <div className="flex items-center gap-3">
+                <div
+                  className="droppable-element group inline-flex items-center gap-2 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-600 hover:to-purple-600 border-2 border-dashed border-indigo-300 hover:border-solid hover:border-indigo-600 rounded-lg px-4 py-2 cursor-grab active:cursor-grabbing transition-all duration-200 shadow-sm hover:shadow-md select-none"
+                  draggable={true}
+                  unselectable="on"
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("text/plain", "");
+                    e.dataTransfer.effectAllowed = "move";
+                    setTimeout(() => { e.dataTransfer.dropEffect = "move"; }, 0);
+                  }}
+                  onDragEnd={(e) => { e.preventDefault(); }}
+                >
+                  <div className="flex items-center justify-center w-6 h-6 rounded bg-indigo-100 group-hover:bg-white/20">
+                    <svg className="w-4 h-4 text-indigo-600 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                  </div>
+                  <span className="text-sm font-semibold text-indigo-900 group-hover:text-white transition-colors">Drag to Add Chart</span>
+                </div>
+                
+                <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-blue-50 px-3 py-1.5 rounded-md border border-blue-200">
+                  <svg className="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="font-medium">Drag and drop to position charts</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      <div className={`p-2 transition-all duration-300 ${isEditMode ? 'pt-52' : 'pt-24'} ${showFilters ? 'mr-80' : 'mr-0'}`} style={{ position: 'relative' }}>
-        
-        {/* {console.log('🎨 [RENDER] Edit mode:', isEditMode, '| tempCompactType:', tempCompactType, '| compactType:', compactType, '| gridStateKey:', gridStateKey)} */}
+      {/* Main Content Area with Dotted Background */}
+      <div 
+        className={`px-2 pb-16 transition-all duration-300 ${isEditMode ? 'pt-48' : 'pt-32'} ${showFilters ? 'mr-80' : 'mr-0'}`}
+        style={{
+          backgroundImage: isEditMode ? `radial-gradient(circle, #94a3b8 1.5px, transparent 1.5px)` : 'none',
+          backgroundSize: isEditMode ? '24px 24px' : 'auto',
+          backgroundPosition: isEditMode ? '0 0' : 'initial',
+          minHeight: 'calc(100vh - 80px)',
+        }}
+      >
         
         {/* EDIT MODE: Use ResponsiveGridLayout */}
         {isEditMode && (
@@ -719,21 +1009,23 @@ export default function DropDragDashboard() {
             onDrop={onDrop}
             onDrag={onDrag}
             onResize={onResize}
-            droppingItem={{ i: "__dropping-elem__", w: 6, h: 2 }}
+            droppingItem={{ i: "__dropping-elem__", w: 6, h: 4 }}
             isDroppable={true}
             isResizable={true}
             isDraggable={true}
             draggableCancel=".non-draggable-close-btn, .non-draggable-edit-btn, .non-draggable-visibility-btn"
             resizeHandles={resizeHandle}
             allowOverlap={false}
-            margin={[10, 10]}
+            margin={[12, 12]}
             style={{ minHeight: '400px' }}
           >
             {visibleCharts.map((item: Layout) => (
               <div
                 key={item.i}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+                className="rounded-xl shadow-md hover:shadow-xl border overflow-hidden transition-all duration-200 backdrop-blur-sm"
                 style={{
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+                  borderColor: 'rgba(203, 213, 225, 0.6)',
                   display: "flex",
                   flexDirection: "column",
                   position: "relative",
@@ -747,7 +1039,7 @@ export default function DropDragDashboard() {
           </ResponsiveGridLayout>
         )}
 
-        {/* VIEW MODE: Use ResponsiveGridLayout (same as edit but not draggable/resizable) */}
+        {/* VIEW MODE: Use ResponsiveGridLayout */}
         {!isEditMode && (
           <ResponsiveGridLayout
             key={`grid-view-${gridStateKey}`}
@@ -764,14 +1056,16 @@ export default function DropDragDashboard() {
             isResizable={false}
             isDraggable={false}
             allowOverlap={false}
-            margin={[10, 10]}
+            margin={[12, 12]}
             style={{ minHeight: '400px' }}
           >
             {visibleCharts.map((item: Layout) => (
               <div
                 key={item.i}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+                className="rounded-xl shadow-md border overflow-hidden backdrop-blur-sm"
                 style={{
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+                  borderColor: 'rgba(203, 213, 225, 0.6)',
                   display: "flex",
                   flexDirection: "column",
                   position: "relative",
@@ -785,53 +1079,201 @@ export default function DropDragDashboard() {
           </ResponsiveGridLayout>
         )}
 
+        {/* Empty State */}
         {(!layouts[currentBreakpoint] || layouts[currentBreakpoint].length === 0) && (
-          <div className="text-center py-12">
-            <svg className="h-16 w-16 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2 2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Charts Yet</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              {isEditMode
-                ? "Drag the 'Add Chart' element into this area to create your first visualization"
-                : "Switch to edit mode to add charts to your dashboard"
-              }
-            </p>
-            {!isEditMode && (
-              <button onClick={toggleEditMode} className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
-                Enter Edit Mode
-              </button>
-            )}
+          <div className="flex items-center justify-center py-24">
+            <div className="text-center max-w-md">
+              <div 
+                className="inline-flex items-center justify-center w-20 h-20 rounded-full mb-6"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(203, 213, 225, 0.5) 0%, rgba(147, 197, 253, 0.3) 100%)',
+                }}
+              >
+                <svg className="h-10 w-10 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2 2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-slate-800 mb-3">Your Dashboard is Empty</h3>
+              <p className="text-slate-600 mb-6 leading-relaxed">
+                {isEditMode
+                  ? "Start building your dashboard by dragging the 'Add Chart' element into the dotted area"
+                  : "Switch to edit mode to add charts and visualizations to your dashboard"
+                }
+              </p>
+              {!isEditMode && (
+                <button 
+                  onClick={toggleEditMode} 
+                  className="inline-flex items-center gap-2 px-6 py-3 text-white font-semibold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
+                  style={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    boxShadow: '0 4px 20px 0 rgba(102, 126, 234, 0.3)',
+                  }}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Enter Edit Mode
+                </button>
+              )}
+            </div>
           </div>
         )}
 
+        {/* All Charts Hidden State */}
         {visibleCharts.length === 0 && layouts[currentBreakpoint]?.length > 0 && (
-          <div className="text-center py-12">
-            <svg className="h-16 w-16 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">All Charts Hidden</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              All {hiddenChartCount} chart{hiddenChartCount > 1 ? 's are' : ' is'} currently hidden by visibility conditions.
-            </p>
-            <p className="text-xs text-gray-500">
-              Change filter values or update visibility conditions in Others section to show charts.
-            </p>
-          </div>
-        )}
-
-        {hiddenChartCount > 0 && visibleCharts.length > 0 && (
-          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex items-center">
-              <svg className="h-5 w-5 text-yellow-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-sm text-yellow-800">
-                <strong>{hiddenChartCount}</strong> chart{hiddenChartCount > 1 ? 's are' : ' is'} currently hidden by visibility conditions.
+          <div className="flex items-center justify-center py-24">
+            <div className="text-center max-w-md">
+              <div 
+                className="inline-flex items-center justify-center w-20 h-20 rounded-full mb-6"
+                style={{
+                  background: 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%)',
+                }}
+              >
+                <svg className="h-10 w-10 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-slate-800 mb-3">All Charts Hidden</h3>
+              <p className="text-slate-600 mb-2">
+                All {hiddenChartCount} chart{hiddenChartCount > 1 ? 's are' : ' is'} currently hidden by visibility conditions.
+              </p>
+              <p className="text-sm text-slate-500">
+                Adjust your filter values or update visibility settings to display charts
               </p>
             </div>
           </div>
         )}
+
+        {/* Hidden Charts Alert */}
+        {hiddenChartCount > 0 && visibleCharts.length > 0 && (
+          <div 
+            className="mt-6 border rounded-xl p-4 shadow-md"
+            style={{
+              background: 'linear-gradient(135deg, #e0e7ff 0%, #ddd6fe 100%)',
+              borderColor: 'rgba(102, 126, 234, 0.3)',
+            }}
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <div 
+                  className="flex items-center justify-center w-8 h-8 rounded-lg"
+                  style={{ backgroundColor: 'rgba(139, 92, 246, 0.15)' }}
+                >
+                  <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-md font-medium text-indigo-900 hover:text-indigo-700 transition-colors">
+                  {hiddenChartCount} chart{hiddenChartCount > 1 ? 's are' : ' is'} hidden
+                </p>
+                <p className="text-xs text-indigo-900 hover:text-indigo-700 transition-colors mt-1">
+                  These charts are currently hidden based on your visibility conditions
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Tableau-Style Footer with View Tabs */}
+      <div 
+        className="fixed bottom-0 left-0 right-0 z-[60] border-t shadow-lg" 
+        style={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          borderTopColor: 'rgba(102, 126, 234, 0.3)',
+          boxShadow: '0 -4px 20px 0 rgba(102, 126, 234, 0.2)',
+        }}
+      >
+        <div className="flex items-center justify-between px-4 py-2">
+          {/* Left Side - View Tabs */}
+          <div className="flex items-center gap-1">
+            {views.map((view) => (
+              <button
+                key={view.id}
+                onClick={() => setSelectedView(view.id)}
+                className={`group relative px-4 py-1.5 text-sm font-medium rounded-t-lg transition-all ${
+                  selectedView === view.id
+                    ? "bg-white text-gray-900 shadow-md"
+                    : "bg-transparent text-white hover:bg-white/20 hover:text-white"
+                }`}
+              >
+                {view.name}
+                {selectedView === view.id && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
+                )}
+              </button>
+            ))}
+            
+            {/* Add View Button */}
+            <button
+              className="ml-2 p-1.5 text-white/60 hover:text-white hover:bg-white/20 rounded transition-colors"
+              title="Add View"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Download options */}
+          <div className="flex items-center justify-end">
+            <div className="flex items-center gap-3 mr-3">
+              <select
+                value={selectDownloadOption}
+                onChange={(e) => setSelectedDownloadOption(e.target.value)}
+                className="bg-white/10 text-white text-sm px-3 py-1.5 rounded border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/50 backdrop-blur-sm"
+                style={{
+                  backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%)',
+                }}
+              >
+                {downloadOptions.map((view) => (
+                  <option 
+                    key={view.id} 
+                    value={view.id}
+                    style={{
+                      backgroundColor: '#667eea',
+                      color: 'white',
+                    }}
+                  >
+                    {view.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Right Side - View Options Dropdown */}
+            <div className="flex items-center gap-3">
+              <select
+                value={selectedCustomView}
+                onChange={(e) => setSelectedCustomView(e.target.value)}
+                className="bg-white/10 text-white text-sm px-3 py-1.5 rounded border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/50 backdrop-blur-sm"
+                style={{
+                  backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%)',
+                }}
+              >
+                {customViews.map((view) => (
+                  <option 
+                    key={view.id} 
+                    value={view.id}
+                    style={{
+                      backgroundColor: '#667eea',
+                      color: 'white',
+                    }}
+                  >
+                    {view.name}
+                  </option>
+                ))}
+              </select>
+              
+              <div className="text-xs text-white/80 font-medium">
+                {visibleCharts.length} sheet{visibleCharts.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+          </div>
+          
+        </div>
       </div>
     </div>
   );

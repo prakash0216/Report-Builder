@@ -94,7 +94,6 @@ function TabPanel(props: TabPanelProps) {
 
 // Variable Display Component
 function VariableDisplay({ name }: { name: string }) {
-    const theme = useTheme();
     const rawValue = useRecoilValue(variableAtomFamily(name));
     const parsedValue = safeParse(rawValue);
     const displayString = typeof parsedValue === 'object'
@@ -113,13 +112,13 @@ function VariableDisplay({ name }: { name: string }) {
         if (type === 'array') {
             return {
                 label: `Array (${parsedValue.length})`,
-                color: 'primary' as const,
+                gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             };
         }
-        if (type === 'object') return { label: 'Object', color: 'secondary' as const };
-        if (type === 'number') return { label: 'Number', color: 'success' as const };
-        if (type === 'string') return { label: 'String', color: 'info' as const };
-        return { label: type, color: 'default' as const };
+        if (type === 'object') return { label: 'Object', gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' };
+        if (type === 'number') return { label: 'Number', gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' };
+        if (type === 'string') return { label: 'String', gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' };
+        return { label: type, gradient: 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)' };
     };
 
     const typeInfo = getTypeInfo();
@@ -130,26 +129,46 @@ function VariableDisplay({ name }: { name: string }) {
             sx={{
                 mb: 2,
                 borderRadius: 2,
+                border: '1px solid rgba(102, 126, 234, 0.2)',
                 transition: 'all 0.2s ease-in-out',
                 '&:hover': {
-                    boxShadow: theme.shadows[4],
+                    boxShadow: '0 8px 24px rgba(102, 126, 234, 0.2)',
                     transform: 'translateY(-2px)',
+                    borderColor: '#667eea',
                 },
             }}
         >
             <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                    <Typography variant="subtitle1" fontWeight="600" color="primary.dark">
+                    <Typography 
+                        variant="subtitle1" 
+                        fontWeight="700"
+                        sx={{
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            backgroundClip: 'text',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                        }}
+                    >
                         {name}
                     </Typography>
-                    <Chip label={typeInfo.label} size="small" color={typeInfo.color} />
+                    <Chip 
+                        label={typeInfo.label} 
+                        size="small" 
+                        sx={{
+                            background: typeInfo.gradient,
+                            color: 'white',
+                            fontWeight: 600,
+                        }}
+                    />
                 </Box>
                 <Paper
                     variant="outlined"
                     sx={{
                         p: 2,
-                        bgcolor: alpha(theme.palette.grey[50], 0.5),
-                        borderRadius: 1.5,
+                        background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.5) 0%, rgba(241, 245, 249, 0.5) 100%)',
+                        borderRadius: 2,
+                        border: '1px solid rgba(102, 126, 234, 0.2)',
                         maxHeight: 200,
                         overflow: 'auto',
                     }}
@@ -165,7 +184,7 @@ function VariableDisplay({ name }: { name: string }) {
                                 wordBreak: 'break-word',
                                 m: 0,
                                 cursor: displayString.length > 250 ? 'help' : 'default',
-                                color: 'text.secondary',
+                                color: '#475569',
                             }}
                         >
                             {truncatedDisplay}
@@ -179,7 +198,6 @@ function VariableDisplay({ name }: { name: string }) {
 
 // Filter Display Component
 function FilterDisplay({ name }: { name: string }) {
-    const theme = useTheme();
     const parsedValue = useRecoilValue(liveFilterFamily(name));
     const displayString = parsedValue !== undefined && parsedValue !== null
         ? (typeof parsedValue === 'object' ? JSON.stringify(parsedValue, null, 2) : String(parsedValue))
@@ -197,10 +215,10 @@ function FilterDisplay({ name }: { name: string }) {
         if (type === 'array') {
             return {
                 label: `Array (${parsedValue.length})`,
-                color: 'info' as const,
+                gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
             };
         }
-        return { label: type, color: 'info' as const };
+        return { label: type, gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' };
     };
 
     const typeInfo = getTypeInfo();
@@ -211,27 +229,47 @@ function FilterDisplay({ name }: { name: string }) {
             sx={{
                 mb: 2,
                 borderRadius: 2,
-                bgcolor: alpha(theme.palette.info.light, 0.08),
+                border: '1px solid rgba(79, 172, 254, 0.3)',
+                background: 'linear-gradient(135deg, rgba(79, 172, 254, 0.05) 0%, rgba(0, 242, 254, 0.05) 100%)',
                 transition: 'all 0.2s ease-in-out',
                 '&:hover': {
-                    boxShadow: theme.shadows[4],
+                    boxShadow: '0 8px 24px rgba(79, 172, 254, 0.2)',
                     transform: 'translateY(-2px)',
+                    borderColor: '#4facfe',
                 },
             }}
         >
             <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                    <Typography variant="subtitle1" fontWeight="600" color="info.dark">
+                    <Typography 
+                        variant="subtitle1" 
+                        fontWeight="700"
+                        sx={{
+                            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                            backgroundClip: 'text',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                        }}
+                    >
                         {name}
                     </Typography>
-                    <Chip label={typeInfo.label} size="small" color={typeInfo.color} variant="outlined" />
+                    <Chip 
+                        label={typeInfo.label} 
+                        size="small"
+                        sx={{
+                            background: typeInfo.gradient,
+                            color: 'white',
+                            fontWeight: 600,
+                        }}
+                    />
                 </Box>
                 <Paper
                     variant="outlined"
                     sx={{
                         p: 2,
                         bgcolor: 'white',
-                        borderRadius: 1.5,
+                        borderRadius: 2,
+                        border: '1px solid rgba(79, 172, 254, 0.2)',
                         maxHeight: 200,
                         overflow: 'auto',
                     }}
@@ -245,7 +283,7 @@ function FilterDisplay({ name }: { name: string }) {
                             whiteSpace: 'pre-wrap',
                             wordBreak: 'break-word',
                             m: 0,
-                            color: 'text.secondary',
+                            color: '#475569',
                         }}
                     >
                         {displayString}
@@ -270,24 +308,32 @@ function StoredLogicItem({
     onExecute: (logic: StoredLogic) => Promise<void>;
     onDownload?: (logic: StoredLogic) => void;
 }) {
-    const theme = useTheme();
-
     return (
         <Card
             variant="outlined"
             sx={{
                 mb: 2,
                 borderRadius: 2,
+                border: '1px solid rgba(102, 126, 234, 0.2)',
                 transition: 'all 0.2s ease-in-out',
                 '&:hover': {
-                    boxShadow: theme.shadows[6],
-                    borderColor: 'primary.main',
+                    boxShadow: '0 8px 24px rgba(102, 126, 234, 0.2)',
+                    borderColor: '#667eea',
                 },
             }}
         >
             <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                    <Typography variant="h6" fontWeight="600" color="primary">
+                    <Typography 
+                        variant="h6" 
+                        fontWeight="700"
+                        sx={{
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            backgroundClip: 'text',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                        }}
+                    >
                         {logic.variableName}
                     </Typography>
                     <Stack direction="row" spacing={0.5}>
@@ -295,8 +341,8 @@ function StoredLogicItem({
                             <IconButton
                                 size="small"
                                 sx={{
-                                    color: 'primary.main',
-                                    '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) },
+                                    color: '#667eea',
+                                    '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.1)' },
                                 }}
                                 onClick={() => onEdit(logic)}
                             >
@@ -307,8 +353,8 @@ function StoredLogicItem({
                             <IconButton
                                 size="small"
                                 sx={{
-                                    color: 'success.main',
-                                    '&:hover': { bgcolor: alpha(theme.palette.success.main, 0.1) },
+                                    color: '#10b981',
+                                    '&:hover': { bgcolor: 'rgba(16, 185, 129, 0.1)' },
                                 }}
                                 onClick={() => onExecute(logic)}
                             >
@@ -320,8 +366,8 @@ function StoredLogicItem({
                                 <IconButton
                                     size="small"
                                     sx={{
-                                        color: 'info.main',
-                                        '&:hover': { bgcolor: alpha(theme.palette.info.main, 0.1) },
+                                        color: '#4facfe',
+                                        '&:hover': { bgcolor: 'rgba(79, 172, 254, 0.1)' },
                                     }}
                                     onClick={() => onDownload(logic)}
                                 >
@@ -333,8 +379,8 @@ function StoredLogicItem({
                             <IconButton
                                 size="small"
                                 sx={{
-                                    color: 'error.main',
-                                    '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.1) },
+                                    color: '#ef4444',
+                                    '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' },
                                 }}
                                 onClick={() => onDelete(logic.id)}
                             >
@@ -347,8 +393,9 @@ function StoredLogicItem({
                     variant="outlined"
                     sx={{
                         p: 2,
-                        bgcolor: alpha(theme.palette.grey[50], 0.5),
-                        borderRadius: 1.5,
+                        background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.5) 0%, rgba(241, 245, 249, 0.5) 100%)',
+                        borderRadius: 2,
+                        border: '1px solid rgba(102, 126, 234, 0.2)',
                         maxHeight: 150,
                         overflow: 'auto',
                     }}
@@ -362,7 +409,7 @@ function StoredLogicItem({
                             whiteSpace: 'pre-wrap',
                             wordBreak: 'break-word',
                             m: 0,
-                            color: 'text.secondary',
+                            color: '#475569',
                         }}
                     >
                         {truncateText(logic.logic, 400)}
@@ -374,14 +421,22 @@ function StoredLogicItem({
                         label={`Created: ${new Date(logic.createdAt).toLocaleDateString()}`}
                         size="small"
                         variant="outlined"
+                        sx={{
+                            borderColor: '#667eea',
+                            color: '#667eea',
+                            fontWeight: 600,
+                        }}
                     />
                     {logic.lastExecuted && (
                         <Chip
                             icon={<PlayArrowIcon fontSize="small" />}
                             label={`Last run: ${new Date(logic.lastExecuted).toLocaleString()}`}
                             size="small"
-                            variant="outlined"
-                            color="success"
+                            sx={{
+                                background: 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)',
+                                color: 'white',
+                                fontWeight: 600,
+                            }}
                         />
                     )}
                 </Box>
@@ -802,13 +857,31 @@ export default function Hooks() {
     const sortedLogicsForDisplay = [...storedLogics].sort((a, b) => a.createdAt - b.createdAt);
 
     return (
-        <Box sx={{ width: '100%', p: { xs: 2, md: 4 }, mx: 'auto' }}>
+        <Box 
+            sx={{ 
+                width: '100%', 
+                p: { xs: 2, md: 4 }, 
+                mx: 'auto',
+                background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+                minHeight: '100vh',
+            }}
+        >
             {/* Header */}
             <Box mb={4}>
-                <Typography variant="h4" fontWeight="700" gutterBottom color="primary">
+                <Typography 
+                    variant="h4" 
+                    fontWeight="700" 
+                    gutterBottom
+                    sx={{
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        backgroundClip: 'text',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                    }}
+                >
                     Dynamic Calculation Engine
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="#64748b" fontWeight={500}>
                     Create, manage, and execute dynamic calculations with live data
                 </Typography>
             </Box>
@@ -817,8 +890,11 @@ export default function Hooks() {
             <Paper
                 elevation={0}
                 sx={{
-                    borderRadius: 2,
-                    border: `1px solid ${theme.palette.divider}`
+                    borderRadius: 3,
+                    border: '1px solid rgba(102, 126, 234, 0.2)',
+                    background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+                    backdropFilter: 'blur(10px)',
+                    boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
                 }}
             >
                 <Tabs
@@ -828,8 +904,19 @@ export default function Hooks() {
                     sx={{
                         '& .MuiTab-root': {
                             textTransform: 'none',
-                            fontWeight: 600,
+                            fontWeight: 700,
                             fontSize: '0.95rem',
+                            color: '#64748b',
+                            '&.Mui-selected': {
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                backgroundClip: 'text',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                            },
+                        },
+                        '& .MuiTabs-indicator': {
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            height: 3,
                         },
                     }}
                 >
@@ -841,38 +928,124 @@ export default function Hooks() {
 
             {/* Global Alerts */}
             {error && (
-                <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
+                <Alert 
+                    severity="error" 
+                    onClose={() => setError(null)} 
+                    sx={{ 
+                        mb: 2, 
+                        mt: 2,
+                        borderRadius: 2,
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        background: 'linear-gradient(135deg, rgba(254, 226, 226, 0.5) 0%, rgba(254, 202, 202, 0.5) 100%)',
+                    }}
+                >
                     {error}
                 </Alert>
             )}
             {success && (
-                <Alert severity="success" onClose={() => setSuccess(null)} sx={{ mb: 2 }}>
+                <Alert 
+                    severity="success" 
+                    onClose={() => setSuccess(null)} 
+                    sx={{ 
+                        mb: 2, 
+                        mt: 2,
+                        borderRadius: 2,
+                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                        background: 'linear-gradient(135deg, rgba(209, 250, 229, 0.5) 0%, rgba(167, 243, 208, 0.5) 100%)',
+                    }}
+                >
                     {success}
                 </Alert>
             )}
 
             {/* Tab 1: Create Calculation */}
             <TabPanel value={tabValue} index={0}>
-                <Paper elevation={1} sx={{ p: 4, borderRadius: 2,boxShadow: 3 }}>
-                    <Typography variant="h6" fontWeight="600" gutterBottom>
-                        Create or Update Calculation
-                    </Typography>
+                <Paper 
+                    elevation={0} 
+                    sx={{ 
+                        p: 4, 
+                        borderRadius: 3,
+                        background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+                        backdropFilter: 'blur(10px)',
+                        border: '1px solid rgba(102, 126, 234, 0.2)',
+                        boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
+                    }}
+                >
+                    <Box
+                        sx={{
+                            display:'flex',
+                            alignItems:'center',
+                            justifyContent:'space-between'
+                        }}
+                        >
+                        <Typography 
+                            variant="h6" 
+                            fontWeight="700" 
+                            gutterBottom
+                            sx={{
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                backgroundClip: 'text',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                            }}
+                        >
+                            Create or Update Calculation
+                        </Typography>
+
+                        <Button
+                            variant="contained"
+                            sx={{ 
+                            textTransform: 'none',
+                            fontWeight: 700,
+                            borderRadius: 2,
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            '&:hover': {
+                                background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                            },
+                            }}
+                        >
+                            Generate Calculations with AI
+                        </Button>
+                    </Box>
 
                     {/* Scope Accordion */}
                     <Accordion
                         expanded={isScopeExpanded}
                         onChange={() => setIsScopeExpanded(!isScopeExpanded)}
-                        sx={{ mt: 3, mb: 3, boxShadow: 'none', border: `1px solid ${theme.palette.divider}` }}
+                        sx={{ 
+                            mt: 3, 
+                            mb: 3, 
+                            boxShadow: 'none', 
+                            border: '1px solid rgba(102, 126, 234, 0.2)',
+                            borderRadius: '8px !important',
+                            '&:before': { display: 'none' },
+                        }}
                     >
-                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Typography variant="subtitle2" fontWeight="600" color="primary">
+                        <AccordionSummary 
+                            expandIcon={<ExpandMoreIcon sx={{ color: '#667eea' }} />}
+                            sx={{
+                                '&:hover': {
+                                    bgcolor: 'rgba(102, 126, 234, 0.05)',
+                                },
+                            }}
+                        >
+                            <Typography 
+                                variant="subtitle2" 
+                                fontWeight="700"
+                                sx={{
+                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    backgroundClip: 'text',
+                                    WebkitBackgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent',
+                                }}
+                            >
                                 📚 Available Variables in Logic (Scope)
                             </Typography>
                         </AccordionSummary>
-                        <AccordionDetails>
+                        <AccordionDetails sx={{ pt: 2 }}>
                             <Stack spacing={2}>
                                 <Box>
-                                    <Typography variant="body2" fontWeight="600" color="primary.dark" gutterBottom>
+                                    <Typography variant="body2" fontWeight="700" color="#1e293b" gutterBottom>
                                         Variables (Calculated):
                                     </Typography>
                                     <Typography
@@ -880,16 +1053,18 @@ export default function Hooks() {
                                         component="div"
                                         sx={{
                                             fontFamily: 'monospace',
-                                            bgcolor: alpha(theme.palette.grey[100], 0.5),
-                                            p: 1,
-                                            borderRadius: 1,
+                                            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                                            p: 1.5,
+                                            borderRadius: 1.5,
+                                            color: '#667eea',
+                                            fontWeight: 600,
                                         }}
                                     >
                                         {variableNames.size > 0 ? Array.from(variableNames).join(', ') : 'None'}
                                     </Typography>
                                 </Box>
                                 <Box>
-                                    <Typography variant="body2" fontWeight="600" color="primary.dark" gutterBottom>
+                                    <Typography variant="body2" fontWeight="700" color="#1e293b" gutterBottom>
                                         Parameters (Static):
                                     </Typography>
                                     <Typography
@@ -897,16 +1072,18 @@ export default function Hooks() {
                                         component="div"
                                         sx={{
                                             fontFamily: 'monospace',
-                                            bgcolor: alpha(theme.palette.grey[100], 0.5),
-                                            p: 1,
-                                            borderRadius: 1,
+                                            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                                            p: 1.5,
+                                            borderRadius: 1.5,
+                                            color: '#667eea',
+                                            fontWeight: 600,
                                         }}
                                     >
                                         {parameterNames.length > 0 ? Array.from(parameterNames).join(', ') : 'None'}
                                     </Typography>
                                 </Box>
                                 <Box>
-                                    <Typography variant="body2" fontWeight="600" color="primary.dark" gutterBottom>
+                                    <Typography variant="body2" fontWeight="700" color="#1e293b" gutterBottom>
                                         Filters (Interactive):
                                     </Typography>
                                     <Typography
@@ -914,9 +1091,11 @@ export default function Hooks() {
                                         component="div"
                                         sx={{
                                             fontFamily: 'monospace',
-                                            bgcolor: alpha(theme.palette.grey[100], 0.5),
-                                            p: 1,
-                                            borderRadius: 1,
+                                            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                                            p: 1.5,
+                                            borderRadius: 1.5,
+                                            color: '#667eea',
+                                            fontWeight: 600,
                                         }}
                                     >
                                         {filterNames.length > 0 ? Array.from(filterNames).join(', ') : 'None'}
@@ -942,11 +1121,22 @@ export default function Hooks() {
                                     : 'Example: [1, 2, 3, 4, 5].map(x => x * 2)'
                             }
                             helperText="Write your JavaScript calculation logic here"
-                            InputProps={{
-                                sx: {
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
                                     fontFamily: '"Fira Code", "Courier New", monospace',
                                     fontSize: '0.9rem',
-                                    borderRadius: 1.5,
+                                    '& fieldset': {
+                                        borderColor: 'rgba(102, 126, 234, 0.3)',
+                                    },
+                                    '&:hover fieldset': {
+                                        borderColor: '#667eea',
+                                    },
+                                    '&.Mui-focused fieldset': {
+                                        borderColor: '#667eea',
+                                    },
+                                },
+                                '& .MuiInputLabel-root.Mui-focused': {
+                                    color: '#667eea',
                                 },
                             }}
                         />
@@ -962,8 +1152,21 @@ export default function Hooks() {
                                     ? `⚠️ Variable "${variableName}" exists. This will update it.`
                                     : 'Enter a unique name for your variable'
                             }
-                            InputProps={{
-                                sx: { borderRadius: 1.5 },
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    '& fieldset': {
+                                        borderColor: 'rgba(102, 126, 234, 0.3)',
+                                    },
+                                    '&:hover fieldset': {
+                                        borderColor: '#667eea',
+                                    },
+                                    '&.Mui-focused fieldset': {
+                                        borderColor: '#667eea',
+                                    },
+                                },
+                                '& .MuiInputLabel-root.Mui-focused': {
+                                    color: '#667eea',
+                                },
                             }}
                         />
 
@@ -975,7 +1178,18 @@ export default function Hooks() {
                                 onClick={executeCalculation}
                                 disabled={isLoading}
                                 startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />}
-                                sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}
+                                sx={{ 
+                                    borderRadius: 2, 
+                                    textTransform: 'none', 
+                                    fontWeight: 700,
+                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    '&:hover': {
+                                        background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                                    },
+                                    '&.Mui-disabled': {
+                                        background: '#e2e8f0',
+                                    },
+                                }}
                             >
                                 {isLoading
                                     ? 'Executing...'
@@ -992,7 +1206,17 @@ export default function Hooks() {
                                     onClick={manualRecalculateAll}
                                     disabled={isLoading}
                                     startIcon={<RefreshIcon />}
-                                    sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}
+                                    sx={{ 
+                                        borderRadius: 2, 
+                                        textTransform: 'none', 
+                                        fontWeight: 700,
+                                        borderColor: '#667eea',
+                                        color: '#667eea',
+                                        '&:hover': {
+                                            borderColor: '#5568d3',
+                                            bgcolor: 'rgba(102, 126, 234, 0.05)',
+                                        },
+                                    }}
                                 >
                                     Recalculate All ({storedLogics.length})
                                 </Button>
@@ -1004,13 +1228,32 @@ export default function Hooks() {
 
             {/* Tab 2: Stored Logics */}
             <TabPanel value={tabValue} index={1}>
-                <Paper elevation={1} sx={{ p: 4, borderRadius: 2,boxShadow: 3 }}>
+                <Paper 
+                    elevation={0} 
+                    sx={{ 
+                        p: 4, 
+                        borderRadius: 3,
+                        background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+                        backdropFilter: 'blur(10px)',
+                        border: '1px solid rgba(102, 126, 234, 0.2)',
+                        boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
+                    }}
+                >
                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
                         <Box>
-                            <Typography variant="h6" fontWeight="600">
+                            <Typography 
+                                variant="h6" 
+                                fontWeight="700"
+                                sx={{
+                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    backgroundClip: 'text',
+                                    WebkitBackgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent',
+                                }}
+                            >
                                 Stored Logics ({storedLogics.length})
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" color="#64748b" fontWeight={500}>
                                 Auto-recalculate when filters change
                             </Typography>
                         </Box>
@@ -1020,7 +1263,15 @@ export default function Hooks() {
                                 onClick={manualRecalculateAll}
                                 disabled={isLoading}
                                 startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
-                                sx={{ borderRadius: 1.5, textTransform: 'none' }}
+                                sx={{ 
+                                    borderRadius: 2, 
+                                    textTransform: 'none',
+                                    fontWeight: 700,
+                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    '&:hover': {
+                                        background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                                    },
+                                }}
                             >
                                 Recalculate All
                             </Button>
@@ -1029,14 +1280,37 @@ export default function Hooks() {
 
                     {storedLogics.length === 0 ? (
                         <Box textAlign="center" py={10}>
-                            <StorageIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-                            <Typography variant="h6" color="text.secondary" gutterBottom>
+                            <Box
+                                sx={{
+                                    width: 96,
+                                    height: 96,
+                                    margin: '0 auto 24px',
+                                    borderRadius: '50%',
+                                    background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                <StorageIcon sx={{ fontSize: 48, color: '#667eea', opacity: 0.6 }} />
+                            </Box>
+                            <Typography variant="h6" color="#475569" gutterBottom fontWeight={700}>
                                 No Stored Logics Yet
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" mb={3}>
+                            <Typography variant="body2" color="#94a3b8" mb={3}>
                                 Create your first calculation in the "Create Calculation" tab
                             </Typography>
-                            <Button variant="contained" onClick={() => setTabValue(0)} sx={{ borderRadius: 1.5 }}>
+                            <Button 
+                                variant="contained" 
+                                onClick={() => setTabValue(0)} 
+                                sx={{ 
+                                    borderRadius: 2,
+                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    '&:hover': {
+                                        background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                                    },
+                                }}
+                            >
                                 Create Calculation
                             </Button>
                         </Box>
@@ -1054,7 +1328,16 @@ export default function Hooks() {
                                     />
                                 ))}
                             </Box>
-                            <Alert severity="info" icon={<InfoIcon />} sx={{ mt: 3 }}>
+                            <Alert 
+                                severity="info" 
+                                icon={<InfoIcon />} 
+                                sx={{ 
+                                    mt: 3,
+                                    borderRadius: 2,
+                                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                                    background: 'linear-gradient(135deg, rgba(224, 242, 254, 0.5) 0%, rgba(186, 230, 253, 0.5) 100%)',
+                                }}
+                            >
                                 Logics execute in creation order. Later variables can reference earlier ones.
                             </Alert>
                         </>
@@ -1067,18 +1350,52 @@ export default function Hooks() {
                 <Grid container spacing={3}>
                     {/* Variables Column */}
                     <Grid size={{xs:12,md:6}}>
-                        <Paper elevation={1} sx={{ p: 3, borderRadius: 2, height: '100%', boxShadow: 3 }}>
-                            <Typography variant="h6" fontWeight="600" gutterBottom>
+                        <Paper 
+                            elevation={0} 
+                            sx={{ 
+                                p: 3, 
+                                borderRadius: 3, 
+                                height: '100%',
+                                background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+                                backdropFilter: 'blur(10px)',
+                                border: '1px solid rgba(102, 126, 234, 0.2)',
+                                boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
+                            }}
+                        >
+                            <Typography 
+                                variant="h6" 
+                                fontWeight="700" 
+                                gutterBottom
+                                sx={{
+                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    backgroundClip: 'text',
+                                    WebkitBackgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent',
+                                }}
+                            >
                                 Variables ({variableNames.size})
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" mb={3}>
+                            <Typography variant="body2" color="#64748b" mb={3} fontWeight={500}>
                                 Calculated values from your logics
                             </Typography>
                             <Box sx={{ maxHeight: '70vh', overflowY: 'auto', pr: 1 }}>
                                 {variableNames.size === 0 ? (
                                     <Box textAlign="center" py={8}>
-                                        <CodeIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Box
+                                            sx={{
+                                                width: 64,
+                                                height: 64,
+                                                margin: '0 auto 16px',
+                                                borderRadius: '50%',
+                                                background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                            }}
+                                        >
+                                            <CodeIcon sx={{ fontSize: 32, color: '#667eea', opacity: 0.6 }} />
+                                        </Box>
+                                        <Typography variant="body2" color="#94a3b8" fontWeight={500}>
                                             No variables yet. Create calculations to see them here!
                                         </Typography>
                                     </Box>
@@ -1091,18 +1408,52 @@ export default function Hooks() {
 
                     {/* Filters Column */}
                     <Grid size={{xs:12,md:6}}>
-                        <Paper elevation={1} sx={{ p: 3, borderRadius: 2, height: '100%', boxShadow: 3 }}>
-                            <Typography variant="h6" fontWeight="600" gutterBottom>
+                        <Paper 
+                            elevation={0} 
+                            sx={{ 
+                                p: 3, 
+                                borderRadius: 3, 
+                                height: '100%',
+                                background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+                                backdropFilter: 'blur(10px)',
+                                border: '1px solid rgba(79, 172, 254, 0.2)',
+                                boxShadow: '0 8px 32px rgba(79, 172, 254, 0.1)',
+                            }}
+                        >
+                            <Typography 
+                                variant="h6" 
+                                fontWeight="700" 
+                                gutterBottom
+                                sx={{
+                                    background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                                    backgroundClip: 'text',
+                                    WebkitBackgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent',
+                                }}
+                            >
                                 Active Filters ({filterNames.length})
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" mb={3}>
+                            <Typography variant="body2" color="#64748b" mb={3} fontWeight={500}>
                                 Current filter selections
                             </Typography>
                             <Box sx={{ maxHeight: '70vh', overflowY: 'auto', pr: 1 }}>
                                 {filterNames.length === 0 ? (
                                     <Box textAlign="center" py={8}>
-                                        <FilterListIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Box
+                                            sx={{
+                                                width: 64,
+                                                height: 64,
+                                                margin: '0 auto 16px',
+                                                borderRadius: '50%',
+                                                background: 'linear-gradient(135deg, rgba(79, 172, 254, 0.1) 0%, rgba(0, 242, 254, 0.1) 100%)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                            }}
+                                        >
+                                            <FilterListIcon sx={{ fontSize: 32, color: '#4facfe', opacity: 0.6 }} />
+                                        </Box>
+                                        <Typography variant="body2" color="#94a3b8" fontWeight={500}>
                                             No filters configured
                                         </Typography>
                                     </Box>
@@ -1117,4 +1468,3 @@ export default function Hooks() {
         </Box>
     );
 }
-
