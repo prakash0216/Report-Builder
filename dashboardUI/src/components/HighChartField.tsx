@@ -28,25 +28,18 @@ import {
 import {
   Save as SaveIcon,
   Dashboard as DashboardIcon,
-  Add as AddIcon,
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
   Code as CodeIcon,
   Error as ErrorIcon,
-  Info as InfoIcon,
   ShowChart as ShowChartIcon,
   BarChart as BarChartIcon,
   PieChart as PieChartIcon,
-  StackedBarChart as StackedBarChartIcon,
-  Timeline as TimelineIcon,
-  StackedBarChartTwoTone,
-  StackedBarChartSharp,
-  StackedLineChart,
   TableChart as TableChartIcon,
   Html as HtmlIcon,
   InsertChart as InsertChartIcon,
 } from '@mui/icons-material';
-import { AreaChartIcon, Columns, Columns2Icon, Columns3CogIcon, DonutIcon, ScatterChartIcon } from "lucide-react";
+import { AreaChartIcon, Columns3Icon, DonutIcon, ScatterChartIcon } from "lucide-react";
 
 const safeParse = (value: string): any => {
   try {
@@ -77,12 +70,12 @@ const highchartsTemplateList = [
       yAxis: { title: { text: "Values" } },
       series: [{ name: "Series 1", data: [10, 20, 15, 25, 30] }],
       credits: { enabled: false },
-      exporting:{enabled:true}
+      exporting: { enabled: true }
     }
   },
   {
     label: "Area Chart",
-    icon: <AreaChartIcon fontSize="small" />,
+    icon: <AreaChartIcon size={16} />,
     value: {
       chart: { type: "area" },
       title: { text: "Area Chart Example" },
@@ -90,23 +83,7 @@ const highchartsTemplateList = [
       yAxis: { title: { text: "Values" } },
       series: [{ name: "Data Set 1", data: [5, 9, 12, 8, 15] }],
       credits: { enabled: false },
-      exporting:{enabled:true}
-    }
-  },
-  {
-    label: "Stacked Area Chart",
-    icon: <StackedLineChart fontSize="small" />,
-    value: {
-      chart: { type: "area" },
-      title: { text: "Stacked Area Chart" },
-      plotOptions: { area: { stacking: "normal" } },
-      xAxis: { categories: ["Q1", "Q2", "Q3", "Q4"] },
-      series: [
-        { name: "Product A", data: [50, 60, 70, 80] },
-        { name: "Product B", data: [30, 40, 20, 50] }
-      ],
-      credits: { enabled: false },
-      exporting:{enabled:true}
+      exporting: { enabled: true }
     }
   },
   {
@@ -119,12 +96,12 @@ const highchartsTemplateList = [
       yAxis: { title: { text: "Values" } },
       series: [{ name: "Data", data: [100, 80, 120] }],
       credits: { enabled: false },
-      exporting:{enabled:true}
+      exporting: { enabled: true }
     }
   },
   {
     label: "Column Chart",
-    icon: <Columns3CogIcon fontSize="small" />,
+    icon: <Columns3Icon size={16} />,
     value: {
       chart: { type: "column" },
       title: { text: "Column Chart Example" },
@@ -132,24 +109,7 @@ const highchartsTemplateList = [
       yAxis: { title: { text: "Count" } },
       series: [{ name: "Sales", data: [100, 80, 120] }],
       credits: { enabled: false },
-      exporting:{enabled:true}
-    }
-  },
-  {
-    label: "Stacked Column Chart",
-    icon: <StackedBarChartSharp fontSize="small" />, 
-    value: {
-      chart: { type: "column" },
-      title: { text: "Stacked Column Chart" },
-      plotOptions: { column: { stacking: "normal" } },
-      xAxis: { categories: ["2020", "2021", "2022", "2023"] },
-      yAxis: { title: { text: "Total Revenue" } },
-      series: [
-        { name: "North Region", data: [120, 150, 130, 160] },
-        { name: "South Region", data: [80, 90, 110, 100] }
-      ],
-      credits: { enabled: false },
-      exporting:{enabled:true}
+      exporting: { enabled: true }
     }
   },
   {
@@ -176,12 +136,12 @@ const highchartsTemplateList = [
         ]
       }],
       credits: { enabled: false },
-      exporting:{enabled:true}
+      exporting: { enabled: true }
     }
   },
   {
     label: "Donut Chart",
-    icon: <DonutIcon fontSize="small" />,
+    icon: <DonutIcon size={16} />,
     value: {
       chart: { type: "pie" },
       title: { text: "Donut Chart Example" },
@@ -204,12 +164,12 @@ const highchartsTemplateList = [
         ]
       }],
       credits: { enabled: false },
-      exporting:{enabled:true}
+      exporting: { enabled: true }
     }
   },
   {
     label: "Scatter Chart",
-    icon: <ScatterChartIcon fontSize="small" />,
+    icon: <ScatterChartIcon size={16} />,
     value: {
       chart: { type: "scatter", zoomType: "xy" },
       title: { text: "Scatter Chart Example" },
@@ -223,8 +183,83 @@ const highchartsTemplateList = [
         ]
       }],
       credits: { enabled: false },
-      exporting:{enabled:true}
+      exporting: { enabled: true }
     }
+  }
+];
+
+const htmlTemplateList = [
+  {
+    label: "Custom",
+    value: ""
+  },
+  {
+    label: "KPI Card",
+    value: `<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; color: white; text-align: center;">
+  <h2 style="font-size: 48px; font-weight: bold; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">$1.2M</h2>
+  <p style="font-size: 18px; margin: 8px 0 0 0; opacity: 0.9;">Total Revenue</p>
+  <div style="margin-top: 16px; display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px;">
+    <span style="font-size: 24px;">↑</span>
+    <span style="font-size: 16px; font-weight: 600;">23.5%</span>
+  </div>
+</div>`
+  },
+  {
+    label: "Info Card",
+    value: `<div style="background: linear-gradient(135deg, #e0e7ff 0%, #ddd6fe 100%); border-radius: 12px; padding: 24px; height: 100%; display: flex; flex-direction: column;">
+  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+    <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px;">📊</div>
+    <div>
+      <h3 style="margin: 0; font-size: 20px; font-weight: bold; color: #1e293b;">Dashboard Stats</h3>
+      <p style="margin: 4px 0 0 0; font-size: 14px; color: #64748b;">Updated just now</p>
+    </div>
+  </div>
+  <div style="flex: 1; display: flex; flex-direction: column; gap: 12px;">
+    <div style="background: white; border-radius: 8px; padding: 16px; border-left: 4px solid #667eea;">
+      <p style="margin: 0; font-size: 14px; color: #64748b;">Active Users</p>
+      <p style="margin: 4px 0 0 0; font-size: 24px; font-weight: bold; color: #1e293b;">1,234</p>
+    </div>
+    <div style="background: white; border-radius: 8px; padding: 16px; border-left: 4px solid #10b981;">
+      <p style="margin: 0; font-size: 14px; color: #64748b;">Conversion Rate</p>
+      <p style="margin: 4px 0 0 0; font-size: 24px; font-weight: bold; color: #1e293b;">3.2%</p>
+    </div>
+  </div>
+</div>`
+  },
+  {
+    label: "Custom Text",
+    value: `<div style="padding: 24px; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%); border-radius: 12px;">
+  <div style="text-align: center;">
+    <h1 style="font-size: 32px; font-weight: bold; color: #78350f; margin: 0 0 16px 0;">Welcome!</h1>
+    <p style="font-size: 16px; color: #92400e; line-height: 1.6; max-width: 400px;">
+      This is a custom HTML card. You can add any HTML content with inline styles to create beautiful, custom visualizations.
+    </p>
+  </div>
+</div>`
+  },
+  {
+    label: "Metric Grid",
+    value: `<div style="padding: 20px; height: 100%; background: white; border-radius: 12px;">
+  <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: bold; color: #1e293b;">Key Metrics</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; height: calc(100% - 40px);">
+    <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 8px; padding: 16px; color: white;">
+      <p style="margin: 0; font-size: 12px; opacity: 0.9;">Sales</p>
+      <p style="margin: 8px 0 0 0; font-size: 28px; font-weight: bold;">$45K</p>
+    </div>
+    <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 8px; padding: 16px; color: white;">
+      <p style="margin: 0; font-size: 12px; opacity: 0.9;">Orders</p>
+      <p style="margin: 8px 0 0 0; font-size: 28px; font-weight: bold;">328</p>
+    </div>
+    <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 8px; padding: 16px; color: white;">
+      <p style="margin: 0; font-size: 12px; opacity: 0.9;">Customers</p>
+      <p style="margin: 8px 0 0 0; font-size: 28px; font-weight: bold;">892</p>
+    </div>
+    <div style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); border-radius: 8px; padding: 16px; color: white;">
+      <p style="margin: 0; font-size: 12px; opacity: 0.9;">Growth</p>
+      <p style="margin: 8px 0 0 0; font-size: 28px; font-weight: bold;">+12%</p>
+    </div>
+  </div>
+</div>`
   }
 ];
 
@@ -303,7 +338,7 @@ const VariableList = ({ variables }: { variables: Record<string, any> }) => {
           fontWeight: 500,
         }}
       >
-        Use <code style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>${`{variableName}`}</code> syntax in your JSON
+        Use <code style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>${`{variableName}`}</code> syntax in your JSON or HTML
       </Typography>
       
       <Box sx={{ maxHeight: 120, overflow: 'auto' }}>
@@ -393,6 +428,8 @@ const useAllVariables = (): Record<string, any> => {
 
 interface ChartConfigData {
   template?: string;
+  htmlContent?: string;
+  type?: 'chart' | 'html' | 'table' | 'tableChart';
   processed?: any;
   [key: string]: any;
 }
@@ -402,18 +439,48 @@ type ViewMode = 'chart' | 'table' | 'tableChart' | 'html';
 export default function HighChartField() {
   const { id } = useParams<{ id: string }>();
   const [chartConfig, setChartConfig] = useState<string>("");
+  const [htmlContent, setHtmlContent] = useState<string>("");
   const [chartConfigs, setChartConfigs] = useRecoilState<Record<string, ChartConfigData>>(chartConfigState);
   const [chartKey, setChartKey] = useState<number>(0);
   const [error, setError] = useState<string>("");
   const [showProcessedConfig, setShowProcessedConfig] = useState<boolean>(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("Custom/Manual");
+  const [selectedHtmlTemplate, setSelectedHtmlTemplate] = useState<string>("Custom");
   const [viewMode, setViewMode] = useState<ViewMode>('chart');
   const navigate = useNavigate();
 
   const availableVariables = useAllVariables();
 
+  // Load saved config on mount
+  useEffect(() => {
+    if (id && chartConfigs[id]) {
+      const config = chartConfigs[id];
+      
+      console.log('Loading config:', config);
+      
+      if (config.type === 'html') {
+        setViewMode('html');
+        setHtmlContent(config.htmlContent || '');
+        setChartConfig('');
+      } else if (config.type === 'table') {
+        setViewMode('table');
+        setChartConfig('');
+        setHtmlContent('');
+      } else if (config.type === 'tableChart') {
+        setViewMode('tableChart');
+        setChartConfig('');
+        setHtmlContent('');
+      } else {
+        setViewMode('chart');
+        setChartConfig(config.template || '');
+        setHtmlContent('');
+      }
+    }
+  }, [id, chartConfigs]);
+
+  // Process chart config
   const processedChartConfig = useMemo(() => {
-    if (!chartConfig.trim()) return null;
+    if (viewMode !== 'chart' || !chartConfig.trim()) return null;
     
     try {
       const configWithVariables = replaceVariableReferences(chartConfig, availableVariables);
@@ -424,39 +491,28 @@ export default function HighChartField() {
       setError(`Configuration error: ${error.message}`);
       return null;
     }
-  }, [chartConfig, availableVariables]);
+  }, [chartConfig, availableVariables, viewMode]);
 
-  // Load saved config on mount ONCE
-  useEffect(() => {
-    if (id && chartConfigs[id]) {
-      if (chartConfigs[id].template) {
-        setChartConfig(chartConfigs[id].template!);
-      } else if (typeof chartConfigs[id] === 'object') {
-        setChartConfig(JSON.stringify(chartConfigs[id], null, 2));
-      }
+  // Process HTML content
+  const processedHtmlConfig = useMemo(() => {
+    if (viewMode !== 'html' || !htmlContent.trim()) return null;
+    
+    try {
+      const htmlWithVariables = replaceVariableReferences(htmlContent, availableVariables);
+      return {
+        html: htmlWithVariables,
+        type: 'html' as const
+      };
+    } catch (error: any) {
+      console.warn('HTML processing error:', error);
+      return {
+        html: htmlContent,
+        type: 'html' as const
+      };
     }
-  }, [id]);
+  }, [htmlContent, availableVariables, viewMode]);
 
-  // Save to localStorage whenever chartConfigs changes
-  useEffect(() => {
-    if (Object.keys(chartConfigs).length > 0) {
-      localStorage.setItem('chart-configs', JSON.stringify(chartConfigs));
-    }
-  }, [chartConfigs]);
-
-  // Load from localStorage ONCE on mount
-  useEffect(() => {
-    const savedConfigs = localStorage.getItem('chart-configs');
-    if (savedConfigs) {
-      try {
-        const parsed = JSON.parse(savedConfigs);
-        setChartConfigs(parsed);
-      } catch (e) {
-        console.error('Failed to load saved configs:', e);
-      }
-    }
-  }, []);
-
+  // Handle chart config changes
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setChartConfig(value);
@@ -475,8 +531,10 @@ export default function HighChartField() {
       setChartConfigs(prev => ({
         ...prev,
         [id]: { 
-          template: value, 
-          processed: parsedConfig 
+          template: value,
+          type: 'chart',
+          processed: parsedConfig,
+          htmlContent: prev[id]?.htmlContent || ''
         },
       }));
 
@@ -485,6 +543,24 @@ export default function HighChartField() {
     } catch (error: any) {
       setError(`Invalid JSON: ${error.message}`);
     }
+  };
+
+  // Handle HTML content changes
+  const handleHtmlChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setHtmlContent(value);
+
+    if (!id) return;
+
+    setChartConfigs(prev => ({
+      ...prev,
+      [id]: { 
+        htmlContent: value,
+        type: 'html',
+        processed: { html: value, type: 'html' },
+        template: prev[id]?.template || ''
+      },
+    }));
   };
 
   const handleTemplateSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -505,16 +581,44 @@ export default function HighChartField() {
           ...prev,
           [id]: {
             template: templateJson,
-            processed: template.value
+            type: 'chart',
+            processed: template.value,
+            htmlContent: prev[id]?.htmlContent || ''
           }
         }));
+        setChartKey(prev => prev + 1);
       }
+    }
+  };
+
+  const handleHtmlTemplateSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const templateLabel = event.target.value;
+    setSelectedHtmlTemplate(templateLabel);
+    
+    if (templateLabel === "Custom") {
+      return;
+    }
+    
+    const template = htmlTemplateList.find(t => t.label === templateLabel);
+    if (template && template.value) {
+      setHtmlContent(template.value);
+      handleHtmlChange({ target: { value: template.value } } as any);
     }
   };
 
   const handleViewModeChange = (_event: React.MouseEvent<HTMLElement>, newMode: ViewMode | null) => {
     if (newMode !== null) {
       setViewMode(newMode);
+      
+      if (id && chartConfigs[id]) {
+        setChartConfigs(prev => ({
+          ...prev,
+          [id]: {
+            ...prev[id],
+            type: newMode
+          }
+        }));
+      }
     }
   };
 
@@ -525,7 +629,6 @@ export default function HighChartField() {
         flexDirection: 'column', 
         minHeight: '100vh', 
         background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
-        boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
       }}
     >
       <AppBar 
@@ -609,7 +712,7 @@ export default function HighChartField() {
 
       <Container maxWidth={false} sx={{ flex: 1, py: 3 }}>
         <Grid container spacing={3} sx={{ height: 'calc(100vh - 120px)' }}>
-          <Grid size={{xs:12,lg:6}} sx={{ display: 'flex', flexDirection: 'column' }}>
+          <Grid size={{ xs: 12, lg: 6 }} sx={{ display: 'flex', flexDirection: 'column' }}>
             <Paper 
               elevation={0} 
               sx={{ 
@@ -627,7 +730,6 @@ export default function HighChartField() {
               <Box sx={{ p: 2, borderBottom: '1px solid rgba(102, 126, 234, 0.2)' }}>
                 <VariableList variables={availableVariables} />
                 
-                {/* Toggle for view modes */}
                 <Box sx={{ mb: 2, mt: 2 }}>
                   <Typography 
                     variant="subtitle2" 
@@ -704,57 +806,54 @@ export default function HighChartField() {
                     {viewMode === 'tableChart' && 'Table + Chart Configuration'}
                     {viewMode === 'html' && 'HTML Configuration'}
                   </Typography>
+                  
                   {viewMode === 'chart' && (
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                      <TextField
-                        select
-                        label="Chart Type"
-                        value={selectedTemplate}
-                        onChange={handleTemplateSelect}
-                        size="small"
-                        sx={{ 
-                          minWidth: 200,
-                          '& .MuiInputBase-root': {
-                            bgcolor: 'white',
-                            borderRadius: 1.5,
-                          },
-                          '& .MuiOutlinedInput-root': {
-                            '& fieldset': {
-                              borderColor: 'rgba(102, 126, 234, 0.3)',
-                            },
-                            '&:hover fieldset': {
-                              borderColor: '#667eea',
-                            },
-                            '&.Mui-focused fieldset': {
-                              borderColor: '#667eea',
-                            },
-                          },
-                          '& .MuiInputLabel-root.Mui-focused': {
-                            color: '#667eea',
-                          },
-                        }}
-                      >
-                        {highchartsTemplateList.map((template) => (
-                          <MenuItem key={template.label} value={template.label}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              {template.icon}
-                              <Typography variant="body2">{template.label}</Typography>
-                            </Box>
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                      <Chip
-                        icon={<InfoIcon />}
-                        label="Live preview"
-                        size="small"
-                        variant="outlined"
-                        sx={{
-                          borderColor: '#667eea',
-                          color: '#667eea',
-                          fontWeight: 600,
-                        }}
-                      />
-                    </Box>
+                    <TextField
+                      select
+                      label="Chart Type"
+                      value={selectedTemplate}
+                      onChange={handleTemplateSelect}
+                      size="small"
+                      sx={{ 
+                        minWidth: 200,
+                        '& .MuiInputBase-root': {
+                          bgcolor: 'white',
+                          borderRadius: 1.5,
+                        },
+                      }}
+                    >
+                      {highchartsTemplateList.map((template) => (
+                        <MenuItem key={template.label} value={template.label}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {template.icon}
+                            <Typography variant="body2">{template.label}</Typography>
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
+
+                  {viewMode === 'html' && (
+                    <TextField
+                      select
+                      label="HTML Template"
+                      value={selectedHtmlTemplate}
+                      onChange={handleHtmlTemplateSelect}
+                      size="small"
+                      sx={{ 
+                        minWidth: 200,
+                        '& .MuiInputBase-root': {
+                          bgcolor: 'white',
+                          borderRadius: 1.5,
+                        },
+                      }}
+                    >
+                      {htmlTemplateList.map((template) => (
+                        <MenuItem key={template.label} value={template.label}>
+                          {template.label}
+                        </MenuItem>
+                      ))}
+                    </TextField>
                   )}
                 </Box>
 
@@ -797,28 +896,28 @@ export default function HighChartField() {
                         height: '100% !important',
                         overflow: 'auto !important',
                       },
-                      '& .MuiOutlinedInput-root': {
-                        '& fieldset': {
-                          borderColor: error ? 'rgba(239, 68, 68, 0.3)' : 'rgba(102, 126, 234, 0.3)',
-                        },
-                        '&:hover fieldset': {
-                          borderColor: error ? '#ef4444' : '#667eea',
-                        },
-                        '&.Mui-focused fieldset': {
-                          borderColor: error ? '#ef4444' : '#667eea',
-                        },
-                      },
                     }}
-                    InputProps={{
-                      sx: {
-                        bgcolor: error 
-                          ? 'rgba(254, 226, 226, 0.3)' 
-                          : 'rgba(248, 250, 252, 0.5)',
-                        '&:hover': {
-                          bgcolor: error 
-                            ? 'rgba(254, 226, 226, 0.5)' 
-                            : 'rgba(241, 245, 249, 0.5)',
-                        },
+                  />
+                ) : viewMode === 'html' ? (
+                  <TextField
+                    multiline
+                    fullWidth
+                    value={htmlContent}
+                    onChange={handleHtmlChange}
+                    placeholder="Enter your HTML content here with inline styles... Use ${variableName} to insert variables"
+                    sx={{
+                      flex: 1,
+                      '& .MuiInputBase-root': {
+                        height: '100%',
+                        alignItems: 'flex-start',
+                        fontFamily: 'monospace',
+                        fontSize: '0.875rem',
+                        lineHeight: 1.6,
+                        borderRadius: 2,
+                      },
+                      '& textarea': {
+                        height: '100% !important',
+                        overflow: 'auto !important',
                       },
                     }}
                   />
@@ -845,7 +944,7 @@ export default function HighChartField() {
                       </Typography>
                     </Box>
                   </Paper>
-                ) : viewMode === 'tableChart' ? (
+                ) : (
                   <Paper
                     variant="outlined"
                     sx={{
@@ -865,29 +964,6 @@ export default function HighChartField() {
                       </Typography>
                       <Typography variant="body2" color="#64748b" fontWeight={500}>
                         Combined editor coming soon
-                      </Typography>
-                    </Box>
-                  </Paper>
-                ) : (
-                  <Paper
-                    variant="outlined"
-                    sx={{
-                      flex: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: 2,
-                      border: '2px dashed rgba(245, 158, 11, 0.3)',
-                      bgcolor: 'rgba(254, 243, 199, 0.3)',
-                    }}
-                  >
-                    <Box sx={{ textAlign: 'center', p: 4 }}>
-                      <HtmlIcon sx={{ fontSize: 60, color: '#f59e0b', mb: 2 }} />
-                      <Typography variant="h6" fontWeight={700} gutterBottom color="#1e293b">
-                        HTML Configuration
-                      </Typography>
-                      <Typography variant="body2" color="#64748b" fontWeight={500}>
-                        HTML editor coming soon
                       </Typography>
                     </Box>
                   </Paper>
@@ -917,7 +993,7 @@ export default function HighChartField() {
             </Paper>
           </Grid>
 
-          <Grid size={{xs:12,lg:6}} sx={{ display: 'flex', flexDirection: 'column' }}>
+          <Grid size={{ xs: 12, lg: 6 }} sx={{ display: 'flex', flexDirection: 'column' }}>
             <Paper 
               elevation={0} 
               sx={{ 
@@ -960,9 +1036,9 @@ export default function HighChartField() {
                   </Typography>
                   <Typography variant="caption" color="#64748b" fontWeight={500}>
                     {viewMode === 'chart' && 'Chart updates automatically'}
+                    {viewMode === 'html' && 'HTML renders with variables'}
                     {viewMode === 'table' && 'Table preview will appear here'}
                     {viewMode === 'tableChart' && 'Combined view will appear here'}
-                    {viewMode === 'html' && 'HTML preview will appear here'}
                   </Typography>
                 </Box>
                 
@@ -1000,16 +1076,20 @@ export default function HighChartField() {
                     overflow: 'hidden',
                     borderRadius: 2,
                     border: '1px solid rgba(102, 126, 234, 0.2)',
-                    bgcolor: processedChartConfig 
+                    bgcolor: (processedChartConfig || processedHtmlConfig)
                       ? 'white' 
                       : error 
                         ? 'rgba(254, 226, 226, 0.3)' 
                         : 'rgba(248, 250, 252, 0.5)',
                   }}
                 >
-                  {processedChartConfig && viewMode === 'chart' ? (
+                  {viewMode === 'chart' && processedChartConfig ? (
                     <Box sx={{ width: '100%', height: '100%' }}>
                       <ResizableChart key={chartKey} options={processedChartConfig} showExport={true}/>
+                    </Box>
+                  ) : viewMode === 'html' && processedHtmlConfig ? (
+                    <Box sx={{ width: '100%', height: '100%' }}>
+                      <ResizableChart options={processedHtmlConfig} showExport={false}/>
                     </Box>
                   ) : error && viewMode === 'chart' ? (
                     <Box sx={{ textAlign: 'center', p: 4 }}>
@@ -1034,114 +1114,6 @@ export default function HighChartField() {
                         {error}
                       </Typography>
                     </Box>
-                  ) : viewMode === 'table' ? (
-                    <Box sx={{ textAlign: 'center', p: 4 }}>
-                      <Box
-                        sx={{
-                          width: 80,
-                          height: 80,
-                          margin: '0 auto 24px',
-                          borderRadius: '50%',
-                          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <TableChartIcon sx={{ fontSize: 40, color: '#3b82f6' }} />
-                      </Box>
-                      <Typography variant="h6" fontWeight={700} gutterBottom color="#1e293b">
-                        Table View
-                      </Typography>
-                      <Typography variant="body2" color="#64748b" fontWeight={500} sx={{ mb: 2 }}>
-                        Table preview will appear here
-                      </Typography>
-                      <Paper 
-                        variant="outlined" 
-                        sx={{ 
-                          p: 3, 
-                          mt: 3,
-                          borderRadius: 2,
-                          border: '2px dashed rgba(59, 130, 246, 0.3)',
-                        }}
-                      >
-                        <Typography variant="caption" color="#64748b">
-                          Configure your table in the left panel to see the preview here.
-                        </Typography>
-                      </Paper>
-                    </Box>
-                  ) : viewMode === 'tableChart' ? (
-                    <Box sx={{ textAlign: 'center', p: 4 }}>
-                      <Box
-                        sx={{
-                          width: 80,
-                          height: 80,
-                          margin: '0 auto 24px',
-                          borderRadius: '50%',
-                          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <InsertChartIcon sx={{ fontSize: 40, color: '#10b981' }} />
-                      </Box>
-                      <Typography variant="h6" fontWeight={700} gutterBottom color="#1e293b">
-                        Table + Chart View
-                      </Typography>
-                      <Typography variant="body2" color="#64748b" fontWeight={500} sx={{ mb: 2 }}>
-                        Combined preview will appear here
-                      </Typography>
-                      <Paper 
-                        variant="outlined" 
-                        sx={{ 
-                          p: 3, 
-                          mt: 3,
-                          borderRadius: 2,
-                          border: '2px dashed rgba(16, 185, 129, 0.3)',
-                        }}
-                      >
-                        <Typography variant="caption" color="#64748b">
-                          Configure your table and chart in the left panel to see the combined preview here.
-                        </Typography>
-                      </Paper>
-                    </Box>
-                  ) : viewMode === 'html' ? (
-                    <Box sx={{ textAlign: 'center', p: 4 }}>
-                      <Box
-                        sx={{
-                          width: 80,
-                          height: 80,
-                          margin: '0 auto 24px',
-                          borderRadius: '50%',
-                          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.1) 100%)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <HtmlIcon sx={{ fontSize: 40, color: '#f59e0b' }} />
-                      </Box>
-                      <Typography variant="h6" fontWeight={700} gutterBottom color="#1e293b">
-                        HTML View
-                      </Typography>
-                      <Typography variant="body2" color="#64748b" fontWeight={500} sx={{ mb: 2 }}>
-                        HTML preview will appear here
-                      </Typography>
-                      <Paper 
-                        variant="outlined" 
-                        sx={{ 
-                          p: 3, 
-                          mt: 3,
-                          borderRadius: 2,
-                          border: '2px dashed rgba(245, 158, 11, 0.3)',
-                        }}
-                      >
-                        <Typography variant="caption" color="#64748b">
-                          Configure your HTML in the left panel to see the rendered output here.
-                        </Typography>
-                      </Paper>
-                    </Box>
                   ) : (
                     <Box sx={{ textAlign: 'center', p: 4 }}>
                       <Box
@@ -1162,7 +1134,10 @@ export default function HighChartField() {
                         Ready for Configuration
                       </Typography>
                       <Typography variant="body2" color="#64748b" fontWeight={500}>
-                        Select a template or enter configuration
+                        {viewMode === 'chart' && 'Select a template or enter Highcharts JSON'}
+                        {viewMode === 'html' && 'Select a template or enter HTML with inline styles'}
+                        {viewMode === 'table' && 'Table configuration coming soon'}
+                        {viewMode === 'tableChart' && 'Combined configuration coming soon'}
                       </Typography>
                     </Box>
                   )}

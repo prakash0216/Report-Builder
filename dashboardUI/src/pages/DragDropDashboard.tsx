@@ -19,6 +19,8 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
 
 interface ChartConfigData {
   template?: string;
+  htmlContent?: string;
+  type?: 'chart' | 'html' | 'table' | 'tableChart';
   processed?: any;
   [key: string]: any;
 }
@@ -45,9 +47,20 @@ const replaceVariableReferences = (jsonString: string, variables: Record<string,
   return result;
 };
 
-// Deep clone helper to fix the "Cannot assign to read only property" error
+// Enhanced deep clone helper that ensures full mutability
 const deepClone = <T,>(obj: T): T => {
-  return JSON.parse(JSON.stringify(obj));
+  if (obj === null || typeof obj !== 'object') return obj;
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => deepClone(item)) as unknown as T;
+  }
+  
+  const cloned = {} as T;
+  Object.keys(obj).forEach(key => {
+    cloned[key as keyof T] = deepClone((obj as any)[key]);
+  });
+  
+  return cloned;
 };
 
 export default function DropDragDashboard() {
@@ -67,7 +80,7 @@ export default function DropDragDashboard() {
   const [chartVisibility, setChartVisibility] = useState<Record<string, boolean>>({});
   const [chartDimensions, setChartDimensions] = useState<Record<string, { width: number; height: number } | null>>({});
 
-  const [compactType, setCompactType] = useState<"vertical" | "horizontal" | null>("horizontal");
+  const [compactType, setCompactType] = useState<"vertical" | "horizontal" | null>(null);
  
   // NEW: Dashboard naming
   const [dashboardName, setDashboardName] = useRecoilState(dahboardNameMain);
@@ -80,6 +93,12 @@ export default function DropDragDashboard() {
   // Flag to ignore auto-compact layout changes
   const ignoreNextLayoutChange = useRef<boolean>(false);
   const visibilityChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // NEW: Compaction safety mechanisms
+  const safeLayoutsRef = useRef<{ [key: string]: Layout[] }>({});
+  const compactionAttempts = useRef<number>(0);
+  const MAX_COMPACTION_ATTEMPTS = 3;
+  const [compactionError, setCompactionError] = useState(false);
 
   const [selectedView, setSelectedView] = useState<string>("dashboardName");
   const [selectedCustomView,setSelectedCustomView]=useState<string>("default")
@@ -117,6 +136,48 @@ export default function DropDragDashboard() {
     { id: "branch2", name: "Custom Comparison b1" },
     { id: "branch3", name: "Patient Provider b1" }
   ])
+
+  // Reset compaction attempts periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      compactionAttempts.current = 0;
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Force unfrozen layouts - improved version
+  useEffect(() => {
+    if (layouts && Object.keys(layouts).length > 0) {
+      const hasImmutableProps = Object.values(layouts).some(layoutArray => 
+        Object.isFrozen(layoutArray) || layoutArray.some(item => Object.isFrozen(item))
+      );
+      
+      if (hasImmutableProps) {
+        console.log('🔧 Detected frozen layouts, reconstructing...');
+        setLayouts(prev => {
+          const reconstructed: { [key: string]: Layout[] } = {};
+          Object.keys(prev).forEach(bp => {
+            reconstructed[bp] = (prev[bp] || []).map(item => {
+              // Create plain object
+              const newItem: any = {};
+              newItem.i = String(item.i);
+              newItem.x = Number(item.x);
+              newItem.y = Number(item.y);
+              newItem.w = Number(item.w);
+              newItem.h = Number(item.h);
+              if (item.minW !== undefined) newItem.minW = Number(item.minW);
+              if (item.maxW !== undefined) newItem.maxW = Number(item.maxW);
+              if (item.minH !== undefined) newItem.minH = Number(item.minH);
+              if (item.maxH !== undefined) newItem.maxH = Number(item.maxH);
+              if (item.static !== undefined) newItem.static = Boolean(item.static);
+              return newItem as Layout;
+            });
+          });
+          return reconstructed;
+        });
+      }
+    }
+  }, []); // Only on mount
 
   // Focus name input when editing
   useEffect(() => {
@@ -255,12 +316,37 @@ export default function DropDragDashboard() {
         return;
       }
 
+      // Check if it's HTML type
+      if (config.type === 'html' && config.htmlContent) {
+        try {
+          const htmlWithVariables = replaceVariableReferences(config.htmlContent, availableVariables);
+          processed[id] = {
+            html: htmlWithVariables,
+            type: 'html'
+          };
+        } catch (error) {
+          console.warn(`Error processing HTML config for ${id}:`, error);
+          processed[id] = {
+            html: config.htmlContent,
+            type: 'html'
+          };
+        }
+        return;
+      }
+
+      // Check if it's table or tableChart type (not yet implemented)
+      if (config.type === 'table' || config.type === 'tableChart') {
+        processed[id] = null;
+        return;
+      }
+
+      // Handle regular chart config
       let configToProcess = null;
 
       if (config.template) {
         configToProcess = config.template;
       } else if (typeof config === 'object' && config !== null) {
-        const { _lastRefresh, ...rest } = config;
+        const { _lastRefresh, htmlContent, type, ...rest } = config;
         configToProcess = JSON.stringify(rest);
       }
 
@@ -319,7 +405,7 @@ export default function DropDragDashboard() {
 
   type ResizeHandleAxis = 's' | 'n' | 'se' | 'ne' | 'w' | 'e' | 'sw' | 'nw';
 
-  const [tempCompactType, setTempCompactType] = useState<"vertical" | "horizontal" | null>("horizontal");
+  const [tempCompactType, setTempCompactType] = useState<"vertical" | "horizontal" | null>(null);
   const [mounted, setMounted] = useState(false);
   const [currentBreakpoint, setCurrentBreakpoint] = useState("lg");
   const [resizeHandle] = useState<ResizeHandleAxis[]>(['s', 'n', 'se', 'ne', 'w', 'e', 'sw', 'nw']);
@@ -360,39 +446,87 @@ export default function DropDragDashboard() {
     return `${currentBreakpoint}-${variableUpdateTrigger}-${visibleIds}`;
   }, [currentBreakpoint, variableUpdateTrigger, visibleCharts]);
 
-  // Create modified layouts with dynamic dimensions applied - DEEP CLONE to fix readonly error
-  const layoutsWithDynamicDimensions = useMemo(() => {
-    const modified = deepClone(layouts);
+  // Track compaction attempts
+  useEffect(() => {
+    if (tempCompactType !== null) {
+      compactionAttempts.current += 1;
+    }
+  }, [visibleCharts, tempCompactType]);
+
+  // NEW: Safe compaction wrapper
+  const getSafeCompactType = useCallback(() => {
+    // If we've had too many compaction attempts, disable it temporarily
+    if (compactionAttempts.current >= MAX_COMPACTION_ATTEMPTS) {
+      console.warn('Too many compaction attempts, temporarily disabling');
+      setCompactionError(true);
+      
+      // Re-enable after delay
+      setTimeout(() => {
+        compactionAttempts.current = 0;
+        setCompactionError(false);
+      }, 3000);
+      
+      return null;
+    }
     
-    console.log('📏 [Dynamic Dims] Processing layouts');
-    console.log('📏 [Dynamic Dims] Base layouts:', layouts[currentBreakpoint]?.map(item => `${item.i}(x=${item.x},y=${item.y},w=${item.w},h=${item.h})`));
-    console.log('📏 [Dynamic Dims] Chart dimensions:', chartDimensions);
+    return tempCompactType;
+  }, [tempCompactType]);
+
+  // IMPROVED: getCleanLayouts with bulletproof mutability and bounds validation
+  const getCleanLayouts = useCallback(() => {
+    const clean: { [key: string]: Layout[] } = {};
     
-    Object.keys(modified).forEach(breakpoint => {
-      modified[breakpoint] = modified[breakpoint].map((item: Layout) => {
+    Object.keys(layouts).forEach(breakpoint => {
+      clean[breakpoint] = [];
+      const seenIds = new Set<string>();
+      
+      (layouts[breakpoint] || []).forEach((item: Layout) => {
+        // Skip duplicates
+        if (seenIds.has(item.i)) {
+          console.warn(`Skipping duplicate item: ${item.i}`);
+          return;
+        }
+        seenIds.add(item.i);
+        
         const dynamicDims = chartDimensions[item.i];
         
-        if (dynamicDims) {
-          // Apply dynamic dimensions but KEEP original position
-          console.log(`📏 [Dynamic Dims] Chart ${item.i}: Applying w=${dynamicDims.width}, h=${dynamicDims.height}, KEEPING x=${item.x}, y=${item.y}`);
-          return {
-            ...item,
-            w: dynamicDims.width,
-            h: dynamicDims.height,
-            // x and y stay from base layout
-          };
-        } else {
-          // Use original completely
-          console.log(`📏 [Dynamic Dims] Chart ${item.i}: Using original x=${item.x}, y=${item.y}, w=${item.w}, h=${item.h}`);
-          return item;
-        }
+        // Create a completely new, mutable object
+        const cleanItem: any = {};
+        
+        // Ensure valid, bounded values
+        cleanItem.i = String(item.i);
+        cleanItem.x = Math.max(0, Math.min(11, Number(item.x) || 0)); // Max x is cols-1
+        cleanItem.y = Math.max(0, Number(item.y) || 0);
+        cleanItem.w = Math.max(1, Math.min(12, dynamicDims ? Number(dynamicDims.width) : Number(item.w) || 6));
+        cleanItem.h = Math.max(1, Math.min(20, dynamicDims ? Number(dynamicDims.height) : Number(item.h) || 4));
+        
+        // Add bounds to prevent infinite growth
+        cleanItem.minW = item.minW !== undefined ? Math.max(1, Number(item.minW)) : 1;
+        cleanItem.maxW = item.maxW !== undefined ? Math.min(12, Number(item.maxW)) : 12;
+        cleanItem.minH = item.minH !== undefined ? Math.max(1, Number(item.minH)) : 1;
+        cleanItem.maxH = item.maxH !== undefined ? Math.min(20, Number(item.maxH)) : 20;
+        
+        if (item.static !== undefined) cleanItem.static = Boolean(item.static);
+        if (item.isDraggable !== undefined) cleanItem.isDraggable = Boolean(item.isDraggable);
+        if (item.isResizable !== undefined) cleanItem.isResizable = Boolean(item.isResizable);
+        if (item.isBounded !== undefined) cleanItem.isBounded = Boolean(item.isBounded);
+        if (item.resizeHandles) cleanItem.resizeHandles = Array.from(item.resizeHandles);
+        if (item.moved !== undefined) cleanItem.moved = Boolean(item.moved);
+        
+        clean[breakpoint].push(cleanItem as Layout);
+      });
+      
+      // Sort by y position, then x to help prevent collisions
+      clean[breakpoint].sort((a, b) => {
+        if (a.y === b.y) return a.x - b.x;
+        return a.y - b.y;
       });
     });
     
-    //@ts-ignore
-    console.log('📏 [Dynamic Dims] Final layouts:', modified[currentBreakpoint]?.map(item => `${item.i}(x=${item.x},y=${item.y},w=${item.w},h=${item.h})`));
-    return modified;
-  }, [layouts, chartDimensions, currentBreakpoint]);
+    // Store safe version
+    safeLayoutsRef.current = clean;
+    return clean;
+  }, [layouts, chartDimensions]);
 
   const onLayoutChange = (_layout: Layout[], allLayouts: { [key: string]: Layout[] }) => {
     if (!isEditMode) {
@@ -402,21 +536,47 @@ export default function DropDragDashboard() {
     // Check if we should ignore this layout change
     if (ignoreNextLayoutChange.current) {
       console.log('🚫 [onLayoutChange] IGNORED (triggered by visibility change)');
-      console.log('🚫 Incoming layout:', _layout.map(item => `${item.i}(x=${item.x},y=${item.y},w=${item.w},h=${item.h})`));
+      return;
+    }
+
+    // Detect if layouts are growing exponentially (sign of infinite loop)
+    const totalHeight = _layout.reduce((sum, item) => sum + (item.y + item.h), 0);
+    if (totalHeight > 10000) {
+      console.error('Layout height overflow detected, resetting compaction');
+      setTempCompactType(null);
+      setCompactType(null);
+      compactionAttempts.current = MAX_COMPACTION_ATTEMPTS; // Trigger cooldown
       return;
     }
 
     console.log('🔄 [onLayoutChange] START');
-    console.log('🔄 [onLayoutChange] Incoming layout:', _layout.map(item => `${item.i}(x=${item.x},y=${item.y},w=${item.w},h=${item.h})`));
+
+    // Clone incoming layouts with validation
+    const incomingLayoutClone = _layout.map(item => {
+      const cloned: any = {};
+      cloned.i = String(item.i);
+      cloned.x = Math.max(0, Math.min(11, Number(item.x)));
+      cloned.y = Math.max(0, Number(item.y));
+      cloned.w = Math.max(1, Math.min(12, Number(item.w)));
+      cloned.h = Math.max(1, Math.min(20, Number(item.h)));
+      
+      if (item.minW !== undefined) cloned.minW = Math.max(1, Number(item.minW));
+      if (item.maxW !== undefined) cloned.maxW = Math.min(12, Number(item.maxW));
+      if (item.minH !== undefined) cloned.minH = Math.max(1, Number(item.minH));
+      if (item.maxH !== undefined) cloned.maxH = Math.min(20, Number(item.maxH));
+      if (item.static !== undefined) cloned.static = Boolean(item.static);
+      if (item.isDraggable !== undefined) cloned.isDraggable = Boolean(item.isDraggable);
+      if (item.isResizable !== undefined) cloned.isResizable = Boolean(item.isResizable);
+      
+      return cloned as Layout;
+    });
 
     const clonedLayouts = deepClone(layouts);
     const currentLayout = clonedLayouts[currentBreakpoint] || [];
-    
-    console.log('🔄 [onLayoutChange] Current stored layout:', currentLayout.map((item: Layout) => `${item.i}(x=${item.x},y=${item.y},w=${item.w},h=${item.h})`));
 
     // Create a map of the incoming layout changes
     const incomingMap = new Map<string, Layout>();
-    _layout.forEach(item => {
+    incomingLayoutClone.forEach(item => {
       incomingMap.set(item.i, item);
     });
 
@@ -424,40 +584,29 @@ export default function DropDragDashboard() {
     const updatedLayout = currentLayout.map((item: Layout) => {
       const updated = incomingMap.get(item.i);
       if (updated) {
-        // Chart is visible and was in the grid
         const dynamicDims = chartDimensions[item.i];
         
         if (dynamicDims) {
-          // Has dynamic dimensions - only save position, not size
-          console.log(`🔄 [onLayoutChange] Chart ${item.i}: Has dynamic dims, saving position only x=${updated.x}, y=${updated.y}`);
           return {
             ...item,
             x: updated.x,
             y: updated.y,
-            // Keep base w/h
           };
         } else {
-          // No dynamic dimensions - save everything
-          console.log(`🔄 [onLayoutChange] Chart ${item.i}: No dynamic dims, saving all x=${updated.x}, y=${updated.y}, w=${updated.w}, h=${updated.h}`);
           return updated;
         }
       }
-      // Chart is hidden - keep as is
-      console.log(`🔄 [onLayoutChange] Chart ${item.i}: Hidden, preserving x=${item.x}, y=${item.y}, w=${item.w}, h=${item.h}`);
       return item;
     });
 
     // Add any completely new items
-    _layout.forEach(item => {
+    incomingLayoutClone.forEach(item => {
       const existsInCurrent = currentLayout.some((existing: Layout) => existing.i === item.i);
       if (!existsInCurrent) {
-        console.log(`🔄 [onLayoutChange] Adding new chart ${item.i}`);
         updatedLayout.push(item);
       }
     });
 
-    console.log('🔄 [onLayoutChange] Final layout to save:', updatedLayout.map((item: Layout) => `${item.i}(x=${item.x},y=${item.y},w=${item.w},h=${item.h})`));
-    
     clonedLayouts[currentBreakpoint] = updatedLayout;
     setLayouts(clonedLayouts);
 
@@ -577,18 +726,10 @@ export default function DropDragDashboard() {
 
   const filterPanelTopOffset: string = isEditMode ? '155px' : '111px';
 
-  // Get grid style with dynamic dimensions for VIEW mode
-  const getGridItemStyle = (item: Layout) => {
-    const dynamicDims = chartDimensions[item.i];
-    
-    return {
-      gridColumn: `span ${dynamicDims?.width || item.w}`,
-      gridRow: `span ${dynamicDims?.height || item.h}`,
-    };
-  };
-
   const renderChartContent = (item: Layout) => {
     const chartConfig = getChartConfig(item.i);
+    const configData = chartConfigs[item.i];
+    const contentType = configData?.type || 'chart';
 
     return (
       <>
@@ -597,7 +738,6 @@ export default function DropDragDashboard() {
             <button
               type="button"
               className="non-draggable-visibility-btn group relative bg-slate-100/90 backdrop-blur-sm hover:bg-indigo-100 text-slate-700 hover:text-indigo-700 p-2 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-slate-300/50 hover:border-indigo-400"
-              // onClick={(e) => handleVisibilityClick(e, item.i)}
               disabled 
               onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
               title="Local Filters"
@@ -612,7 +752,7 @@ export default function DropDragDashboard() {
               className="non-draggable-edit-btn group relative bg-slate-100/90 backdrop-blur-sm hover:bg-blue-100 text-slate-700 hover:text-blue-700 p-2 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-slate-300/50 hover:border-blue-400"
               onClick={(e) => handleEditClick(e, item.i)}
               onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
-              title="Edit Chart"
+              title="Edit Content"
               style={{ pointerEvents: 'auto', cursor: 'pointer', position: 'relative', zIndex: 10000 }}
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -624,13 +764,56 @@ export default function DropDragDashboard() {
               className="non-draggable-close-btn group relative bg-slate-100/90 backdrop-blur-sm hover:bg-red-100 text-slate-700 hover:text-red-700 p-2 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-slate-300/50 hover:border-red-400"
               onClick={(e) => handleRemoveClick(e, item.i)}
               onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
-              title="Remove Chart"
+              title="Remove"
               style={{ pointerEvents: 'auto', cursor: 'pointer', position: 'relative', zIndex: 10000 }}
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+          </div>
+        )}
+
+        {/* Content Type Badge */}
+        {isEditMode && chartConfig && (
+          <div className="absolute top-3 left-3" style={{ zIndex: 9999, pointerEvents: 'none' }}>
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold" style={{
+              backgroundColor: contentType === 'html' ? 'rgba(245, 158, 11, 0.9)' : 
+                             contentType === 'table' ? 'rgba(59, 130, 246, 0.9)' : 
+                             contentType === 'tableChart' ? 'rgba(16, 185, 129, 0.9)' :
+                             'rgba(139, 92, 246, 0.9)',
+              color: 'white'
+            }}>
+              {contentType === 'html' ? (
+                <>
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  </svg>
+                  HTML
+                </>
+              ) : contentType === 'table' ? (
+                <>
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Table
+                </>
+              ) : contentType === 'tableChart' ? (
+                <>
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  Table+Chart
+                </>
+              ) : (
+                <>
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  Chart
+                </>
+              )}
+            </span>
           </div>
         )}
 
@@ -641,12 +824,34 @@ export default function DropDragDashboard() {
             <div className="h-full flex items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 rounded-xl border-2 border-dashed border-slate-300">
               <div className="text-center px-6 py-8">
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 mb-4">
-                  <svg className="h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2 2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
+                  {contentType === 'html' ? (
+                    <svg className="h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                  ) : contentType === 'table' ? (
+                    <svg className="h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  ) : contentType === 'tableChart' ? (
+                    <svg className="h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  ) : (
+                    <svg className="h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  )}
                 </div>
-                <h3 className="text-base font-semibold text-slate-800 mb-2">Configure Your Chart</h3>
-                <p className="text-sm text-slate-600 mb-4 max-w-xs mx-auto">This chart is ready to be configured with your data and visualizations</p>
+                <h3 className="text-base font-semibold text-slate-800 mb-2">
+                  Configure Your {contentType === 'html' ? 'HTML Card' : contentType === 'table' ? 'Table' : contentType === 'tableChart' ? 'Table + Chart' : 'Chart'}
+                </h3>
+                <p className="text-sm text-slate-600 mb-4 max-w-xs mx-auto">
+                  This {contentType === 'html' ? 'card' : contentType} is ready to be configured
+                  {contentType === 'html' && ' with custom HTML and inline styles'}
+                  {contentType === 'table' && ' with your data'}
+                  {contentType === 'tableChart' && ' with combined table and chart view'}
+                  {contentType === 'chart' && ' with your data and visualizations'}
+                </p>
                 {isEditMode && (
                   <button 
                     onClick={(e) => handleEditClick(e, item.i)} 
@@ -655,7 +860,7 @@ export default function DropDragDashboard() {
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
-                    Configure Chart
+                    Configure {contentType === 'html' ? 'HTML' : contentType === 'table' ? 'Table' : contentType === 'tableChart' ? 'Table+Chart' : 'Chart'}
                   </button>
                 )}
               </div>
@@ -822,7 +1027,7 @@ export default function DropDragDashboard() {
                 )}
               </button>
 
-              {isEditMode && (
+              {/* {isEditMode && (
                 <button 
                   onClick={toggleCompactType} 
                   className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg hover:bg-white/20 border backdrop-blur-sm transition-all duration-200"
@@ -836,7 +1041,7 @@ export default function DropDragDashboard() {
                   </svg>
                   {compactType === null ? "Free" : compactType === "vertical" ? "Vertical" : "Horizontal"}
                 </button>
-              )}
+              )} */}
 
               <button
                 onClick={toggleEditMode}
@@ -966,17 +1171,34 @@ export default function DropDragDashboard() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
                   </div>
-                  <span className="text-sm font-semibold text-indigo-900 group-hover:text-white transition-colors">Drag to Add Chart</span>
+                  <span className="text-sm font-semibold text-indigo-900 group-hover:text-white transition-colors">Drag to Add Content</span>
                 </div>
                 
                 <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-blue-50 px-3 py-1.5 rounded-md border border-blue-200">
                   <svg className="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span className="font-medium">Drag and drop to position charts</span>
+                  <span className="font-medium">Drag and drop to position charts, tables, or HTML cards</span>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Compaction Error Warning Banner */}
+      {compactionError && (
+        <div 
+          className="fixed left-1/2 transform -translate-x-1/2 z-[45] bg-amber-500 text-white px-6 py-3 rounded-lg shadow-xl animate-pulse"
+          style={{
+            top: isEditMode ? '170px' : '126px',
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <p className="text-sm font-medium">Auto-layout temporarily paused to prevent conflicts</p>
           </div>
         </div>
       )}
@@ -997,12 +1219,12 @@ export default function DropDragDashboard() {
           <ResponsiveGridLayout
             key={`grid-edit-${gridStateKey}`}
             className="layout"
-            layouts={layoutsWithDynamicDimensions}
+            layouts={getCleanLayouts()}
             breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
             cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-            rowHeight={100}
-            compactType={tempCompactType}
-            preventCollision={false}
+            rowHeight={80}
+            compactType={getSafeCompactType()}
+            preventCollision={!getSafeCompactType()}
             useCSSTransforms={mounted}
             onLayoutChange={onLayoutChange}
             onBreakpointChange={onBreakpointChange}
@@ -1018,6 +1240,8 @@ export default function DropDragDashboard() {
             allowOverlap={false}
             margin={[12, 12]}
             style={{ minHeight: '400px' }}
+            verticalCompact={true}
+            maxRows={100}
           >
             {visibleCharts.map((item: Layout) => (
               <div
@@ -1044,12 +1268,12 @@ export default function DropDragDashboard() {
           <ResponsiveGridLayout
             key={`grid-view-${gridStateKey}`}
             className="layout"
-            layouts={layoutsWithDynamicDimensions}
+            layouts={getCleanLayouts()}
             breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
             cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
             rowHeight={100}
-            compactType={tempCompactType}
-            preventCollision={false}
+            compactType={getSafeCompactType()}
+            preventCollision={!getSafeCompactType()}
             useCSSTransforms={mounted}
             onBreakpointChange={onBreakpointChange}
             isDroppable={false}
@@ -1058,6 +1282,8 @@ export default function DropDragDashboard() {
             allowOverlap={false}
             margin={[12, 12]}
             style={{ minHeight: '400px' }}
+            verticalCompact={true}
+            maxRows={100}
           >
             {visibleCharts.map((item: Layout) => (
               <div
@@ -1096,8 +1322,8 @@ export default function DropDragDashboard() {
               <h3 className="text-xl font-bold text-slate-800 mb-3">Your Dashboard is Empty</h3>
               <p className="text-slate-600 mb-6 leading-relaxed">
                 {isEditMode
-                  ? "Start building your dashboard by dragging the 'Add Chart' element into the dotted area"
-                  : "Switch to edit mode to add charts and visualizations to your dashboard"
+                  ? "Start building your dashboard by dragging the 'Add Content' element into the dotted area"
+                  : "Switch to edit mode to add charts, tables, or HTML cards to your dashboard"
                 }
               </p>
               {!isEditMode && (
@@ -1133,12 +1359,12 @@ export default function DropDragDashboard() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
                 </svg>
               </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-3">All Charts Hidden</h3>
+              <h3 className="text-xl font-bold text-slate-800 mb-3">All Content Hidden</h3>
               <p className="text-slate-600 mb-2">
-                All {hiddenChartCount} chart{hiddenChartCount > 1 ? 's are' : ' is'} currently hidden by visibility conditions.
+                All {hiddenChartCount} item{hiddenChartCount > 1 ? 's are' : ' is'} currently hidden by visibility conditions.
               </p>
               <p className="text-sm text-slate-500">
-                Adjust your filter values or update visibility settings to display charts
+                Adjust your filter values or update visibility settings to display content
               </p>
             </div>
           </div>
@@ -1166,10 +1392,10 @@ export default function DropDragDashboard() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-md font-medium text-indigo-900 hover:text-indigo-700 transition-colors">
-                  {hiddenChartCount} chart{hiddenChartCount > 1 ? 's are' : ' is'} hidden
+                  {hiddenChartCount} item{hiddenChartCount > 1 ? 's are' : ' is'} hidden
                 </p>
                 <p className="text-xs text-indigo-900 hover:text-indigo-700 transition-colors mt-1">
-                  These charts are currently hidden based on your visibility conditions
+                  These items are currently hidden based on your visibility conditions
                 </p>
               </div>
             </div>

@@ -551,8 +551,8 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
       setFilterPositions({
         ...filterPositions,
         [selectedFilter]: {
-          x: 10,
-          y: 10 + (activeFilterIds.length * 80),
+          x: 6,
+          y: 6 + (activeFilterIds.length * 80),
         },
       });
     }
