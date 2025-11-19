@@ -1959,33 +1959,84 @@ const CascadingDropdown: React.FC = () => {
                                                         ))}
                                                     </Select>
                                                 ) : (
-                                                    <FormGroup
-                                                        sx={{
-                                                            p: 2,
-                                                            bgcolor: 'white',
-                                                            borderRadius: 2,
-                                                            border: '1px solid rgba(102, 126, 234, 0.3)',
-                                                            maxHeight: 200,
-                                                            overflow: 'auto',
-                                                        }}
-                                                    >
-                                                        {availableOptions.map((option, index) => (
-                                                            <FormControlLabel
-                                                                key={index}
-                                                                control={
-                                                                    <Checkbox
-                                                                        checked={defaultMultiValues.includes(option.value)}
-                                                                        onChange={() => handleMultiSelectChange(option.value)}
-                                                                        sx={{ 
-                                                                            color: '#667eea', 
-                                                                            '&.Mui-checked': { color: '#667eea' } 
-                                                                        }}
-                                                                    />
-                                                                }
-                                                                label={option.label.toString()}
-                                                            />
-                                                        ))}
-                                                    </FormGroup>
+                                                    <Box
+        sx={{
+            bgcolor: 'white',
+            borderRadius: 2,
+            border: '1px solid rgba(102, 126, 234, 0.3)',
+            overflow: 'hidden',
+        }}
+    >
+        {/* Select All Header */}
+        <Box
+            sx={{
+                px: 2,
+                py: 1,
+                borderBottom: '1px solid rgba(102, 126, 234, 0.2)',
+                bgcolor: 'rgba(102, 126, 234, 0.05)',
+            }}
+        >
+            <FormControlLabel
+                control={
+                    <Checkbox
+                        checked={defaultMultiValues.length === availableOptions.length && availableOptions.length > 0}
+                        indeterminate={defaultMultiValues.length > 0 && defaultMultiValues.length < availableOptions.length}
+                        onChange={(e) => {
+                            if (e.target.checked) {
+                                // Select all
+                                setDefaultMultiValues(availableOptions.map(opt => opt.value));
+                            } else {
+                                // Deselect all
+                                setDefaultMultiValues([]);
+                            }
+                        }}
+                        sx={{ 
+                            color: '#667eea', 
+                            '&.Mui-checked': { color: '#667eea' },
+                            '&.MuiCheckbox-indeterminate': { color: '#667eea' }
+                        }}
+                    />
+                }
+                label={
+                    <Typography variant="body2" fontWeight={700} color="#667eea">
+                        (All)
+                    </Typography>
+                }
+            />
+        </Box>
+        
+        {/* Scrollable Options */}
+        <FormGroup
+            sx={{
+                p: 2,
+                maxHeight: 200,
+                overflow: 'auto',
+            }}
+        >
+            {availableOptions.map((option, index) => (
+                <FormControlLabel
+                    key={index}
+                    control={
+                        <Checkbox
+                            checked={defaultMultiValues.includes(option.value)}
+                            onChange={() => handleMultiSelectChange(option.value)}
+                            sx={{ 
+                                color: '#667eea', 
+                                '&.Mui-checked': { color: '#667eea' } 
+                            }}
+                        />
+                    }
+                    label={option.label.toString()}
+                    sx={{
+                        '&:hover': {
+                            bgcolor: 'rgba(102, 126, 234, 0.05)',
+                            borderRadius: 1,
+                        }
+                    }}
+                />
+            ))}
+        </FormGroup>
+    </Box>
                                                 )}
                                                 <Typography variant="caption" color="text.secondary" mt={0.5}>
                                                     {selectionType === 'single' 

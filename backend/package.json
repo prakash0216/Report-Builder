@@ -12,6 +12,7 @@
   "description": "",
   "dependencies": {
     "@duckdb/node-api": "^1.4.0-r.1",
+    "apache-arrow": "^21.1.0",
     "axios": "^1.11.0",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",

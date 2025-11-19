@@ -514,7 +514,9 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
   showFilters, 
   topOffset = '80px'
 }) => {
-  const [selectedFilter, setSelectedFilter] = useState<string>("");
+  const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
+  const [tempSelectedFilters, setTempSelectedFilters] = useState<string[]>([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [activeFilterIds, setActiveFilterIds] = useRecoilState(activeFilterIdsState);
   const [filterPositions, setFilterPositions] = useRecoilState(filterPositionsState);
   
@@ -534,30 +536,61 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
       return a.displayName.localeCompare(b.displayName);
     });
 
-  const handleAddFilter = () => {
-    if (!selectedFilter) return;
-
-    // Check if filter already exists
-    if (activeFilterIds.includes(selectedFilter)) {
-      alert('This filter is already added!');
-      return;
+  const handleToggleFilter = (filterName: string) => {
+    if (filterName === 'ALL') {
+      // Toggle all filters
+      if (tempSelectedFilters.length === filterNames.length) {
+        setTempSelectedFilters([]);
+      } else {
+        setTempSelectedFilters(filterNames);
+      }
+    } else {
+      // Toggle individual filter
+      if (tempSelectedFilters.includes(filterName)) {
+        setTempSelectedFilters(tempSelectedFilters.filter(f => f !== filterName));
+      } else {
+        setTempSelectedFilters([...tempSelectedFilters, filterName]);
+      }
     }
+  };
 
-    // Add to active filters
-    setActiveFilterIds([...activeFilterIds, selectedFilter]);
+  const handleApplyFilters = () => {
+    // Find filters to add (in tempSelectedFilters but not in activeFilterIds)
+    const filtersToAdd = tempSelectedFilters.filter(name => !activeFilterIds.includes(name));
+    
+    // Find filters to remove (in activeFilterIds but not in tempSelectedFilters)
+    const filtersToRemove = activeFilterIds.filter(name => !tempSelectedFilters.includes(name));
 
-    // Set initial position (stagger vertically)
-    if (!filterPositions[selectedFilter]) {
-      setFilterPositions({
-        ...filterPositions,
-        [selectedFilter]: {
+    // Update active filters
+    const newActiveFilters = tempSelectedFilters.filter(name => filterNames.includes(name));
+    setActiveFilterIds(newActiveFilters);
+
+    // Set initial positions for new filters
+    const newPositions = { ...filterPositions };
+    let yOffset = 6 + (newActiveFilters.filter(id => filterPositions[id]).length * 80);
+    
+    filtersToAdd.forEach((filterId) => {
+      if (!newPositions[filterId]) {
+        newPositions[filterId] = {
           x: 6,
-          y: 6 + (activeFilterIds.length * 80),
-        },
-      });
-    }
+          y: yOffset,
+        };
+        yOffset += 80;
+      }
+    });
 
-    setSelectedFilter("");
+    // Remove positions for removed filters
+    filtersToRemove.forEach((filterId) => {
+      delete newPositions[filterId];
+    });
+    
+    setFilterPositions(newPositions);
+    setDropdownOpen(false);
+  };
+
+  const handleCancelFilters = () => {
+    setTempSelectedFilters(activeFilterIds);
+    setDropdownOpen(false);
   };
 
   const handleRemoveFilter = (filterId: string) => {
@@ -627,12 +660,25 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
               borderRadius: 2,
             }}
           >
-            <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
-              <InputLabel sx={{ color: '#667eea', '&.Mui-focused': { color: '#667eea' } }}>Add Filter</InputLabel>
+            <FormControl fullWidth size="small">
+              <InputLabel sx={{ color: '#667eea', '&.Mui-focused': { color: '#667eea' } }}>
+                Add Filters
+              </InputLabel>
               <Select
-                value={selectedFilter}
-                onChange={(e) => setSelectedFilter(e.target.value)}
-                label="Add Filter"
+                multiple
+                value={tempSelectedFilters}
+                open={dropdownOpen}
+                onOpen={() => {
+                  setTempSelectedFilters(activeFilterIds);
+                  setDropdownOpen(true);
+                }}
+                onClose={() => {}} // Prevent auto-close
+                label="Add Filters"
+                renderValue={(selected) => {
+                  if (selected.length === 0) return <em>No filters selected</em>;
+                  if (selected.length === filterNames.length) return `All Filters (${selected.length})`;
+                  return `${selected.length} filter${selected.length > 1 ? 's' : ''} selected`;
+                }}
                 sx={{ 
                   bgcolor: 'white',
                   borderRadius: 1.5,
@@ -646,15 +692,60 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                     borderColor: '#667eea',
                   }
                 }}
-                renderValue={(selected) => {
-                  if (!selected) return <em>-- Select a filter --</em>;
-                  const config = allFilters[selected];
-                  return config?.displayName || selected;
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      maxHeight: 400,
+                      '& .MuiList-root': {
+                        pt: 0,
+                      }
+                    }
+                  },
+                  autoFocus: false,
                 }}
               >
-                <MenuItem value="">
-                  <em>-- Select a filter --</em>
+                {/* Select All Option */}
+                <MenuItem
+                  value="ALL"
+                  onClick={() => handleToggleFilter('ALL')}
+                  sx={{
+                    borderBottom: '1px solid #e2e8f0',
+                    bgcolor: '#f8fafc',
+                    '&:hover': {
+                      bgcolor: '#f0f4ff',
+                    }
+                  }}
+                >
+                  <Checkbox
+                    size="small"
+                    checked={tempSelectedFilters.length === filterNames.length}
+                    indeterminate={tempSelectedFilters.length > 0 && tempSelectedFilters.length < filterNames.length}
+                    sx={{ 
+                      color: '#667eea', 
+                      '&.Mui-checked': { color: '#667eea' },
+                      '&.MuiCheckbox-indeterminate': { color: '#667eea' }
+                    }}
+                  />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip 
+                      label="ALL" 
+                      size="small"
+                      sx={{ 
+                        bgcolor: '#ede9fe',
+                        color: '#7c3aed',
+                        border: '1px solid #c4b5fd',
+                        fontSize: '0.65rem',
+                        height: 20,
+                        fontWeight: 700,
+                      }}
+                    />
+                    <Typography variant="body2" fontWeight={600}>
+                      All Filters
+                    </Typography>
+                  </Box>
                 </MenuItem>
+
+                {/* Individual Filter Options */}
                 {availableFilters.map((config) => {
                   const getCategoryChipColor = (category: string) => {
                     switch (category.toLowerCase()) {
@@ -670,10 +761,28 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   };
                   
                   const chipColor = getCategoryChipColor(config.category);
+                  const isChecked = tempSelectedFilters.includes(config.variableName);
                   
                   return (
-                    <MenuItem key={config.variableName} value={config.variableName}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                    <MenuItem
+                      key={config.variableName}
+                      value={config.variableName}
+                      onClick={() => handleToggleFilter(config.variableName)}
+                      sx={{
+                        '&:hover': {
+                          bgcolor: '#f0f4ff',
+                        },
+                      }}
+                    >
+                      <Checkbox
+                        size="small"
+                        checked={isChecked}
+                        sx={{ 
+                          color: '#667eea', 
+                          '&.Mui-checked': { color: '#667eea' }
+                        }}
+                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
                         <Chip 
                           label={config.category} 
                           size="small"
@@ -684,47 +793,95 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                             fontWeight: 700,
                           }}
                         />
-                        <Typography variant="body2" fontWeight={500}>
+                        <Typography 
+                          variant="body2" 
+                          fontWeight={500}
+                          sx={{ flex: 1 }}
+                        >
                           {config.displayName}
                         </Typography>
                       </Box>
                     </MenuItem>
                   );
                 })}
+
+                {/* Apply and Cancel Buttons inside dropdown */}
+                <Box 
+                  sx={{ 
+                    p: 1.5, 
+                    pt: 1, 
+                    borderTop: '2px solid #e2e8f0',
+                    display: 'flex', 
+                    gap: 1,
+                    position: 'sticky',
+                    bottom: 0,
+                    bgcolor: 'white',
+                    zIndex: 1,
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    onClick={handleCancelFilters}
+                    size="small"
+                    sx={{
+                      borderColor: '#cbd5e1',
+                      color: '#64748b',
+                      fontWeight: 600,
+                      borderRadius: 1.5,
+                      '&:hover': {
+                        borderColor: '#94a3b8',
+                        bgcolor: '#f8fafc',
+                      }
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    onClick={handleApplyFilters}
+                    size="small"
+                    sx={{
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      fontWeight: 600,
+                      borderRadius: 1.5,
+                      '&:hover': {
+                        background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                      }
+                    }}
+                  >
+                    Apply ({tempSelectedFilters.length})
+                  </Button>
+                </Box>
               </Select>
             </FormControl>
-          
-            <Button
-              fullWidth
-              variant="contained"
-              onClick={handleAddFilter}
-              disabled={!selectedFilter}
-              size="small"
-              sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                fontWeight: 600,
-                borderRadius: 1.5,
-                '&:hover': {
-                  background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
-                },
-                '&.Mui-disabled': {
-                  background: '#e2e8f0',
-                }
-              }}
-            >
-              Add Filter
-            </Button>
           </Paper>
         )}
       </Box>
 
-      {/* Draggable Filters Area */}
+      {/* Draggable Filters Area - Now Scrollable */}
       <Box 
         sx={{ 
           flexGrow: 1,
-          overflow: 'hidden',
+          overflow: 'auto', // Changed from 'hidden' to 'auto'
           background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.5) 0%, rgba(241, 245, 249, 0.5) 100%)',
           position: 'relative',
+          '&::-webkit-scrollbar': {
+            width: '8px',
+          },
+          '&::-webkit-scrollbar-track': {
+            background: 'rgba(0, 0, 0, 0.05)',
+            borderRadius: '10px',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: 'rgba(102, 126, 234, 0.3)',
+            borderRadius: '10px',
+            '&:hover': {
+              background: 'rgba(102, 126, 234, 0.5)',
+            },
+          },
         }}
       >
         {activeFilterIds.length === 0 ? (
@@ -770,7 +927,12 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
             </Box>
           </Box>
         ) : (
-          <Box sx={{ position: 'relative', width: '100%', height: '100%', p: 1 }}>
+          <Box sx={{ 
+            position: 'relative', 
+            width: '100%', 
+            minHeight: '100%', // Changed from height to minHeight
+            p: 1 
+          }}>
             {activeFilterIds.map((filterId) => (
               <CompactFilterItem
                 key={filterId}

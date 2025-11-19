@@ -632,7 +632,7 @@ app.post('/execute-query', async (req, res) => {
                             const stream = stmt.streamRows();
                             
                             // 6. Setup streaming with optimized batching
-                            const BATCH_SIZE = 50000; // Optimal for Parquet writing
+                            const BATCH_SIZE = 100000; // Optimal for Parquet writing
                             let batch = [];
                             let totalRowCount = 0;
                             let previewRows = [];
