@@ -537,20 +537,39 @@ export default function Hooks() {
 
                     filterNames.forEach((filterId) => {
                         try {
-                            const filterConfig = snapshot.getLoadable(filterConfigFamily(filterId)).contents;
-
-                            if (filterConfig && filterConfig.variableName) {
-                                const selectedOptions = snapshot.getLoadable(
-                                    liveFilterFamily(filterConfig.variableName)
-                                ).contents;
-                                allFilters[filterConfig.variableName] = selectedOptions;
-
-                                console.log(`✅ [Hooks] Loaded filter: ${filterConfig.variableName}`, selectedOptions);
-                            }
+                          const filterConfig = snapshot.getLoadable(filterConfigFamily(filterId)).contents;
+                      
+                          if (filterConfig && filterConfig.variableName) {
+                            const selectedOptions = snapshot.getLoadable(
+                              liveFilterFamily(filterConfig.variableName)
+                            ).contents;
+                      
+                            // 🔥 Calculate metadata
+                            const totalOptions = filterConfig.availableOptions?.length || 0;
+                            const selectedCount = selectedOptions?.length || 0;
+                            const isAll = selectedCount === totalOptions && totalOptions > 0;
+                      
+                            // 🔥 FIXED: Create a plain object that will serialize properly
+                            const filterData = {
+                              values: selectedOptions || [],  // The actual array
+                              isAll: isAll,
+                              total: totalOptions,
+                              columnName: filterConfig.variableName
+                            };
+                            
+                            allFilters[filterConfig.variableName] = filterData;
+                      
+                            console.log(`✅ [Hooks] Loaded filter: ${filterConfig.variableName}`, {
+                              selected: selectedCount,
+                              total: totalOptions,
+                              isAll: isAll
+                            });
+                          }
                         } catch (err) {
-                            console.warn(`[Hooks] Failed to load live filter value for ${filterId}:`, err);
+                          console.warn(`[Hooks] Failed to load live filter value for ${filterId}:`, err);
                         }
-                    });
+                      });
+
 
                     console.log(`🔄 [Hooks] Executing logic for: ${logic.variableName}`);
                     console.log(`📦 [Hooks] Fresh variables:`, Object.keys(allVariables));
@@ -683,18 +702,38 @@ export default function Hooks() {
 
                     filterNames.forEach((filterId) => {
                         try {
-                            const filterConfig = snapshot.getLoadable(filterConfigFamily(filterId)).contents;
-
-                            if (filterConfig && filterConfig.variableName) {
-                                const selectedOptions = snapshot.getLoadable(
-                                    liveFilterFamily(filterConfig.variableName)
-                                ).contents;
-                                allFilters[filterConfig.variableName] = selectedOptions;
-                            }
+                          const filterConfig = snapshot.getLoadable(filterConfigFamily(filterId)).contents;
+                      
+                          if (filterConfig && filterConfig.variableName) {
+                            const selectedOptions = snapshot.getLoadable(
+                              liveFilterFamily(filterConfig.variableName)
+                            ).contents;
+                      
+                            // 🔥 Calculate metadata
+                            const totalOptions = filterConfig.availableOptions?.length || 0;
+                            const selectedCount = selectedOptions?.length || 0;
+                            const isAll = selectedCount === totalOptions && totalOptions > 0;
+                      
+                            // 🔥 FIXED: Create a plain object that will serialize properly
+                            const filterData = {
+                              values: selectedOptions || [],  // The actual array
+                              isAll: isAll,
+                              total: totalOptions,
+                              columnName: filterConfig.variableName
+                            };
+                            
+                            allFilters[filterConfig.variableName] = filterData;
+                      
+                            console.log(`✅ [Hooks] Loaded filter: ${filterConfig.variableName}`, {
+                              selected: selectedCount,
+                              total: totalOptions,
+                              isAll: isAll
+                            });
+                          }
                         } catch (err) {
-                            console.warn(`[Hooks] Failed to load live filter value for ${filterId}:`, err);
+                          console.warn(`[Hooks] Failed to load live filter value for ${filterId}:`, err);
                         }
-                    });
+                      });
 
                     const response = await fetch('http://localhost:3002/api/calculate', {
                         method: 'POST',

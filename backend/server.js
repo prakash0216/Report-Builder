@@ -797,30 +797,147 @@ app.post('/execute-query', async (req, res) => {
   }
 });
 
-async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
-  const {columns,where,groupBy,orderBy,limit}=queryObject;
-  console.log('Query Object:', queryObject);
+
+function buildWhereClause(filters) {
+  if (!filters || typeof filters !== 'object') {
+    return '';
+  }
+
+  const conditions = [];
+
+  for (const [filterName, filterData] of Object.entries(filters)) {
+    // Skip if no filter data
+    if (!filterData) {
+      continue;
+    }
+
+    // 🔥 NEW: Handle filter object with metadata
+    if (typeof filterData === 'object' && filterData.values !== undefined && filterData.isAll !== undefined) {
+      // Check if "All" is selected
+      if (filterData.isAll === true) {
+        console.log(`⏭️  Skipping ${filterName} - All selected`);
+        continue;
+      }
+
+      // Extract values
+      const values = filterData.values.map(item => {
+        if (typeof item === 'object' && item.value !== undefined) {
+          return item.value;
+        }
+        return item;
+      });
+
+      if (values.length === 0) {
+        console.log(`⏭️  Skipping ${filterName} - No selections`);
+        continue;
+      }
+
+      // Build IN clause
+      const escapedValues = values.map(v => {
+        if (v === null || v === undefined) {
+          return 'NULL';
+        }
+        const escaped = String(v).replace(/'/g, "''");
+        return `'${escaped}'`;
+      });
+
+      const columnName = filterData.columnName || filterName;
+      conditions.push(`${columnName} IN (${escapedValues.join(', ')})`);
+      
+      console.log(`✅ Added condition for ${filterName}: ${columnName} IN (${values.length} values)`);
+    }
+    // 🔥 BACKWARD COMPATIBILITY: Handle array with metadata properties (from eval)
+    else if (Array.isArray(filterData)) {
+      // Check if "All" is selected using the metadata property
+      if (filterData.isAll === true) {
+        console.log(`⏭️  Skipping ${filterName} - All selected`);
+        continue;
+      }
+
+      const values = filterData.map(item => {
+        if (typeof item === 'object' && item.value !== undefined) {
+          return item.value;
+        }
+        return item;
+      });
+
+      if (values.length === 0) {
+        console.log(`⏭️  Skipping ${filterName} - No selections`);
+        continue;
+      }
+
+      const escapedValues = values.map(v => {
+        if (v === null || v === undefined) {
+          return 'NULL';
+        }
+        const escaped = String(v).replace(/'/g, "''");
+        return `'${escaped}'`;
+      });
+
+      const columnName = filterData.columnName || filterName;
+      conditions.push(`${columnName} IN (${escapedValues.join(', ')})`);
+      
+      console.log(`✅ Added condition for ${filterName}: ${columnName} IN (${values.length} values)`);
+    }
+  }
+
+  const whereClause = conditions.length > 0 ? conditions.join(' AND ') : '';
+  console.log(`📝 Filter-based WHERE clause: ${whereClause || '(none - all data)'}`);
+  
+  return whereClause;
+}
+
+// 🔥 Main function to get data based on data source name
+async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
+  const {columns, filters, customWhere, groupBy, orderBy, limit} = queryObject;
+  console.log('📦 Query Object:', queryObject);
   
   console.log(`🔄 Loading data from: ${dataSourceName}`);
+  
+  // Get data source type from registry
   const connectionType = await dbClient.query(`SELECT type FROM data_source_registry WHERE ds_name='${dataSourceName}'`);
   if (connectionType.length === 0) {
     throw new Error(`Data source ${dataSourceName} not found in registry`);
   }
   
   const type = connectionType[0].type;
+  console.log(`📊 Data source type: ${type}`);
 
+  // 🔥 Build WHERE clause from filters
+  const filterWhereClause = buildWhereClause(filters);
+  
+  // 🔥 Combine filter WHERE with custom WHERE
+  let whereClause = '';
+  if (filterWhereClause && customWhere) {
+    whereClause = `${filterWhereClause} AND ${customWhere}`;
+    console.log(`🔗 Combined WHERE: filters + custom`);
+  } else if (filterWhereClause) {
+    whereClause = filterWhereClause;
+  } else if (customWhere) {
+    whereClause = customWhere;
+    console.log(`🔗 Using custom WHERE only`);
+  }
+  
+  console.log(`🔍 Final WHERE clause: ${whereClause || '(none - fetching all data)'}`);
+
+  // ============================================
+  // LIVE CONNECTION (Snowflake)
+  // ============================================
   if (type === 'Live') {
     const startTime = Date.now();
-    console.log('🔄 Loading from Snowflake Live');
+    console.log('❄️  Loading from Snowflake Live');
     
-    const connectionDetails = await dbClient.query(`SELECT connection_id, query FROM data_source_registry WHERE ds_name='${dataSourceName}'`);
+    // Get connection details
+    const connectionDetails = await dbClient.query(
+      `SELECT connection_id, query FROM data_source_registry WHERE ds_name='${dataSourceName}'`
+    );
     if (connectionDetails.length === 0) {
       throw new Error(`Connection details for ${dataSourceName} not found`);
     }
     const connId = connectionDetails[0].connection_id;
-    const query = connectionDetails[0].query;
+    const baseQuery = connectionDetails[0].query;
     
-    // Fetch snowflake connection details
+    // Fetch snowflake connection credentials
     const connDetails = await dbClient.query(`SELECT * FROM snow_flake_connections WHERE id=${connId}`);
     if (connDetails.length === 0) {
       throw new Error(`Snowflake connection with id ${connId} not found`);
@@ -829,6 +946,7 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
 
     // Connect to snowflake and execute query with streaming
     return new Promise((resolve, reject) => {
+      // Prepare private key for authentication
       const privateKeyBuffer = Buffer.from(conn.privateKey, 'base64');
       const privateKeyObject = crypto.createPrivateKey({
         key: privateKeyBuffer,
@@ -840,6 +958,7 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
         type: 'pkcs8'
       });
       
+      // Create Snowflake connection
       const sfConnection = snowflake.createConnection({
         account: conn.account,
         username: conn.username,
@@ -850,6 +969,7 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
         schema: conn.schema,
       });
       
+      // Connect and execute query
       sfConnection.connect((err, connection) => {
         if (err) {
           console.error('❌ Unable to connect to Snowflake:', err.message);
@@ -861,30 +981,31 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
         
         let data = [];
         let rowsProcessed = 0;
-        const sanitizedQuery = query.trim().replace(/;$/, '');
+        const sanitizedQuery = baseQuery.trim().replace(/;$/, '');
 
+        // 🔥 Build custom query with all parameters
         let customQuery;
         
-        if (columns || where || groupBy || orderBy || limit) {
-          // If custom columns/filters are provided, wrap the base query
+        if (columns || whereClause || groupBy || orderBy || limit) {
           customQuery = `SELECT ${columns && columns.length > 0 ? columns.join(', ') : '*'} FROM (${sanitizedQuery}) AS subquery` +
-            (where ? ` WHERE ${where}` : '') +
-            (groupBy ? ` GROUP BY ${groupBy.join(', ')}` : '') +
-            (orderBy ? ` ORDER BY ${orderBy.join(', ')}` : '') +
+            (whereClause ? ` WHERE ${whereClause}` : '') +
+            (groupBy && groupBy.length > 0 ? ` GROUP BY ${groupBy.join(', ')}` : '') +
+            (orderBy && orderBy.length > 0 ? ` ORDER BY ${orderBy.join(', ')}` : '') +
             (limit ? ` LIMIT ${limit}` : '');
         } else {
-          // If no custom parameters, use the base query as-is
           customQuery = sanitizedQuery;
         }
-        console.log('Executing Query:', customQuery);
         
+        console.log('📝 Executing Snowflake Query:', customQuery);
+        
+        // Execute with streaming enabled
         const statement = connection.execute({        
           sqlText: customQuery,
-          streamResult: true, // Enable streaming
+          streamResult: true, // Enable streaming for large datasets
           complete: (err, stmt, rows) => {
             if (err) {
               sfConnection.destroy();
-              console.error('❌ Failed to execute query:', err.message);
+              console.error('❌ Failed to execute Snowflake query:', err.message);
               return reject(new Error('Failed to execute query: ' + err.message));
             }
           }
@@ -895,7 +1016,7 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
         
         stream.on('error', (err) => {
           sfConnection.destroy();
-          console.error('❌ Stream error:', err.message);
+          console.error('❌ Snowflake stream error:', err.message);
           reject(new Error('Stream error: ' + err.message));
         });
         
@@ -913,29 +1034,36 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
         stream.on('end', () => {
           sfConnection.destroy();
           const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
-          console.log(`✅ Data loaded in ${totalTime}s`);
+          console.log(`✅ Snowflake data loaded in ${totalTime}s`);
           console.log(`✅ Loaded ${data.length.toLocaleString()} rows from Snowflake`);
           resolve(data);
         });
       });
     });
   }
+
+  // ============================================
+  // EXTRACT CONNECTION (DuckDB/Parquet)
+  // ============================================
   if (type === 'Extract') {
     const startTime = Date.now();
-    console.log('🔄 Loading from DuckDB Extract');
+    console.log('🦆 Loading from DuckDB Extract');
     
-    const dsDetails = await dbClient.query(`SELECT parquet_path FROM data_source_registry WHERE ds_name='${dataSourceName}'`);
+    // Get parquet file path
+    const dsDetails = await dbClient.query(
+      `SELECT parquet_path FROM data_source_registry WHERE ds_name='${dataSourceName}'`
+    );
     if (dsDetails.length === 0) {
-        throw new Error(`Data source details for ${dataSourceName} not found`);
+      throw new Error(`Data source details for ${dataSourceName} not found`);
     }
     
     const parquetPath = dsDetails[0].parquet_path;
-    console.log('Parquet path:', parquetPath);
+    console.log('📁 Parquet path:', parquetPath);
     
-    // Use fs.existsSync (ES module compatible)
+    // Verify file exists
     const { existsSync } = await import('fs');
     if (!parquetPath || !existsSync(parquetPath)) {
-        throw new Error(`Parquet file for data source ${dataSourceName} not found at path: ${parquetPath}`);
+      throw new Error(`Parquet file for data source ${dataSourceName} not found at path: ${parquetPath}`);
     }
     
     console.log('🔄 Streaming data from Parquet file:', parquetPath);
@@ -943,31 +1071,29 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
     // Escape backslashes for Windows paths
     const escapedPath = parquetPath.replace(/\\/g, '\\\\');
     
-    // Build custom query with columns, where, groupBy, orderBy, limit
+    // 🔥 Build custom query with all parameters
     let customQuery;
     
-    if (columns || where || groupBy || orderBy || limit) {
-        // If custom columns/filters are provided, wrap the base parquet read
-        customQuery = `SELECT ${columns && columns.length > 0 ? columns.join(', ') : '*'} FROM read_parquet('${escapedPath}')` +
-            (where ? ` WHERE ${where}` : '') +
-            (groupBy ? ` GROUP BY ${groupBy.join(', ')}` : '') +
-            (orderBy ? ` ORDER BY ${orderBy.join(', ')}` : '') +
-            (limit ? ` LIMIT ${limit}` : '');
+    if (columns || whereClause || groupBy || orderBy || limit) {
+      customQuery = `SELECT ${columns && columns.length > 0 ? columns.join(', ') : '*'} FROM read_parquet('${escapedPath}')` +
+        (whereClause ? ` WHERE ${whereClause}` : '') +
+        (groupBy && groupBy.length > 0 ? ` GROUP BY ${groupBy.join(', ')}` : '') +
+        (orderBy && orderBy.length > 0 ? ` ORDER BY ${orderBy.join(', ')}` : '') +
+        (limit ? ` LIMIT ${limit}` : '');
     } else {
-        // If no custom parameters, use the base query as-is
-        customQuery = `SELECT * FROM read_parquet('${escapedPath}')`;
+      customQuery = `SELECT * FROM read_parquet('${escapedPath}')`;
     }
     
-    console.log('Executing DuckDB Query:', customQuery);
+    console.log('📝 Executing DuckDB Query:', customQuery);
     
-    // ✅ OPTION 3: Get column names using DESCRIBE query
+    // ✅ Get column names using DESCRIBE query
     const describeQuery = `DESCRIBE (${customQuery})`;
-    console.log('Getting column names:', describeQuery);
+    console.log('🔍 Getting column names:', describeQuery);
     const columnInfo = await dbClient.query(describeQuery);
     const columnNames = columnInfo.map(col => col.column_name);
     console.log('📋 Column names:', columnNames);
     
-    // Use the stream method which returns a QueryResult
+    // Execute query with streaming
     const queryResult = await dbClient.stream(customQuery);
     
     let data = [];
@@ -976,44 +1102,49 @@ async function getDataBasedOnDataSourceName(dataSourceName,queryObject) {
     
     // Iterate through chunks
     while (true) {
-        const chunk = await queryResult.fetchChunk();
-        
-        // Exit when no more data
-        if (chunk.rowCount === 0) {
-            break;
-        }
-        
-        chunkCount++;
-        rowsProcessed += chunk.rowCount;
-        
-        // ✅ Convert arrays to objects using column names
-        const rowArrays = chunk.getRows();
-        const rows = rowArrays.map(rowArray => {
-            const obj = {};
-            columnNames.forEach((name, index) => {
-                obj[name] = rowArray[index];
-            });
-            return obj;
+      const chunk = await queryResult.fetchChunk();
+      
+      // Exit when no more data
+      if (chunk.rowCount === 0) {
+        break;
+      }
+      
+      chunkCount++;
+      rowsProcessed += chunk.rowCount;
+      
+      // ✅ Convert arrays to objects using column names
+      const rowArrays = chunk.getRows();
+      const rows = rowArrays.map(rowArray => {
+        const obj = {};
+        columnNames.forEach((name, index) => {
+          obj[name] = rowArray[index];
         });
-        
-        data.push(...rows);
-        
-        // Log progress every 10 chunks or every 50k rows
-        if (chunkCount % 10 === 0 || rowsProcessed % 50000 === 0) {
-            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-            console.log(`📊 Progress: ${rowsProcessed.toLocaleString()} rows loaded (${chunkCount} chunks) in ${elapsed}s`);
-        }
+        return obj;
+      });
+      
+      data.push(...rows);
+      
+      // Log progress every 10 chunks or every 50k rows
+      if (chunkCount % 10 === 0 || rowsProcessed % 50000 === 0) {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`📊 Progress: ${rowsProcessed.toLocaleString()} rows loaded (${chunkCount} chunks) in ${elapsed}s`);
+      }
     }
+    
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`✅ Data loaded in ${totalTime}s`);
+    console.log(`✅ DuckDB data loaded in ${totalTime}s`);
     console.log(`✅ Loaded ${data.length.toLocaleString()} rows from Parquet file`);
+    
     return data;
   }
+
+  // ============================================
+  // UNSUPPORTED CONNECTION TYPE
+  // ============================================
   else {
     throw new Error(`Unsupported connection type: ${type}`);
   }
 }
-
 
 app.post('/api/calculate', async (req, res) => {
   const { logic, existingVariables, existingParameters, variableName, existingFilters } = req.body;
@@ -1027,7 +1158,22 @@ app.post('/api/calculate', async (req, res) => {
     const variableDeclarations = Object.entries(allAvailableVariables)
     .map(([name, value]) => {
       let serialized;
-      if (value === undefined) {
+      
+      // 🔥 NEW: Special handling for filter objects with metadata
+      if (value && typeof value === 'object' && value.values !== undefined && value.isAll !== undefined) {
+        // This is a filter with metadata
+        // Create an array with metadata properties attached
+        const arrayStr = JSON.stringify(value.values);
+        serialized = `(function() {
+          const arr = ${arrayStr};
+          arr.isAll = ${value.isAll};
+          arr.total = ${value.total};
+          arr.columnName = ${JSON.stringify(value.columnName)};
+          return arr;
+        })()`;
+      } 
+      // Original handling
+      else if (value === undefined) {
         serialized = 'undefined';
       } else if (value === null) {
         serialized = 'null';
@@ -1036,9 +1182,12 @@ app.post('/api/calculate', async (req, res) => {
       } else {
         serialized = JSON.stringify(value);
       }
+      
       return `const ${name} = ${serialized};`;
     })
     .join('\n');
+
+    // console.log('📝 Variable declarations:', variableDeclarations);
 
     // This structure correctly handles 'await' inside the logic string.
     const funcString = `(async function(dsConnect) {
@@ -1050,7 +1199,6 @@ app.post('/api/calculate', async (req, res) => {
 
     const cal = eval(funcString);
     const result = await cal(getDataBasedOnDataSourceName);
-    // console.log(result)
 
     res.json({ value: result, success: true });
   } catch (err) {

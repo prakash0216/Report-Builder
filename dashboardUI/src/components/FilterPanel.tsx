@@ -628,6 +628,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
         zIndex: 30,
         overflow: 'hidden',
         padding: 0.5,
+        paddingBottom:8
       }}
     >
       {/* Header Section */}
@@ -865,7 +866,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
       <Box 
         sx={{ 
           flexGrow: 1,
-          overflow: 'auto', // Changed from 'hidden' to 'auto'
+          overflow: 'auto',
           background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.5) 0%, rgba(241, 245, 249, 0.5) 100%)',
           position: 'relative',
           '&::-webkit-scrollbar': {
