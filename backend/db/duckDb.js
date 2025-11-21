@@ -42,6 +42,7 @@ class DuckDBClient {
   }
 
   async run(sql, params = []) {
+    
     await this.ready;
     const stmt = await this.connection.prepare(sql);
     await stmt.run(...params);

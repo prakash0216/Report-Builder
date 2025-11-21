@@ -11,6 +11,7 @@ import snowflake from 'snowflake-sdk';
 import crypto from 'crypto';
 import bodyParser from 'body-parser';
 import parquet from 'parquetjs'
+import NodeCache from 'node-cache';
 // import redis from 'redis';
 
 
@@ -18,6 +19,50 @@ const app = express();
 app.use(bodyParser.json({limit: '50mb'}));
 app.use(bodyParser.urlencoded({limit: '50mb', extended: true}));
 const PORT = process.env.PORT || 3002;
+
+// ============================================
+// CACHE CONFIGURATION
+// ============================================
+// Cache TTL: 30 minutes (1800 seconds) - adjust based on your needs
+// For 11 crore rows, caching is critical for performance
+const CACHE_TTL = parseInt(process.env.CACHE_TTL) || 259200; // 3 days default
+const CACHE_CHECK_PERIOD = 600; // Check for expired keys every 10 minutes
+
+// Initialize cache with TTL and automatic cleanup
+const queryCache = new NodeCache({
+  stdTTL: CACHE_TTL, // Time to live in seconds
+  checkperiod: CACHE_CHECK_PERIOD, // Check for expired keys periodically
+  useClones: false, // Don't clone values (better performance for large objects)
+  maxKeys: 100, // Maximum number of keys (adjust based on memory)
+  deleteOnExpire: true, // Automatically delete expired keys
+});
+
+console.log(`✅ Query cache initialized with TTL: ${CACHE_TTL}s (${CACHE_TTL / 60} minutes)`);
+
+// ============================================
+// CACHE KEY GENERATION
+// ============================================
+/**
+ * Generate a unique cache key from dataSourceName and queryObject
+ * This ensures same queries return cached results
+ */
+function generateCacheKey(dataSourceName, queryObject) {
+  // Normalize queryObject to ensure consistent keys
+  const normalized = {
+    dataSourceName,
+    columns: queryObject.columns ? [...queryObject.columns].sort() : null,
+    filters: queryObject.filters ? JSON.stringify(queryObject.filters, Object.keys(queryObject.filters).sort()) : null,
+    customWhere: queryObject.customWhere || null,
+    groupBy: queryObject.groupBy ? [...queryObject.groupBy].sort() : null,
+    orderBy: queryObject.orderBy ? [...queryObject.orderBy].sort() : null,
+    limit: queryObject.limit || null,
+  };
+  
+  // Create hash from normalized object
+  const keyString = JSON.stringify(normalized);
+  const hash = crypto.createHash('md5').update(keyString).digest('hex');
+  return `query:${dataSourceName}:${hash}`;
+}
 
 // const {getDatafromDuckDB}=require('./services/snowflakeConnector')
 
@@ -415,7 +460,21 @@ app.post('/remove-data-source', async (req, res) => {
   const {dsName}= req.body;
   try{
     const deleteQuery = `DELETE FROM data_source_registry WHERE ds_name='${dsName}'`;
-    await dbClient.run(deleteQuery);  
+    await dbClient.run(deleteQuery);  
+
+    // Clear cache for this data source
+    const keys = queryCache.keys();
+    const prefix = `query:${dsName}:`;
+    let clearedCount = 0;
+    keys.forEach(key => {
+      if (key.startsWith(prefix)) {
+        queryCache.del(key);
+        clearedCount++;
+      }
+    });
+    if (clearedCount > 0) {
+      console.log(`🗑️  Cleared ${clearedCount} cache entries for removed data source: ${dsName}`);
+    }
 
     res.json({success:true,message:`Data source ${dsName} removed successfully`});
   }
@@ -887,8 +946,8 @@ function buildWhereClause(filters) {
   return whereClause;
 }
 
-// 🔥 Main function to get data based on data source name
-async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
+// 🔥 Internal function to get data based on data source name (without cache)
+async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
   const {columns, filters, customWhere, groupBy, orderBy, limit} = queryObject;
   console.log('📦 Query Object:', queryObject);
   
@@ -1146,6 +1205,37 @@ async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
   }
 }
 
+// 🔥 CACHED WRAPPER: Main function to get data with caching
+async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
+  // Generate cache key from query parameters
+  const cacheKey = generateCacheKey(dataSourceName, queryObject);
+  
+  // Check cache first
+  const cachedData = queryCache.get(cacheKey);
+  if (cachedData !== undefined) {
+    console.log(`⚡ CACHE HIT for ${dataSourceName} - Returning cached data (${cachedData.length.toLocaleString()} rows)`);
+    return cachedData;
+  }
+  
+  // Cache miss - execute query
+  console.log(`💾 CACHE MISS for ${dataSourceName} - Executing query...`);
+  const startTime = Date.now();
+  
+  try {
+    const data = await _getDataBasedOnDataSourceName(dataSourceName, queryObject);
+    
+    // Store in cache
+    queryCache.set(cacheKey, data);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`✅ Query completed in ${elapsed}s - Cached ${data.length.toLocaleString()} rows with key: ${cacheKey.substring(0, 50)}...`);
+    
+    return data;
+  } catch (error) {
+    console.error(`❌ Query failed for ${dataSourceName}:`, error.message);
+    throw error;
+  }
+}
+
 app.post('/api/calculate', async (req, res) => {
   const { logic, existingVariables, existingParameters, variableName, existingFilters } = req.body;
   if (!logic || !variableName) {
@@ -1226,6 +1316,21 @@ app.post("/rename-data-source",async(req,res)=>{
   try{
     const updateQuery=`UPDATE data_source_registry SET ds_name='${newName}' WHERE ds_name='${oldName}'`;
     await dbClient.run(updateQuery);
+    
+    // Clear cache for the old data source name
+    const keys = queryCache.keys();
+    const prefix = `query:${oldName}:`;
+    let clearedCount = 0;
+    keys.forEach(key => {
+      if (key.startsWith(prefix)) {
+        queryCache.del(key);
+        clearedCount++;
+      }
+    });
+    if (clearedCount > 0) {
+      console.log(`🗑️  Cleared ${clearedCount} cache entries for renamed data source: ${oldName} -> ${newName}`);
+    }
+    
     return res.json({success:true,message:`Data source renamed from ${oldName} to ${newName}`});
   }catch(err){
     console.error("Error renaming data source:",err);
@@ -1415,6 +1520,118 @@ app.post("/get-distinct-column-values", async (req, res) => {
   } catch (err) {
     console.error('❌ Error in /get-distinct-column-values:', err.message);
     return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// CACHE MANAGEMENT ENDPOINTS
+// ============================================
+
+/**
+ * Get cache statistics
+ * GET /cache/stats
+ */
+app.get('/cache/stats', (req, res) => {
+  try {
+    const stats = queryCache.getStats();
+    const keys = queryCache.keys();
+    
+    // Calculate approximate memory usage (rough estimate)
+    let estimatedSize = 0;
+    keys.forEach(key => {
+      const data = queryCache.get(key);
+      if (data && Array.isArray(data)) {
+        // Rough estimate: each row object ~1KB, plus overhead
+        estimatedSize += data.length * 1024;
+      }
+    });
+    
+    res.json({
+      success: true,
+      stats: {
+        keys: stats.keys,
+        hits: stats.hits,
+        misses: stats.misses,
+        ksize: stats.ksize,
+        vsize: stats.vsize,
+        estimatedSizeMB: (estimatedSize / (1024 * 1024)).toFixed(2),
+        hitRate: stats.hits + stats.misses > 0 
+          ? ((stats.hits / (stats.hits + stats.misses)) * 100).toFixed(2) + '%'
+          : '0%',
+        cacheKeys: keys.length,
+        ttl: CACHE_TTL,
+        ttlMinutes: CACHE_TTL / 60
+      }
+    });
+  } catch (err) {
+    console.error('❌ Error getting cache stats:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Clear entire cache
+ * POST /cache/clear
+ */
+app.post('/cache/clear', (req, res) => {
+  try {
+    const keysBefore = queryCache.keys().length;
+    queryCache.flushAll();
+    console.log(`🗑️  Cache cleared - Removed ${keysBefore} keys`);
+    res.json({ 
+      success: true, 
+      message: `Cache cleared successfully. Removed ${keysBefore} keys.` 
+    });
+  } catch (err) {
+    console.error('❌ Error clearing cache:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Clear cache for a specific data source
+ * POST /cache/clear/:dataSourceName
+ */
+app.post('/cache/clear/:dataSourceName', (req, res) => {
+  try {
+    const { dataSourceName } = req.params;
+    const keys = queryCache.keys();
+    const prefix = `query:${dataSourceName}:`;
+    
+    let clearedCount = 0;
+    keys.forEach(key => {
+      if (key.startsWith(prefix)) {
+        queryCache.del(key);
+        clearedCount++;
+      }
+    });
+    
+    console.log(`🗑️  Cleared ${clearedCount} cache entries for data source: ${dataSourceName}`);
+    res.json({ 
+      success: true, 
+      message: `Cleared ${clearedCount} cache entries for data source: ${dataSourceName}` 
+    });
+  } catch (err) {
+    console.error('❌ Error clearing cache for data source:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get cache keys (for debugging)
+ * GET /cache/keys
+ */
+app.get('/cache/keys', (req, res) => {
+  try {
+    const keys = queryCache.keys();
+    res.json({ 
+      success: true, 
+      keys: keys,
+      count: keys.length 
+    });
+  } catch (err) {
+    console.error('❌ Error getting cache keys:', err.message);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

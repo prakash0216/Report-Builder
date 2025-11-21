@@ -905,7 +905,7 @@ export default function DropDragDashboard() {
                   className="text-xl font-bold leading-tight drop-shadow-md"
                   style={{ color: 'white', letterSpacing: '0.5px' }}
                 >
-                  Report Builder Intelligence
+                  Report Builder
                 </h1>
                 <div className="flex items-center gap-2 mt-0.5">
                   <p className="text-xs font-medium" style={{ color: 'rgba(255, 255, 255, 0.9)' }}>
@@ -1099,7 +1099,7 @@ export default function DropDragDashboard() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
-            <span className="text-sm font-semibold text-indigo-900">Dashboard:</span>
+            <span className="text-sm font-semibold text-indigo-900">Dashboard     :</span>
           </div>
           
           {isEditingName ? (
@@ -1116,27 +1116,30 @@ export default function DropDragDashboard() {
                   setIsEditingName(false);
                 }
               }}
-              className="text-base font-bold text-gray-900 bg-white border-2 border-indigo-500 outline-none px-3 py-1 rounded-lg shadow-sm"
+              className="text-base font-bold text-gray-900 bg-white border-2 border-indigo-500 outline-none  rounded-lg shadow-sm"
               style={{ minWidth: '200px', maxWidth: '400px' }}
             />
           ) : (
             <button
-              onClick={() => setIsEditingName(true)}
-              className="text-base font-bold text-indigo-900 hover:text-indigo-700 transition-colors px-3 py-1 rounded-lg hover:bg-white/40 border border-transparent hover:border-indigo-300"
+              onClick={() =>  isEditMode ? setIsEditingName(true) : setIsEditingName(false)}
+              className="text-base font-bold text-indigo-900 hover:text-indigo-700 transition-colors px-1 py-1 rounded-lg hover:bg-white/40 border border-transparent hover:border-indigo-300"
             >
               {dashboardName}
             </button>
           )}
-          
-          <button
+
+          {isEditMode && (
+            <button
             onClick={() => setIsEditingName(true)}
             className="p-1 text-indigo-600 hover:text-indigo-700 hover:bg-white/40 rounded transition-colors"
             title="Edit name"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-            </svg>
-          </button>
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+          )}
+          
         </div>
       </div>
 

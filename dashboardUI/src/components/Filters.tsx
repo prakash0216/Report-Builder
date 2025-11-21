@@ -41,6 +41,45 @@ import { variableAtomFamily } from '../recoil/VariableFamily';
 import { hooksArraySelector,hooksArrayOfArraySelector,hooksArrayOfObjectsSelector } from '../recoil/Variabletracker';
 import axios from 'axios';
 
+// Utility function to format dates to yyyy-mm-dd
+const formatDateToYYYYMMDD = (value: any): string => {
+  if (!value) return String(value);
+  
+  // If it's already a string in yyyy-mm-dd format, return as is
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value;
+  }
+  
+  // Try to parse as Date
+  let date: Date | null = null;
+  
+  if (value instanceof Date) {
+    date = value;
+  } else if (typeof value === 'string') {
+    // Try parsing the string as a date
+    const parsed = new Date(value);
+    if (!isNaN(parsed.getTime())) {
+      date = parsed;
+    }
+  } else if (typeof value === 'number') {
+    // Could be a timestamp
+    date = new Date(value);
+    if (isNaN(date.getTime())) {
+      return String(value);
+    }
+  }
+  
+  if (date && !isNaN(date.getTime())) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  // If not a date, return as string
+  return String(value);
+};
+
 type Category = 'params' | 'filters' | 'hooks';
 
 interface DefaultValueOption {
@@ -439,10 +478,13 @@ const CascadingDropdown: React.FC = () => {
     const getAvailableValues = (): DefaultValueOption[] => {
         if (mainCategory === 'data-source' && selectedFilterColumn) {
             if (availableFilterColumnValues.length > 0) {
-                return availableFilterColumnValues.map(item => ({ 
-                    label: item.toString(), 
-                    value: item 
-                }));
+                return availableFilterColumnValues.map(item => {
+                    const formattedLabel = formatDateToYYYYMMDD(item);
+                    return { 
+                        label: formattedLabel, 
+                        value: item 
+                    };
+                });
             }
             return [];
         } 
@@ -459,21 +501,21 @@ const CascadingDropdown: React.FC = () => {
                 
                 if (hookType === 'array') {
                     return parsedOptions.map((item: string | number) => ({
-                        label: item.toString(),
+                        label: formatDateToYYYYMMDD(item),
                         value: item,
                     }));
 
                 } else if (hookType === 'arrayOfArray') {
                     if (hooksArrayOfArrayLabelIndex !== '' && hooksArrayOfArrayValueIndex !== '') {
                         return parsedOptions.map((item: any[]) => ({
-                            label: item[hooksArrayOfArrayLabelIndex as number]?.toString() || 'N/A', 
+                            label: formatDateToYYYYMMDD(item[hooksArrayOfArrayLabelIndex as number]) || 'N/A', 
                             value: item[hooksArrayOfArrayValueIndex as number],
                         }));
                     }
                 } else if (hookType === 'arrayOfObjects') {
                     if (hooksArrayOfObjectLabelKey && hooksArrayOfObjectValueKey) {
                         return parsedOptions.map((item: Record<string, any>) => ({
-                            label: item[hooksArrayOfObjectLabelKey]?.toString() || 'N/A', 
+                            label: formatDateToYYYYMMDD(item[hooksArrayOfObjectLabelKey]) || 'N/A', 
                             value: item[hooksArrayOfObjectValueKey],
                         }));
                     }
@@ -495,21 +537,21 @@ const CascadingDropdown: React.FC = () => {
             
             if (paramType === 'array') {
                 return parsedOptions.map((item: string | number) => ({
-                    label: item.toString(),
+                    label: formatDateToYYYYMMDD(item),
                     value: item,
                 }));
 
             } else if (paramType === 'arrayOfArray') {
                 if (arrayOfArrayLabelIndex !== '' && arrayOfArrayValueIndex !== '') {
                     return parsedOptions.map((item: any[]) => ({
-                        label: item[arrayOfArrayLabelIndex as number]?.toString() || 'N/A', 
+                        label: formatDateToYYYYMMDD(item[arrayOfArrayLabelIndex as number]) || 'N/A', 
                         value: item[arrayOfArrayValueIndex as number],
                     }));
                 }
             } else if (paramType === 'arrayOfObjects') {
                 if (arrayOfObjectLabelKey && arrayOfObjectValueKey) {
                     return parsedOptions.map((item: Record<string, any>) => ({
-                        label: item[arrayOfObjectLabelKey]?.toString() || 'N/A', 
+                        label: formatDateToYYYYMMDD(item[arrayOfObjectLabelKey]) || 'N/A', 
                         value: item[arrayOfObjectValueKey],
                     }));
                 }
