@@ -129,8 +129,8 @@ export function CardArrangement() {
       return;
     }
 
-    if (height < 1 || height > 10) {
-      alert('Height must be between 1 and 10');
+    if (height < 1 || height > 12) {
+      alert('Height must be between 1 and 12');
       return;
     }
 
@@ -475,7 +475,7 @@ export function CardArrangement() {
                   label="Height (Grid Rows)"
                   value={height}
                   onChange={(e) => setHeight(parseInt(e.target.value) || 2)}
-                  inputProps={{ min: 1, max: 10 }}
+                  inputProps={{ min: 1, max: 12 }}
                   sx={{ 
                     bgcolor: 'white',
                     '& .MuiOutlinedInput-root': {
@@ -494,7 +494,7 @@ export function CardArrangement() {
                       color: '#667eea',
                     },
                   }}
-                  helperText="1-10 rows"
+                  helperText="1-12 rows"
                 />
               </Box>
 

@@ -1290,6 +1290,9 @@ app.post('/api/calculate', async (req, res) => {
     const cal = eval(funcString);
     const result = await cal(getDataBasedOnDataSourceName);
 
+    console.log('📊 Calculation result type:', typeof result);
+    console.log('📊 Calculation result value:', result);
+
     res.json({ value: result, success: true });
   } catch (err) {
     console.error(`Error in /api/calculate: ${err.message}`);
