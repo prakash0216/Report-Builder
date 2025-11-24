@@ -41,7 +41,13 @@ import {
 } from '@mui/icons-material';
 import { AreaChartIcon, Columns3Icon, DonutIcon, ScatterChartIcon } from "lucide-react";
 
+
 const safeParse = (value: string): any => {
+  // If it's a string that looks like a formatted number (contains commas), return as-is
+  if (typeof value === 'string' && /^[\d,]+$/.test(value)) {
+    return value;
+  }
+  
   try {
     return JSON.parse(value);
   } catch {
@@ -51,6 +57,33 @@ const safeParse = (value: string): any => {
       return value;
     }
   }
+};
+
+const replaceVariableReferences = (jsonString: string, variables: Record<string, any>): string => {
+  let result = jsonString;
+  
+  Object.entries(variables).forEach(([name, value]) => {
+    // Check if the raw stored value is a formatted number (before parsing)
+    const isFormattedNumber = typeof value === 'string' && /^[\d,]+$/.test(value);
+    
+    let replacement: string;
+    
+    if (isFormattedNumber) {
+      // 🔥 Formatted numbers: use as-is without quotes
+      replacement = value;
+    } else {
+      // 🔥 Everything else: stringify the raw value
+      replacement = JSON.stringify(value);
+    }
+    
+    // Replace in JSON context: "${variableName}"
+    result = result.replace(new RegExp(`"\\$\\{${name}\\}"`, 'g'), replacement);
+    
+    // Replace in HTML context: ${variableName}
+    result = result.replace(new RegExp(`\\$\\{${name}\\}`, 'g'), replacement);
+  });
+  
+  return result;
 };
 
 const highchartsTemplateList = [
@@ -263,15 +296,6 @@ const htmlTemplateList = [
   }
 ];
 
-const replaceVariableReferences = (jsonString: string, variables: Record<string, any>): string => {
-  let result = jsonString;
-  Object.entries(variables).forEach(([name, value]) => {
-    const replacement = JSON.stringify(value);
-    result = result.replace(new RegExp(`"\\$\\{${name}\\}"`, 'g'), replacement);
-    result = result.replace(new RegExp(`\\$\\{${name}\\}`, 'g'), replacement);
-  });
-  return result;
-};
 
 const VariableList = ({ variables }: { variables: Record<string, any> }) => {
   const variableCount = Object.keys(variables).length;

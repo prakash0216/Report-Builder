@@ -53,16 +53,21 @@ import { liveFilterFamily } from '../recoil/LiveFilterFamily';
 
 // Helper to safely parse stored strings into arrays/objects/values
 const safeParse = (value: string): any => {
-    try {
-        return JSON.parse(value);
-    } catch {
-        try {
-            return Function('"use strict";return (' + value + ')')();
-        } catch {
-            return value;
-        }
+    // If it's a string that looks like a formatted number (contains commas), return as-is
+    if (typeof value === 'string' && /^[\d,]+$/.test(value)) {
+      return value;
     }
-};
+    
+    try {
+      return JSON.parse(value);
+    } catch {
+      try {
+        return Function('"use strict";return (' + value + ')')();
+      } catch {
+        return value;
+      }
+    }
+  };
 
 // Helper to truncate text with ellipsis
 const truncateText = (text: string, maxLength: number = 150): string => {

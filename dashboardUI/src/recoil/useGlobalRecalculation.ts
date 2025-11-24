@@ -18,6 +18,11 @@ import { topNState } from '../recoil/topN';
 
 // Helper to safely parse stored strings into arrays/objects/values
 const safeParse = (value: string): any => {
+  // If it's a string that looks like a formatted number (contains commas), return as-is
+  if (typeof value === 'string' && /^[\d,]+$/.test(value)) {
+    return value;
+  }
+  
   try {
     return JSON.parse(value);
   } catch {
