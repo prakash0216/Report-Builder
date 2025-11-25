@@ -99,3 +99,48 @@ async function insertDummyConnections(){
 }
 
 // insertDummyConnections();
+async function parameterTable(){
+  const createTablesMultiple=`
+  CREATE TABLE IF NOT EXISTS parameters (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('parameters_seq'),
+  name VARCHAR NOT NULL,
+  value TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_modified TIMESTAMP,
+);
+`
+  try{
+    await dbClient.run(createDataSourceRegistryTable);
+    console.log("✅ Table 'data_source_registry' created successfully.");
+  }catch(err){
+    console.error("❌ Error creating table:", err.message);
+  }
+}
+
+const calculationsTable=`
+CREATE TABLE IF NOT EXISTS calculations (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('calculations_seq'),
+  name VARCHAR NOT NULL,
+  expression TEXT NOT NULL,
+  last_modified TIMESTAMP,
+);
+`
+
+const filtersTable=`
+CREATE TABLE IF NOT EXISTS filters (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('filters_seq'),
+  variable_name TEXT UNIQUE NOT NULL,
+  category TEXT NOT NULL,
+  param_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  selection_type TEXT NOT NULL CHECK (selection_type IN ('single','multi')),
+  ds_name TEXT,
+  label_index INTEGER,
+  value_index INTEGER,
+  label_key TEXT,
+  value_key TEXT,
+  available_options_json TEXT NOT NULL,
+  default_values_json TEXT NOT NULL,
+  last_modified TIMESTAMP,
+);
+`

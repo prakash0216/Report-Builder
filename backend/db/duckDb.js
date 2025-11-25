@@ -1,6 +1,7 @@
 import { DuckDBInstance } from '@duckdb/node-api';
 import path from 'path';
 import fs from 'fs/promises';
+import os from 'os';
 import { fileURLToPath } from 'url';
 
 // Get __dirname equivalent in ES Modules
@@ -27,18 +28,37 @@ class DuckDBClient {
       throw err;
     }
 
-    // Create and connect to the DuckDB database
-    const db = await DuckDBInstance.create(dbPath);
+    // Create and connect to the DuckDB database with optimized settings
+    const db = await DuckDBInstance.create(dbPath, {
+      threads: Math.min(8, os.cpus().length), // Use up to 8 threads
+    });
     this.connection = await db.connect();
-    console.log(`DuckDB initialized at ${dbPath}`);
+    
+    // Set performance optimizations for DuckDB
+    await this.connection.run(`
+      SET memory_limit='16GB';
+      SET threads=${Math.min(8, os.cpus().length)};
+      SET preserve_insertion_order=false;
+      SET enable_object_cache=true;
+      SET enable_progress_bar=false;
+    `);
+    
+    console.log(`✅ DuckDB initialized at ${dbPath} with ${Math.min(8, os.cpus().length)} threads`);
   }
 
   async query(sql, params = []) {
     await this.ready;
-    // const stmt = await this.connection.prepare(sql);
     const reader = await this.connection.runAndReadAll(sql, params);
     const result = reader.getRowObjectsJson();
     return result;
+  }
+
+  // Optimized method for reading parquet files directly to JSON
+  async queryParquet(sql, params = []) {
+    await this.ready;
+    // Use runAndReadAll for better performance on parquet files
+    const reader = await this.connection.runAndReadAll(sql, params);
+    return reader.getRowObjectsJson();
   }
 
   async run(sql, params = []) {

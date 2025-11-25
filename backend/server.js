@@ -11,8 +11,8 @@ import snowflake from 'snowflake-sdk';
 import crypto from 'crypto';
 import bodyParser from 'body-parser';
 import parquet from 'parquetjs'
-import NodeCache from 'node-cache';
 // import redis from 'redis';
+// Removed compression - using direct object references for ultra-low latency
 
 
 const app = express();
@@ -21,30 +21,31 @@ app.use(bodyParser.urlencoded({limit: '50mb', extended: true}));
 const PORT = process.env.PORT || 3002;
 
 // ============================================
-// CACHE CONFIGURATION
+// ULTRA-FAST CACHE CONFIGURATION
 // ============================================
-// Cache TTL: 30 minutes (1800 seconds) - adjust based on your needs
-// For 11 crore rows, caching is critical for performance
+// For VERY LOW LATENCY: Using native Map for O(1) lookups
+// No compression, no cloning, direct object references
 const CACHE_TTL = parseInt(process.env.CACHE_TTL) || 259200; // 3 days default
-const CACHE_CHECK_PERIOD = 600; // Check for expired keys every 10 minutes
+const MAX_CACHE_SIZE = 500; // Maximum number of cached queries
 
-// Initialize cache with TTL and automatic cleanup
-const queryCache = new NodeCache({
-  stdTTL: CACHE_TTL, // Time to live in seconds
-  checkperiod: CACHE_CHECK_PERIOD, // Check for expired keys periodically
-  useClones: false, // Don't clone values (better performance for large objects)
-  maxKeys: 100, // Maximum number of keys (adjust based on memory)
-  deleteOnExpire: true, // Automatically delete expired keys
-});
+// Ultra-fast in-memory cache using native Map
+// Map provides O(1) lookup time - fastest possible
+const fastCache = new Map(); // key -> { data, expiresAt, accessCount, lastAccessed }
 
-console.log(`✅ Query cache initialized with TTL: ${CACHE_TTL}s (${CACHE_TTL / 60} minutes)`);
+// Cache key hash cache to avoid recalculating
+const keyHashCache = new Map(); // queryObject string -> hash
+
+// LRU eviction tracking
+let cacheAccessOrder = []; // Array of keys in access order
+
+console.log(`⚡ Ultra-fast cache initialized (native Map, no compression, direct object references)`);
 
 // ============================================
 // CACHE KEY GENERATION
 // ============================================
 /**
  * Generate a unique cache key from dataSourceName and queryObject
- * This ensures same queries return cached results
+ * OPTIMIZED: Caches hash calculations for faster key generation
  */
 function generateCacheKey(dataSourceName, queryObject) {
   // Normalize queryObject to ensure consistent keys
@@ -55,13 +56,63 @@ function generateCacheKey(dataSourceName, queryObject) {
     customWhere: queryObject.customWhere || null,
     groupBy: queryObject.groupBy ? [...queryObject.groupBy].sort() : null,
     orderBy: queryObject.orderBy ? [...queryObject.orderBy].sort() : null,
-    limit: queryObject.limit || null,
   };
   
-  // Create hash from normalized object
+  // Check hash cache first (avoid recalculating)
   const keyString = JSON.stringify(normalized);
+  if (keyHashCache.has(keyString)) {
+    return `query:${dataSourceName}:${keyHashCache.get(keyString)}`;
+  }
+  
+  // Create hash from normalized object
   const hash = crypto.createHash('md5').update(keyString).digest('hex');
+  keyHashCache.set(keyString, hash);
+  
+  // Limit hash cache size
+  if (keyHashCache.size > 1000) {
+    const firstKey = keyHashCache.keys().next().value;
+    keyHashCache.delete(firstKey);
+  }
+  
   return `query:${dataSourceName}:${hash}`;
+}
+
+/**
+ * Clean expired cache entries (runs periodically)
+ */
+function cleanExpiredCache() {
+  const now = Date.now();
+  let cleaned = 0;
+  
+  for (const [key, value] of fastCache.entries()) {
+    if (value.expiresAt < now) {
+      fastCache.delete(key);
+      const index = cacheAccessOrder.indexOf(key);
+      if (index > -1) cacheAccessOrder.splice(index, 1);
+      cleaned++;
+    }
+  }
+  
+  if (cleaned > 0) {
+    console.log(`🧹 Cleaned ${cleaned} expired cache entries`);
+  }
+}
+
+// Clean expired entries every 5 minutes
+setInterval(cleanExpiredCache, 5 * 60 * 1000);
+
+/**
+ * Evict least recently used entry if cache is full
+ */
+function evictLRU() {
+  if (fastCache.size < MAX_CACHE_SIZE) return;
+  
+  // Remove least recently used (first in access order)
+  if (cacheAccessOrder.length > 0) {
+    const lruKey = cacheAccessOrder.shift();
+    fastCache.delete(lruKey);
+    console.log(`🗑️  Evicted LRU cache entry: ${lruKey.substring(0, 50)}...`);
+  }
 }
 
 // const {getDatafromDuckDB}=require('./services/snowflakeConnector')
@@ -463,15 +514,18 @@ app.post('/remove-data-source', async (req, res) => {
     await dbClient.run(deleteQuery);  
 
     // Clear cache for this data source
-    const keys = queryCache.keys();
     const prefix = `query:${dsName}:`;
     let clearedCount = 0;
-    keys.forEach(key => {
+    
+    for (const key of fastCache.keys()) {
       if (key.startsWith(prefix)) {
-        queryCache.del(key);
+        fastCache.delete(key);
+        const index = cacheAccessOrder.indexOf(key);
+        if (index > -1) cacheAccessOrder.splice(index, 1);
         clearedCount++;
       }
-    });
+    }
+    
     if (clearedCount > 0) {
       console.log(`🗑️  Cleared ${clearedCount} cache entries for removed data source: ${dsName}`);
     }
@@ -1205,29 +1259,63 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
   }
 }
 
-// 🔥 CACHED WRAPPER: Main function to get data with caching
+// ⚡ ULTRA-FAST CACHED WRAPPER: Zero-latency cache with native Map
 async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
-  // Generate cache key from query parameters
+  // Generate cache key (with hash caching for speed)
   const cacheKey = generateCacheKey(dataSourceName, queryObject);
   
-  // Check cache first
-  const cachedData = queryCache.get(cacheKey);
-  if (cachedData !== undefined) {
-    console.log(`⚡ CACHE HIT for ${dataSourceName} - Returning cached data (${cachedData.length.toLocaleString()} rows)`);
-    return cachedData;
+  // ⚡ INSTANT CACHE LOOKUP - O(1) Map.get() operation
+  const cached = fastCache.get(cacheKey);
+  
+  if (cached) {
+    // Check if expired
+    if (cached.expiresAt > Date.now()) {
+      // Update LRU tracking (move to end)
+      const index = cacheAccessOrder.indexOf(cacheKey);
+      if (index > -1) cacheAccessOrder.splice(index, 1);
+      cacheAccessOrder.push(cacheKey);
+      
+      // Update access stats
+      cached.accessCount++;
+      cached.lastAccessed = Date.now();
+      
+      // Return data directly (no decompression, no parsing - instant!)
+      const rowCount = Array.isArray(cached.data) ? cached.data.length : 0;
+      console.log(`⚡⚡ INSTANT CACHE HIT for ${dataSourceName} (${rowCount.toLocaleString()} rows, accessed ${cached.accessCount}x)`);
+      return cached.data;
+    } else {
+      // Expired - remove it
+      fastCache.delete(cacheKey);
+      const index = cacheAccessOrder.indexOf(cacheKey);
+      if (index > -1) cacheAccessOrder.splice(index, 1);
+    }
   }
   
   // Cache miss - execute query
   console.log(`💾 CACHE MISS for ${dataSourceName} - Executing query...`);
-  const startTime = Date.now();
+  const queryStartTime = Date.now();
   
   try {
     const data = await _getDataBasedOnDataSourceName(dataSourceName, queryObject);
+    const queryElapsed = ((Date.now() - queryStartTime) / 1000).toFixed(2);
     
-    // Store in cache
-    queryCache.set(cacheKey, data);
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`✅ Query completed in ${elapsed}s - Cached ${data.length.toLocaleString()} rows with key: ${cacheKey.substring(0, 50)}...`);
+    // Evict LRU if cache is full
+    evictLRU();
+    
+    // ⚡ STORE DIRECTLY IN MEMORY - No compression, no serialization overhead
+    // Store as JavaScript object reference (fastest possible)
+    fastCache.set(cacheKey, {
+      data: data, // Direct object reference
+      expiresAt: Date.now() + (CACHE_TTL * 1000),
+      accessCount: 1,
+      lastAccessed: Date.now()
+    });
+    
+    // Update LRU tracking
+    cacheAccessOrder.push(cacheKey);
+    
+    const rowCount = Array.isArray(data) ? data.length : 0;
+    console.log(`✅ Query completed in ${queryElapsed}s - Cached ${rowCount.toLocaleString()} rows (instant access ready)`);
     
     return data;
   } catch (error) {
@@ -1318,15 +1406,18 @@ app.post("/rename-data-source",async(req,res)=>{
     await dbClient.run(updateQuery);
     
     // Clear cache for the old data source name
-    const keys = queryCache.keys();
     const prefix = `query:${oldName}:`;
     let clearedCount = 0;
-    keys.forEach(key => {
+    
+    for (const key of fastCache.keys()) {
       if (key.startsWith(prefix)) {
-        queryCache.del(key);
+        fastCache.delete(key);
+        const index = cacheAccessOrder.indexOf(key);
+        if (index > -1) cacheAccessOrder.splice(index, 1);
         clearedCount++;
       }
-    });
+    }
+    
     if (clearedCount > 0) {
       console.log(`🗑️  Cleared ${clearedCount} cache entries for renamed data source: ${oldName} -> ${newName}`);
     }
@@ -1533,34 +1624,31 @@ app.post("/get-distinct-column-values", async (req, res) => {
  */
 app.get('/cache/stats', (req, res) => {
   try {
-    const stats = queryCache.getStats();
-    const keys = queryCache.keys();
-    
-    // Calculate approximate memory usage (rough estimate)
+    let totalRows = 0;
     let estimatedSize = 0;
-    keys.forEach(key => {
-      const data = queryCache.get(key);
-      if (data && Array.isArray(data)) {
-        // Rough estimate: each row object ~1KB, plus overhead
-        estimatedSize += data.length * 1024;
+    let totalAccessCount = 0;
+    
+    for (const [key, value] of fastCache.entries()) {
+      if (value.data && Array.isArray(value.data)) {
+        totalRows += value.data.length;
+        // Rough estimate: each row object ~1KB
+        estimatedSize += value.data.length * 1024;
       }
-    });
+      totalAccessCount += value.accessCount || 0;
+    }
     
     res.json({
       success: true,
       stats: {
-        keys: stats.keys,
-        hits: stats.hits,
-        misses: stats.misses,
-        ksize: stats.ksize,
-        vsize: stats.vsize,
+        keys: fastCache.size,
+        maxKeys: MAX_CACHE_SIZE,
+        totalRows: totalRows.toLocaleString(),
         estimatedSizeMB: (estimatedSize / (1024 * 1024)).toFixed(2),
-        hitRate: stats.hits + stats.misses > 0 
-          ? ((stats.hits / (stats.hits + stats.misses)) * 100).toFixed(2) + '%'
-          : '0%',
-        cacheKeys: keys.length,
+        totalAccessCount: totalAccessCount,
+        avgAccessPerKey: fastCache.size > 0 ? (totalAccessCount / fastCache.size).toFixed(1) : 0,
         ttl: CACHE_TTL,
-        ttlMinutes: CACHE_TTL / 60
+        ttlMinutes: CACHE_TTL / 60,
+        type: 'Ultra-fast native Map (O(1) lookup, no compression, direct object references)'
       }
     });
   } catch (err) {
@@ -1575,8 +1663,10 @@ app.get('/cache/stats', (req, res) => {
  */
 app.post('/cache/clear', (req, res) => {
   try {
-    const keysBefore = queryCache.keys().length;
-    queryCache.flushAll();
+    const keysBefore = fastCache.size;
+    fastCache.clear();
+    cacheAccessOrder = [];
+    keyHashCache.clear();
     console.log(`🗑️  Cache cleared - Removed ${keysBefore} keys`);
     res.json({ 
       success: true, 
@@ -1595,16 +1685,17 @@ app.post('/cache/clear', (req, res) => {
 app.post('/cache/clear/:dataSourceName', (req, res) => {
   try {
     const { dataSourceName } = req.params;
-    const keys = queryCache.keys();
     const prefix = `query:${dataSourceName}:`;
-    
     let clearedCount = 0;
-    keys.forEach(key => {
+    
+    for (const key of fastCache.keys()) {
       if (key.startsWith(prefix)) {
-        queryCache.del(key);
+        fastCache.delete(key);
+        const index = cacheAccessOrder.indexOf(key);
+        if (index > -1) cacheAccessOrder.splice(index, 1);
         clearedCount++;
       }
-    });
+    }
     
     console.log(`🗑️  Cleared ${clearedCount} cache entries for data source: ${dataSourceName}`);
     res.json({ 
@@ -1623,7 +1714,7 @@ app.post('/cache/clear/:dataSourceName', (req, res) => {
  */
 app.get('/cache/keys', (req, res) => {
   try {
-    const keys = queryCache.keys();
+    const keys = Array.from(fastCache.keys());
     res.json({ 
       success: true, 
       keys: keys,

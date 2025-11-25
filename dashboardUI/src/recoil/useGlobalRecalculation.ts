@@ -14,7 +14,6 @@ import { filterConfigFamily, filterNamesState } from '../recoil/FiltersFamily';
 import { parameterNamesState } from '../recoil/ParameterTracker';
 import { liveFilterFamily } from '../recoil/LiveFilterFamily';
 import { allFiltersSnapshotSelector } from '../recoil/AllFiltersSelector';
-import { topNState } from '../recoil/topN';
 
 // Helper to safely parse stored strings into arrays/objects/values
 const safeParse = (value: string): any => {
@@ -41,7 +40,6 @@ export const useGlobalRecalculation = () => {
   const variableNames = useRecoilValue(variableNamesState);
   const parameterNames = useRecoilValue(parameterNamesState);
   const filterNames = useRecoilValue(filterNamesState);
-  const topNValue = useRecoilValue(topNState);
   const setVariableNames = useSetRecoilState(variableNamesState);
   const setStoredLogics = useSetRecoilState(storedLogicsState);
   const setUpdateTrigger = useSetRecoilState(variableUpdateTriggerState);
@@ -126,8 +124,6 @@ export const useGlobalRecalculation = () => {
         }
       });
       
-      // Always include topN
-      allVariables['topN'] = topNValue;
       
       console.log(`📦 [Global Recalc] Fresh variables:`, Object.keys(allVariables));
       console.log(`📦 [Global Recalc] Fresh parameters:`, Object.keys(allParameters));
@@ -176,7 +172,7 @@ export const useGlobalRecalculation = () => {
       console.error(`❌ [Global Recalc] Failed to execute logic for ${logic.variableName}:`, err);
       return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
     }
-  }, [variableNames, parameterNames, filterNames, topNValue, setVariableNames, setStoredLogics]);
+  }, [variableNames, parameterNames, filterNames, setVariableNames, setStoredLogics]);
 
   // Global recalculation function
   const recalculateAllLogics = useCallback(async () => {

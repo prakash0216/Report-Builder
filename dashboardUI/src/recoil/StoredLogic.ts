@@ -52,7 +52,6 @@ export const logicsNeedingRecalculationSelector = selector({
   key: 'logicsNeedingRecalculationSelector',
   get: ({ get }) => {
     const logics = get(storedLogicsState);
-    const topN = get(require('./topN').topNState);
     
     // Return logics that reference topN in their logic string
     return logics.filter(logic => 
