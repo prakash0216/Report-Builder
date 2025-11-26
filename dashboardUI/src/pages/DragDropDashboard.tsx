@@ -768,7 +768,7 @@ export default function DropDragDashboard() {
 
         <div className="flex-1 p-4" style={{ minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 0 }}>
           {chartConfig ? (
-            <ResizableChart key={`${item.i}-${variableUpdateTrigger}`} options={chartConfig} />
+            <ResizableChart key={`${item.i}-${variableUpdateTrigger}`} options={chartConfig} showExport= {isEditMode ? false : true}/>
           ) : (
             <div className="h-full flex items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 rounded-xl border-2 border-dashed border-slate-300">
               <div className="text-center px-6 py-8">

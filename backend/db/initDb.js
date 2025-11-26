@@ -118,14 +118,13 @@ async function parameterTable(){
   }
 }
 
-const calculationsTable=`
-CREATE TABLE IF NOT EXISTS calculations (
+const calculationTables=`
+CREATE TABLE IF NOT EXISTS calculations(
   id INTEGER PRIMARY KEY DEFAULT NEXTVAL('calculations_seq'),
-  name VARCHAR NOT NULL,
-  expression TEXT NOT NULL,
-  last_modified TIMESTAMP,
-);
-`
+  variable_name varchar NOT NULL,
+  logic TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_executed TIMESTAMP)`
 
 const filtersTable=`
 CREATE TABLE IF NOT EXISTS filters (

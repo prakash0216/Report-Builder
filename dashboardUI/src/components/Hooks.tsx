@@ -464,6 +464,30 @@ export default function Hooks() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
+    // Helper function to reload calculations from database
+    const reloadCalculations = useCallback(async () => {
+        try {
+            const response = await fetch('http://localhost:3002/api/calculations');
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.calculations) {
+                    const updatedLogics = data.calculations.map((dbCalc: any) => ({
+                        id: dbCalc.id.toString(),
+                        variableName: dbCalc.variable_name,
+                        logic: dbCalc.logic,
+                        createdAt: new Date(dbCalc.created_at).getTime(),
+                        lastExecuted: dbCalc.last_executed ? new Date(dbCalc.last_executed).getTime() : undefined,
+                    }));
+                    setStoredLogics(updatedLogics);
+                    return updatedLogics;
+                }
+            }
+        } catch (err) {
+            console.error('Failed to reload calculations:', err);
+        }
+        return null;
+    }, [setStoredLogics]);
+
     const [isScopeExpanded, setIsScopeExpanded] = useState(false);
 
     const parameterNames = useRecoilValue(parameterNamesState);
@@ -614,6 +638,17 @@ export default function Hooks() {
                         return newSet;
                     });
 
+                    // Update last_executed timestamp in database
+                    try {
+                        await fetch(`http://localhost:3002/api/calculations/${logic.id}/execute`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                        });
+                    } catch (err) {
+                        console.warn('Failed to update execution timestamp:', err);
+                    }
+
+                    // Update local state
                     setStoredLogics((prev) =>
                         prev.map((l) => (l.id === logic.id ? { ...l, lastExecuted: Date.now() } : l))
                     );
@@ -771,28 +806,70 @@ export default function Hooks() {
                     const existingLogicIndex = storedLogics.findIndex((logic) => logic.variableName === variableName);
 
                     if (existingLogicIndex !== -1) {
-                        setStoredLogics((prev) =>
-                            prev.map((logic, index) =>
-                                index === existingLogicIndex
-                                    ? {
-                                          ...logic,
-                                          logic: calculationLogic,
-                                          lastExecuted: Date.now(),
-                                      }
-                                    : logic
-                            )
-                        );
+                        // Update existing calculation in database
+                        const existingLogic = storedLogics[existingLogicIndex];
+                        try {
+                            const updateResponse = await fetch(`http://localhost:3002/api/calculations/${existingLogic.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    logic: calculationLogic,
+                                }),
+                            });
+
+                            if (!updateResponse.ok) {
+                                throw new Error('Failed to update calculation');
+                            }
+
+                            // Update execution timestamp
+                            await fetch(`http://localhost:3002/api/calculations/${existingLogic.id}/execute`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                            });
+
+                            // Reload calculations from database
+                            await reloadCalculations();
+                        } catch (err) {
+                            console.error('Failed to update calculation:', err);
+                            throw err;
+                        }
                         setSuccess(`Logic for variable "${variableName}" updated successfully.`);
                     } else {
-                        const newLogic: StoredLogic = {
-                            id: Date.now().toString(),
-                            variableName,
-                            logic: calculationLogic,
-                            createdAt: Date.now(),
-                            lastExecuted: Date.now(),
-                        };
+                        // Create new calculation in database
+                        try {
+                            const createResponse = await fetch('http://localhost:3002/api/calculations', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    variableName,
+                                    logic: calculationLogic,
+                                }),
+                            });
 
-                        setStoredLogics((prev) => [...prev, newLogic]);
+                            if (!createResponse.ok) {
+                                const errorData = await createResponse.json();
+                                throw new Error(errorData.error || 'Failed to create calculation');
+                            }
+
+                            // Reload calculations to get the new one with its ID
+                            const updatedLogics = await reloadCalculations();
+                            
+                            // Find the newly created calculation and update execution timestamp
+                            if (updatedLogics) {
+                                const newCalc = updatedLogics.find((c: StoredLogic) => c.variableName === variableName);
+                                if (newCalc) {
+                                    await fetch(`http://localhost:3002/api/calculations/${newCalc.id}/execute`, {
+                                        method: 'PUT',
+                                        headers: { 'Content-Type': 'application/json' },
+                                    });
+                                    // Reload one more time to get the updated timestamp
+                                    await reloadCalculations();
+                                }
+                            }
+                        } catch (err) {
+                            console.error('Failed to create calculation:', err);
+                            throw err;
+                        }
                         setSuccess(`Variable "${variableName}" created and logic stored successfully.`);
                     }
 
@@ -819,6 +896,7 @@ export default function Hooks() {
             setUpdateTrigger,
             setStoredLogics,
             storedLogics,
+            reloadCalculations,
         ]
     );
 
@@ -833,26 +911,46 @@ export default function Hooks() {
 
     const deleteStoredLogic = useRecoilCallback(
         ({ reset }) =>
-            (id: string) => {
+            async (id: string) => {
                 const logicToDelete = storedLogics.find((logic) => logic.id === id);
 
-                if (logicToDelete) {
+                if (!logicToDelete) {
+                    return;
+                }
+
+                try {
+                    // Delete from database
+                    const deleteResponse = await fetch(`http://localhost:3002/api/calculations/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                    });
+
+                    if (!deleteResponse.ok) {
+                        throw new Error('Failed to delete calculation');
+                    }
+
+                    // Reset variable atom
                     reset(variableAtomFamily(logicToDelete.variableName));
 
+                    // Remove from variable names
                     setVariableNames((prev) => {
                         const newSet = new Set(prev);
                         newSet.delete(logicToDelete.variableName);
                         return newSet;
                     });
+
+                    // Reload calculations from database
+                    await reloadCalculations();
+
+                    setTimeout(() => {
+                        setUpdateTrigger((prev) => prev + 1);
+                    }, 100);
+
+                    setSuccess(`Logic "${logicToDelete.variableName}" deleted successfully.`);
+                } catch (err) {
+                    console.error('Failed to delete calculation:', err);
+                    setError(err instanceof Error ? err.message : 'Failed to delete calculation');
                 }
-
-                setStoredLogics((prev) => prev.filter((logic) => logic.id !== id));
-
-                setTimeout(() => {
-                    setUpdateTrigger((prev) => prev + 1);
-                }, 100);
-
-                setSuccess(`Logic "${logicToDelete?.variableName}" deleted successfully.`);
             },
         [storedLogics, setVariableNames, setStoredLogics, setUpdateTrigger]
     );

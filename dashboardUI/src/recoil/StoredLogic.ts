@@ -1,8 +1,10 @@
 // recoil/storedLogics.js
 import { atom, atomFamily, selector } from 'recoil';
-import { localStorageEffect } from './persistence';
+import axios from 'axios';
 
-// Interface for stored logic
+const API_BASE_URL = 'http://localhost:3002';
+
+// Interface for stored logic (matches database schema)
 export interface StoredLogic {
   id: string;
   variableName: string;
@@ -11,12 +13,54 @@ export interface StoredLogic {
   lastExecuted?: number;
 }
 
+// Database calculation interface (from API)
+interface DbCalculation {
+  id: number;
+  variable_name: string;
+  logic: string;
+  created_at: string;
+  last_executed: string | null;
+}
+
+// Convert database format to StoredLogic format
+function dbToStoredLogic(dbCalc: DbCalculation): StoredLogic {
+  return {
+    id: dbCalc.id.toString(),
+    variableName: dbCalc.variable_name,
+    logic: dbCalc.logic,
+    createdAt: new Date(dbCalc.created_at).getTime(),
+    lastExecuted: dbCalc.last_executed ? new Date(dbCalc.last_executed).getTime() : undefined,
+  };
+}
+
+// Custom effect for syncing calculations with database
+const calculationsDbEffect = ({ setSelf, onSet, trigger }: any) => {
+  // Load initial value from database
+  if (trigger === 'get') {
+    axios.get(`${API_BASE_URL}/api/calculations`)
+      .then(response => {
+        if (response.data.success && response.data.calculations) {
+          const storedLogics = response.data.calculations.map(dbToStoredLogic);
+          setSelf(storedLogics);
+          console.log('✅ Loaded calculations from database:', storedLogics.length);
+        }
+      })
+      .catch(error => {
+        console.error('❌ Error loading calculations from database:', error);
+        // Keep default value on error
+      });
+  }
+
+  // Note: Individual calculation additions/updates/deletes are handled via API calls in components
+  // This effect is primarily for loading the initial state
+};
+
 // Main atom to store all logics
 export const storedLogicsState = atom<StoredLogic[]>({
   key: 'storedLogicsState',
   default: [],
   effects: [
-    localStorageEffect<StoredLogic[]>('storedLogicsState')
+    calculationsDbEffect
   ],
 });
 

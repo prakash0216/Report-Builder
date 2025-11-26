@@ -141,6 +141,125 @@ async function parseCsvByName(csvName) {
   }
 
 // ============================================
+// PARAMETER ENDPOINTS (NEW)
+// ============================================
+
+/**
+ * Get all parameter names
+ * GET /api/parameters/names
+ */
+app.get('/api/parameters/names', async (req, res) => {
+  try {
+    const result = await dbClient.query('SELECT name FROM parameters ORDER BY created_at DESC');
+    const paramNames = result.map(row => row.name);
+    res.json({ success: true, parameterNames: paramNames });
+  } catch (err) {
+    console.error('❌ Error fetching parameter names:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get specific parameter value by name
+ * GET /api/parameters/:name
+ */
+app.get('/api/parameters/:name', async (req, res) => {
+  const { name } = req.params;
+  try {
+    const result = await dbClient.query(`SELECT value FROM parameters WHERE name='${name}'`);
+    if (result.length === 0) {
+      return res.json({ success: true, value: '' }); // Return empty string if not found
+    }
+    res.json({ success: true, value: result[0].value });
+  } catch (err) {
+    console.error('❌ Error fetching parameter:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Create or update parameter
+ * POST /api/parameters/:name
+ */
+app.post('/api/parameters/:name', async (req, res) => {
+  const { name } = req.params;
+  const { value } = req.body;
+  
+  if (value === undefined) {
+    return res.status(400).json({ success: false, error: 'Value is required' });
+  }
+
+  try {
+    // Check if parameter exists
+    const existing = await dbClient.query(`SELECT id FROM parameters WHERE name='${name}'`);
+    
+    if (existing.length > 0) {
+      // Update existing parameter
+      const updateQuery = `UPDATE parameters SET value='${String(value).replace(/'/g, "''")}', last_modified=CURRENT_TIMESTAMP WHERE name='${name}'`;
+      await dbClient.run(updateQuery);
+      console.log(`✅ Updated parameter: ${name}`);
+    } else {
+      // Insert new parameter
+      const insertQuery = `INSERT INTO parameters (name, value, created_at, last_modified) VALUES ('${name}', '${String(value).replace(/'/g, "''")}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
+      await dbClient.run(insertQuery);
+      console.log(`✅ Created parameter: ${name}`);
+    }
+    
+    res.json({ success: true, message: 'Parameter saved successfully' });
+  } catch (err) {
+    console.error('❌ Error saving parameter:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Delete parameter
+ * DELETE /api/parameters/:name
+ */
+app.delete('/api/parameters/:name', async (req, res) => {
+  const { name } = req.params;
+  try {
+    const deleteQuery = `DELETE FROM parameters WHERE name='${name}'`;
+    await dbClient.run(deleteQuery);
+    console.log(`✅ Deleted parameter: ${name}`);
+    res.json({ success: true, message: 'Parameter deleted successfully' });
+  } catch (err) {
+    console.error('❌ Error deleting parameter:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Rename parameter
+ * PUT /api/parameters/:oldName/rename
+ */
+app.put('/api/parameters/:oldName/rename', async (req, res) => {
+  const { oldName } = req.params;
+  const { newName } = req.body;
+  
+  if (!newName) {
+    return res.status(400).json({ success: false, error: 'New name is required' });
+  }
+
+  try {
+    // Check if new name already exists
+    const existing = await dbClient.query(`SELECT id FROM parameters WHERE name='${newName}'`);
+    if (existing.length > 0) {
+      return res.status(400).json({ success: false, error: 'Parameter name already exists' });
+    }
+    
+    const updateQuery = `UPDATE parameters SET name='${newName}', last_modified=CURRENT_TIMESTAMP WHERE name='${oldName}'`;
+    await dbClient.run(updateQuery);
+    console.log(`✅ Renamed parameter: ${oldName} -> ${newName}`);
+    res.json({ success: true, message: 'Parameter renamed successfully' });
+  } catch (err) {
+    console.error('❌ Error renaming parameter:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
+// ============================================
 // DATA SOURCE METADATA ENDPOINTS (NEW)
 // ============================================
 
@@ -310,123 +429,197 @@ app.put('/api/datasources/:name/query', async (req, res) => {
   }
 });
 
+app.post('/remove-data-source', async (req, res) => {
+  const {dsName}= req.body;
+  try{
+    const deleteQuery = `DELETE FROM data_source_registry WHERE ds_name='${dsName}'`;
+    await dbClient.run(deleteQuery);  
+
+    // Clear cache for this data source
+    const prefix = `query:${dsName}:`;
+    let clearedCount = 0;
+    
+    for (const key of fastCache.keys()) {
+      if (key.startsWith(prefix)) {
+        fastCache.delete(key);
+        const index = cacheAccessOrder.indexOf(key);
+        if (index > -1) cacheAccessOrder.splice(index, 1);
+        clearedCount++;
+      }
+    }
+    
+    if (clearedCount > 0) {
+      console.log(`🗑️  Cleared ${clearedCount} cache entries for removed data source: ${dsName}`);
+    }
+
+    res.json({success:true,message:`Data source ${dsName} removed successfully`});
+  }
+  catch(err){
+    console.error("Error removing data source:", err);
+    res.status(500).json({success:false,error:err.message});
+  }
+});
+
+
 // ============================================
-// PARAMETER ENDPOINTS (NEW)
+// Calculations ENDPOINTS (NEW)
 // ============================================
 
 /**
- * Get all parameter names
- * GET /api/parameters/names
+ * Get all calculations
+ * GET /api/calculations
  */
-app.get('/api/parameters/names', async (req, res) => {
+app.get('/api/calculations', async (req, res) => {
   try {
-    const result = await dbClient.query('SELECT name FROM parameters ORDER BY created_at DESC');
-    const paramNames = result.map(row => row.name);
-    res.json({ success: true, parameterNames: paramNames });
+    const result = await dbClient.query('SELECT * FROM calculations ORDER BY created_at ASC');
+    res.json({ success: true, calculations: result });
   } catch (err) {
-    console.error('❌ Error fetching parameter names:', err.message);
+    console.error('❌ Error fetching calculations:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 /**
- * Get specific parameter value by name
- * GET /api/parameters/:name
+ * Get specific calculation by id
+ * GET /api/calculations/:id
  */
-app.get('/api/parameters/:name', async (req, res) => {
-  const { name } = req.params;
+app.get('/api/calculations/:id', async (req, res) => {
+  const { id } = req.params;
   try {
-    const result = await dbClient.query(`SELECT value FROM parameters WHERE name='${name}'`);
+    const result = await dbClient.query(`SELECT * FROM calculations WHERE id=${id}`);
     if (result.length === 0) {
-      return res.json({ success: true, value: '' }); // Return empty string if not found
+      return res.status(404).json({ success: false, error: 'Calculation not found' });
     }
-    res.json({ success: true, value: result[0].value });
+    res.json({ success: true, calculation: result[0] });
   } catch (err) {
-    console.error('❌ Error fetching parameter:', err.message);
+    console.error('❌ Error fetching calculation:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 /**
- * Create or update parameter
- * POST /api/parameters/:name
+ * Add new calculation
+ * POST /api/calculations
  */
-app.post('/api/parameters/:name', async (req, res) => {
-  const { name } = req.params;
-  const { value } = req.body;
+app.post('/api/calculations', async (req, res) => {
+  const { variableName, logic } = req.body;
   
-  if (value === undefined) {
-    return res.status(400).json({ success: false, error: 'Value is required' });
+  if (!variableName || !logic) {
+    return res.status(400).json({ success: false, error: 'variableName and logic are required' });
   }
 
   try {
-    // Check if parameter exists
-    const existing = await dbClient.query(`SELECT id FROM parameters WHERE name='${name}'`);
-    
+    // Check if variable name already exists
+    const existing = await dbClient.query(`SELECT id FROM calculations WHERE variable_name='${variableName.replace(/'/g, "''")}'`);
     if (existing.length > 0) {
-      // Update existing parameter
-      const updateQuery = `UPDATE parameters SET value='${String(value).replace(/'/g, "''")}', last_modified=CURRENT_TIMESTAMP WHERE name='${name}'`;
-      await dbClient.run(updateQuery);
-      console.log(`✅ Updated parameter: ${name}`);
+      return res.status(400).json({ success: false, error: 'Calculation with this variable name already exists' });
+    }
+
+    const insertQuery = `INSERT INTO calculations (variable_name, logic, created_at) 
+      VALUES ('${variableName.replace(/'/g, "''")}', '${logic.replace(/'/g, "''")}', CURRENT_TIMESTAMP)`;
+    await dbClient.run(insertQuery);
+    console.log(`✅ Calculation added: ${variableName}`);
+    res.json({ success: true, message: 'Calculation added successfully' });
+  } catch (err) {
+    console.error('❌ Error adding calculation:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Update calculation
+ * PUT /api/calculations/:id
+ */
+app.put('/api/calculations/:id', async (req, res) => {
+  const { id } = req.params;
+  const { variableName, logic } = req.body;
+  
+  if (!logic) {
+    return res.status(400).json({ success: false, error: 'logic is required' });
+  }
+
+  try {
+    // Check if calculation exists
+    const existing = await dbClient.query(`SELECT id FROM calculations WHERE id=${id}`);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, error: 'Calculation not found' });
+    }
+
+    // If variableName is being updated, check if new name already exists
+    if (variableName) {
+      const nameCheck = await dbClient.query(`SELECT id FROM calculations WHERE variable_name='${variableName.replace(/'/g, "''")}' AND id != ${id}`);
+      if (nameCheck.length > 0) {
+        return res.status(400).json({ success: false, error: 'Calculation with this variable name already exists' });
+      }
+    }
+
+    let updateQuery;
+    if (variableName) {
+      updateQuery = `UPDATE calculations 
+        SET variable_name='${variableName.replace(/'/g, "''")}', 
+            logic='${logic.replace(/'/g, "''")}' 
+        WHERE id=${id}`;
     } else {
-      // Insert new parameter
-      const insertQuery = `INSERT INTO parameters (name, value, created_at, last_modified) VALUES ('${name}', '${String(value).replace(/'/g, "''")}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
-      await dbClient.run(insertQuery);
-      console.log(`✅ Created parameter: ${name}`);
+      updateQuery = `UPDATE calculations 
+        SET logic='${logic.replace(/'/g, "''")}' 
+        WHERE id=${id}`;
     }
     
-    res.json({ success: true, message: 'Parameter saved successfully' });
-  } catch (err) {
-    console.error('❌ Error saving parameter:', err.message);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/**
- * Delete parameter
- * DELETE /api/parameters/:name
- */
-app.delete('/api/parameters/:name', async (req, res) => {
-  const { name } = req.params;
-  try {
-    const deleteQuery = `DELETE FROM parameters WHERE name='${name}'`;
-    await dbClient.run(deleteQuery);
-    console.log(`✅ Deleted parameter: ${name}`);
-    res.json({ success: true, message: 'Parameter deleted successfully' });
-  } catch (err) {
-    console.error('❌ Error deleting parameter:', err.message);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/**
- * Rename parameter
- * PUT /api/parameters/:oldName/rename
- */
-app.put('/api/parameters/:oldName/rename', async (req, res) => {
-  const { oldName } = req.params;
-  const { newName } = req.body;
-  
-  if (!newName) {
-    return res.status(400).json({ success: false, error: 'New name is required' });
-  }
-
-  try {
-    // Check if new name already exists
-    const existing = await dbClient.query(`SELECT id FROM parameters WHERE name='${newName}'`);
-    if (existing.length > 0) {
-      return res.status(400).json({ success: false, error: 'Parameter name already exists' });
-    }
-    
-    const updateQuery = `UPDATE parameters SET name='${newName}', last_modified=CURRENT_TIMESTAMP WHERE name='${oldName}'`;
     await dbClient.run(updateQuery);
-    console.log(`✅ Renamed parameter: ${oldName} -> ${newName}`);
-    res.json({ success: true, message: 'Parameter renamed successfully' });
+    console.log(`✅ Calculation updated: id=${id}`);
+    res.json({ success: true, message: 'Calculation updated successfully' });
   } catch (err) {
-    console.error('❌ Error renaming parameter:', err.message);
+    console.error('❌ Error updating calculation:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+/**
+ * Update calculation last_executed timestamp
+ * PUT /api/calculations/:id/execute
+ */
+app.put('/api/calculations/:id/execute', async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    const existing = await dbClient.query(`SELECT id FROM calculations WHERE id=${id}`);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, error: 'Calculation not found' });
+    }
+
+    const updateQuery = `UPDATE calculations SET last_executed=CURRENT_TIMESTAMP WHERE id=${id}`;
+    await dbClient.run(updateQuery);
+    res.json({ success: true, message: 'Calculation execution timestamp updated' });
+  } catch (err) {
+    console.error('❌ Error updating calculation execution timestamp:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Delete calculation
+ * DELETE /api/calculations/:id
+ */
+app.delete('/api/calculations/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Check if calculation exists
+    const existing = await dbClient.query(`SELECT id FROM calculations WHERE id=${id}`);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, error: 'Calculation not found' });
+    }
+
+    const deleteQuery = `DELETE FROM calculations WHERE id=${id}`;
+    await dbClient.run(deleteQuery);
+    console.log(`✅ Calculation deleted: id=${id}`);
+    res.json({ success: true, message: 'Calculation deleted successfully' });
+  } catch (err) {
+    console.error('❌ Error deleting calculation:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 // ============================================
 // EXISTING ENDPOINTS (KEPT AS IS)
@@ -584,37 +777,6 @@ app.delete('/delete-snowflake-connection/:id', async (req, res) => {
   } catch (err) {
       console.error("Error deleting snowflake connection:", err);
       res.status(500).json({success:false,error:err.message});
-  }
-});
-
-app.post('/remove-data-source', async (req, res) => {
-  const {dsName}= req.body;
-  try{
-    const deleteQuery = `DELETE FROM data_source_registry WHERE ds_name='${dsName}'`;
-    await dbClient.run(deleteQuery);  
-
-    // Clear cache for this data source
-    const prefix = `query:${dsName}:`;
-    let clearedCount = 0;
-    
-    for (const key of fastCache.keys()) {
-      if (key.startsWith(prefix)) {
-        fastCache.delete(key);
-        const index = cacheAccessOrder.indexOf(key);
-        if (index > -1) cacheAccessOrder.splice(index, 1);
-        clearedCount++;
-      }
-    }
-    
-    if (clearedCount > 0) {
-      console.log(`🗑️  Cleared ${clearedCount} cache entries for removed data source: ${dsName}`);
-    }
-
-    res.json({success:true,message:`Data source ${dsName} removed successfully`});
-  }
-  catch(err){
-    console.error("Error removing data source:", err);
-    res.status(500).json({success:false,error:err.message});
   }
 });
 
