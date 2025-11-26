@@ -1,22 +1,45 @@
-import { atom,selector } from 'recoil';
-import { localStorageEffect } from './persistence';
+import { atom, selector } from 'recoil';
+import axios from 'axios';
 import { parameterAtomFamily } from './ParameterFamliy';
+
+const API_BASE_URL = 'http://localhost:3002';
+
+// Custom effect for syncing parameter names with database
+const parameterNamesDbEffect = ({ setSelf, onSet, trigger }: any) => {
+  // Load initial value from database
+  if (trigger === 'get') {
+    axios.get(`${API_BASE_URL}/api/parameters/names`)
+      .then(response => {
+        if (response.data.success && response.data.parameterNames) {
+          setSelf(response.data.parameterNames);
+          console.log('✅ Loaded parameter names from database:', response.data.parameterNames);
+        }
+      })
+      .catch(error => {
+        console.error('❌ Error loading parameter names:', error);
+        // Keep default value on error
+      });
+  }
+
+  // Note: Individual parameter additions/removals are handled via API calls in components
+  // This effect is primarily for loading the initial state
+};
 
 export const parameterNamesState = atom<string[]>({
   key: 'parameterNamesState',
   default: [],
-  effects:[
-    localStorageEffect('parameterNames')
+  effects: [
+    parameterNamesDbEffect
   ]
 });
 
-const _classificationCalculation =selector({
-  key:'_classificationCalculation',
-  get:({get})=>{
-    const names=get(parameterNamesState);
-    const arrayParams:any=[];
-    const arrayOfArrayParams:any=[];
-    const arrayOfObjectsParams:any=[];
+const _classificationCalculation = selector({
+  key: '_classificationCalculation',
+  get: ({ get }) => {
+    const names = get(parameterNamesState);
+    const arrayParams: any = [];
+    const arrayOfArrayParams: any = [];
+    const arrayOfObjectsParams: any = [];
 
     names.forEach(paramName => {
       // 🔑 CORRECT WAY TO READ VALUE: Use the Recoil 'get' function
@@ -50,7 +73,7 @@ const _classificationCalculation =selector({
       arrayOfObjectsParams,
     };
   }
-})
+});
 
 // Exported Selectors for use in components
 export const arrayParameterNamesSelector = selector({
@@ -67,50 +90,3 @@ export const arrayOfObjectsParameterNamesSelector = selector({
   key: 'arrayOfObjectsParameterNamesSelector',
   get: ({ get }) => get(_classificationCalculation).arrayOfObjectsParams,
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// export const arrayparameterNamesState = atom<string[]>({
-//   key: 'arrayparameterNamesState',
-//   default: [],
-//   effects:[
-//       localStorageEffect('arrayparameterNames')
-//   ]
-// });
-
-// export const arrayOfArrayParameterNamesState = atom<string[]>({
-//   key: 'arrayOfArrayParameterNamesState',
-//   default: [],
-//   effects:[
-//       localStorageEffect('arrayOfArrayParameterNames')
-//   ]
-// });
-
-// export const arrayOfObjectsParameterNamesState = atom<string[]>({
-//   key: 'arrayOfObjectsParameterNamesState',
-//   default: [],
-//   effects:[
-//       localStorageEffect('arrayOfObjectsParameterNames')
-//   ]
-// });

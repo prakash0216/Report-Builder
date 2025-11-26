@@ -8,6 +8,7 @@ import {
   arrayOfArrayParameterNamesSelector,
   arrayOfObjectsParameterNamesSelector,
 } from '../recoil/ParameterTracker';
+import axios from 'axios';
 import {
   Box,
   Button,
@@ -31,12 +32,13 @@ import {
   Edit as EditIcon,
 } from '@mui/icons-material';
 
-// --- Interface for Alert State ---
 interface AlertState {
   show: boolean;
   message: string;
   severity: 'success' | 'error' | 'warning' | 'info';
 }
+
+const API_BASE_URL = 'http://localhost:3002';
 
 export default function AddParameterMui() {
   const [selectedParam, setSelectedParam] = useState<string>('');
@@ -47,14 +49,12 @@ export default function AddParameterMui() {
   const [editingParam, setEditingParam] = useState<string | null>(null);
   const [editedParamName, setEditedParamName] = useState<string>('');
 
-  // --- Alert State ---
   const [alert, setAlert] = useState<AlertState>({
     show: false,
     message: '',
     severity: 'success',
   });
 
-  // Use a special state for the parameter value based on selection
   const [parameterValue, setParameterValue] = useRecoilState(
     selectedParam
       ? parameterAtomFamily(selectedParam)
@@ -65,24 +65,31 @@ export default function AddParameterMui() {
     parameterAtomFamily(selectedParam)
   );
 
-  // --- Updated Show Alert Function (with auto-hide) ---
   const showAlert = (
     message: string,
     severity: AlertState['severity'] = 'success'
   ) => {
     setAlert({ show: true, message, severity });
-    // Auto-hide after 4 seconds
     setTimeout(() => {
       setAlert((prev) => ({ ...prev, show: false }));
     }, 4000);
   };
 
-  const addParameter = (): void => {
+  const addParameter = async (): Promise<void> => {
     if (newParamName && !parameterNames.includes(newParamName)) {
-      setParameterNames((prev: string[]) => [...prev, newParamName]);
-      setSelectedParam(newParamName);
-      setNewParamName('');
-      showAlert(`Parameter "${newParamName}" added successfully`, 'success');
+      try {
+        // Create parameter in database with empty value
+        await axios.post(`${API_BASE_URL}/api/parameters/${newParamName}`, { value: '' });
+        
+        // Update local state
+        setParameterNames((prev: string[]) => [...prev, newParamName]);
+        setSelectedParam(newParamName);
+        setNewParamName('');
+        showAlert(`Parameter "${newParamName}" added successfully`, 'success');
+      } catch (err) {
+        console.error('Failed to add parameter', err);
+        showAlert('Failed to add parameter', 'error');
+      }
     }
   };
 
@@ -91,7 +98,7 @@ export default function AddParameterMui() {
     setEditedParamName(paramName);
   };
 
-  const saveEditedParam = (): void => {
+  const saveEditedParam = async (): Promise<void> => {
     if (!editedParamName.trim() || editedParamName === editingParam) {
       setEditingParam(null);
       return;
@@ -102,16 +109,27 @@ export default function AddParameterMui() {
       return;
     }
 
-    setParameterNames((prev: string[]) =>
-      prev.map((name) => (name === editingParam ? editedParamName : name))
-    );
+    try {
+      // Rename parameter in database
+      await axios.put(`${API_BASE_URL}/api/parameters/${editingParam}/rename`, {
+        newName: editedParamName,
+      });
 
-    if (selectedParam === editingParam) {
-      setSelectedParam(editedParamName);
+      // Update local state
+      setParameterNames((prev: string[]) =>
+        prev.map((name) => (name === editingParam ? editedParamName : name))
+      );
+
+      if (selectedParam === editingParam) {
+        setSelectedParam(editedParamName);
+      }
+
+      showAlert(`Parameter renamed to "${editedParamName}"`, 'success');
+      setEditingParam(null);
+    } catch (err) {
+      console.error('Failed to rename parameter', err);
+      showAlert('Failed to rename parameter', 'error');
     }
-
-    showAlert(`Parameter renamed to "${editedParamName}"`, 'success');
-    setEditingParam(null);
   };
 
   const cancelEditingParam = (): void => {
@@ -119,15 +137,24 @@ export default function AddParameterMui() {
     setEditedParamName('');
   };
 
-  const removeParameter = (paramName: string): void => {
-    if (selectedParam === paramName) {
-      resetParameterValue();
-      setSelectedParam('');
+  const removeParameter = async (paramName: string): Promise<void> => {
+    try {
+      // Delete parameter from database
+      await axios.delete(`${API_BASE_URL}/api/parameters/${paramName}`);
+
+      // Update local state
+      if (selectedParam === paramName) {
+        resetParameterValue();
+        setSelectedParam('');
+      }
+      setParameterNames((prev: string[]) =>
+        prev.filter((name) => name !== paramName)
+      );
+      showAlert(`Parameter "${paramName}" removed successfully`, 'success');
+    } catch (err) {
+      console.error('Failed to remove parameter', err);
+      showAlert('Failed to remove parameter', 'error');
     }
-    setParameterNames((prev: string[]) =>
-      prev.filter((name) => name !== paramName)
-    );
-    showAlert(`Parameter "${paramName}" removed successfully`, 'success');
   };
 
   useEffect(() => {
@@ -595,7 +622,7 @@ export default function AddParameterMui() {
                       }}
                     />
                     <Typography variant="body2" sx={{ color: '#059669', fontWeight: 600 }}>
-                      Auto-saved
+                      Auto-saved to DB
                     </Typography>
                   </Box>
                 </Box>

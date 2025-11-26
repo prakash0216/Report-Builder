@@ -57,6 +57,8 @@ interface AlertState {
   severity: 'success' | 'error' | 'warning' | 'info';
 }
 
+const API_BASE_URL = 'http://localhost:3002';
+
 export default function AddDataSourceMui() {
   const [selectedDS, setSelectedDS] = useState<string>('');
   const [newDSName, setNewDSName] = useState<string>('');
@@ -102,7 +104,7 @@ export default function AddDataSourceMui() {
   const fetchConnectionNames = async () => {
     try {
       const connectionNames = await axios.get(
-        'http://localhost:3002/all-connections'
+        `${API_BASE_URL}/all-connections`
       );
       const fetchedConnectionNames = connectionNames.data.connections;
       setConnectionNames(fetchedConnectionNames);
@@ -120,8 +122,12 @@ export default function AddDataSourceMui() {
     fetchConnectionNames();
   }, []);
 
+  // Note: Data sources are now automatically loaded from database via Recoil effect
+  // No need for manual fetching here
+
   const addDataSource = (): void => {
     if (newDSName && !dataSourceNames.includes(newDSName)) {
+      // Update local Recoil state - the data source will be created in DB when query is executed
       setDataSourceNames((prev: string[]) => [...prev, newDSName]);
       setSelectedDS(newDSName);
       setNewDSName('');
@@ -134,10 +140,13 @@ export default function AddDataSourceMui() {
   const removeDataSource = async (dsName: string): Promise<void> => {
     try {
       const response = await axios.post(
-        'http://localhost:3002/remove-data-source',
+        `${API_BASE_URL}/remove-data-source`,
         { dsName }
       );
       if (response) {
+        // Also delete the parameter from database
+        await axios.delete(`${API_BASE_URL}/api/parameters/${dsName}`);
+        
         setDataSourceNames((prev: string[]) =>
           prev.filter((name) => name !== dsName)
         );
@@ -172,9 +181,9 @@ export default function AddDataSourceMui() {
     }
 
     try {
-      // Update in backend if needed
+      // Update in backend
       const response = await axios.post(
-        'http://localhost:3002/rename-data-source',
+        `${API_BASE_URL}/rename-data-source`,
         {
           oldName: editingDS,
           newName: editedName,
@@ -219,7 +228,7 @@ export default function AddDataSourceMui() {
 
     try {
       const response = await axios.post(
-        'http://localhost:3002/execute-query',
+        `${API_BASE_URL}/execute-query`,
         {
           query: sqlQuery,
           dataSourceName: selectedDS,
@@ -231,6 +240,12 @@ export default function AddDataSourceMui() {
       const result = response.data;
       if (result.success) {
         setQueryResult(result);
+        
+        // After successful query execution, ensure the data source name is in the list
+        if (!dataSourceNames.includes(selectedDS)) {
+          setDataSourceNames((prev: string[]) => [...prev, selectedDS]);
+        }
+        
         showAlert('Query executed successfully', 'success');
       } else {
         setError(result.error || 'Query execution failed');
@@ -662,7 +677,7 @@ export default function AddDataSourceMui() {
         </Collapse>
       </Box>
 
-      {/* Right Side Content */}
+      {/* Right Side Content - Same as before, just continuing... */}
       <Box
         sx={{ gridColumn: 'span 9', display: 'flex', flexDirection: 'column', gap: 3 }}
       >
@@ -723,7 +738,7 @@ export default function AddDataSourceMui() {
           </Box>
         ) : (
           <>
-            {/* SQL Query Section */}
+            {/* SQL Query Section - continuing from previous component... */}
             <Paper
               elevation={0}
               sx={{
@@ -748,7 +763,6 @@ export default function AddDataSourceMui() {
                   gap: 2,
                 }}
               >
-                {/* Left side: Title */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                   <Box
                     sx={{
@@ -780,7 +794,6 @@ export default function AddDataSourceMui() {
                   </Box>
                 </Box>
 
-                {/* Right side: Controls */}
                 <Box
                   sx={{
                     display: 'flex',
@@ -803,7 +816,6 @@ export default function AddDataSourceMui() {
                 >
                     Generate Queries with AI
                 </Button>
-                  {/* Connection Name Dropdown */}
                   <FormControl 
                     size="small" 
                     sx={{ 
@@ -844,7 +856,6 @@ export default function AddDataSourceMui() {
                     </Select>
                   </FormControl>
 
-                  {/* Connection Type Dropdown */}
                   <FormControl 
                     size="small" 
                     sx={{ 
@@ -878,7 +889,6 @@ export default function AddDataSourceMui() {
                     </Select>
                   </FormControl>
 
-                  {/* Execute Button */}
                   <Button
                     variant="contained"
                     size="large"
@@ -911,7 +921,6 @@ export default function AddDataSourceMui() {
                 </Box>
               </Box>
 
-              {/* Query Input with enhanced styling */}
               <Box
                 sx={{
                   position: 'relative',
@@ -924,7 +933,6 @@ export default function AddDataSourceMui() {
                   },
                 }}
               >
-                {/* Line numbers */}
                 <Box
                   sx={{
                     position: 'absolute',
@@ -993,7 +1001,6 @@ Press Ctrl+Enter to execute"
                   }}
                 />
 
-                {/* Keyboard shortcut hint */}
                 <Box
                   sx={{
                     position: 'absolute',
@@ -1014,7 +1021,7 @@ Press Ctrl+Enter to execute"
               </Box>
             </Paper>
 
-            {/* Results Table Section */}
+            {/* Results Table Section - Same as before */}
             <Paper
               elevation={0}
               sx={{
@@ -1030,7 +1037,6 @@ Press Ctrl+Enter to execute"
                 boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
               }}
             >
-              {/* Header */}
               <Box
                 sx={{
                   p: 2.5,
@@ -1060,7 +1066,6 @@ Press Ctrl+Enter to execute"
                 )}
               </Box>
 
-              {/* Error Display */}
               {error && (
                 <Box 
                   sx={{ 
@@ -1078,7 +1083,6 @@ Press Ctrl+Enter to execute"
                 </Box>
               )}
 
-              {/* Loading State */}
               {isLoading && (
                 <Box
                   sx={{
@@ -1100,7 +1104,6 @@ Press Ctrl+Enter to execute"
                 </Box>
               )}
 
-              {/* Empty State */}
               {!queryResult && !error && !isLoading && (
                 <Box
                   sx={{
@@ -1135,7 +1138,6 @@ Press Ctrl+Enter to execute"
                 </Box>
               )}
 
-              {/* Results Table */}
               {queryResult && queryResult.success && !isLoading && (
                 <>
                   <TableContainer 

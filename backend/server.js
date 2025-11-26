@@ -11,9 +11,6 @@ import snowflake from 'snowflake-sdk';
 import crypto from 'crypto';
 import bodyParser from 'body-parser';
 import parquet from 'parquetjs'
-// import redis from 'redis';
-// Removed compression - using direct object references for ultra-low latency
-
 
 const app = express();
 app.use(bodyParser.json({limit: '50mb'}));
@@ -23,32 +20,19 @@ const PORT = process.env.PORT || 3002;
 // ============================================
 // ULTRA-FAST CACHE CONFIGURATION
 // ============================================
-// For VERY LOW LATENCY: Using native Map for O(1) lookups
-// No compression, no cloning, direct object references
 const CACHE_TTL = parseInt(process.env.CACHE_TTL) || 259200; // 3 days default
 const MAX_CACHE_SIZE = 500; // Maximum number of cached queries
 
-// Ultra-fast in-memory cache using native Map
-// Map provides O(1) lookup time - fastest possible
-const fastCache = new Map(); // key -> { data, expiresAt, accessCount, lastAccessed }
-
-// Cache key hash cache to avoid recalculating
-const keyHashCache = new Map(); // queryObject string -> hash
-
-// LRU eviction tracking
-let cacheAccessOrder = []; // Array of keys in access order
+const fastCache = new Map();
+const keyHashCache = new Map();
+let cacheAccessOrder = [];
 
 console.log(`⚡ Ultra-fast cache initialized (native Map, no compression, direct object references)`);
 
 // ============================================
 // CACHE KEY GENERATION
 // ============================================
-/**
- * Generate a unique cache key from dataSourceName and queryObject
- * OPTIMIZED: Caches hash calculations for faster key generation
- */
 function generateCacheKey(dataSourceName, queryObject) {
-  // Normalize queryObject to ensure consistent keys
   const normalized = {
     dataSourceName,
     columns: queryObject.columns ? [...queryObject.columns].sort() : null,
@@ -58,17 +42,14 @@ function generateCacheKey(dataSourceName, queryObject) {
     orderBy: queryObject.orderBy ? [...queryObject.orderBy].sort() : null,
   };
   
-  // Check hash cache first (avoid recalculating)
   const keyString = JSON.stringify(normalized);
   if (keyHashCache.has(keyString)) {
     return `query:${dataSourceName}:${keyHashCache.get(keyString)}`;
   }
   
-  // Create hash from normalized object
   const hash = crypto.createHash('md5').update(keyString).digest('hex');
   keyHashCache.set(keyString, hash);
   
-  // Limit hash cache size
   if (keyHashCache.size > 1000) {
     const firstKey = keyHashCache.keys().next().value;
     keyHashCache.delete(firstKey);
@@ -77,9 +58,6 @@ function generateCacheKey(dataSourceName, queryObject) {
   return `query:${dataSourceName}:${hash}`;
 }
 
-/**
- * Clean expired cache entries (runs periodically)
- */
 function cleanExpiredCache() {
   const now = Date.now();
   let cleaned = 0;
@@ -98,16 +76,11 @@ function cleanExpiredCache() {
   }
 }
 
-// Clean expired entries every 5 minutes
 setInterval(cleanExpiredCache, 5 * 60 * 1000);
 
-/**
- * Evict least recently used entry if cache is full
- */
 function evictLRU() {
   if (fastCache.size < MAX_CACHE_SIZE) return;
   
-  // Remove least recently used (first in access order)
   if (cacheAccessOrder.length > 0) {
     const lruKey = cacheAccessOrder.shift();
     fastCache.delete(lruKey);
@@ -115,14 +88,10 @@ function evictLRU() {
   }
 }
 
-// const {getDatafromDuckDB}=require('./services/snowflakeConnector')
-
 app.use(cors({
   origin: 'http://localhost:3000',
   credentials: true
 }));
-
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -133,7 +102,6 @@ const storage = multer.memoryStorage();
 const upload=multer({
   storage:storage,
   fileFilter: (req,file,cb)=>{
-    // console.log('File received:',file);
     const allowedExtensions=['.der','.pem','.key'];
     const fileExtension=path.extname(file.originalname).toLowerCase();
     if(allowedExtensions.includes(fileExtension)){
@@ -144,12 +112,6 @@ const upload=multer({
     }
   },
 })
-
-
-// const allowedFunctions={
-//   parseCsvByName,
-//   getDatafromDuckDB
-// }
 
 const csvFiles = {
   DynamicMarketShare: 'DynamicMarketShare.csv',
@@ -169,35 +131,6 @@ const csvHeaders = {
   ShareBarsNew: ['Company', 'NBRx Share', 'Paid TRx Share', 'Written TRx Share','Projected TRx Share'],
 };
 
-// function detectFunction(logic){
-//   if(logic.includes('parseCsvByName')){
-//     return allowedFunctions.parseCsvByName;
-//   }else if(logic.includes('getDatafromDuckDB')){
-//     return allowedFunctions.getDatafromDuckDB;
-//   }else{
-//     throw new Error('No allowed function detected in logic');
-//   }
-// }
-
-// function dsConnect(filePath, headers) {
-//   return new Promise((resolve, reject) => {
-//     const results = [];
-//     fs.createReadStream(filePath)
-//       .pipe(iconv.decodeStream('utf16le'))
-//       .pipe(csvParser({
-//         separator: '\t',
-//         skipEmptyLines: true,
-//         skipLines: 1,
-//         headers: headers,
-//         mapHeaders: ({ header }) => header.trim()
-//       }))
-//       .on('data', (data) => results.push(data))
-//       .on('end', () => resolve(results))
-//       .on('error', (err) => reject(err));
-//   });
-// }
-
-
 async function parseCsvByName(csvName) {
     if (!csvFiles[csvName]) {
       throw new Error(`CSV "${csvName}" not found`);
@@ -207,149 +140,201 @@ async function parseCsvByName(csvName) {
     return dsConnect(filePath, headers);
   }
 
-// (async()=>{
-//     try{
-//         await redisClient.connect();
-//         console.log('✅ Connected to Redis');
-//     }catch(err){
-//         console.error('❌ Redis connection failed:', err);
-//     }
-// })();
+// ============================================
+// DATA SOURCE METADATA ENDPOINTS (NEW)
+// ============================================
 
-// async function checkRedisConnection() {
-//     try {
-//       await redisClient.ping();
-//       return true;
-//     } catch (err) {
-//       console.error(err);
-//       return false;
-//     }
-//   }
+/**
+ * Get all data source names
+ * GET /api/datasources/names
+ */
+app.get('/api/datasources/names', async (req, res) => {
+  try {
+    const result = await dbClient.query('SELECT ds_name FROM data_source_registry ORDER BY created_at DESC');
+    const dsNames = result.map(row => row.ds_name);
+    res.json({ success: true, dataSourceNames: dsNames });
+  } catch (err) {
+    console.error('❌ Error fetching data source names:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
-//   app.get('/check-redis', async (req, res) => {
-//     const isConnected = await checkRedisConnection();
-//     res.json({ connected: isConnected });
-//   }); 
+/**
+ * Get specific data source query by name
+ * GET /api/datasources/:name/query
+ */
+app.get('/api/datasources/:name/query', async (req, res) => {
+  const { name } = req.params;
+  try {
+    const result = await dbClient.query(`SELECT query FROM data_source_registry WHERE ds_name='${name}'`);
+    if (result.length === 0) {
+      return res.status(404).json({ success: false, error: 'Data source not found' });
+    }
+    res.json({ success: true, query: result[0].query });
+  } catch (err) {
+    console.error('❌ Error fetching data source query:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
-// Generic API for SQL-like table names
-// app.post('/api/query', async (req, res) => {
-//   const { sql } = req.body;
+/**
+ * Update data source query
+ * PUT /api/datasources/:name/query
+ */
+app.put('/api/datasources/:name/query', async (req, res) => {
+  const { name } = req.params;
+  const { query } = req.body;
+  
+  if (!query) {
+    return res.status(400).json({ success: false, error: 'Query is required' });
+  }
 
-//   if (!sql || typeof sql !== 'string') {
-//     return res.status(400).json({ success: false, error: 'SQL string required' });
-//   }
+  try {
+    const updateQuery = `UPDATE data_source_registry SET query='${query.replace(/'/g, "''")}' WHERE ds_name='${name}'`;
+    await dbClient.run(updateQuery);
+    
+    // Clear cache for this data source
+    const prefix = `query:${name}:`;
+    let clearedCount = 0;
+    
+    for (const key of fastCache.keys()) {
+      if (key.startsWith(prefix)) {
+        fastCache.delete(key);
+        const index = cacheAccessOrder.indexOf(key);
+        if (index > -1) cacheAccessOrder.splice(index, 1);
+        clearedCount++;
+      }
+    }
+    
+    console.log(`✅ Updated query for ${name}, cleared ${clearedCount} cache entries`);
+    res.json({ success: true, message: 'Query updated successfully' });
+  } catch (err) {
+    console.error('❌ Error updating data source query:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
-//   // Extract table name from query
-//   const match = sql.match(/from\s+(\w+)/i);
-//   if (!match) {
-//     return res.status(400).json({ success: false, error: 'Invalid SQL format' });
-//   }
-//   const tableName = match[1];
+// ============================================
+// PARAMETER ENDPOINTS (NEW)
+// ============================================
 
-//   if (!csvFiles[tableName]) {
-//     return res.status(404).json({ success: false, error: `Unknown table: ${tableName}` });
-//   }
+/**
+ * Get all parameter names
+ * GET /api/parameters/names
+ */
+app.get('/api/parameters/names', async (req, res) => {
+  try {
+    const result = await dbClient.query('SELECT name FROM parameters ORDER BY created_at DESC');
+    const paramNames = result.map(row => row.name);
+    res.json({ success: true, parameterNames: paramNames });
+  } catch (err) {
+    console.error('❌ Error fetching parameter names:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
-//   try {
-//     const filePath = path.join(csvFolder, csvFiles[tableName]);
-//     if (!fs.existsSync(filePath)) {
-//       return res.status(404).json({ success: false, error: 'File not found' });
-//     }
+/**
+ * Get specific parameter value by name
+ * GET /api/parameters/:name
+ */
+app.get('/api/parameters/:name', async (req, res) => {
+  const { name } = req.params;
+  try {
+    const result = await dbClient.query(`SELECT value FROM parameters WHERE name='${name}'`);
+    if (result.length === 0) {
+      return res.json({ success: true, value: '' }); // Return empty string if not found
+    }
+    res.json({ success: true, value: result[0].value });
+  } catch (err) {
+    console.error('❌ Error fetching parameter:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
-//     const data = await dsConnect(filePath, csvHeaders[tableName]);
-//     res.json({ success: true, data, rowCount: data.length });
-//   } catch (err) {
-//     res.status(500).json({ success: false, error: err.message });
-//   }
-// });
+/**
+ * Create or update parameter
+ * POST /api/parameters/:name
+ */
+app.post('/api/parameters/:name', async (req, res) => {
+  const { name } = req.params;
+  const { value } = req.body;
+  
+  if (value === undefined) {
+    return res.status(400).json({ success: false, error: 'Value is required' });
+  }
 
+  try {
+    // Check if parameter exists
+    const existing = await dbClient.query(`SELECT id FROM parameters WHERE name='${name}'`);
+    
+    if (existing.length > 0) {
+      // Update existing parameter
+      const updateQuery = `UPDATE parameters SET value='${String(value).replace(/'/g, "''")}', last_modified=CURRENT_TIMESTAMP WHERE name='${name}'`;
+      await dbClient.run(updateQuery);
+      console.log(`✅ Updated parameter: ${name}`);
+    } else {
+      // Insert new parameter
+      const insertQuery = `INSERT INTO parameters (name, value, created_at, last_modified) VALUES ('${name}', '${String(value).replace(/'/g, "''")}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
+      await dbClient.run(insertQuery);
+      console.log(`✅ Created parameter: ${name}`);
+    }
+    
+    res.json({ success: true, message: 'Parameter saved successfully' });
+  } catch (err) {
+    console.error('❌ Error saving parameter:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
+/**
+ * Delete parameter
+ * DELETE /api/parameters/:name
+ */
+app.delete('/api/parameters/:name', async (req, res) => {
+  const { name } = req.params;
+  try {
+    const deleteQuery = `DELETE FROM parameters WHERE name='${name}'`;
+    await dbClient.run(deleteQuery);
+    console.log(`✅ Deleted parameter: ${name}`);
+    res.json({ success: true, message: 'Parameter deleted successfully' });
+  } catch (err) {
+    console.error('❌ Error deleting parameter:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
-// app.post('/api/calculate', async (req, res) => {
-//   try {
-//       const { logic, existingVariables, variableName } = req.body;
-//       if (!logic || !variableName) {
-//           return res.status(400).json({ message: 'Missing logic or variableName' });
-//       }
+/**
+ * Rename parameter
+ * PUT /api/parameters/:oldName/rename
+ */
+app.put('/api/parameters/:oldName/rename', async (req, res) => {
+  const { oldName } = req.params;
+  const { newName } = req.body;
+  
+  if (!newName) {
+    return res.status(400).json({ success: false, error: 'New name is required' });
+  }
 
-//       const variables = existingVariables || {};
+  try {
+    // Check if new name already exists
+    const existing = await dbClient.query(`SELECT id FROM parameters WHERE name='${newName}'`);
+    if (existing.length > 0) {
+      return res.status(400).json({ success: false, error: 'Parameter name already exists' });
+    }
+    
+    const updateQuery = `UPDATE parameters SET name='${newName}', last_modified=CURRENT_TIMESTAMP WHERE name='${oldName}'`;
+    await dbClient.run(updateQuery);
+    console.log(`✅ Renamed parameter: ${oldName} -> ${newName}`);
+    res.json({ success: true, message: 'Parameter renamed successfully' });
+  } catch (err) {
+    console.error('❌ Error renaming parameter:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
-//       try {
-//           // Create variable declarations from existingVariables
-//           const variableDeclarations = Object.entries(variables)
-//               .map(([name, value]) => `const ${name} = ${JSON.stringify(value)};`)
-//               .join('\n');
-
-//           // ⚠️ FIX: Create a string that defines and returns an anonymous async function
-//           // The surrounding parentheses ( ) make it a function expression that is evaluated and returned.
-//           const funcString = `(async function(dsConnect) { ${variableDeclarations} { ${logic} } })`;
-
-//           // ⚠️ FIX: Assign the returned function object to the variable 'cal'
-//           // The function is now explicitly defined in the route handler's scope.
-//           const cal = eval(funcString); 
-
-//           // Assuming 'parseCsvByName' is available in this scope
-//           var result = await cal(parseCsvByName);
-
-//           res.json({ value: result, success: true });
-//       } catch (err) {
-//           // Note: This catch block will catch errors in the 'eval' and in the execution of 'cal'
-//           return res.status(400).json({ message: 'Error evaluating logic: ' + err.message });
-//       }
-
-//   } catch (err) {
-//       res.status(500).json({ message: err.message, success: false });
-//   }
-// });
-
-
-// app.post('/api/calculate', async (req, res) => {
-//   try {
-//     const { logic, existingVariables, variableName } = req.body;
-//     if (!logic || !variableName) {
-//       return res.status(400).json({ message: 'Missing logic or variableName' });
-//     }
-
-//     const variables = existingVariables || {};
-
-//     try {
-//       // Create variable declarations from existingVariables
-//       const variableDeclarations = Object.entries(variables)
-//         .map(([name, value]) => `const ${name} = ${JSON.stringify(value)};`)
-//         .join('\n');
-
-//       // ✅ Add block scope around logic to prevent let redeclaration issues
-//       const funcString = "async function cal(dsConnect) { " + variableDeclarations + "{ " + logic + " } }";
-//       eval(funcString); // Defines async function cal
-
-//       // ✅ Await its execution (your exact syntax)
-//       var result = await cal(parseCsvByName);
-
-//       res.json({ value: result, success: true });
-//     } catch (err) {
-//       return res.status(400).json({ message: 'Error evaluating logic: ' + err.message });
-//     }
-
-//   } catch (err) {
-//     res.status(500).json({ message: err.message, success: false });
-//   }
-// });
-
-
-
-
-// (async () => {
-//   try {
-//     await dbClient.query('SELECT 1'); // simple test query
-//     console.log('✅ SQL Server is connected');
-//   } catch (err) {
-//     console.error('❌ Failed to connect to SQL Server:', err.message);
-//   }
-
-//   app.listen(PORT, () => {
-//     console.log(`🚀 Server is running at http://localhost:${PORT}`);
-//   });
-// })();
+// ============================================
+// EXISTING ENDPOINTS (KEPT AS IS)
+// ============================================
 
 app.get('/snowflake-connections', async (req, res) => {
   try {
@@ -397,7 +382,7 @@ app.post('/check-snowflake-connection',upload.single('privateKey'), async (req, 
         return res.status(500).json({ success: false, error: err.message });
       } else {
         console.log('✅ Successfully connected to Snowflake.');
-        connection.destroy(); // Close the connection after test
+        connection.destroy();
         return res.json({ success: true, message: 'Connection successful' });
       }
     });
@@ -407,7 +392,6 @@ app.post('/check-snowflake-connection',upload.single('privateKey'), async (req, 
   }
 }
 );
-
 
 app.post('/add-snowflake-connection', upload.single('privateKey'), async (req, res) => {
   const { connectionName, account, username, authenticator, warehouse, database, schema } = req.body;
@@ -419,7 +403,7 @@ app.post('/add-snowflake-connection', upload.single('privateKey'), async (req, r
   
   try {
 
-    const privateKeyBuffer = privateKey.buffer.toString('base64'); // Store as base64 string
+    const privateKeyBuffer = privateKey.buffer.toString('base64');
     const privateKeyFileName = privateKey.originalname;
 
     const insertQuery = `
@@ -484,7 +468,7 @@ app.post('/update-snowflake-connection/:id',upload.single('privateKey'), async (
               schema='${schema}'
           WHERE id=${id}
       `;
-      await dbClient.run(updateQuery);  
+      await dbClient.run(updateQuery);  
 
       res.json({success:true,message:'Connection updated successfully'});
   } catch (err) {
@@ -498,7 +482,7 @@ app.delete('/delete-snowflake-connection/:id', async (req, res) => {
 
   try {
       const deleteQuery = `DELETE FROM snow_flake_connections WHERE id=${id}`;
-      await dbClient.run(deleteQuery);  
+      await dbClient.run(deleteQuery);  
 
       res.json({success:true,message:'Connection deleted successfully'});
   } catch (err) {
@@ -557,14 +541,12 @@ app.post('/execute-query', async (req, res) => {
 
   if (connectionType === 'Live') {
       try {
-          // 1. Fetch connection details from DuckDB
           const connectionDetails = await dbClient.query(`SELECT * from snow_flake_connections where id=${connectionId}`);
           if (connectionDetails.length === 0) {
               return res.status(404).json({ success: false, error: 'Connection not found' });
           }
           const conn = connectionDetails[0];
 
-          // 2. Prepare Snowflake connection with private key
           const privateKeyBuffer = Buffer.from(conn.privateKey, 'base64');
           const privateKeyObject = crypto.createPrivateKey({
               key: privateKeyBuffer,
@@ -586,7 +568,6 @@ app.post('/execute-query', async (req, res) => {
               schema: conn.schema,
           });
 
-          // 3. Connect to Snowflake and execute query
           sfConnection.connect((err, connection) => {
               if (err) {
                   console.error('❌ Unable to connect to Snowflake:', err.message);
@@ -604,18 +585,16 @@ app.post('/execute-query', async (req, res) => {
                               sfConnection.destroy();
                               return res.status(500).json({ success: false, error: err.message });
                           } else {
-                              // 4. Extract column names from the query result
                               const columnNames = stmt.getColumns().map(col => col.getName());
                               const tableName = 'ds_' + dataSourceName.toLowerCase();
 
-                              //First delete the table if exists
                               const dropTableQuery = `DROP TABLE IF EXISTS ${tableName}`;
                               dbClient.run(dropTableQuery).then(() => {
                                   console.log(`✅ Existing DuckDB table ${tableName} dropped.`);
                               }).catch(dropErr => {
                                   console.error('❌ Error dropping existing DuckDB table:', dropErr.message);
                               });
-                              // 5. Create the DuckDB table with only column names and TEXT type
+                              
                               const createTableQuery = `CREATE TABLE IF NOT EXISTS ${tableName} (${columnNames.map(col => `${col} TEXT`).join(', ')})`;
 
                               dbClient.run(createTableQuery).then(() => {
@@ -624,11 +603,10 @@ app.post('/execute-query', async (req, res) => {
                                   const timeTaken = (endTime - startTime) / 1000;
                                   console.log(`⏱️  Query executed in ${timeTaken} seconds, fetched ${rows.length} rows.`);
 
-                                  // 6. RETURN THE QUERY RESULTS TO FRONTEND
                                   sfConnection.destroy();
                                   res.json({ 
                                       success: true, 
-                                      data: rows.slice(0,100),  // ← LIMIT TO FIRST 100 ROWS
+                                      data: rows.slice(0,100),
                                       rowCount: rows.length, 
                                       query: query,  
                                       message: `Data source ${dataSourceName} created successfully with ${rows.length} rows` 
@@ -639,7 +617,6 @@ app.post('/execute-query', async (req, res) => {
                                   res.status(500).json({ success: false, error: duckdbErr.message });
                               });
                               
-                              // 7. Upsert metadata into data_source_registry (Fire and forget - do AFTER response)
                               const deleteQuery = `DELETE FROM data_source_registry WHERE ds_name='${dataSourceName}'`;
                               const insertQuery = `INSERT INTO data_source_registry (ds_name,connection_id,type,query,created_at) VALUES ('${dataSourceName}',${connectionId},'${connectionType}','${query.replace(/'/g,"''")}',CURRENT_TIMESTAMP)`;
                               
@@ -661,19 +638,16 @@ app.post('/execute-query', async (req, res) => {
       }
   } else if (connectionType === 'Extract') {
     try {
-        // Define parquet storage directory
         const PARQUET_DIR = path.join(__dirname, './db/parquet_files');
         if (!fs.existsSync(PARQUET_DIR)) {
             fs.mkdirSync(PARQUET_DIR, { recursive: true });
         }
         
-        // 1. Fetch connection details from DuckDB
         const connectionDetails = await dbClient.query(`SELECT * from snow_flake_connections where id=${connectionId}`);
         if (connectionDetails.length === 0) {
             return res.status(404).json({ success: false, error: 'Connection not found' });
         }
         
-        // 2. Prepare Snowflake connection with private key
         const conn = connectionDetails[0];
         const privateKeyBuffer = Buffer.from(conn.privateKey, 'base64');
         const privateKeyObject = crypto.createPrivateKey({
@@ -696,7 +670,6 @@ app.post('/execute-query', async (req, res) => {
             schema: conn.schema,
         });
         
-        // 3. Connect to Snowflake and execute query
         sfConnection.connect((err, connection) => {
             if (err) {
                 console.error('❌ Unable to connect to Snowflake:', err.message);
@@ -715,37 +688,30 @@ app.post('/execute-query', async (req, res) => {
                         }
                         
                         try {
-                            // 4. Extract column information and build Parquet schema
                             const columns = stmt.getColumns();
                             const columnNames = columns.map(col => col.getName());
                             const tableName = 'ds_' + dataSourceName.toLowerCase();
                             const parquetFilePath = path.join(PARQUET_DIR, `${tableName}.parquet`);
                             
-                            // Delete existing parquet file if it exists
                             if (fs.existsSync(parquetFilePath)) {
                                 fs.unlinkSync(parquetFilePath);
                                 console.log(`✅ Existing parquet file ${parquetFilePath} deleted.`);
                             }
                             
-                            // Build Parquet schema dynamically from Snowflake column types
                             const parquetSchema = new parquet.ParquetSchema(
                                 columnNames.reduce((schema, colName) => {
-                                    // Default to UTF8 (string), can be enhanced with type mapping
                                     schema[colName] = { type: 'UTF8', optional: true };
                                     return schema;
                                 }, {})
                             );
                             
-                            // Create Parquet writer
                             const writer = await parquet.ParquetWriter.openFile(parquetSchema, parquetFilePath);
                             
                             console.log(`✅ Parquet writer initialized for ${parquetFilePath}`);
                             
-                            // 5. Get the stream
                             const stream = stmt.streamRows();
                             
-                            // 6. Setup streaming with optimized batching
-                            const BATCH_SIZE = 100000; // Optimal for Parquet writing
+                            const BATCH_SIZE = 100000;
                             let batch = [];
                             let totalRowCount = 0;
                             let previewRows = [];
@@ -753,26 +719,21 @@ app.post('/execute-query', async (req, res) => {
                             let isWriting = false;
                             const startTime = Date.now();
                             
-                            // Helper function to write batch to Parquet
                             const writeBatchToParquet = async (rows) => {
                                 if (rows.length === 0) return;
                                 
                                 try {
                                     const batchSize = rows.length;
                                     
-                                    // Write each row to parquet
                                     for (const row of rows) {
-                                        // Transform row to match schema
                                         const parquetRow = {};
                                         columnNames.forEach(col => {
                                             const val = row[col];
-                                            // Convert to string, handle nulls
                                             parquetRow[col] = (val === null || typeof val === 'undefined') ? null : String(val);
                                         });
                                         await writer.appendRow(parquetRow);
                                     }
                                     
-                                    // Calculate and log progress
                                     const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
                                     const rowsPerSecond = (totalRowCount / elapsed).toFixed(0);
                                     console.log(`✅ Written batch of ${batchSize.toLocaleString()} rows | Total: ${totalRowCount.toLocaleString()} | Speed: ${rowsPerSecond} rows/sec | Time: ${elapsed}s`);
@@ -783,18 +744,15 @@ app.post('/execute-query', async (req, res) => {
                                 }
                             };
                             
-                            // 7. Handle streaming data
                             stream.on('data', (row) => {
                                 totalRowCount++;
                                 
-                                // Store first 100 rows for preview
                                 if (previewRows.length < 100) {
                                     previewRows.push(row);
                                 }
                                 
                                 batch.push(row);
                                 
-                                // When batch is full, write it
                                 if (batch.length >= BATCH_SIZE && !isWriting) {
                                     isWriting = true;
                                     const currentBatch = [...batch];
@@ -820,7 +778,6 @@ app.post('/execute-query', async (req, res) => {
                                 }
                             });
                             
-                            // 8. Handle stream errors
                             stream.on('error', async (streamErr) => {
                                 console.error('❌ Stream error:', streamErr.message);
                                 await writer.close().catch(() => {});
@@ -828,7 +785,6 @@ app.post('/execute-query', async (req, res) => {
                                 res.status(500).json({ success: false, error: streamErr.message });
                             });
                             
-                            // 9. Handle stream end
                             stream.on('end', () => {
                                 streamEnded = true;
                                 
@@ -839,10 +795,8 @@ app.post('/execute-query', async (req, res) => {
                                     }
                                     
                                     try {
-                                        // Write remaining rows
                                         await writeBatchToParquet(batch);
                                         
-                                        // Close the Parquet writer
                                         await writer.close();
                                         
                                         const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -861,7 +815,6 @@ app.post('/execute-query', async (req, res) => {
                                         sfConnection.destroy();
                                         
                                         
-                                        // Send response
                                         res.json({
                                             success: true,
                                             data: previewRows,
@@ -873,7 +826,6 @@ app.post('/execute-query', async (req, res) => {
                                             message: `Data source ${dataSourceName} created successfully with ${totalRowCount.toLocaleString()} rows in ${totalTime}s (${fileSizeMB} MB)`
                                         });
                                         
-                                        // Update registry
                                         const deleteQuery = `DELETE FROM data_source_registry WHERE ds_name='${dataSourceName}'`;
                                         const insertQuery = `INSERT INTO data_source_registry (ds_name,connection_id,type,query,created_at,parquet_path) VALUES ('${dataSourceName}',${connectionId},'${connectionType}','${query.replace(/'/g, "''")}',CURRENT_TIMESTAMP,'${parquetFilePath}')`;
                                         
@@ -910,7 +862,6 @@ app.post('/execute-query', async (req, res) => {
   }
 });
 
-
 function buildWhereClause(filters) {
   if (!filters || typeof filters !== 'object') {
     return '';
@@ -919,20 +870,16 @@ function buildWhereClause(filters) {
   const conditions = [];
 
   for (const [filterName, filterData] of Object.entries(filters)) {
-    // Skip if no filter data
     if (!filterData) {
       continue;
     }
 
-    // 🔥 NEW: Handle filter object with metadata
     if (typeof filterData === 'object' && filterData.values !== undefined && filterData.isAll !== undefined) {
-      // Check if "All" is selected
       if (filterData.isAll === true) {
         console.log(`⏭️  Skipping ${filterName} - All selected`);
         continue;
       }
 
-      // Extract values
       const values = filterData.values.map(item => {
         if (typeof item === 'object' && item.value !== undefined) {
           return item.value;
@@ -945,7 +892,6 @@ function buildWhereClause(filters) {
         continue;
       }
 
-      // Build IN clause
       const escapedValues = values.map(v => {
         if (v === null || v === undefined) {
           return 'NULL';
@@ -959,9 +905,7 @@ function buildWhereClause(filters) {
       
       console.log(`✅ Added condition for ${filterName}: ${columnName} IN (${values.length} values)`);
     }
-    // 🔥 BACKWARD COMPATIBILITY: Handle array with metadata properties (from eval)
     else if (Array.isArray(filterData)) {
-      // Check if "All" is selected using the metadata property
       if (filterData.isAll === true) {
         console.log(`⏭️  Skipping ${filterName} - All selected`);
         continue;
@@ -1000,14 +944,12 @@ function buildWhereClause(filters) {
   return whereClause;
 }
 
-// 🔥 Internal function to get data based on data source name (without cache)
 async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
   const {columns, filters, customWhere, groupBy, orderBy, limit} = queryObject;
   console.log('📦 Query Object:', queryObject);
   
   console.log(`🔄 Loading data from: ${dataSourceName}`);
   
-  // Get data source type from registry
   const connectionType = await dbClient.query(`SELECT type FROM data_source_registry WHERE ds_name='${dataSourceName}'`);
   if (connectionType.length === 0) {
     throw new Error(`Data source ${dataSourceName} not found in registry`);
@@ -1016,10 +958,8 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
   const type = connectionType[0].type;
   console.log(`📊 Data source type: ${type}`);
 
-  // 🔥 Build WHERE clause from filters
   const filterWhereClause = buildWhereClause(filters);
   
-  // 🔥 Combine filter WHERE with custom WHERE
   let whereClause = '';
   if (filterWhereClause && customWhere) {
     whereClause = `${filterWhereClause} AND ${customWhere}`;
@@ -1033,14 +973,10 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
   
   console.log(`🔍 Final WHERE clause: ${whereClause || '(none - fetching all data)'}`);
 
-  // ============================================
-  // LIVE CONNECTION (Snowflake)
-  // ============================================
   if (type === 'Live') {
     const startTime = Date.now();
     console.log('❄️  Loading from Snowflake Live');
     
-    // Get connection details
     const connectionDetails = await dbClient.query(
       `SELECT connection_id, query FROM data_source_registry WHERE ds_name='${dataSourceName}'`
     );
@@ -1050,16 +986,13 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     const connId = connectionDetails[0].connection_id;
     const baseQuery = connectionDetails[0].query;
     
-    // Fetch snowflake connection credentials
     const connDetails = await dbClient.query(`SELECT * FROM snow_flake_connections WHERE id=${connId}`);
     if (connDetails.length === 0) {
       throw new Error(`Snowflake connection with id ${connId} not found`);
     }
     const conn = connDetails[0];
 
-    // Connect to snowflake and execute query with streaming
     return new Promise((resolve, reject) => {
-      // Prepare private key for authentication
       const privateKeyBuffer = Buffer.from(conn.privateKey, 'base64');
       const privateKeyObject = crypto.createPrivateKey({
         key: privateKeyBuffer,
@@ -1071,7 +1004,6 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
         type: 'pkcs8'
       });
       
-      // Create Snowflake connection
       const sfConnection = snowflake.createConnection({
         account: conn.account,
         username: conn.username,
@@ -1082,7 +1014,6 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
         schema: conn.schema,
       });
       
-      // Connect and execute query
       sfConnection.connect((err, connection) => {
         if (err) {
           console.error('❌ Unable to connect to Snowflake:', err.message);
@@ -1096,7 +1027,6 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
         let rowsProcessed = 0;
         const sanitizedQuery = baseQuery.trim().replace(/;$/, '');
 
-        // 🔥 Build custom query with all parameters
         let customQuery;
         
         if (columns || whereClause || groupBy || orderBy || limit) {
@@ -1111,10 +1041,9 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
         
         console.log('📝 Executing Snowflake Query:', customQuery);
         
-        // Execute with streaming enabled
         const statement = connection.execute({        
           sqlText: customQuery,
-          streamResult: true, // Enable streaming for large datasets
+          streamResult: true,
           complete: (err, stmt, rows) => {
             if (err) {
               sfConnection.destroy();
@@ -1124,7 +1053,6 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
           }
         });
         
-        // Create a stream from the statement
         const stream = statement.streamRows();
         
         stream.on('error', (err) => {
@@ -1137,7 +1065,6 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
           data.push(row);
           rowsProcessed++;
           
-          // Log progress every 50k rows
           if (rowsProcessed % 50000 === 0) {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             console.log(`📊 Progress: ${rowsProcessed.toLocaleString()} rows streamed in ${elapsed}s`);
@@ -1155,14 +1082,10 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     });
   }
 
-  // ============================================
-  // EXTRACT CONNECTION (DuckDB/Parquet)
-  // ============================================
   if (type === 'Extract') {
     const startTime = Date.now();
     console.log('🦆 Loading from DuckDB Extract');
     
-    // Get parquet file path
     const dsDetails = await dbClient.query(
       `SELECT parquet_path FROM data_source_registry WHERE ds_name='${dataSourceName}'`
     );
@@ -1173,7 +1096,6 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     const parquetPath = dsDetails[0].parquet_path;
     console.log('📁 Parquet path:', parquetPath);
     
-    // Verify file exists
     const { existsSync } = await import('fs');
     if (!parquetPath || !existsSync(parquetPath)) {
       throw new Error(`Parquet file for data source ${dataSourceName} not found at path: ${parquetPath}`);
@@ -1181,10 +1103,8 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     
     console.log('🔄 Streaming data from Parquet file:', parquetPath);
     
-    // Escape backslashes for Windows paths
     const escapedPath = parquetPath.replace(/\\/g, '\\\\');
     
-    // 🔥 Build custom query with all parameters
     let customQuery;
     
     if (columns || whereClause || groupBy || orderBy || limit) {
@@ -1199,25 +1119,21 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     
     console.log('📝 Executing DuckDB Query:', customQuery);
     
-    // ✅ Get column names using DESCRIBE query
     const describeQuery = `DESCRIBE (${customQuery})`;
     console.log('🔍 Getting column names:', describeQuery);
     const columnInfo = await dbClient.query(describeQuery);
     const columnNames = columnInfo.map(col => col.column_name);
     console.log('📋 Column names:', columnNames);
     
-    // Execute query with streaming
     const queryResult = await dbClient.stream(customQuery);
     
     let data = [];
     let chunkCount = 0;
     let rowsProcessed = 0;
     
-    // Iterate through chunks
     while (true) {
       const chunk = await queryResult.fetchChunk();
       
-      // Exit when no more data
       if (chunk.rowCount === 0) {
         break;
       }
@@ -1225,7 +1141,6 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
       chunkCount++;
       rowsProcessed += chunk.rowCount;
       
-      // ✅ Convert arrays to objects using column names
       const rowArrays = chunk.getRows();
       const rows = rowArrays.map(rowArray => {
         const obj = {};
@@ -1237,7 +1152,6 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
       
       data.push(...rows);
       
-      // Log progress every 10 chunks or every 50k rows
       if (chunkCount % 10 === 0 || rowsProcessed % 50000 === 0) {
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
         console.log(`📊 Progress: ${rowsProcessed.toLocaleString()} rows loaded (${chunkCount} chunks) in ${elapsed}s`);
@@ -1251,47 +1165,35 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     return data;
   }
 
-  // ============================================
-  // UNSUPPORTED CONNECTION TYPE
-  // ============================================
   else {
     throw new Error(`Unsupported connection type: ${type}`);
   }
 }
 
-// ⚡ ULTRA-FAST CACHED WRAPPER: Zero-latency cache with native Map
 async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
-  // Generate cache key (with hash caching for speed)
   const cacheKey = generateCacheKey(dataSourceName, queryObject);
   
-  // ⚡ INSTANT CACHE LOOKUP - O(1) Map.get() operation
   const cached = fastCache.get(cacheKey);
   
   if (cached) {
-    // Check if expired
     if (cached.expiresAt > Date.now()) {
-      // Update LRU tracking (move to end)
       const index = cacheAccessOrder.indexOf(cacheKey);
       if (index > -1) cacheAccessOrder.splice(index, 1);
       cacheAccessOrder.push(cacheKey);
       
-      // Update access stats
       cached.accessCount++;
       cached.lastAccessed = Date.now();
       
-      // Return data directly (no decompression, no parsing - instant!)
       const rowCount = Array.isArray(cached.data) ? cached.data.length : 0;
       console.log(`⚡⚡ INSTANT CACHE HIT for ${dataSourceName} (${rowCount.toLocaleString()} rows, accessed ${cached.accessCount}x)`);
       return cached.data;
     } else {
-      // Expired - remove it
       fastCache.delete(cacheKey);
       const index = cacheAccessOrder.indexOf(cacheKey);
       if (index > -1) cacheAccessOrder.splice(index, 1);
     }
   }
   
-  // Cache miss - execute query
   console.log(`💾 CACHE MISS for ${dataSourceName} - Executing query...`);
   const queryStartTime = Date.now();
   
@@ -1299,19 +1201,15 @@ async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     const data = await _getDataBasedOnDataSourceName(dataSourceName, queryObject);
     const queryElapsed = ((Date.now() - queryStartTime) / 1000).toFixed(2);
     
-    // Evict LRU if cache is full
     evictLRU();
     
-    // ⚡ STORE DIRECTLY IN MEMORY - No compression, no serialization overhead
-    // Store as JavaScript object reference (fastest possible)
     fastCache.set(cacheKey, {
-      data: data, // Direct object reference
+      data: data,
       expiresAt: Date.now() + (CACHE_TTL * 1000),
       accessCount: 1,
       lastAccessed: Date.now()
     });
     
-    // Update LRU tracking
     cacheAccessOrder.push(cacheKey);
     
     const rowCount = Array.isArray(data) ? data.length : 0;
@@ -1337,10 +1235,7 @@ app.post('/api/calculate', async (req, res) => {
     .map(([name, value]) => {
       let serialized;
       
-      // 🔥 NEW: Special handling for filter objects with metadata
       if (value && typeof value === 'object' && value.values !== undefined && value.isAll !== undefined) {
-        // This is a filter with metadata
-        // Create an array with metadata properties attached
         const arrayStr = JSON.stringify(value.values);
         serialized = `(function() {
           const arr = ${arrayStr};
@@ -1350,7 +1245,6 @@ app.post('/api/calculate', async (req, res) => {
           return arr;
         })()`;
       } 
-      // Original handling
       else if (value === undefined) {
         serialized = 'undefined';
       } else if (value === null) {
@@ -1365,9 +1259,6 @@ app.post('/api/calculate', async (req, res) => {
     })
     .join('\n');
 
-    // console.log('📝 Variable declarations:', variableDeclarations);
-
-    // This structure correctly handles 'await' inside the logic string.
     const funcString = `(async function(dsConnect) {
       ${variableDeclarations}
       return (async () => {
@@ -1405,7 +1296,6 @@ app.post("/rename-data-source",async(req,res)=>{
     const updateQuery=`UPDATE data_source_registry SET ds_name='${newName}' WHERE ds_name='${oldName}'`;
     await dbClient.run(updateQuery);
     
-    // Clear cache for the old data source name
     const prefix = `query:${oldName}:`;
     let clearedCount = 0;
     
@@ -1473,9 +1363,7 @@ app.post("/get-ds-column-names",async(req,res)=>{
           console.error('❌ Unable to connect to Snowflake:',err.message);
           return res.status(500).json({success:false,error:err.message});
         }
-        // Remove trailing semicolon and whitespace
         query = query.trim().replace(/;+$/, '');
-        // Wrap the original query to get only schema, no data
         const schemaQuery = `SELECT * FROM (${query}) LIMIT 0`;
         connection.execute({
           sqlText:schemaQuery,
@@ -1497,7 +1385,6 @@ app.post("/get-ds-column-names",async(req,res)=>{
         return res.status(404).json({success:false,error:`Parquet path for data source ${ds_name} not found`});
       }
       const escapedPath = parquetPath.replace(/\\/g, '\\\\');
-      // Use DESCRIBE to get column names without reading data
       const describeResult = await dbClient.query(`DESCRIBE SELECT * FROM read_parquet('${escapedPath}')`);
       columnNames = describeResult.map(row => row.column_name);
       return res.json({success:true,column_names:columnNames});
@@ -1567,10 +1454,8 @@ app.post("/get-distinct-column-values", async (req, res) => {
           return res.status(500).json({ success: false, error: err.message });
         }
 
-        // Remove trailing semicolon and whitespace
         query = query.trim().replace(/;+$/, '');
         
-        // Get distinct values for the specified column
         const distinctQuery = `SELECT DISTINCT "${column_name}" FROM (${query}) WHERE "${column_name}" IS NOT NULL ORDER BY "${column_name}"`;
 
         connection.execute({
@@ -1597,7 +1482,6 @@ app.post("/get-distinct-column-values", async (req, res) => {
 
       const escapedPath = parquetPath.replace(/\\/g, '\\\\');
       
-      // Get distinct values from parquet file
       const distinctQuery = `SELECT DISTINCT "${column_name}" FROM read_parquet('${escapedPath}') WHERE "${column_name}" IS NOT NULL ORDER BY "${column_name}"`;
       const result = await dbClient.query(distinctQuery);
       
@@ -1618,10 +1502,6 @@ app.post("/get-distinct-column-values", async (req, res) => {
 // CACHE MANAGEMENT ENDPOINTS
 // ============================================
 
-/**
- * Get cache statistics
- * GET /cache/stats
- */
 app.get('/cache/stats', (req, res) => {
   try {
     let totalRows = 0;
@@ -1631,7 +1511,6 @@ app.get('/cache/stats', (req, res) => {
     for (const [key, value] of fastCache.entries()) {
       if (value.data && Array.isArray(value.data)) {
         totalRows += value.data.length;
-        // Rough estimate: each row object ~1KB
         estimatedSize += value.data.length * 1024;
       }
       totalAccessCount += value.accessCount || 0;
@@ -1657,10 +1536,6 @@ app.get('/cache/stats', (req, res) => {
   }
 });
 
-/**
- * Clear entire cache
- * POST /cache/clear
- */
 app.post('/cache/clear', (req, res) => {
   try {
     const keysBefore = fastCache.size;
@@ -1678,10 +1553,6 @@ app.post('/cache/clear', (req, res) => {
   }
 });
 
-/**
- * Clear cache for a specific data source
- * POST /cache/clear/:dataSourceName
- */
 app.post('/cache/clear/:dataSourceName', (req, res) => {
   try {
     const { dataSourceName } = req.params;
@@ -1708,10 +1579,6 @@ app.post('/cache/clear/:dataSourceName', (req, res) => {
   }
 });
 
-/**
- * Get cache keys (for debugging)
- * GET /cache/keys
- */
 app.get('/cache/keys', (req, res) => {
   try {
     const keys = Array.from(fastCache.keys());
@@ -1728,7 +1595,7 @@ app.get('/cache/keys', (req, res) => {
 
 (async()=> {
   try {
-    await dbClient.query('SELECT 1'); // simple test query
+    await dbClient.query('SELECT 1');
     console.log('✅ DuckDB is connected');
 
     app.listen(PORT, () => {
@@ -1739,243 +1606,3 @@ app.get('/cache/keys', (req, res) => {
   }
 }
 )();
-
-// app.listen(PORT, () => {
-//   console.log(`Server running on port ${PORT}`);
-// });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// async function dsConnect(dataSourceName) {
-  //   console.log(`🔄 Loading data from: ${dataSourceName}`);
-    
-  //   const connectionType = await dbClient.query(
-  //     `SELECT type FROM data_source_registry WHERE ds_name=?`,
-  //     [dataSourceName]
-  //   );
-  
-  //   if (connectionType.length === 0) {
-  //     throw new Error(`Data source ${dataSourceName} not found in registry`);
-  //   }
-  
-  //   const type = connectionType[0].type;
-  
-  //   if (type === 'Live') {
-  //     return await loadFromSnowflake(dataSourceName);
-  //   } else if (type === 'Extract') {
-  //     return await loadFromDuckDB(dataSourceName);
-  //   }
-  // }
-  
-  // /**
-  //  * Load from Snowflake with streaming
-  //  */
-  // async function loadFromSnowflake(dataSourceName) {
-  //   const connectionDetails = await dbClient.query(
-  //     `SELECT connection_id, query FROM data_source_registry WHERE ds_name=?`,
-  //     [dataSourceName]
-  //   );
-  
-  //   if (connectionDetails.length === 0) {
-  //     throw new Error(`Connection details for ${dataSourceName} not found`);
-  //   }
-  
-  //   const connId = connectionDetails[0].connection_id;
-  //   const query = connectionDetails[0].query;
-  
-  //   const connDetails = await dbClient.query(
-  //     `SELECT * FROM snow_flake_connections WHERE id=?`,
-  //     [connId]
-  //   );
-  
-  //   if (connDetails.length === 0) {
-  //     throw new Error(`Snowflake connection with id ${connId} not found`);
-  //   }
-  
-  //   const conn = connDetails[0];
-  
-  //   return new Promise((resolve, reject) => {
-  //     let sfConnection;
-      
-  //     try {
-  //       const privateKeyBuffer = Buffer.from(conn.privateKey, 'base64');
-  //       const privateKeyObject = crypto.createPrivateKey({
-  //         key: privateKeyBuffer,
-  //         format: 'der',
-  //         type: 'pkcs8',
-  //       });
-  
-  //       const privateKeyPemBuffer = privateKeyObject.export({
-  //         format: 'pem',
-  //         type: 'pkcs8'
-  //       });
-  
-  //       sfConnection = snowflake.createConnection({
-  //         account: conn.account,
-  //         username: conn.username,
-  //         authenticator: conn.authenticator,
-  //         privateKey: privateKeyPemBuffer,
-  //         warehouse: conn.warehouse,
-  //         database: conn.database,
-  //         schema: conn.schema,
-  //       });
-  
-  //       sfConnection.connect((err, connection) => {
-  //         if (err) {
-  //           console.error('❌ Unable to connect to Snowflake:', err.message);
-  //           return reject(new Error('Unable to connect to Snowflake: ' + err.message));
-  //         }
-  
-  //         console.log('✅ Successfully connected to Snowflake');
-  
-  //         connection.execute({
-  //           sqlText: query,
-  //           streamResult: true, // Enable streaming
-  //           fetchAsString: ['Number', 'Date'], // Fix string length issues
-  //           complete: (err, stmt) => {
-  //             if (err) {
-  //               sfConnection.destroy();
-  //               console.error('❌ Failed to execute query:', err.message);
-  //               return reject(new Error('Failed to execute query: ' + err.message));
-  //             }
-  
-  //             const stream = stmt.streamRows();
-  //             const allRows = []; // Collect all data
-  //             let totalRows = 0;
-  
-  //             stream.on('data', (row) => {
-  //               allRows.push(row);
-  //               totalRows++;
-                
-  //               // Log progress every 10k rows
-  //               if (totalRows % 10000 === 0) {
-  //                 console.log(`📊 Loaded ${totalRows} rows from Snowflake...`);
-  //               }
-  //             });
-  
-  //             stream.on('end', () => {
-  //               sfConnection.destroy();
-  //               console.log(`✅ Completed loading ${totalRows} rows from Snowflake`);
-  //               resolve(allRows);
-  //             });
-  
-  //             stream.on('error', (streamErr) => {
-  //               sfConnection.destroy();
-  //               console.error('❌ Stream error:', streamErr.message);
-  //               reject(new Error('Stream error: ' + streamErr.message));
-  //             });
-  //           }
-  //         });
-  //       });
-  //     } catch (error) {
-  //       if (sfConnection) sfConnection.destroy();
-  //       console.error('❌ Error:', error.message);
-  //       reject(new Error('Connection error: ' + error.message));
-  //     }
-  //   });
-  // }
-  
-  // /**
-  //  * Load from DuckDB with pagination
-  //  */
-  // async function loadFromDuckDB(dataSourceName) {
-  //   const tableName = 'ds_' + dataSourceName.toLowerCase();
-  //   const BATCH_SIZE = 50000;
-  //   let offset = 0;
-  //   let allData = [];
-  //   let hasMore = true;
-  
-  //   console.log(`📊 Starting to load from DuckDB table: ${tableName}`);
-  
-  //   while (hasMore) {
-  //     const batch = await dbClient.query(
-  //       `SELECT * FROM ${tableName} LIMIT ? OFFSET ?`,
-  //       [BATCH_SIZE, offset]
-  //     );
-  
-  //     if (batch.length === 0) {
-  //       hasMore = false;
-  //     } else {
-  //       allData.push(...batch);
-  //       console.log(`📊 Loaded ${batch.length} rows (Total: ${allData.length})`);
-        
-  //       offset += BATCH_SIZE;
-        
-  //       if (batch.length < BATCH_SIZE) {
-  //         hasMore = false;
-  //       }
-  //     }
-  //   }
-  
-  //   console.log(`✅ Completed loading ${allData.length} rows from DuckDB`);
-  //   return allData;
-  // }
-  
-  // // ============================================
-  // // API ENDPOINT
-  // // ============================================
-  
-  // app.post('/api/calculate', async (req, res) => {
-  //   const { logic, existingVariables, existingParameters, variableName } = req.body;
-    
-  //   if (!logic || !variableName) {
-  //     return res.status(400).json({ message: 'Missing logic or variableName' });
-  //   }
-  
-  //   const allAvailableVariables = { ...existingVariables, ...existingParameters };
-  
-  //   try {
-  //     const variableDeclarations = Object.entries(allAvailableVariables)
-  //       .map(([name, value]) => `const ${name} = ${JSON.stringify(value)};`)
-  //       .join('\n');
-  
-  //     const funcString = `(async function(dsConnect) {
-  //       ${variableDeclarations}
-  //       return (async () => {
-  //         ${logic}
-  //       })();
-  //     })`;
-  
-  //     const cal = eval(funcString);
-  //     const result = await cal(dsConnect);
-  
-  //     res.json({ value: result, success: true });
-  //   } catch (err) {
-  //     console.error(`Error in /api/calculate: ${err.message}`);
-  //     return res.status(400).json({ 
-  //       message: 'Error evaluating logic: ' + err.message,
-  //       success: false 
-  //     });
-  //   }
-  // });
