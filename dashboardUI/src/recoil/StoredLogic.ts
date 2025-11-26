@@ -48,15 +48,15 @@ export const logicsByVariableSelector = selector({
 });
 
 // Helper selectors for common operations
-export const logicsNeedingRecalculationSelector = selector({
-  key: 'logicsNeedingRecalculationSelector',
-  get: ({ get }) => {
-    const logics = get(storedLogicsState);
+// export const logicsNeedingRecalculationSelector = selector({
+//   key: 'logicsNeedingRecalculationSelector',
+//   get: ({ get }) => {
+//     const logics = get(storedLogicsState);
     
-    // Return logics that reference topN in their logic string
-    return logics.filter(logic => 
-      logic.logic.includes('topN') && 
-      (!logic.lastExecuted || Date.now() - logic.lastExecuted > 1000) // Prevent rapid re-execution
-    );
-  },
-});
+//     // Return logics that reference topN in their logic string
+//     return logics.filter(logic => 
+//       logic.logic.includes('topN') && 
+//       (!logic.lastExecuted || Date.now() - logic.lastExecuted > 1000) // Prevent rapid re-execution
+//     );
+//   },
+// });

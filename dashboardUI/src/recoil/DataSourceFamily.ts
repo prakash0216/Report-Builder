@@ -7,6 +7,11 @@ const API_BASE_URL = 'http://localhost:3002';
 const dbSyncEffect = (param: string) => ({ setSelf, onSet, trigger }: any) => {
   // Load initial value from database
   if (trigger === 'get') {
+    // Only fetch if param is not empty
+    if (!param || param.trim() === '') {
+      return;
+    }
+    
     axios.get(`${API_BASE_URL}/api/datasources/${param}/query`)
       .then(response => {
         if (response.data.success && response.data.query) {
@@ -14,22 +19,28 @@ const dbSyncEffect = (param: string) => ({ setSelf, onSet, trigger }: any) => {
         }
       })
       .catch(error => {
-        console.error(`Error loading data source ${param}:`, error);
+        // Only log error if it's not a 404 (data source might not exist yet)
+        if (error.response?.status !== 404) {
+          console.error(`Error loading data source ${param}:`, error);
+        }
         // Keep default value on error
       });
   }
 
   // Save to database when value changes
   onSet((newValue: string, oldValue: string, isReset: boolean) => {
-    if (!isReset && newValue !== oldValue) {
-      axios.put(`${API_BASE_URL}/api/datasources/${param}/query`, { query: newValue })
-        .then(response => {
-          console.log(`✅ Data source ${param} synced to database`);
-        })
-        .catch(error => {
-          console.error(`❌ Error syncing data source ${param}:`, error);
-        });
+    // Only save if param is not empty
+    if (!param || param.trim() === '' || isReset || newValue === oldValue) {
+      return;
     }
+    
+    axios.put(`${API_BASE_URL}/api/datasources/${param}/query`, { query: newValue })
+      .then(response => {
+        console.log(`✅ Data source ${param} synced to database`);
+      })
+      .catch(error => {
+        console.error(`❌ Error syncing data source ${param}:`, error);
+      });
   });
 };
 

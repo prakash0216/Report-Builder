@@ -78,7 +78,7 @@ export default function AddDataSourceMui() {
   });
 
   // Connection dropdowns
-  const [connectionNames, setConnectionNames] = useState<[]>([]);
+  const [connectionNames, setConnectionNames] = useState<any[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<Number | ''>(
     ''
   );
@@ -125,13 +125,36 @@ export default function AddDataSourceMui() {
   // Note: Data sources are now automatically loaded from database via Recoil effect
   // No need for manual fetching here
 
-  const addDataSource = (): void => {
+  const addDataSource = async (): Promise<void> => {
     if (newDSName && !dataSourceNames.includes(newDSName)) {
-      // Update local Recoil state - the data source will be created in DB when query is executed
-      setDataSourceNames((prev: string[]) => [...prev, newDSName]);
-      setSelectedDS(newDSName);
-      setNewDSName('');
-      showAlert(`Data source "${newDSName}" added successfully`, 'success');
+      if (!selectedConnectionId || !connectionType) {
+        showAlert('Please select a connection and connection type', 'error');
+        return;
+      }
+
+      try {
+        // Store data source in database immediately
+        const response = await axios.post(
+          `${API_BASE_URL}/api/datasources`,
+          {
+            dataSourceName: newDSName,
+            connectionId: selectedConnectionId,
+            connectionType: connectionType,
+            query: '' // Empty query initially
+          }
+        );
+
+        if (response.data.success) {
+          // Update local Recoil state
+          setDataSourceNames((prev: string[]) => [...prev, newDSName]);
+          setSelectedDS(newDSName);
+          setNewDSName('');
+          showAlert(`Data source "${newDSName}" added successfully`, 'success');
+        }
+      } catch (err) {
+        console.error('Failed to add data source', err);
+        showAlert('Failed to add data source', 'error');
+      }
     }
   };
 
@@ -286,6 +309,55 @@ export default function AddDataSourceMui() {
       setSelectedDS(dataSourceNames[0]);
     }
   }, [dataSourceNames, selectedDS]);
+
+  // Load data source details when a data source is selected
+  useEffect(() => {
+    const loadDataSourceDetails = async () => {
+      if (!selectedDS) return;
+
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/datasources/${selectedDS}`);
+        if (response.data.success && response.data.dataSource) {
+          const ds = response.data.dataSource;
+          // Set connection ID and type if they exist
+          if (ds.connectionId && connectionNames.length > 0) {
+            // Verify the connection exists in the dropdown
+            const connectionExists = connectionNames.some((conn: any) => conn.id === ds.connectionId);
+            if (connectionExists) {
+              setSelectedConnectionId(ds.connectionId);
+            } else {
+              // Connection doesn't exist, use first available
+              const firstConn = connectionNames[0];
+              if (firstConn) {
+                setSelectedConnectionId(firstConn.id);
+              }
+            }
+          } else if (connectionNames.length > 0) {
+            // No connection set, use first available
+            const firstConn = connectionNames[0];
+            if (firstConn) {
+              setSelectedConnectionId(firstConn.id);
+            }
+          }
+          if (ds.connectionType) {
+            setConnectionType(ds.connectionType);
+          }
+        }
+      } catch (err) {
+        // Data source might not exist yet (newly created), that's okay
+        console.log('Data source details not found, using defaults');
+        // Set default connection if available
+        if (connectionNames.length > 0 && !selectedConnectionId) {
+          const firstConn = connectionNames[0];
+          if (firstConn) {
+            setSelectedConnectionId(firstConn.id);
+          }
+        }
+      }
+    };
+
+    loadDataSourceDetails();
+  }, [selectedDS, connectionNames]);
 
   const getTableColumns = () => {
     if (!queryResult?.data || queryResult.data.length === 0) return [];
@@ -844,9 +916,23 @@ export default function AddDataSourceMui() {
                       id="connection-select"
                       value={selectedConnectionId}
                       label="Connection"
-                      onChange={(e) =>
-                        setSelectedConnectionId(Number(e.target.value))
-                      }
+                      onChange={async (e) => {
+                        const newConnectionId = Number(e.target.value);
+                        setSelectedConnectionId(newConnectionId);
+                        // Save connection change to database
+                        if (selectedDS) {
+                          try {
+                            await axios.post(`${API_BASE_URL}/api/datasources`, {
+                              dataSourceName: selectedDS,
+                              connectionId: newConnectionId,
+                              connectionType: connectionType,
+                              query: sqlQuery || ''
+                            });
+                          } catch (err) {
+                            console.error('Failed to update connection', err);
+                          }
+                        }
+                      }}
                     >
                       {connectionNames.map((conn: any) => (
                         <MenuItem key={conn.id} value={conn.id}>
@@ -882,7 +968,23 @@ export default function AddDataSourceMui() {
                       id="connection-type"
                       value={connectionType}
                       label="Type"
-                      onChange={(e) => setConnectionType(e.target.value)}
+                      onChange={async (e) => {
+                        const newType = e.target.value;
+                        setConnectionType(newType);
+                        // Save connection type change to database
+                        if (selectedDS) {
+                          try {
+                            await axios.post(`${API_BASE_URL}/api/datasources`, {
+                              dataSourceName: selectedDS,
+                              connectionId: selectedConnectionId,
+                              connectionType: newType,
+                              query: sqlQuery || ''
+                            });
+                          } catch (err) {
+                            console.error('Failed to update connection type', err);
+                          }
+                        }
+                      }}
                     >
                       <MenuItem value="Live">Live</MenuItem>
                       <MenuItem value="Extract">Extract</MenuItem>

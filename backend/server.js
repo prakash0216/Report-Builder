@@ -145,14 +145,30 @@ async function parseCsvByName(csvName) {
 // ============================================
 
 /**
- * Get all data source names
+ * Get all data source names with connection info
  * GET /api/datasources/names
  */
 app.get('/api/datasources/names', async (req, res) => {
   try {
-    const result = await dbClient.query('SELECT ds_name FROM data_source_registry ORDER BY created_at DESC');
-    const dsNames = result.map(row => row.ds_name);
-    res.json({ success: true, dataSourceNames: dsNames });
+    const result = await dbClient.query(`
+      SELECT 
+        dsr.ds_name,
+        dsr.connection_id,
+        dsr.type,
+        sfc.connectionName
+      FROM data_source_registry dsr
+      LEFT JOIN snow_flake_connections sfc ON dsr.connection_id = sfc.id
+      ORDER BY dsr.created_at DESC
+    `);
+    
+    const dataSources = result.map(row => ({
+      name: row.ds_name,
+      connectionId: row.connection_id,
+      connectionType: row.type,
+      connectionName: row.connectionName || null
+    }));
+    
+    res.json({ success: true, dataSources: dataSources });
   } catch (err) {
     console.error('❌ Error fetching data source names:', err.message);
     res.status(500).json({ success: false, error: err.message });
@@ -173,6 +189,86 @@ app.get('/api/datasources/:name/query', async (req, res) => {
     res.json({ success: true, query: result[0].query });
   } catch (err) {
     console.error('❌ Error fetching data source query:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Create or update data source (without executing query)
+ * POST /api/datasources
+ */
+app.post('/api/datasources', async (req, res) => {
+  const { dataSourceName, connectionId, connectionType, query } = req.body;
+  
+  if (!dataSourceName || !connectionId || !connectionType) {
+    return res.status(400).json({ success: false, error: 'dataSourceName, connectionId, and connectionType are required' });
+  }
+
+  try {
+    // Check if data source already exists
+    const existing = await dbClient.query(`SELECT id FROM data_source_registry WHERE ds_name='${dataSourceName}'`);
+    
+    if (existing.length > 0) {
+      // Update existing data source
+      const updateQuery = `UPDATE data_source_registry 
+        SET connection_id=${connectionId}, 
+            type='${connectionType}',
+            ${query ? `query='${query.replace(/'/g, "''")}',` : ''}
+            last_modified=CURRENT_TIMESTAMP 
+        WHERE ds_name='${dataSourceName}'`;
+      await dbClient.run(updateQuery);
+      console.log(`✅ Updated data source: ${dataSourceName}`);
+    } else {
+      // Insert new data source
+      const insertQuery = `INSERT INTO data_source_registry (ds_name, connection_id, type, query, created_at, last_modified) 
+        VALUES ('${dataSourceName}', ${connectionId}, '${connectionType}', '${query ? query.replace(/'/g, "''") : ''}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
+      await dbClient.run(insertQuery);
+      console.log(`✅ Created data source: ${dataSourceName}`);
+    }
+    
+    res.json({ success: true, message: 'Data source saved successfully' });
+  } catch (err) {
+    console.error('❌ Error saving data source:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get data source details by name
+ * GET /api/datasources/:name
+ */
+app.get('/api/datasources/:name', async (req, res) => {
+  const { name } = req.params;
+  try {
+    const result = await dbClient.query(`
+      SELECT 
+        dsr.ds_name,
+        dsr.connection_id,
+        dsr.type,
+        dsr.query,
+        sfc.connectionName
+      FROM data_source_registry dsr
+      LEFT JOIN snow_flake_connections sfc ON dsr.connection_id = sfc.id
+      WHERE dsr.ds_name='${name}'
+    `);
+    
+    if (result.length === 0) {
+      return res.status(404).json({ success: false, error: 'Data source not found' });
+    }
+    
+    const ds = result[0];
+    res.json({ 
+      success: true, 
+      dataSource: {
+        name: ds.ds_name,
+        connectionId: ds.connection_id,
+        connectionType: ds.type,
+        connectionName: ds.connectionName,
+        query: ds.query || ''
+      }
+    });
+  } catch (err) {
+    console.error('❌ Error fetching data source details:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -1278,9 +1374,27 @@ app.post('/api/calculate', async (req, res) => {
 
 app.get("/get-all-ds-names", async (req, res) => {
   try{
-    const result=await dbClient.query('SELECT ds_name FROM data_source_registry');
+    const result=await dbClient.query(`
+      SELECT 
+        dsr.ds_name,
+        dsr.connection_id,
+        dsr.type,
+        sfc.connectionName
+      FROM data_source_registry dsr
+      LEFT JOIN snow_flake_connections sfc ON dsr.connection_id = sfc.id
+    `);
     const dsNames=result.map(row=>row.ds_name);
-    res.json({success:true,data_source_names:dsNames});
+    // Keep backward compatibility with data_source_names
+    res.json({
+      success:true,
+      data_source_names:dsNames,
+      dataSources: result.map(row => ({
+        name: row.ds_name,
+        connectionId: row.connection_id,
+        connectionType: row.type,
+        connectionName: row.connectionName || null
+      }))
+    });
   }catch(err){
     console.error("Error fetching data_source names:",err);
     res.status(500).json({success:false,error:err.message});
