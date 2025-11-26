@@ -42,15 +42,35 @@ import { hooksArraySelector,hooksArrayOfArraySelector,hooksArrayOfObjectsSelecto
 import axios from 'axios';
 
 // Utility function to format dates to yyyy-mm-dd
+// Only formats actual dates, not numbers that happen to be small
 const formatDateToYYYYMMDD = (value: any): string => {
-  if (!value) return String(value);
+  if (!value && value !== 0) return String(value);
   
   // If it's already a string in yyyy-mm-dd format, return as is
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
     return value;
   }
   
-  // Try to parse as Date
+  // For numbers, only treat as timestamp if it's a reasonable date (after 1970-01-01 and before 2100)
+  // Small numbers like 10, 20, 30 are NOT timestamps
+  if (typeof value === 'number') {
+    // Only treat as timestamp if it's a reasonable date timestamp (milliseconds since epoch)
+    // Timestamps for dates are typically > 0 and < 4102444800000 (year 2100)
+    // Small numbers like 10, 20, 30 are just numbers, not timestamps
+    if (value > 0 && value < 4102444800000 && value > 86400000) { // At least 1 day in milliseconds
+      const date = new Date(value);
+      if (!isNaN(date.getTime()) && date.getFullYear() >= 1970 && date.getFullYear() <= 2100) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    }
+    // Not a valid timestamp, return as number string
+    return String(value);
+  }
+  
+  // Try to parse as Date for strings
   let date: Date | null = null;
   
   if (value instanceof Date) {
@@ -58,14 +78,8 @@ const formatDateToYYYYMMDD = (value: any): string => {
   } else if (typeof value === 'string') {
     // Try parsing the string as a date
     const parsed = new Date(value);
-    if (!isNaN(parsed.getTime())) {
+    if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 1970 && parsed.getFullYear() <= 2100) {
       date = parsed;
-    }
-  } else if (typeof value === 'number') {
-    // Could be a timestamp
-    date = new Date(value);
-    if (isNaN(date.getTime())) {
-      return String(value);
     }
   }
   
@@ -501,23 +515,33 @@ const CascadingDropdown: React.FC = () => {
                 
                 if (hookType === 'array') {
                     return parsedOptions.map((item: string | number) => ({
-                        label: formatDateToYYYYMMDD(item),
+                        label: String(item), // Don't format numbers as dates - just show the value
                         value: item,
                     }));
 
                 } else if (hookType === 'arrayOfArray') {
                     if (hooksArrayOfArrayLabelIndex !== '' && hooksArrayOfArrayValueIndex !== '') {
-                        return parsedOptions.map((item: any[]) => ({
-                            label: formatDateToYYYYMMDD(item[hooksArrayOfArrayLabelIndex as number]) || 'N/A', 
-                            value: item[hooksArrayOfArrayValueIndex as number],
-                        }));
+                        return parsedOptions.map((item: any[]) => {
+                            const labelValue = item[hooksArrayOfArrayLabelIndex as number];
+                            const valueValue = item[hooksArrayOfArrayValueIndex as number];
+                            // Show the value index value in dropdown (what user sees), store label index in label field, and value index in value field
+                            return {
+                                label: String(valueValue !== undefined && valueValue !== null ? valueValue : 'N/A'),
+                                value: valueValue,
+                            };
+                        });
                     }
                 } else if (hookType === 'arrayOfObjects') {
                     if (hooksArrayOfObjectLabelKey && hooksArrayOfObjectValueKey) {
-                        return parsedOptions.map((item: Record<string, any>) => ({
-                            label: formatDateToYYYYMMDD(item[hooksArrayOfObjectLabelKey]) || 'N/A', 
-                            value: item[hooksArrayOfObjectValueKey],
-                        }));
+                        return parsedOptions.map((item: Record<string, any>) => {
+                            const labelValue = item[hooksArrayOfObjectLabelKey];
+                            const valueValue = item[hooksArrayOfObjectValueKey];
+                            // Show the value key value (e.g., age) in dropdown (what user sees), store label key in label field, and value key in value field
+                            return {
+                                label: String(valueValue !== undefined && valueValue !== null ? valueValue : 'N/A'),
+                                value: valueValue,
+                            };
+                        });
                     }
                 }
             }catch(e){
@@ -537,23 +561,33 @@ const CascadingDropdown: React.FC = () => {
             
             if (paramType === 'array') {
                 return parsedOptions.map((item: string | number) => ({
-                    label: formatDateToYYYYMMDD(item),
+                    label: String(item), // Don't format numbers as dates - just show the value
                     value: item,
                 }));
 
             } else if (paramType === 'arrayOfArray') {
                 if (arrayOfArrayLabelIndex !== '' && arrayOfArrayValueIndex !== '') {
-                    return parsedOptions.map((item: any[]) => ({
-                        label: formatDateToYYYYMMDD(item[arrayOfArrayLabelIndex as number]) || 'N/A', 
-                        value: item[arrayOfArrayValueIndex as number],
-                    }));
+                    return parsedOptions.map((item: any[]) => {
+                        const labelValue = item[arrayOfArrayLabelIndex as number];
+                        const valueValue = item[arrayOfArrayValueIndex as number];
+                        // Show the value index value in dropdown (what user sees), store label index in label field, and value index in value field
+                        return {
+                            label: String(valueValue !== undefined && valueValue !== null ? valueValue : 'N/A'),
+                            value: valueValue,
+                        };
+                    });
                 }
             } else if (paramType === 'arrayOfObjects') {
                 if (arrayOfObjectLabelKey && arrayOfObjectValueKey) {
-                    return parsedOptions.map((item: Record<string, any>) => ({
-                        label: formatDateToYYYYMMDD(item[arrayOfObjectLabelKey]) || 'N/A', 
-                        value: item[arrayOfObjectValueKey],
-                    }));
+                    return parsedOptions.map((item: Record<string, any>) => {
+                        const labelValue = item[arrayOfObjectLabelKey];
+                        const valueValue = item[arrayOfObjectValueKey];
+                        // Show the value key value (e.g., age) in dropdown (what user sees), store label key in label field, and value key in value field
+                        return {
+                            label: String(valueValue !== undefined && valueValue !== null ? valueValue : 'N/A'),
+                            value: valueValue,
+                        };
+                    });
                 }
             }
 
@@ -569,8 +603,13 @@ const CascadingDropdown: React.FC = () => {
         setTimeout(() => setSuccessMessage(''), 3000);
     };
 
+    const showError = (message: string) => {
+        setSuccessMessage(`Error: ${message}`);
+        setTimeout(() => setSuccessMessage(''), 5000);
+    };
+
     // ==================== SAVE CONFIGURATION ====================
-    const handleSaveConfiguration = () => {
+    const handleSaveConfiguration = async () => {
         const availableOptions = getAvailableValues(); 
         
         let actualSelectedName = '';
@@ -586,11 +625,58 @@ const CascadingDropdown: React.FC = () => {
             ? (defaultSingleValue ? [defaultSingleValue] : [])
             : defaultMultiValues;
         
+        // Helper function to get label index/key value for array of arrays/objects
+        const getLabelValueForSavedOption = (selectedValue: any): string => {
+            try {
+                if (mainCategory === 'params' && paramType === 'arrayOfArray' && arrayOfArrayLabelIndex !== '' && arrayOfArrayValueIndex !== '') {
+                    const parsedOptions = JSON.parse(paramValueToInspect || '[]');
+                    const foundItem = parsedOptions.find((item: any[]) => item[arrayOfArrayValueIndex as number] === selectedValue);
+                    if (foundItem) {
+                        const labelValue = foundItem[arrayOfArrayLabelIndex as number];
+                        return String(labelValue !== undefined && labelValue !== null ? labelValue : 'N/A');
+                    }
+                } else if (mainCategory === 'params' && paramType === 'arrayOfObjects' && arrayOfObjectLabelKey && arrayOfObjectValueKey) {
+                    const parsedOptions = JSON.parse(paramValueToInspect || '[]');
+                    const foundItem = parsedOptions.find((item: Record<string, any>) => item[arrayOfObjectValueKey] === selectedValue);
+                    if (foundItem) {
+                        const labelValue = foundItem[arrayOfObjectLabelKey];
+                        return String(labelValue !== undefined && labelValue !== null ? labelValue : 'N/A');
+                    }
+                } else if (mainCategory === 'hooks' && hookType === 'arrayOfArray' && hooksArrayOfArrayLabelIndex !== '' && hooksArrayOfArrayValueIndex !== '') {
+                    const parsedOptions = JSON.parse(hooksValueToInspect || '[]');
+                    const foundItem = parsedOptions.find((item: any[]) => item[hooksArrayOfArrayValueIndex as number] === selectedValue);
+                    if (foundItem) {
+                        const labelValue = foundItem[hooksArrayOfArrayLabelIndex as number];
+                        return String(labelValue !== undefined && labelValue !== null ? labelValue : 'N/A');
+                    }
+                } else if (mainCategory === 'hooks' && hookType === 'arrayOfObjects' && hooksArrayOfObjectLabelKey && hooksArrayOfObjectValueKey) {
+                    const parsedOptions = JSON.parse(hooksValueToInspect || '[]');
+                    const foundItem = parsedOptions.find((item: Record<string, any>) => item[hooksArrayOfObjectValueKey] === selectedValue);
+                    if (foundItem) {
+                        const labelValue = foundItem[hooksArrayOfObjectLabelKey];
+                        return String(labelValue !== undefined && labelValue !== null ? labelValue : 'N/A');
+                    }
+                }
+            } catch (e) {
+                console.error('Error getting label value for saved option:', e);
+            }
+            // Fallback: use the value as label if we can't find the label index/key value
+            return String(selectedValue);
+        };
+        
         const defaultValues: DefaultValueOption[] = selectedPrimitiveValues
-            .map(selectedValue => 
-                availableOptions.find(opt => opt.value === selectedValue) || 
-                { label: selectedValue.toString(), value: selectedValue }
-            ); 
+            .map(selectedValue => {
+                const foundOption = availableOptions.find(opt => opt.value === selectedValue);
+                if (foundOption) {
+                    // For array of arrays/objects, replace label with label index/key value
+                    const labelValue = getLabelValueForSavedOption(selectedValue);
+                    return {
+                        label: labelValue,
+                        value: selectedValue,
+                    };
+                }
+                return { label: selectedValue.toString(), value: selectedValue };
+            }); 
 
         const configId = variableName;
         const newConfig: FilterConfig = {
@@ -621,15 +707,49 @@ const CascadingDropdown: React.FC = () => {
             }),
         };
 
-        if (!editingId && !filterNames.includes(configId)) {
-            setFilterNames(prev => [...prev, configId]);
-        }
-        
-        setSpecificConfig(newConfig);
+        try {
+            const filterData = {
+                variableName: newConfig.variableName,
+                category: newConfig.category,
+                paramName: newConfig.paramName,
+                displayName: newConfig.displayName,
+                selectionType: newConfig.selectionType,
+                dsName: newConfig.dsName,
+                labelIndex: newConfig.labelIndex,
+                valueIndex: newConfig.valueIndex,
+                labelKey: newConfig.labelKey,
+                valueKey: newConfig.valuekey,
+                availableOptions: newConfig.availableOptions,
+                defaultValues: newConfig.defaultValues,
+            };
 
-        showSuccess(editingId ? 'Filter updated successfully!' : 'Filter created successfully!');
-        
-        resetAllSelections();
+            if (editingId) {
+                // Update existing filter by variable name
+                await axios.put(`http://localhost:3002/api/filters/${configId}`, filterData);
+            } else {
+                // Create new filter
+                await axios.post('http://localhost:3002/api/filters', filterData);
+                if (!filterNames.includes(configId)) {
+                    setFilterNames(prev => [...prev, configId]);
+                }
+            }
+
+            // Update local state
+            setSpecificConfig(newConfig);
+            
+            // Reload filters from database to ensure consistency
+            const reloadResponse = await axios.get('http://localhost:3002/api/filters');
+            if (reloadResponse.data.success && reloadResponse.data.filters) {
+                const reloadedFilterNames = reloadResponse.data.filters.map((f: any) => f.variable_name);
+                setFilterNames(reloadedFilterNames);
+            }
+
+            showSuccess(editingId ? 'Filter updated successfully!' : 'Filter created successfully!');
+            resetAllSelections();
+        } catch (error: any) {
+            console.error('Failed to save filter:', error);
+            showError(error.response?.data?.error || 'Failed to save filter');
+        }
     };
 
     const handleEditFilter = (config: SavedFilterConfig) => { 
@@ -683,10 +803,27 @@ const CascadingDropdown: React.FC = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleDeleteFilter = (variableName: string) => {
-        setFilterNames(prev => prev.filter(name => name !== variableName));
-        clearFilterConfig(variableName); 
-        showSuccess('Filter deleted successfully!');
+    const handleDeleteFilter = async (variableName: string) => {
+        try {
+            // Delete from database
+            await axios.delete(`http://localhost:3002/api/filters/${variableName}`);
+            
+            // Update local state
+            setFilterNames(prev => prev.filter(name => name !== variableName));
+            clearFilterConfig(variableName);
+            
+            // Reload filters from database to ensure consistency
+            const reloadResponse = await axios.get('http://localhost:3002/api/filters');
+            if (reloadResponse.data.success && reloadResponse.data.filters) {
+                const reloadedFilterNames = reloadResponse.data.filters.map((f: any) => f.variable_name);
+                setFilterNames(reloadedFilterNames);
+            }
+            
+            showSuccess('Filter deleted successfully!');
+        } catch (error: any) {
+            console.error('Failed to delete filter:', error);
+            showError(error.response?.data?.error || 'Failed to delete filter');
+        }
     };
 
     const toggleFilterExpanded = (variableName: string) => {

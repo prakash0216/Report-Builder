@@ -622,6 +622,197 @@ app.delete('/api/calculations/:id', async (req, res) => {
 
 
 // ============================================
+// FILTER ENDPOINTS
+// ============================================
+
+/**
+ * Get all filters
+ * GET /api/filters
+ */
+app.get('/api/filters', async (req, res) => {
+  try {
+    // Note: filters table doesn't have created_at, using last_modified for ordering
+    const result = await dbClient.query('SELECT * FROM filters ORDER BY last_modified DESC, id ASC');
+    res.json({ success: true, filters: result });
+  } catch (err) {
+    console.error('❌ Error fetching filters:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get filter by variable name (variable_name is unique, so this is the primary lookup method)
+ * GET /api/filters/:variableName
+ */
+app.get('/api/filters/:variableName', async (req, res) => {
+  const { variableName } = req.params;
+  try {
+    const result = await dbClient.query(`SELECT * FROM filters WHERE variable_name='${variableName.replace(/'/g, "''")}'`);
+    if (result.length === 0) {
+      return res.status(404).json({ success: false, error: 'Filter not found' });
+    }
+    res.json({ success: true, filter: result[0] });
+  } catch (err) {
+    console.error('❌ Error fetching filter:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Add new filter
+ * POST /api/filters
+ */
+app.post('/api/filters', async (req, res) => {
+  const { 
+    variableName, 
+    category, 
+    paramName, 
+    displayName, 
+    selectionType, 
+    dsName, 
+    labelIndex, 
+    valueIndex, 
+    labelKey, 
+    valueKey, 
+    availableOptions, 
+    defaultValues 
+  } = req.body;
+  
+  if (!variableName || !category || !paramName || !displayName || !selectionType || !availableOptions || !defaultValues) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'variableName, category, paramName, displayName, selectionType, availableOptions, and defaultValues are required' 
+    });
+  }
+
+  try {
+    // Check if variable name already exists
+    const existing = await dbClient.query(`SELECT id FROM filters WHERE variable_name='${variableName.replace(/'/g, "''")}'`);
+    if (existing.length > 0) {
+      return res.status(400).json({ success: false, error: 'Filter with this variable name already exists' });
+    }
+
+    const insertQuery = `INSERT INTO filters (
+      variable_name, 
+      category, 
+      param_name, 
+      display_name, 
+      selection_type, 
+      ds_name, 
+      label_index, 
+      value_index, 
+      label_key, 
+      value_key, 
+      available_options_json, 
+      default_values_json,
+      last_modified
+    ) VALUES (
+      '${variableName.replace(/'/g, "''")}',
+      '${category.replace(/'/g, "''")}',
+      '${paramName.replace(/'/g, "''")}',
+      '${displayName.replace(/'/g, "''")}',
+      '${selectionType}',
+      ${dsName ? `'${dsName.replace(/'/g, "''")}'` : 'NULL'},
+      ${labelIndex !== undefined && labelIndex !== null ? labelIndex : 'NULL'},
+      ${valueIndex !== undefined && valueIndex !== null ? valueIndex : 'NULL'},
+      ${labelKey ? `'${labelKey.replace(/'/g, "''")}'` : 'NULL'},
+      ${valueKey ? `'${valueKey.replace(/'/g, "''")}'` : 'NULL'},
+      '${JSON.stringify(availableOptions).replace(/'/g, "''")}',
+      '${JSON.stringify(defaultValues).replace(/'/g, "''")}',
+      CURRENT_TIMESTAMP
+    )`;
+    
+    await dbClient.run(insertQuery);
+    console.log(`✅ Filter added: ${variableName}`);
+    res.json({ success: true, message: 'Filter added successfully' });
+  } catch (err) {
+    console.error('❌ Error adding filter:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Update filter by variable name
+ * PUT /api/filters/:variableName
+ */
+app.put('/api/filters/:variableName', async (req, res) => {
+  const { variableName } = req.params;
+  const { 
+    category, 
+    paramName, 
+    displayName, 
+    selectionType, 
+    dsName, 
+    labelIndex, 
+    valueIndex, 
+    labelKey, 
+    valueKey, 
+    availableOptions, 
+    defaultValues 
+  } = req.body;
+  
+  if (!category || !paramName || !displayName || !selectionType || !availableOptions || !defaultValues) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'category, paramName, displayName, selectionType, availableOptions, and defaultValues are required' 
+    });
+  }
+
+  try {
+    // Check if filter exists
+    const existing = await dbClient.query(`SELECT id FROM filters WHERE variable_name='${variableName.replace(/'/g, "''")}'`);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, error: 'Filter not found' });
+    }
+
+    const updateQuery = `UPDATE filters SET
+      category='${category.replace(/'/g, "''")}',
+      param_name='${paramName.replace(/'/g, "''")}',
+      display_name='${displayName.replace(/'/g, "''")}',
+      selection_type='${selectionType}',
+      ds_name=${dsName ? `'${dsName.replace(/'/g, "''")}'` : 'NULL'},
+      label_index=${labelIndex !== undefined && labelIndex !== null ? labelIndex : 'NULL'},
+      value_index=${valueIndex !== undefined && valueIndex !== null ? valueIndex : 'NULL'},
+      label_key=${labelKey ? `'${labelKey.replace(/'/g, "''")}'` : 'NULL'},
+      value_key=${valueKey ? `'${valueKey.replace(/'/g, "''")}'` : 'NULL'},
+      available_options_json='${JSON.stringify(availableOptions).replace(/'/g, "''")}',
+      default_values_json='${JSON.stringify(defaultValues).replace(/'/g, "''")}',
+      last_modified=CURRENT_TIMESTAMP
+    WHERE variable_name='${variableName.replace(/'/g, "''")}'`;
+    
+    await dbClient.run(updateQuery);
+    console.log(`✅ Filter updated: ${variableName}`);
+    res.json({ success: true, message: 'Filter updated successfully' });
+  } catch (err) {
+    console.error('❌ Error updating filter:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Delete filter by variable name
+ * DELETE /api/filters/:variableName
+ */
+app.delete('/api/filters/:variableName', async (req, res) => {
+  const { variableName } = req.params;
+
+  try {
+    const existing = await dbClient.query(`SELECT id FROM filters WHERE variable_name='${variableName.replace(/'/g, "''")}'`);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, error: 'Filter not found' });
+    }
+
+    const deleteQuery = `DELETE FROM filters WHERE variable_name='${variableName.replace(/'/g, "''")}'`;
+    await dbClient.run(deleteQuery);
+    console.log(`✅ Filter deleted: ${variableName}`);
+    res.json({ success: true, message: 'Filter deleted successfully' });
+  } catch (err) {
+    console.error('❌ Error deleting filter:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
 // EXISTING ENDPOINTS (KEPT AS IS)
 // ============================================
 
