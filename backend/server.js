@@ -2060,6 +2060,491 @@ app.get('/cache/keys', (req, res) => {
   }
 });
 
+// ============================================
+// CHART CONFIG ENDPOINTS
+// ============================================
+
+/**
+ * Get all chart configs
+ * GET /api/chart-configs
+ */
+app.get('/api/chart-configs', async (req, res) => {
+  try {
+    const configs = await dbClient.query('SELECT * FROM chart_configs ORDER BY last_modified DESC, created_at DESC');
+    const result = {};
+    configs.forEach(row => {
+      result[row.chart_id] = {
+        template: row.template,
+        type: row.type,
+        processed: row.processed_config_json ? JSON.parse(row.processed_config_json) : null,
+        htmlContent: row.html_content || '',
+      };
+    });
+    res.json({ success: true, configs: result });
+  } catch (err) {
+    console.error('Error fetching chart configs:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get a specific chart config
+ * GET /api/chart-configs/:chartId
+ */
+app.get('/api/chart-configs/:chartId', async (req, res) => {
+  try {
+    const { chartId } = req.params;
+    const configs = await dbClient.query(`SELECT * FROM chart_configs WHERE chart_id='${chartId.replace(/'/g, "''")}'`);
+    if (configs.length === 0) {
+      return res.status(404).json({ success: false, error: 'Chart config not found' });
+    }
+    const row = configs[0];
+    res.json({
+      success: true,
+      config: {
+        template: row.template,
+        type: row.type,
+        processed: row.processed_config_json ? JSON.parse(row.processed_config_json) : null,
+        htmlContent: row.html_content || '',
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching chart config:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Create or update a chart config
+ * POST /api/chart-configs
+ */
+app.post('/api/chart-configs', async (req, res) => {
+  try {
+    const { chartId, template, type, processed, htmlContent } = req.body;
+    if (!chartId || !type) {
+      return res.status(400).json({ success: false, error: 'chartId and type are required' });
+    }
+
+    const processedJson = processed ? JSON.stringify(processed) : null;
+    const existing = await dbClient.query(`SELECT id FROM chart_configs WHERE chart_id='${chartId.replace(/'/g, "''")}'`);
+    
+    const escapedChartId = chartId.replace(/'/g, "''");
+    const escapedTemplate = (template || '').replace(/'/g, "''");
+    const escapedHtmlContent = (htmlContent || '').replace(/'/g, "''");
+    const escapedProcessedJson = (processedJson || '').replace(/'/g, "''");
+    
+    if (existing.length > 0) {
+      // Update
+      await dbClient.run(`
+        UPDATE chart_configs 
+        SET template='${escapedTemplate}', type='${type}', processed_config_json='${escapedProcessedJson}', html_content='${escapedHtmlContent}', last_modified=CURRENT_TIMESTAMP
+        WHERE chart_id='${escapedChartId}'
+      `);
+    } else {
+      // Insert
+      await dbClient.run(`
+        INSERT INTO chart_configs (chart_id, template, type, processed_config_json, html_content, last_modified)
+        VALUES ('${escapedChartId}', '${escapedTemplate}', '${type}', '${escapedProcessedJson}', '${escapedHtmlContent}', CURRENT_TIMESTAMP)
+      `);
+    }
+
+    res.json({ success: true, message: 'Chart config saved successfully' });
+  } catch (err) {
+    console.error('Error saving chart config:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Delete a chart config
+ * DELETE /api/chart-configs/:chartId
+ */
+app.delete('/api/chart-configs/:chartId', async (req, res) => {
+  try {
+    const { chartId } = req.params;
+    await dbClient.run(`DELETE FROM chart_configs WHERE chart_id='${chartId.replace(/'/g, "''")}'`);
+    res.json({ success: true, message: 'Chart config deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting chart config:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// LAYOUT ENDPOINTS
+// ============================================
+
+/**
+ * Get all layouts
+ * GET /api/layouts
+ */
+app.get('/api/layouts', async (req, res) => {
+  try {
+    const layouts = await dbClient.query('SELECT * FROM layouts ORDER BY breakpoint, y, x');
+    const result = {
+      lg: [],
+      md: [],
+      sm: [],
+      xs: [],
+      xxs: [],
+    };
+    
+    layouts.forEach(row => {
+      const layoutItem = {
+        i: row.chart_id,
+        x: row.x,
+        y: row.y,
+        w: row.w,
+        h: row.h,
+      };
+      if (row.min_w !== null) layoutItem.minW = row.min_w;
+      if (row.max_w !== null) layoutItem.maxW = row.max_w;
+      if (row.min_h !== null) layoutItem.minH = row.min_h;
+      if (row.max_h !== null) layoutItem.maxH = row.max_h;
+      if (row.static !== null) layoutItem.static = row.static;
+      if (row.is_draggable !== null) layoutItem.isDraggable = row.is_draggable;
+      if (row.is_resizable !== null) layoutItem.isResizable = row.is_resizable;
+      if (row.is_bounded !== null) layoutItem.isBounded = row.is_bounded;
+      if (row.resize_handles) layoutItem.resizeHandles = JSON.parse(row.resize_handles);
+      if (row.moved !== null) layoutItem.moved = row.moved;
+      
+      result[row.breakpoint].push(layoutItem);
+    });
+    
+    res.json({ success: true, layouts: result });
+  } catch (err) {
+    console.error('Error fetching layouts:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Save all layouts
+ * POST /api/layouts
+ */
+app.post('/api/layouts', async (req, res) => {
+  try {
+    const { layouts } = req.body;
+    if (!layouts || typeof layouts !== 'object') {
+      return res.status(400).json({ success: false, error: 'layouts object is required' });
+    }
+
+    // Delete all existing layouts
+    await dbClient.run('DELETE FROM layouts');
+
+    // Insert new layouts
+    const breakpoints = ['lg', 'md', 'sm', 'xs', 'xxs'];
+    for (const breakpoint of breakpoints) {
+      if (layouts[breakpoint] && Array.isArray(layouts[breakpoint])) {
+        for (const item of layouts[breakpoint]) {
+          const escapedChartId = (item.i || '').replace(/'/g, "''");
+          const x = item.x || 0;
+          const y = item.y || 0;
+          const w = item.w || 6;
+          const h = item.h || 4;
+          const minW = item.minW !== undefined ? item.minW : 'NULL';
+          const maxW = item.maxW !== undefined ? item.maxW : 'NULL';
+          const minH = item.minH !== undefined ? item.minH : 'NULL';
+          const maxH = item.maxH !== undefined ? item.maxH : 'NULL';
+          const staticVal = item.static !== undefined ? (item.static ? 'true' : 'false') : 'NULL';
+          const isDraggable = item.isDraggable !== undefined ? (item.isDraggable ? 'true' : 'false') : 'NULL';
+          const isResizable = item.isResizable !== undefined ? (item.isResizable ? 'true' : 'false') : 'NULL';
+          const isBounded = item.isBounded !== undefined ? (item.isBounded ? 'true' : 'false') : 'NULL';
+          const resizeHandles = item.resizeHandles ? `'${JSON.stringify(item.resizeHandles).replace(/'/g, "''")}'` : 'NULL';
+          const moved = item.moved !== undefined ? (item.moved ? 'true' : 'false') : 'NULL';
+          
+          await dbClient.run(`
+            INSERT INTO layouts (
+              breakpoint, chart_id, x, y, w, h, min_w, max_w, min_h, max_h,
+              static, is_draggable, is_resizable, is_bounded, resize_handles, moved, last_modified
+            ) VALUES ('${breakpoint}', '${escapedChartId}', ${x}, ${y}, ${w}, ${h}, ${minW}, ${maxW}, ${minH}, ${maxH}, ${staticVal}, ${isDraggable}, ${isResizable}, ${isBounded}, ${resizeHandles}, ${moved}, CURRENT_TIMESTAMP)
+          `);
+        }
+      }
+    }
+
+    res.json({ success: true, message: 'Layouts saved successfully' });
+  } catch (err) {
+    console.error('Error saving layouts:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// CHART VISIBILITY ENDPOINTS
+// ============================================
+
+/**
+ * Get all chart visibility mappings
+ * GET /api/chart-visibility
+ */
+app.get('/api/chart-visibility', async (req, res) => {
+  try {
+    const visibility = await dbClient.query('SELECT * FROM chart_visibility');
+    const result = {};
+    visibility.forEach(row => {
+      result[row.chart_id] = row.variable_name || '';
+    });
+    res.json({ success: true, visibility: result });
+  } catch (err) {
+    console.error('Error fetching chart visibility:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Save chart visibility mappings
+ * POST /api/chart-visibility
+ */
+app.post('/api/chart-visibility', async (req, res) => {
+  try {
+    const { visibility } = req.body;
+    if (!visibility || typeof visibility !== 'object') {
+      return res.status(400).json({ success: false, error: 'visibility object is required' });
+    }
+
+    // Delete all existing visibility mappings
+    await dbClient.run('DELETE FROM chart_visibility');
+
+    // Insert new mappings
+    for (const [chartId, variableName] of Object.entries(visibility)) {
+      if (variableName) {
+        const escapedChartId = chartId.replace(/'/g, "''");
+        const escapedVariableName = variableName.replace(/'/g, "''");
+        await dbClient.run(`
+          INSERT INTO chart_visibility (chart_id, variable_name, last_modified)
+          VALUES ('${escapedChartId}', '${escapedVariableName}', CURRENT_TIMESTAMP)
+        `);
+      }
+    }
+
+    res.json({ success: true, message: 'Chart visibility saved successfully' });
+  } catch (err) {
+    console.error('Error saving chart visibility:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Update a single chart visibility
+ * PUT /api/chart-visibility/:chartId
+ */
+app.put('/api/chart-visibility/:chartId', async (req, res) => {
+  try {
+    const { chartId } = req.params;
+    const { variableName } = req.body;
+
+    const existing = await dbClient.query(`SELECT id FROM chart_visibility WHERE chart_id='${chartId.replace(/'/g, "''")}'`);
+    
+    const escapedChartId = chartId.replace(/'/g, "''");
+    if (existing.length > 0) {
+      if (variableName) {
+        const escapedVariableName = variableName.replace(/'/g, "''");
+        await dbClient.run(`
+          UPDATE chart_visibility 
+          SET variable_name='${escapedVariableName}', last_modified=CURRENT_TIMESTAMP
+          WHERE chart_id='${escapedChartId}'
+        `);
+      } else {
+        await dbClient.run(`DELETE FROM chart_visibility WHERE chart_id='${escapedChartId}'`);
+      }
+    } else if (variableName) {
+      const escapedVariableName = variableName.replace(/'/g, "''");
+      await dbClient.run(`
+        INSERT INTO chart_visibility (chart_id, variable_name, last_modified)
+        VALUES ('${escapedChartId}', '${escapedVariableName}', CURRENT_TIMESTAMP)
+      `);
+    }
+
+    res.json({ success: true, message: 'Chart visibility updated successfully' });
+  } catch (err) {
+    console.error('Error updating chart visibility:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// FILTER PANEL STATE ENDPOINTS
+// ============================================
+
+/**
+ * Get filter panel state (positions and active filters)
+ * GET /api/filter-panel-state
+ */
+app.get('/api/filter-panel-state', async (req, res) => {
+  try {
+    const states = await dbClient.query('SELECT * FROM filter_panel_state WHERE is_active = true ORDER BY display_order, last_modified DESC');
+    const positions = {};
+    const activeFilterIds = [];
+    
+    states.forEach((row, index) => {
+      positions[row.filter_id] = {
+        x: row.x_position,
+        y: row.y_position,
+      };
+      activeFilterIds.push(row.filter_id);
+    });
+    
+    res.json({ 
+      success: true, 
+      positions,
+      activeFilterIds 
+    });
+  } catch (err) {
+    console.error('Error fetching filter panel state:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Save filter panel state (positions and active filters)
+ * POST /api/filter-panel-state
+ */
+app.post('/api/filter-panel-state', async (req, res) => {
+  try {
+    const { positions, activeFilterIds } = req.body;
+    if (!positions || !activeFilterIds || !Array.isArray(activeFilterIds)) {
+      return res.status(400).json({ success: false, error: 'positions object and activeFilterIds array are required' });
+    }
+
+    // Mark all existing filters as inactive
+    await dbClient.run('UPDATE filter_panel_state SET is_active = false');
+
+    // Insert or update active filters with their positions
+    for (let i = 0; i < activeFilterIds.length; i++) {
+      const filterId = activeFilterIds[i];
+      const position = positions[filterId] || { x: 6, y: 6 + (i * 80) };
+      const escapedFilterId = filterId.replace(/'/g, "''");
+      
+      const existing = await dbClient.query(`SELECT id FROM filter_panel_state WHERE filter_id='${escapedFilterId}'`);
+      
+      if (existing.length > 0) {
+        // Update existing
+        await dbClient.run(`
+          UPDATE filter_panel_state 
+          SET x_position=${position.x}, y_position=${position.y}, is_active=true, display_order=${i}, last_modified=CURRENT_TIMESTAMP
+          WHERE filter_id='${escapedFilterId}'
+        `);
+      } else {
+        // Insert new
+        await dbClient.run(`
+          INSERT INTO filter_panel_state (filter_id, x_position, y_position, is_active, display_order, last_modified)
+          VALUES ('${escapedFilterId}', ${position.x}, ${position.y}, true, ${i}, CURRENT_TIMESTAMP)
+        `);
+      }
+    }
+
+    res.json({ success: true, message: 'Filter panel state saved successfully' });
+  } catch (err) {
+    console.error('Error saving filter panel state:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Update a single filter position
+ * PUT /api/filter-panel-state/:filterId/position
+ */
+app.put('/api/filter-panel-state/:filterId/position', async (req, res) => {
+  try {
+    const { filterId } = req.params;
+    const { x, y } = req.body;
+    
+    if (x === undefined || y === undefined) {
+      return res.status(400).json({ success: false, error: 'x and y positions are required' });
+    }
+
+    const escapedFilterId = filterId.replace(/'/g, "''");
+    const existing = await dbClient.query(`SELECT id FROM filter_panel_state WHERE filter_id='${escapedFilterId}'`);
+    
+    if (existing.length > 0) {
+      await dbClient.run(`
+        UPDATE filter_panel_state 
+        SET x_position=${x}, y_position=${y}, last_modified=CURRENT_TIMESTAMP
+        WHERE filter_id='${escapedFilterId}'
+      `);
+    } else {
+      // Create new entry if it doesn't exist
+      await dbClient.run(`
+        INSERT INTO filter_panel_state (filter_id, x_position, y_position, is_active, display_order, last_modified)
+        VALUES ('${escapedFilterId}', ${x}, ${y}, true, 0, CURRENT_TIMESTAMP)
+      `);
+    }
+
+    res.json({ success: true, message: 'Filter position updated successfully' });
+  } catch (err) {
+    console.error('Error updating filter position:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// CARD DIMENSION CONDITIONS ENDPOINTS
+// ============================================
+
+/**
+ * Get all card dimension conditions
+ * GET /api/card-dimension-conditions
+ */
+app.get('/api/card-dimension-conditions', async (req, res) => {
+  try {
+    const conditions = await dbClient.query('SELECT * FROM card_dimension_conditions ORDER BY chart_id, priority');
+    const result = {};
+    conditions.forEach(row => {
+      if (!result[row.chart_id]) {
+        result[row.chart_id] = [];
+      }
+      result[row.chart_id].push({
+        id: row.condition_id,
+        variableName: row.variable_name,
+        expectedValue: row.expected_value,
+        width: row.width,
+        height: row.height,
+        priority: row.priority,
+      });
+    });
+    res.json({ success: true, conditions: result });
+  } catch (err) {
+    console.error('Error fetching card dimension conditions:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Save card dimension conditions for a chart
+ * POST /api/card-dimension-conditions
+ */
+app.post('/api/card-dimension-conditions', async (req, res) => {
+  try {
+    const { chartId, conditions } = req.body;
+    if (!chartId) {
+      return res.status(400).json({ success: false, error: 'chartId is required' });
+    }
+
+    // Delete existing conditions for this chart
+    await dbClient.run(`DELETE FROM card_dimension_conditions WHERE chart_id='${chartId.replace(/'/g, "''")}'`);
+
+    // Insert new conditions
+    if (conditions && Array.isArray(conditions)) {
+      for (const condition of conditions) {
+        const escapedChartId = chartId.replace(/'/g, "''");
+        const escapedConditionId = condition.id.replace(/'/g, "''");
+        const escapedVariableName = condition.variableName.replace(/'/g, "''");
+        await dbClient.run(`
+          INSERT INTO card_dimension_conditions (
+            chart_id, condition_id, variable_name, expected_value, width, height, priority, last_modified
+          ) VALUES ('${escapedChartId}', '${escapedConditionId}', '${escapedVariableName}', ${condition.expectedValue ? 'true' : 'false'}, ${condition.width}, ${condition.height}, ${condition.priority}, CURRENT_TIMESTAMP)
+        `);
+      }
+    }
+
+    res.json({ success: true, message: 'Card dimension conditions saved successfully' });
+  } catch (err) {
+    console.error('Error saving card dimension conditions:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 (async()=> {
   try {
     await dbClient.query('SELECT 1');

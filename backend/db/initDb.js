@@ -141,6 +141,147 @@ CREATE TABLE IF NOT EXISTS filters (
   value_key TEXT,
   available_options_json TEXT NOT NULL,
   default_values_json TEXT NOT NULL,
-  last_modified TIMESTAMP,
+  last_modified TIMESTAMP
 );
 `
+
+const chartConfigsTable=`
+CREATE TABLE IF NOT EXISTS chart_configs (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('chart_configs_seq'),
+  chart_id TEXT UNIQUE NOT NULL,
+  template TEXT,
+  type TEXT NOT NULL CHECK (type IN ('chart','table','tableChart','html')),
+  processed_config_json TEXT,
+  html_content TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_modified TIMESTAMP
+);
+`
+
+const layoutsTable=`
+CREATE TABLE IF NOT EXISTS layouts (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('layouts_seq'),
+  breakpoint TEXT NOT NULL CHECK (breakpoint IN ('lg','md','sm','xs','xxs')),
+  chart_id TEXT NOT NULL,
+  x INTEGER NOT NULL,
+  y INTEGER NOT NULL,
+  w INTEGER NOT NULL,
+  h INTEGER NOT NULL,
+  min_w INTEGER,
+  max_w INTEGER,
+  min_h INTEGER,
+  max_h INTEGER,
+  static BOOLEAN,
+  is_draggable BOOLEAN,
+  is_resizable BOOLEAN,
+  is_bounded BOOLEAN,
+  resize_handles TEXT,
+  moved BOOLEAN,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_modified TIMESTAMP,
+  UNIQUE(breakpoint, chart_id)
+);
+`
+
+const chartVisibilityTable=`
+CREATE TABLE IF NOT EXISTS chart_visibility (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('chart_visibility_seq'),
+  chart_id TEXT UNIQUE NOT NULL,
+  variable_name TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_modified TIMESTAMP
+);
+`
+
+const cardDimensionConditionsTable=`
+CREATE TABLE IF NOT EXISTS card_dimension_conditions (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('card_dimension_conditions_seq'),
+  chart_id TEXT NOT NULL,
+  condition_id TEXT NOT NULL,
+  variable_name TEXT NOT NULL,
+  expected_value BOOLEAN NOT NULL,
+  width INTEGER NOT NULL,
+  height INTEGER NOT NULL,
+  priority INTEGER NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_modified TIMESTAMP,
+  UNIQUE(chart_id, condition_id)
+);
+`
+
+const filterPanelStateTable=`
+CREATE TABLE IF NOT EXISTS filter_panel_state (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('filter_panel_state_seq'),
+  filter_id TEXT UNIQUE NOT NULL,
+  x_position INTEGER NOT NULL,
+  y_position INTEGER NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  display_order INTEGER,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_modified TIMESTAMP
+);
+`
+
+async function createChartConfigsTable() {
+  try {
+    await dbClient.run(chartConfigsTable);
+    console.log("✅ Table 'chart_configs' created successfully.");
+  } catch (err) {
+    console.error("❌ Error creating table 'chart_configs':", err.message);
+  }
+}
+
+async function createLayoutsTable() {
+  try {
+    await dbClient.run(layoutsTable);
+    console.log("✅ Table 'layouts' created successfully.");
+  } catch (err) {
+    console.error("❌ Error creating table 'layouts':", err.message);
+  }
+}
+
+async function createChartVisibilityTable() {
+  try {
+    await dbClient.run(chartVisibilityTable);
+    console.log("✅ Table 'chart_visibility' created successfully.");
+  } catch (err) {
+    console.error("❌ Error creating table 'chart_visibility':", err.message);
+  }
+}
+
+async function createCardDimensionConditionsTable() {
+  try {
+    await dbClient.run(cardDimensionConditionsTable);
+    console.log("✅ Table 'card_dimension_conditions' created successfully.");
+  } catch (err) {
+    console.error("❌ Error creating table 'card_dimension_conditions':", err.message);
+  }
+}
+
+async function createFilterPanelStateTable() {
+  try {
+    await dbClient.run(filterPanelStateTable);
+    console.log("✅ Table 'filter_panel_state' created successfully.");
+  } catch (err) {
+    console.error("❌ Error creating table 'filter_panel_state':", err.message);
+  }
+}
+
+
+const createTables = async () => {
+  await createChartConfigsTable();
+  await createLayoutsTable();
+  await createChartVisibilityTable();
+  await createCardDimensionConditionsTable();
+  await createFilterPanelStateTable();
+}
+
+// createTables();
+
+// export {
+//   createChartConfigsTable,
+//   createLayoutsTable,
+//   createChartVisibilityTable,
+//   createCardDimensionConditionsTable,
+//   createFilterPanelStateTable
+// };

@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRecoilValue, useRecoilState } from 'recoil';
+import axios from "axios";
 import { 
   Box, 
   Select, 
@@ -29,7 +30,6 @@ import { allFiltersSelector, filterNamesState, filterConfigFamily } from "../rec
 import { liveFilterFamily } from "../recoil/LiveFilterFamily";
 import { atom } from 'recoil';
 import { IsEditModeState } from "../recoil/IsEditeMode";
-import { localStorageEffect } from "../recoil/persistence";
 
 interface FilterPanelProps {
   showFilters: boolean;
@@ -46,16 +46,37 @@ export const filterPositionsState = atom<Record<string, FilterPosition>>({
   key: 'filterPositionsState',
   default: {},
   effects: [
-    localStorageEffect('filterPositions')
+    ({ setSelf }) => {
+      // Load filter positions from API on initialization
+      axios.get('http://localhost:3002/api/filter-panel-state')
+        .then(response => {
+          if (response.data.success && response.data.positions) {
+            setSelf(response.data.positions);
+          }
+        })
+        .catch(error => {
+          console.error('Failed to load filter positions:', error);
+        });
+    },
   ]
-
 });
 
 export const activeFilterIdsState = atom<string[]>({
   key: 'activeFilterIdsState',
   default: [],
   effects: [
-    localStorageEffect('activeFilterIds')
+    ({ setSelf }) => {
+      // Load active filter IDs from API on initialization
+      axios.get('http://localhost:3002/api/filter-panel-state')
+        .then(response => {
+          if (response.data.success && response.data.activeFilterIds) {
+            setSelf(response.data.activeFilterIds);
+          }
+        })
+        .catch(error => {
+          console.error('Failed to load active filter IDs:', error);
+        });
+    },
   ]
 });
 
@@ -524,6 +545,31 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
   const filterNames = useRecoilValue(filterNamesState);
 
   const isEdit=useRecoilValue(IsEditModeState);
+
+  // Save filter panel state to API when it changes (debounced)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await axios.post('http://localhost:3002/api/filter-panel-state', {
+          positions: filterPositions,
+          activeFilterIds: activeFilterIds,
+        });
+      } catch (error) {
+        console.error('Failed to save filter panel state:', error);
+      }
+    }, 500); // Debounce by 500ms
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [filterPositions, activeFilterIds]);
 
   // Get all available filters sorted by category
   const availableFilters = filterNames

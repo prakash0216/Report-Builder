@@ -3,25 +3,43 @@ import { atom, selectorFamily } from 'recoil';
 import { variableAtomFamily } from './VariableFamily';
 import { cardDimensionConditionsState } from './Carddimensionstate ';
 
+import axios from 'axios';
+
 export const chartVisibilityVariableState = atom<Record<string, string>>({
   key: 'chartVisibilityVariableState',
   default: {},
   effects: [
-    ({ setSelf, onSet }) => {
-      const saved = localStorage.getItem('chart-visibility-variables');
-      if (saved) {
-        try {
-          setSelf(JSON.parse(saved));
-        } catch (e) {
-          console.error('Failed to load visibility variables:', e);
-        }
-      }
-
+    ({ setSelf }) => {
+      // Load chart visibility from API on initialization
+      axios.get('http://localhost:3002/api/chart-visibility')
+        .then(response => {
+          if (response.data.success && response.data.visibility) {
+            setSelf(response.data.visibility);
+          }
+        })
+        .catch(error => {
+          console.error('Failed to load chart visibility:', error);
+        });
+    },
+    ({ onSet }) => {
+      // Save chart visibility to API when it changes (debounced)
+      let timeoutId: NodeJS.Timeout;
       onSet((newValue, _, isReset) => {
+        clearTimeout(timeoutId);
         if (isReset) {
-          localStorage.removeItem('chart-visibility-variables');
+          // If reset, clear all visibility
+          axios.post('http://localhost:3002/api/chart-visibility', { visibility: {} })
+            .catch(error => console.error('Failed to reset chart visibility:', error));
         } else {
-          localStorage.setItem('chart-visibility-variables', JSON.stringify(newValue));
+          timeoutId = setTimeout(async () => {
+            try {
+              await axios.post('http://localhost:3002/api/chart-visibility', {
+                visibility: newValue,
+              });
+            } catch (error) {
+              console.error('Failed to save chart visibility:', error);
+            }
+          }, 500); // Debounce by 500ms
         }
       });
     },

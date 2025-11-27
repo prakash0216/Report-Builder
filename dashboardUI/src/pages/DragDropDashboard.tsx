@@ -800,7 +800,7 @@ export default function DropDragDashboard() {
                 {isEditMode && (
                   <button 
                     onClick={(e) => handleEditClick(e, item.i)} 
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                    className="non-draggable-config-btn inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
                   >
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -1165,7 +1165,7 @@ export default function DropDragDashboard() {
           isDroppable={isEditMode}
           isResizable={isEditMode}
           isDraggable={isEditMode}
-          draggableCancel=".non-draggable-close-btn, .non-draggable-edit-btn, .non-draggable-visibility-btn"
+          draggableCancel=".non-draggable-close-btn, .non-draggable-edit-btn, .non-draggable-visibility-btn, .non-draggable-config-btn"
           resizeHandles={isEditMode ? resizeHandle : []}
           allowOverlap={false}
           margin={[12, 12]}
