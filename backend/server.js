@@ -472,10 +472,10 @@ app.post('/remove-data-source', async (req, res) => {
 app.get('/api/calculations', async (req, res) => {
   try {
     const result = await dbClient.query('SELECT * FROM calculations ORDER BY created_at ASC');
-    res.json({ success: true, calculations: result });
+    res.json({ success: true, calculations: result || [] });
   } catch (err) {
-    console.error('❌ Error fetching calculations:', err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('❌ Error fetching calculations:', err.message || err);
+    res.status(500).json({ success: false, error: err.message || 'Unknown error' });
   }
 });
 
@@ -2061,6 +2061,69 @@ app.get('/cache/keys', (req, res) => {
 });
 
 // ============================================
+// CHART ID GENERATION ENDPOINT
+// ============================================
+
+/**
+ * Get next available chart ID
+ * GET /api/next-chart-id
+ */
+app.get('/api/next-chart-id', async (req, res) => {
+  try {
+    // Get max chart_id from all tables that use chart_id
+    // DuckDB uses ~ for regex matching
+    const queries = [
+      "SELECT chart_id FROM layouts WHERE chart_id ~ '^[0-9]+$'",
+      "SELECT chart_id FROM chart_configs WHERE chart_id ~ '^[0-9]+$'",
+      "SELECT chart_id FROM chart_visibility WHERE chart_id ~ '^[0-9]+$'",
+      "SELECT chart_id FROM card_dimension_conditions WHERE chart_id ~ '^[0-9]+$'"
+    ];
+    
+    let maxId = 0;
+    
+    for (const query of queries) {
+      try {
+        const results = await dbClient.query(query);
+        if (results && Array.isArray(results)) {
+          results.forEach(row => {
+            const id = parseInt(row.chart_id);
+            if (!isNaN(id) && id > maxId) {
+              maxId = id;
+            }
+          });
+        }
+      } catch (err) {
+        // If regex doesn't work, try without filter (get all and filter in JS)
+        try {
+          const tableName = query.match(/FROM (\w+)/)?.[1];
+          if (tableName) {
+            const altQuery = `SELECT chart_id FROM ${tableName}`;
+            const altResults = await dbClient.query(altQuery);
+            if (altResults && Array.isArray(altResults)) {
+              altResults.forEach(row => {
+                const id = parseInt(row.chart_id);
+                if (!isNaN(id) && id > maxId) {
+                  maxId = id;
+                }
+              });
+            }
+          }
+        } catch (altErr) {
+          console.warn('Warning checking chart_id in table:', err.message);
+        }
+      }
+    }
+    
+    const nextId = maxId + 1;
+    res.json({ success: true, nextChartId: nextId });
+  } catch (err) {
+    console.error('Error getting next chart ID:', err.message || err);
+    // Fallback to 1 if there's an error
+    res.json({ success: true, nextChartId: 1 });
+  }
+});
+
+// ============================================
 // CHART CONFIG ENDPOINTS
 // ============================================
 
@@ -2070,20 +2133,22 @@ app.get('/cache/keys', (req, res) => {
  */
 app.get('/api/chart-configs', async (req, res) => {
   try {
-    const configs = await dbClient.query('SELECT * FROM chart_configs ORDER BY last_modified DESC, created_at DESC');
+    const configs = await dbClient.query('SELECT * FROM chart_configs ORDER BY COALESCE(last_modified, created_at) DESC, created_at DESC');
     const result = {};
-    configs.forEach(row => {
-      result[row.chart_id] = {
-        template: row.template,
-        type: row.type,
-        processed: row.processed_config_json ? JSON.parse(row.processed_config_json) : null,
-        htmlContent: row.html_content || '',
-      };
-    });
+    if (configs && Array.isArray(configs)) {
+      configs.forEach(row => {
+        result[row.chart_id] = {
+          template: row.template,
+          type: row.type,
+          processed: row.processed_config_json ? JSON.parse(row.processed_config_json) : null,
+          htmlContent: row.html_content || '',
+        };
+      });
+    }
     res.json({ success: true, configs: result });
   } catch (err) {
-    console.error('Error fetching chart configs:', err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('Error fetching chart configs:', err.message || err);
+    res.status(500).json({ success: false, error: err.message || 'Unknown error' });
   }
 });
 
@@ -2170,6 +2235,30 @@ app.delete('/api/chart-configs/:chartId', async (req, res) => {
   }
 });
 
+/**
+ * Delete a chart completely from all tables
+ * DELETE /api/charts/:chartId
+ * This deletes the chart from chart_configs, layouts, chart_visibility, and card_dimension_conditions
+ */
+app.delete('/api/charts/:chartId', async (req, res) => {
+  try {
+    const { chartId } = req.params;
+    const escapedChartId = chartId.replace(/'/g, "''");
+    
+    // Delete from all tables that reference chart_id
+    await dbClient.run(`DELETE FROM chart_configs WHERE chart_id='${escapedChartId}'`);
+    await dbClient.run(`DELETE FROM layouts WHERE chart_id='${escapedChartId}'`);
+    await dbClient.run(`DELETE FROM chart_visibility WHERE chart_id='${escapedChartId}'`);
+    await dbClient.run(`DELETE FROM card_dimension_conditions WHERE chart_id='${escapedChartId}'`);
+    
+    console.log(`✅ Chart ${chartId} deleted from all tables`);
+    res.json({ success: true, message: 'Chart deleted successfully from all tables' });
+  } catch (err) {
+    console.error('Error deleting chart:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ============================================
 // LAYOUT ENDPOINTS
 // ============================================
@@ -2229,11 +2318,16 @@ app.post('/api/layouts', async (req, res) => {
       return res.status(400).json({ success: false, error: 'layouts object is required' });
     }
 
-    // Delete all existing layouts
-    await dbClient.run('DELETE FROM layouts');
+    // Delete existing layouts for breakpoints we're updating
+    const breakpoints = ['lg', 'md', 'sm', 'xs', 'xxs'];
+    const breakpointsToUpdate = breakpoints.filter(bp => layouts[bp] && Array.isArray(layouts[bp]) && layouts[bp].length > 0);
+    
+    if (breakpointsToUpdate.length > 0) {
+      const breakpointList = breakpointsToUpdate.map(bp => `'${bp}'`).join(',');
+      await dbClient.run(`DELETE FROM layouts WHERE breakpoint IN (${breakpointList})`);
+    }
 
     // Insert new layouts
-    const breakpoints = ['lg', 'md', 'sm', 'xs', 'xxs'];
     for (const breakpoint of breakpoints) {
       if (layouts[breakpoint] && Array.isArray(layouts[breakpoint])) {
         for (const item of layouts[breakpoint]) {
@@ -2282,13 +2376,15 @@ app.get('/api/chart-visibility', async (req, res) => {
   try {
     const visibility = await dbClient.query('SELECT * FROM chart_visibility');
     const result = {};
-    visibility.forEach(row => {
-      result[row.chart_id] = row.variable_name || '';
-    });
+    if (visibility && Array.isArray(visibility)) {
+      visibility.forEach(row => {
+        result[row.chart_id] = row.variable_name || '';
+      });
+    }
     res.json({ success: true, visibility: result });
   } catch (err) {
-    console.error('Error fetching chart visibility:', err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('Error fetching chart visibility:', err.message || err);
+    res.status(500).json({ success: false, error: err.message || 'Unknown error' });
   }
 });
 
@@ -2373,17 +2469,19 @@ app.put('/api/chart-visibility/:chartId', async (req, res) => {
  */
 app.get('/api/filter-panel-state', async (req, res) => {
   try {
-    const states = await dbClient.query('SELECT * FROM filter_panel_state WHERE is_active = true ORDER BY display_order, last_modified DESC');
+    const states = await dbClient.query('SELECT * FROM filter_panel_state WHERE is_active = true ORDER BY COALESCE(display_order, 0), last_modified DESC');
     const positions = {};
     const activeFilterIds = [];
     
-    states.forEach((row, index) => {
-      positions[row.filter_id] = {
-        x: row.x_position,
-        y: row.y_position,
-      };
-      activeFilterIds.push(row.filter_id);
-    });
+    if (states && Array.isArray(states)) {
+      states.forEach((row, index) => {
+        positions[row.filter_id] = {
+          x: row.x_position,
+          y: row.y_position,
+        };
+        activeFilterIds.push(row.filter_id);
+      });
+    }
     
     res.json({ 
       success: true, 
@@ -2391,8 +2489,8 @@ app.get('/api/filter-panel-state', async (req, res) => {
       activeFilterIds 
     });
   } catch (err) {
-    console.error('Error fetching filter panel state:', err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('Error fetching filter panel state:', err.message || err);
+    res.status(500).json({ success: false, error: err.message || 'Unknown error' });
   }
 });
 
@@ -2549,6 +2647,21 @@ app.post('/api/card-dimension-conditions', async (req, res) => {
   try {
     await dbClient.query('SELECT 1');
     console.log('✅ DuckDB is connected');
+
+     // Initialize new tables
+     const { 
+      createChartConfigsTable, 
+      createLayoutsTable, 
+      createChartVisibilityTable, 
+      createCardDimensionConditionsTable,
+      createFilterPanelStateTable
+    } = await import('./db/initDb.js');
+    
+    await createChartConfigsTable();
+    await createLayoutsTable();
+    await createChartVisibilityTable();
+    await createCardDimensionConditionsTable();
+    await createFilterPanelStateTable();
 
     app.listen(PORT, () => {
       console.log(`🚀 Server is running at http://localhost:${PORT}`);

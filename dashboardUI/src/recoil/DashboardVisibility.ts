@@ -78,8 +78,8 @@ export const isChartVisibleSelector = selectorFamily<boolean, string>({
       
       console.log(`[Selector] Chart ${chartId}: Variable ${variableName} = ${parsedValue}`);
       
-      // If variable is true = HIDE, if false = SHOW
-      const isVisible = parsedValue !== true;
+      // If variable is true = SHOW, if false = HIDE
+      const isVisible = parsedValue === true;
       console.log(`[Selector] Chart ${chartId}: isVisible = ${isVisible}`);
       return isVisible;
     } catch (e) {

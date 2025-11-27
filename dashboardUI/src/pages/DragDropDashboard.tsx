@@ -402,20 +402,36 @@ export default function DropDragDashboard() {
     }
   }, [variableUpdateTrigger, forceChartRefresh]);
 
+  // Initialize idRef from database on mount
   useEffect(() => {
-    if (layouts && Object.keys(layouts).length > 0) {
-      const allIds = Object.values(layouts)
-        .flat()
-        .map((item: Layout) => {
-          const num = parseInt(item.i);
-          return isNaN(num) ? 0 : num;
-        });
+    const initializeChartId = async () => {
+      try {
+        const response = await fetch('http://localhost:3002/api/next-chart-id');
+        const data = await response.json();
+        if (data.success && data.nextChartId) {
+          idRef.current = data.nextChartId;
+          console.log(`✅ Initialized chart ID counter to ${idRef.current}`);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch next chart ID from server, using fallback:', err);
+        // Fallback: use layouts if available
+        if (layouts && Object.keys(layouts).length > 0) {
+          const allIds = Object.values(layouts)
+            .flat()
+            .map((item: Layout) => {
+              const num = parseInt(item.i);
+              return isNaN(num) ? 0 : num;
+            });
 
-      if (allIds.length > 0) {
-        idRef.current = Math.max(...allIds, 0) + 1;
+          if (allIds.length > 0) {
+            idRef.current = Math.max(...allIds, 0) + 1;
+          }
+        }
       }
-    }
-  }, []);
+    };
+    
+    initializeChartId();
+  }, [layouts]);
 
   const getCurrentLayout = useCallback(() => {
     const currentLayout = layouts[currentBreakpoint] || [];
@@ -557,9 +573,26 @@ export default function DropDragDashboard() {
     setCurrentBreakpoint(breakpoint);
   }, []);
 
-  const onDrop = useCallback((_layout: Layout[], item: Layout) => {
-    const newId = idRef.current.toString();
-    idRef.current += 1;
+  const onDrop = useCallback(async (_layout: Layout[], item: Layout) => {
+    // Get next chart ID from server to ensure no duplicates
+    let newId: string;
+    try {
+      const response = await fetch('http://localhost:3002/api/next-chart-id');
+      const data = await response.json();
+      if (data.success && data.nextChartId) {
+        newId = data.nextChartId.toString();
+        idRef.current = data.nextChartId + 1; // Update local ref for next time
+      } else {
+        // Fallback to local counter
+        newId = idRef.current.toString();
+        idRef.current += 1;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch next chart ID, using local counter:', err);
+      // Fallback to local counter
+      newId = idRef.current.toString();
+      idRef.current += 1;
+    }
 
     const newItem: Layout = makeMutableLayoutItem({
       i: newId,
@@ -602,7 +635,26 @@ export default function DropDragDashboard() {
     });
   };
 
-  const removeItem = useCallback((id: string) => {
+  const removeItem = useCallback(async (id: string) => {
+    // Delete from database first
+    try {
+      const response = await fetch(`http://localhost:3002/api/charts/${id}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+      if (!data.success) {
+        console.error('Failed to delete chart from database:', data.error);
+        alert('Failed to delete chart. Please try again.');
+        return;
+      }
+      console.log(`✅ Chart ${id} deleted from database`);
+    } catch (err) {
+      console.error('Error deleting chart from database:', err);
+      alert('Failed to delete chart. Please try again.');
+      return;
+    }
+
+    // Update frontend state after successful database deletion
     delete trueOriginalPositionsRef.current[id];
 
     isInternalUpdateRef.current = true;
@@ -800,7 +852,7 @@ export default function DropDragDashboard() {
                 {isEditMode && (
                   <button 
                     onClick={(e) => handleEditClick(e, item.i)} 
-                    className="non-draggable-config-btn inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
                   >
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -1165,7 +1217,7 @@ export default function DropDragDashboard() {
           isDroppable={isEditMode}
           isResizable={isEditMode}
           isDraggable={isEditMode}
-          draggableCancel=".non-draggable-close-btn, .non-draggable-edit-btn, .non-draggable-visibility-btn, .non-draggable-config-btn"
+          draggableCancel=".non-draggable-close-btn, .non-draggable-edit-btn, .non-draggable-visibility-btn"
           resizeHandles={isEditMode ? resizeHandle : []}
           allowOverlap={false}
           margin={[12, 12]}

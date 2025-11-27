@@ -117,7 +117,7 @@ export function IsVisible() {
         ...visibilityVariables,
         [id]: selectedVariable,
       });
-      setSuccessMessage(`Visibility rule saved: Chart will hide when "${selectedVariable}" is true`);
+      setSuccessMessage(`Visibility rule saved: Chart will show when "${selectedVariable}" is true`);
     }
     
     setTimeout(() => setSuccessMessage(''), 4000);
@@ -228,9 +228,9 @@ export function IsVisible() {
           <Typography variant="body2" component="div" color="#0c4a6e" fontWeight={500}>
             • Select a <strong>boolean variable</strong> from your calculations
             <br />
-            • When the variable is <code style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '2px 6px', borderRadius: 4 }}>true</code> → Chart is <strong>HIDDEN</strong>
+            • When the variable is <code style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '2px 6px', borderRadius: 4 }}>true</code> → Chart is <strong>VISIBLE</strong>
             <br />
-            • When the variable is <code style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '2px 6px', borderRadius: 4 }}>false</code> → Chart is <strong>VISIBLE</strong>
+            • When the variable is <code style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '2px 6px', borderRadius: 4 }}>false</code> → Chart is <strong>HIDDEN</strong>
             <br />
             • By default (no variable selected) → Chart is always <strong>VISIBLE</strong>
           </Typography>
@@ -401,8 +401,8 @@ export function IsVisible() {
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Typography variant="body2" fontWeight={700}>Then:</Typography>
-                    <Typography variant="body2" fontWeight={700} color="#ef4444">
-                      Chart {id} will be HIDDEN
+                    <Typography variant="body2" fontWeight={700} color="#10b981">
+                      Chart {id} will be VISIBLE
                     </Typography>
                   </Box>
                   <Divider sx={{ borderColor: 'rgba(16, 185, 129, 0.3)' }} />
@@ -431,8 +431,8 @@ export function IsVisible() {
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Typography variant="body2" fontWeight={700}>Then:</Typography>
-                    <Typography variant="body2" fontWeight={700} color="#10b981">
-                      Chart {id} will be VISIBLE
+                    <Typography variant="body2" fontWeight={700} color="#ef4444">
+                      Chart {id} will be HIDDEN
                     </Typography>
                   </Box>
                 </Stack>
@@ -703,8 +703,8 @@ function VariableValueDisplay({ variableName }: { variableName: string }) {
             >
               <Typography variant="body2" fontWeight={700}>
                 {currentValue 
-                  ? '❌ Chart is currently HIDDEN (variable is true)'
-                  : '✅ Chart is currently VISIBLE (variable is false)'
+                  ? '✅ Chart is currently VISIBLE (variable is true)'
+                  : '❌ Chart is currently HIDDEN (variable is false)'
                 }
               </Typography>
             </Alert>

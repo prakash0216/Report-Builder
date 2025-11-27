@@ -278,10 +278,10 @@ const createTables = async () => {
 
 // createTables();
 
-// export {
-//   createChartConfigsTable,
-//   createLayoutsTable,
-//   createChartVisibilityTable,
-//   createCardDimensionConditionsTable,
-//   createFilterPanelStateTable
-// };
+export {
+  createChartConfigsTable,
+  createLayoutsTable,
+  createChartVisibilityTable,
+  createCardDimensionConditionsTable,
+  createFilterPanelStateTable
+};
