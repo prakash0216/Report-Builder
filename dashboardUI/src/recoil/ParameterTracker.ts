@@ -4,8 +4,14 @@ import { parameterAtomFamily } from './ParameterFamliy';
 
 const API_BASE_URL = 'http://localhost:3002';
 
+// Track whether parameters have been loaded from database
+export const parametersLoadedState = atom<boolean>({
+  key: 'parametersLoadedState',
+  default: false,
+});
+
 // Custom effect for syncing parameter names with database
-const parameterNamesDbEffect = ({ setSelf, onSet, trigger }: any) => {
+const parameterNamesDbEffect = ({ setSelf, onSet, trigger, getPromise, set }: any) => {
   // Load initial value from database
   if (trigger === 'get') {
     axios.get(`${API_BASE_URL}/api/parameters/names`)

@@ -1679,6 +1679,13 @@ app.post('/api/calculate', async (req, res) => {
 
   const allAvailableVariables = { ...existingVariables, ...existingParameters, ...existingFilters };
 
+  // Debug logging to see what's being sent
+  console.log(`📊 [Calculate] Variable: ${variableName}`);
+  console.log(`📊 [Calculate] Parameters:`, Object.keys(existingParameters || {}));
+  console.log(`📊 [Calculate] Filters:`, Object.keys(existingFilters || {}));
+  console.log(`📊 [Calculate] Variables:`, Object.keys(existingVariables || {}));
+  console.log(`📊 [Calculate] All available:`, Object.keys(allAvailableVariables));
+
   try {
     const variableDeclarations = Object.entries(allAvailableVariables)
     .map(([name, value]) => {
@@ -2654,9 +2661,18 @@ app.post('/api/card-dimension-conditions', async (req, res) => {
       createLayoutsTable, 
       createChartVisibilityTable, 
       createCardDimensionConditionsTable,
-      createFilterPanelStateTable
+      createFilterPanelStateTable,
+      createParametersTable,
+      createCalculationsTable,
+      createFiltersTable
     } = await import('./db/initDb.js');
     
+    // Create essential tables first (parameters, calculations, filters)
+    await createParametersTable();
+    await createCalculationsTable();
+    await createFiltersTable();
+    
+    // Create UI-related tables
     await createChartConfigsTable();
     await createLayoutsTable();
     await createChartVisibilityTable();

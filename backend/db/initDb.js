@@ -100,32 +100,52 @@ async function insertDummyConnections(){
 }
 
 // insertDummyConnections();
-async function parameterTable(){
-  const createTablesMultiple=`
-  CREATE TABLE IF NOT EXISTS parameters (
+
+// Parameters table definition
+const parametersTable=`
+CREATE TABLE IF NOT EXISTS parameters (
   id INTEGER PRIMARY KEY DEFAULT NEXTVAL('parameters_seq'),
   name VARCHAR NOT NULL,
   value TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  last_modified TIMESTAMP,
+  last_modified TIMESTAMP
 );
 `
+
+async function createParametersTable(){
   try{
-    await dbClient.run(createDataSourceRegistryTable);
-    console.log("✅ Table 'data_source_registry' created successfully.");
+    // Ensure sequence exists first
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS parameters_seq START 1;`);
+    await dbClient.run(parametersTable);
+    console.log("✅ Table 'parameters' created successfully.");
   }catch(err){
-    console.error("❌ Error creating table:", err.message);
+    console.error("❌ Error creating table 'parameters':", err.message);
   }
 }
 
-const calculationTables=`
+// Calculations table definition
+const calculationsTable=`
 CREATE TABLE IF NOT EXISTS calculations(
   id INTEGER PRIMARY KEY DEFAULT NEXTVAL('calculations_seq'),
-  variable_name varchar NOT NULL,
+  variable_name VARCHAR NOT NULL,
   logic TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  last_executed TIMESTAMP)`
+  last_executed TIMESTAMP
+);
+`
 
+async function createCalculationsTable(){
+  try{
+    // Ensure sequence exists first
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS calculations_seq START 1;`);
+    await dbClient.run(calculationsTable);
+    console.log("✅ Table 'calculations' created successfully.");
+  }catch(err){
+    console.error("❌ Error creating table 'calculations':", err.message);
+  }
+}
+
+// Filters table definition
 const filtersTable=`
 CREATE TABLE IF NOT EXISTS filters (
   id INTEGER PRIMARY KEY DEFAULT NEXTVAL('filters_seq'),
@@ -144,6 +164,26 @@ CREATE TABLE IF NOT EXISTS filters (
   last_modified TIMESTAMP
 );
 `
+
+async function createFiltersTable(){
+  try{
+    // Ensure sequence exists first
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS filters_seq START 1;`);
+    await dbClient.run(filtersTable);
+    console.log("✅ Table 'filters' created successfully.");
+  }catch(err){
+    console.error("❌ Error creating table 'filters':", err.message);
+  }
+}
+
+// Create sequences for auto-increment IDs
+const createSequences = `
+CREATE SEQUENCE IF NOT EXISTS chart_configs_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS layouts_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS chart_visibility_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS card_dimension_conditions_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS filter_panel_state_seq START 1;
+`;
 
 const chartConfigsTable=`
 CREATE TABLE IF NOT EXISTS chart_configs (
@@ -222,8 +262,25 @@ CREATE TABLE IF NOT EXISTS filter_panel_state (
 );
 `
 
+async function initializeSequences() {
+  try {
+    // Run each sequence creation separately to handle any that might already exist
+    const sequences = createSequences.split(';').filter(s => s.trim());
+    for (const seq of sequences) {
+      if (seq.trim()) {
+        await dbClient.run(seq + ';');
+      }
+    }
+    console.log("✅ All sequences initialized.");
+  } catch (err) {
+    console.error("❌ Error initializing sequences:", err.message);
+  }
+}
+
 async function createChartConfigsTable() {
   try {
+    // Ensure sequence exists first
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS chart_configs_seq START 1;`);
     await dbClient.run(chartConfigsTable);
     console.log("✅ Table 'chart_configs' created successfully.");
   } catch (err) {
@@ -233,6 +290,8 @@ async function createChartConfigsTable() {
 
 async function createLayoutsTable() {
   try {
+    // Ensure sequence exists first
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS layouts_seq START 1;`);
     await dbClient.run(layoutsTable);
     console.log("✅ Table 'layouts' created successfully.");
   } catch (err) {
@@ -242,6 +301,8 @@ async function createLayoutsTable() {
 
 async function createChartVisibilityTable() {
   try {
+    // Ensure sequence exists first
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS chart_visibility_seq START 1;`);
     await dbClient.run(chartVisibilityTable);
     console.log("✅ Table 'chart_visibility' created successfully.");
   } catch (err) {
@@ -251,6 +312,8 @@ async function createChartVisibilityTable() {
 
 async function createCardDimensionConditionsTable() {
   try {
+    // Ensure sequence exists first
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS card_dimension_conditions_seq START 1;`);
     await dbClient.run(cardDimensionConditionsTable);
     console.log("✅ Table 'card_dimension_conditions' created successfully.");
   } catch (err) {
@@ -260,6 +323,8 @@ async function createCardDimensionConditionsTable() {
 
 async function createFilterPanelStateTable() {
   try {
+    // Ensure sequence exists first
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS filter_panel_state_seq START 1;`);
     await dbClient.run(filterPanelStateTable);
     console.log("✅ Table 'filter_panel_state' created successfully.");
   } catch (err) {
@@ -283,5 +348,8 @@ export {
   createLayoutsTable,
   createChartVisibilityTable,
   createCardDimensionConditionsTable,
-  createFilterPanelStateTable
+  createFilterPanelStateTable,
+  createParametersTable,
+  createCalculationsTable,
+  createFiltersTable
 };

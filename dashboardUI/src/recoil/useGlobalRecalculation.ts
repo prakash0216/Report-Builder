@@ -14,6 +14,7 @@ import { filterConfigFamily, filterNamesState } from '../recoil/FiltersFamily';
 import { parameterNamesState } from '../recoil/ParameterTracker';
 import { liveFilterFamily } from '../recoil/LiveFilterFamily';
 import { allFiltersSnapshotSelector } from '../recoil/AllFiltersSelector';
+import { dataLoadedState } from '../components/DataInitializer';
 
 // Helper to safely parse stored strings into arrays/objects/values
 const safeParse = (value: string): any => {
@@ -40,6 +41,7 @@ export const useGlobalRecalculation = () => {
   const variableNames = useRecoilValue(variableNamesState);
   const parameterNames = useRecoilValue(parameterNamesState);
   const filterNames = useRecoilValue(filterNamesState);
+  const dataLoaded = useRecoilValue(dataLoadedState);
   const setVariableNames = useSetRecoilState(variableNamesState);
   const setStoredLogics = useSetRecoilState(storedLogicsState);
   const setUpdateTrigger = useSetRecoilState(variableUpdateTriggerState);
@@ -54,6 +56,7 @@ export const useGlobalRecalculation = () => {
   const initializedRef = useRef(false);
   const previousSnapshotRef = useRef<string>('');
   const mountCalculationDoneRef = useRef(false);
+  const mountSequenceRunningRef = useRef(false); // Atomic flag to prevent double execution
 
   // Check if we're on dashboard route
   const isDashboardRoute = location.pathname === '/dashboards';
@@ -65,16 +68,23 @@ export const useGlobalRecalculation = () => {
     logicsExecutedSoFar: StoredLogic[] = []
   ) => {
     try {
+      // 🔑 CRITICAL: Get FRESH filter and parameter names from snapshot (not closure!)
+      const currentFilterNames = await snapshot.getPromise(filterNamesState);
+      const currentParameterNames = await snapshot.getPromise(parameterNamesState);
+      const currentVariableNames = await snapshot.getPromise(variableNamesState);
+      
       // 🔑 CRITICAL: Build list of variables from BOTH sources:
-      // 1. variableNames (existing variables)
+      // 1. currentVariableNames (existing variables from snapshot)
       // 2. logicsExecutedSoFar (variables just calculated in THIS batch)
       const allVariableNamesToRead = new Set([
-        ...Array.from(variableNames),
+        ...Array.from(currentVariableNames),
         ...logicsExecutedSoFar.map(l => l.variableName)
       ]);
 
       console.log(`🔄 [Global Recalc] Executing logic for: ${logic.variableName}`);
       console.log(`   Variables to read:`, Array.from(allVariableNamesToRead));
+      console.log(`   Filters available:`, currentFilterNames);
+      console.log(`   Parameters available:`, currentParameterNames);
       
       const allVariables: Record<string, any> = {};
       const allParameters: Record<string, any> = {};
@@ -93,13 +103,14 @@ export const useGlobalRecalculation = () => {
         }
       });
 
-      // Get explicit parameter values
-      const filterNamesSet = new Set(filterNames);
+      // Get explicit parameter values - use getPromise to wait for values to load
+      const filterNamesSet = new Set(currentFilterNames);
       
-      parameterNames.forEach(paramName => {
+      for (const paramName of currentParameterNames) {
         if (!filterNamesSet.has(paramName)) { 
           try {
-            const rawValue = snapshot.getLoadable(parameterAtomFamily(paramName)).contents;
+            // Use getPromise to ensure we wait for the parameter value to load from API
+            const rawValue = await snapshot.getPromise(parameterAtomFamily(paramName));
             const parsedValue = safeParse(rawValue);
             if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
               allParameters[paramName] = parsedValue;
@@ -108,21 +119,22 @@ export const useGlobalRecalculation = () => {
             console.warn(`[Global Recalc] Failed to load explicit parameter ${paramName}:`, err);
           }
         }
-      });
+      }
 
-      // Get live filter values
-      filterNames.forEach(filterId => {
+      // Get live filter values - use getPromise to wait for values to load
+      // 🔑 CRITICAL: Use currentFilterNames from snapshot, not closure!
+      for (const filterId of currentFilterNames) {
         try {
-          const filterConfig = snapshot.getLoadable(filterConfigFamily(filterId)).contents;
+          const filterConfig = await snapshot.getPromise(filterConfigFamily(filterId));
           
           if (filterConfig && filterConfig.variableName) {
-            const selectedOptions = snapshot.getLoadable(liveFilterFamily(filterConfig.variableName)).contents;
+            const selectedOptions = await snapshot.getPromise(liveFilterFamily(filterConfig.variableName));
             allFilters[filterConfig.variableName] = selectedOptions;
           }
         } catch (err) {
           console.warn(`[Global Recalc] Failed to load live filter value for ${filterId}:`, err);
         }
-      });
+      }
       
       
       console.log(`📦 [Global Recalc] Fresh variables:`, Object.keys(allVariables));
@@ -155,28 +167,32 @@ export const useGlobalRecalculation = () => {
       // Update the variable atom
       set(variableAtomFamily(logic.variableName), JSON.stringify(calculatedValue));
 
-      // Update variable names set
-      setVariableNames(prev => {
-        const newSet = new Set(prev);
-        newSet.add(logic.variableName);
-        return newSet;
-      });
+      // Update variable names set - get current value from snapshot and update
+      const currentVarNames = await snapshot.getPromise(variableNamesState);
+      const newVarNames = new Set(currentVarNames);
+      newVarNames.add(logic.variableName);
+      set(variableNamesState, newVarNames);
 
-      // Update last executed time
-      setStoredLogics(prev => prev.map(l => 
+      // Update last executed time - get current logics from snapshot and update
+      const currentLogics = await snapshot.getPromise(storedLogicsState);
+      const updatedLogics = currentLogics.map(l => 
         l.id === logic.id ? { ...l, lastExecuted: Date.now() } : l
-      ));
+      );
+      set(storedLogicsState, updatedLogics);
 
       return { success: true, result: calculatedValue };
     } catch (err) {
       console.error(`❌ [Global Recalc] Failed to execute logic for ${logic.variableName}:`, err);
       return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
     }
-  }, [variableNames, parameterNames, filterNames, setVariableNames, setStoredLogics]);
+  });
 
   // Global recalculation function
-  const recalculateAllLogics = useCallback(async () => {
-    if (storedLogics.length === 0) {
+  const recalculateAllLogics = useRecoilCallback(({ snapshot, set }) => async () => {
+    // Get stored logics from snapshot
+    const currentLogics = await snapshot.getPromise(storedLogicsState);
+    
+    if (currentLogics.length === 0) {
       console.log('⏭️ [Global Recalc] No stored logics to recalculate');
       return;
     }
@@ -190,11 +206,47 @@ export const useGlobalRecalculation = () => {
     recalculationInProgressRef.current = true;
     setIsRecalculating(true);
     
-    console.log(`🚀 [Global Recalc] Starting recalculation for ${storedLogics.length} logics...`);
+    console.log(`🚀 [Global Recalc] Starting recalculation for ${currentLogics.length} logics...`);
 
     try {
+      // 🔑 CRITICAL: Ensure filters and parameters are loaded before running calculations
+      // This is especially important when triggered by filter change watcher
+      const filterNames = await snapshot.getPromise(filterNamesState);
+      const parameterNames = await snapshot.getPromise(parameterNamesState);
+      
+      // Quick check - if we have filters, verify at least one is loaded
+      if (filterNames.length > 0) {
+        console.log(`⏳ [Global Recalc] Verifying ${filterNames.length} filters are loaded...`);
+        for (const filterVariableName of filterNames) {
+          try {
+            const filterConfig = await snapshot.getPromise(filterConfigFamily(filterVariableName));
+            if (filterConfig?.variableName) {
+              await snapshot.getPromise(liveFilterFamily(filterConfig.variableName));
+            }
+          } catch (err) {
+            console.warn(`⚠️ [Global Recalc] Filter ${filterVariableName} not ready yet, waiting...`);
+            // Wait a bit and retry
+            await new Promise(resolve => setTimeout(resolve, 200));
+            const retryConfig = await snapshot.getPromise(filterConfigFamily(filterVariableName));
+            if (retryConfig?.variableName) {
+              await snapshot.getPromise(liveFilterFamily(retryConfig.variableName));
+            }
+          }
+        }
+        console.log(`✅ [Global Recalc] All ${filterNames.length} filters verified`);
+      }
+      
+      // Quick check - if we have parameters, verify they're loaded
+      if (parameterNames.length > 0) {
+        console.log(`⏳ [Global Recalc] Verifying ${parameterNames.length} parameters are loaded...`);
+        for (const paramName of parameterNames) {
+          await snapshot.getPromise(parameterAtomFamily(paramName));
+        }
+        console.log(`✅ [Global Recalc] All ${parameterNames.length} parameters verified`);
+      }
+      
       // Execute in creation order
-      const sortedLogics = [...storedLogics].sort((a, b) => a.createdAt - b.createdAt);
+      const sortedLogics = [...currentLogics].sort((a, b) => a.createdAt - b.createdAt);
       
       console.log(`📋 [Global Recalc] Execution order:`, sortedLogics.map(l => l.variableName));
       
@@ -218,11 +270,9 @@ export const useGlobalRecalculation = () => {
       }
 
       // Trigger dashboard update
-      setUpdateTrigger(prev => {
-        const newValue = prev + 1;
-        console.log(`✅ [Global Recalc] Update trigger set to ${newValue}`);
-        return newValue;
-      });
+      const currentTrigger = await snapshot.getPromise(variableUpdateTriggerState);
+      set(variableUpdateTriggerState, currentTrigger + 1);
+      console.log(`✅ [Global Recalc] Update trigger set to ${currentTrigger + 1}`);
 
       console.log('✅ [Global Recalc] Completed:', results);
       return results;
@@ -234,7 +284,7 @@ export const useGlobalRecalculation = () => {
         console.log('🏁 [Global Recalc] State reset');
       }, 300);
     }
-  }, [storedLogics, executeSingleLogic, setUpdateTrigger]);
+  });
 
   // Initialize filter defaults
   const initializeFilterDefaults = useRecoilCallback(({ snapshot, set }) => async () => {
@@ -265,46 +315,175 @@ export const useGlobalRecalculation = () => {
     }
   }, [filterNames]);
 
-  // Run initialization and calculation on mount - ONLY ON DASHBOARD ROUTE
+  // Helper function to wait for all initial data to be loaded (parameters AND filters)
+  const waitForDataLoaded = useRecoilCallback(({ snapshot }) => async () => {
+    const MAX_WAIT_TIME = 15000; // 15 seconds max wait
+    const POLL_INTERVAL = 200; // Check every 200ms
+    let elapsed = 0;
+    
+    console.log('⏳ [Global Recalc] Waiting for initial data to load (parameters and filters)...');
+    
+    while (elapsed < MAX_WAIT_TIME) {
+      // Get current parameter names, filter names, and logics from snapshot
+      const currentParamNames = await snapshot.getPromise(parameterNamesState);
+      const currentFilterNames = await snapshot.getPromise(filterNamesState);
+      const currentLogics = await snapshot.getPromise(storedLogicsState);
+      
+      // Must have logics to proceed
+      if (currentLogics.length === 0) {
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+        elapsed += POLL_INTERVAL;
+        continue;
+      }
+      
+      // Check if parameters are loaded
+      let allParamsLoaded = true;
+      const loadedParams: string[] = [];
+      
+      if (currentParamNames.length > 0) {
+        for (const paramName of currentParamNames) {
+          try {
+            const paramValue = await snapshot.getPromise(parameterAtomFamily(paramName));
+            loadedParams.push(paramName);
+          } catch (err) {
+            allParamsLoaded = false;
+            break;
+          }
+        }
+      }
+      
+      // Check if filters are loaded (both configs and values)
+      let allFiltersLoaded = true;
+      const loadedFilters: string[] = [];
+      
+      if (currentFilterNames.length > 0) {
+        for (const filterVariableName of currentFilterNames) {
+          try {
+            // Check if filter config is loaded
+            const filterConfig = await snapshot.getPromise(filterConfigFamily(filterVariableName));
+            if (!filterConfig) {
+              allFiltersLoaded = false;
+              break;
+            }
+            
+            // Check if filter value is loaded (from liveFilterFamily)
+            if (filterConfig.variableName) {
+              await snapshot.getPromise(liveFilterFamily(filterConfig.variableName));
+              loadedFilters.push(filterVariableName);
+            }
+          } catch (err) {
+            allFiltersLoaded = false;
+            break;
+          }
+        }
+      }
+      
+      // If both parameters and filters are loaded (or don't exist), we can proceed
+      const paramsReady = currentParamNames.length === 0 || (allParamsLoaded && loadedParams.length === currentParamNames.length);
+      const filtersReady = currentFilterNames.length === 0 || (allFiltersLoaded && loadedFilters.length === currentFilterNames.length);
+      
+      if (paramsReady && filtersReady) {
+        const parts: string[] = [];
+        if (loadedParams.length > 0) parts.push(`${loadedParams.length} parameters`);
+        if (loadedFilters.length > 0) parts.push(`${loadedFilters.length} filters`);
+        console.log(`✅ [Global Recalc] Data loaded: ${currentLogics.length} logics${parts.length > 0 ? `, ${parts.join(', ')}` : ''}`);
+        if (loadedParams.length > 0) console.log(`   Parameters: ${loadedParams.join(', ')}`);
+        if (loadedFilters.length > 0) console.log(`   Filters: ${loadedFilters.join(', ')}`);
+        
+        // Additional safety delay to ensure all state is fully propagated
+        console.log('⏳ [Global Recalc] Waiting for all values to fully propagate...');
+        await new Promise(resolve => setTimeout(resolve, 800));
+        return true;
+      }
+      
+      // Data not fully loaded yet, keep waiting
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+      elapsed += POLL_INTERVAL;
+      
+      if (elapsed % 1000 === 0) {
+        const logicCount = currentLogics.length;
+        const paramCount = currentParamNames.length;
+        const filterCount = currentFilterNames.length;
+        const loadedParamCount = loadedParams.length;
+        const loadedFilterCount = loadedFilters.length;
+        console.log(`⏳ [Global Recalc] Still waiting... (${elapsed}ms) - Logics: ${logicCount}, Params: ${loadedParamCount}/${paramCount}, Filters: ${loadedFilterCount}/${filterCount}`);
+      }
+    }
+    
+    // Timeout reached - check one more time if we can proceed
+    const finalParamNames = await snapshot.getPromise(parameterNamesState);
+    const finalFilterNames = await snapshot.getPromise(filterNamesState);
+    if (finalParamNames.length === 0 && finalFilterNames.length === 0) {
+      console.log('⚠️ [Global Recalc] Timeout reached, but no parameters or filters exist - proceeding');
+      return true;
+    }
+    
+    // Timeout with data that didn't load - this is an error condition
+    console.warn('⚠️ [Global Recalc] Data load timeout - some parameters or filters may not be loaded. Proceeding anyway...');
+    return false;
+  }, []);
+
+  // Single unified effect to handle mount calculations
+  // Data is now preloaded at app startup, so we can skip waiting
   useEffect(() => {
     if (!isDashboardRoute) {
-      console.log(`⏭️ [Global Recalc] Not on dashboard route (${location.pathname}), skipping mount calculations`);
       return;
     }
 
-    console.log(`🎬 [Global Recalc] Mount effect triggered on dashboard. Logics: ${storedLogics.length}`);
-    
-    if (storedLogics.length > 0 && !mountCalculationDoneRef.current) {
-      mountCalculationDoneRef.current = true;
-      
-      console.log('🎬 [Global Recalc] Running mount initialization sequence...');
-      
-      const runMountSequence = async () => {
-        try {
-          // Step 1: Initialize filter defaults
-          await initializeFilterDefaults();
-          
-          // Step 2: Additional safety delay
-          console.log('⏱️ [Global Recalc] Additional 200ms safety delay...');
-          await new Promise(resolve => setTimeout(resolve, 200));
-          
-          // Step 3: Run calculations
-          console.log('🎬 [Global Recalc] Starting initial calculations...');
-          await recalculateAllLogics();
-        } catch (err) {
-          console.error('❌ [Global Recalc] Mount sequence failed:', err);
-          mountCalculationDoneRef.current = false;
-          setIsRecalculating(false);
-        }
-      };
-      
-      runMountSequence();
-    } else if (storedLogics.length === 0) {
-      console.log('⏭️ [Global Recalc] No logics to calculate');
-    } else {
-      console.log('⏭️ [Global Recalc] Already calculated on this mount');
+    // Wait for data to be preloaded
+    if (!dataLoaded) {
+      console.log('⏳ [Global Recalc] Waiting for data to be preloaded...');
+      return;
     }
-  }, [isDashboardRoute]);
+
+    // CRITICAL: Check if already done or in progress FIRST
+    if (mountCalculationDoneRef.current || mountSequenceRunningRef.current) {
+      console.log('⏭️ [Global Recalc] Already calculated or running, skipping...');
+      return;
+    }
+
+    if (recalculationInProgressRef.current) {
+      console.log('⏭️ [Global Recalc] Calculation already in progress, skipping...');
+      return;
+    }
+
+    // Only proceed if we have logics to calculate
+    if (storedLogics.length === 0) {
+      console.log('⏭️ [Global Recalc] No logics to calculate');
+      return;
+    }
+
+    console.log(`🎬 [Global Recalc] Mount effect triggered. Logics: ${storedLogics.length}`);
+    
+    // Mark as running IMMEDIATELY (atomically) to prevent other effects from running
+    mountSequenceRunningRef.current = true;
+    mountCalculationDoneRef.current = true;
+    
+    console.log('🎬 [Global Recalc] Running mount initialization sequence...');
+    
+    const runMountSequence = async () => {
+      try {
+        // Data is already preloaded by DataInitializer, so we can run calculations immediately
+        initializedRef.current = true; // Temporarily disable filter watcher
+        
+        // Run calculations immediately (all data is already loaded)
+        console.log('🎬 [Global Recalc] Starting initial calculations (data already preloaded)...');
+        await recalculateAllLogics();
+        
+        // Re-enable filter watcher after calculations complete
+        initializedRef.current = false;
+        previousSnapshotRef.current = allFiltersSnapshot;
+        mountSequenceRunningRef.current = false; // Clear running flag
+      } catch (err) {
+        console.error('❌ [Global Recalc] Mount sequence failed:', err);
+        mountCalculationDoneRef.current = false;
+        mountSequenceRunningRef.current = false;
+        setIsRecalculating(false);
+      }
+    };
+    
+    runMountSequence();
+  }, [isDashboardRoute, storedLogics.length, dataLoaded]); // Watch route, logics, and dataLoaded
 
   // Reset mount flag when leaving dashboard
   useEffect(() => {
@@ -315,7 +494,7 @@ export const useGlobalRecalculation = () => {
     }
   }, [isDashboardRoute]);
 
-  // Watch for filter changes AFTER mount
+  // Watch for filter changes AFTER mount and initial calculation
   useEffect(() => {
     if (!isDashboardRoute) {
       return;
@@ -325,17 +504,20 @@ export const useGlobalRecalculation = () => {
       return;
     }
 
+    // Don't trigger if mount calculation hasn't completed yet
     if (!mountCalculationDoneRef.current) {
       return;
     }
 
+    // Initialize the watcher on first run (after mount calculation is done)
     if (!initializedRef.current) {
       initializedRef.current = true;
       previousSnapshotRef.current = allFiltersSnapshot;
-      console.log('🎬 [Global Recalc] Initialized filter watcher:', allFiltersSnapshot);
+      console.log('🎬 [Global Recalc] Initialized filter watcher (after mount calculation):', allFiltersSnapshot);
       return;
     }
 
+    // Only trigger if filters actually changed (not just initialized)
     if (allFiltersSnapshot !== previousSnapshotRef.current) {
       console.log('🔔 [Global Recalc] Filter values changed, triggering recalculation...');
       console.log('Previous:', previousSnapshotRef.current);

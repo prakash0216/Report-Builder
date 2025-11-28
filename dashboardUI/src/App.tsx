@@ -5,11 +5,13 @@ import EditChart from './pages/EditChart';
 import GlobalCalculationWrapper from './components/GlobalCalculationWrapper';
 import DashboardsManagement from './pages/DashboardManagement';
 import DashboardViews from './pages/DashboardViews';
+import { DataInitializer } from './components/DataInitializer';
 
 
 function App() {
   return (
       <BrowserRouter>
+        <DataInitializer />
         <GlobalCalculationWrapper>
           <Routes>
             <Route path="/dashboards" element={<DropDragDashboard/>}/>
