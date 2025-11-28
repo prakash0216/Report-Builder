@@ -425,11 +425,8 @@ export const useGlobalRecalculation = () => {
 
   // Single unified effect to handle mount calculations
   // Data is now preloaded at app startup, so we can skip waiting
+  // Run calculations when data is loaded, regardless of route (needed for edit mode)
   useEffect(() => {
-    if (!isDashboardRoute) {
-      return;
-    }
-
     // Wait for data to be preloaded
     if (!dataLoaded) {
       console.log('⏳ [Global Recalc] Waiting for data to be preloaded...');
@@ -453,7 +450,7 @@ export const useGlobalRecalculation = () => {
       return;
     }
 
-    console.log(`🎬 [Global Recalc] Mount effect triggered. Logics: ${storedLogics.length}`);
+    console.log(`🎬 [Global Recalc] Mount effect triggered. Route: ${location.pathname}, Logics: ${storedLogics.length}`);
     
     // Mark as running IMMEDIATELY (atomically) to prevent other effects from running
     mountSequenceRunningRef.current = true;
@@ -470,9 +467,11 @@ export const useGlobalRecalculation = () => {
         console.log('🎬 [Global Recalc] Starting initial calculations (data already preloaded)...');
         await recalculateAllLogics();
         
-        // Re-enable filter watcher after calculations complete
-        initializedRef.current = false;
-        previousSnapshotRef.current = allFiltersSnapshot;
+        // Re-enable filter watcher after calculations complete (only if on dashboard route)
+        if (isDashboardRoute) {
+          initializedRef.current = false;
+          previousSnapshotRef.current = allFiltersSnapshot;
+        }
         mountSequenceRunningRef.current = false; // Clear running flag
       } catch (err) {
         console.error('❌ [Global Recalc] Mount sequence failed:', err);
@@ -483,7 +482,7 @@ export const useGlobalRecalculation = () => {
     };
     
     runMountSequence();
-  }, [isDashboardRoute, storedLogics.length, dataLoaded]); // Watch route, logics, and dataLoaded
+  }, [storedLogics.length, dataLoaded, location.pathname, isDashboardRoute]); // Watch logics, dataLoaded, and route
 
   // Reset mount flag when leaving dashboard
   useEffect(() => {

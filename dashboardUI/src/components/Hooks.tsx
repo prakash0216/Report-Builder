@@ -460,6 +460,8 @@ export default function Hooks() {
 
     const [calculationLogic, setCalculationLogic] = useState('');
     const [variableName, setVariableName] = useState('');
+    const [editingCalculationId, setEditingCalculationId] = useState<string | null>(null);
+    const [oldVariableName, setOldVariableName] = useState<string | null>(null); // Track old variable name when editing
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -497,6 +499,14 @@ export default function Hooks() {
         ({ set }) =>
             (varName: string, value: string) => {
                 set(variableAtomFamily(varName), value);
+            },
+        []
+    );
+
+    const resetVariableAtom = useRecoilCallback(
+        ({ reset }) =>
+            (varName: string) => {
+                reset(variableAtomFamily(varName));
             },
         []
     );
@@ -803,16 +813,29 @@ export default function Hooks() {
                         return newSet;
                     });
 
-                    const existingLogicIndex = storedLogics.findIndex((logic) => logic.variableName === variableName);
-
-                    if (existingLogicIndex !== -1) {
-                        // Update existing calculation in database
-                        const existingLogic = storedLogics[existingLogicIndex];
+                    // 🔑 FIX: Check if we're editing an existing calculation by ID
+                    if (editingCalculationId) {
+                        // Update existing calculation by ID (regardless of variable name change)
                         try {
-                            const updateResponse = await fetch(`http://localhost:3002/api/calculations/${existingLogic.id}`, {
+                            // If variable name changed, clean up old variable
+                            if (oldVariableName && oldVariableName !== variableName) {
+                                // Remove old variable name from set
+                                setVariableNames((prev) => {
+                                    const newSet = new Set(prev);
+                                    newSet.delete(oldVariableName);
+                                    return newSet;
+                                });
+                                
+                                // Reset old variable atom
+                                resetVariableAtom(oldVariableName);
+                                console.log(`🧹 Cleaned up old variable: ${oldVariableName}`);
+                            }
+
+                            const updateResponse = await fetch(`http://localhost:3002/api/calculations/${editingCalculationId}`, {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
+                                    variableName, // Allow variable name to be updated too
                                     logic: calculationLogic,
                                 }),
                             });
@@ -822,19 +845,56 @@ export default function Hooks() {
                             }
 
                             // Update execution timestamp
-                            await fetch(`http://localhost:3002/api/calculations/${existingLogic.id}/execute`, {
+                            await fetch(`http://localhost:3002/api/calculations/${editingCalculationId}/execute`, {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
                             });
 
                             // Reload calculations from database
                             await reloadCalculations();
+                            
+                            // Clear editing state
+                            setEditingCalculationId(null);
+                            setOldVariableName(null);
                         } catch (err) {
                             console.error('Failed to update calculation:', err);
                             throw err;
                         }
                         setSuccess(`Logic for variable "${variableName}" updated successfully.`);
                     } else {
+                        // Not editing - check if variable name already exists (for new calculations)
+                        const existingLogicIndex = storedLogics.findIndex((logic) => logic.variableName === variableName);
+
+                        if (existingLogicIndex !== -1) {
+                            // Variable name exists - update it
+                            const existingLogic = storedLogics[existingLogicIndex];
+                            try {
+                                const updateResponse = await fetch(`http://localhost:3002/api/calculations/${existingLogic.id}`, {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        logic: calculationLogic,
+                                    }),
+                                });
+
+                                if (!updateResponse.ok) {
+                                    throw new Error('Failed to update calculation');
+                                }
+
+                                // Update execution timestamp
+                                await fetch(`http://localhost:3002/api/calculations/${existingLogic.id}/execute`, {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                });
+
+                                // Reload calculations from database
+                                await reloadCalculations();
+                            } catch (err) {
+                                console.error('Failed to update calculation:', err);
+                                throw err;
+                            }
+                            setSuccess(`Logic for variable "${variableName}" updated successfully.`);
+                        } else {
                         // Create new calculation in database
                         try {
                             const createResponse = await fetch('http://localhost:3002/api/calculations', {
@@ -870,7 +930,8 @@ export default function Hooks() {
                             console.error('Failed to create calculation:', err);
                             throw err;
                         }
-                        setSuccess(`Variable "${variableName}" created and logic stored successfully.`);
+                            setSuccess(`Variable "${variableName}" created and logic stored successfully.`);
+                        }
                     }
 
                     setTimeout(() => {
@@ -879,6 +940,8 @@ export default function Hooks() {
 
                     setCalculationLogic('');
                     setVariableName('');
+                    setEditingCalculationId(null); // Clear editing state
+                    setOldVariableName(null); // Clear old variable name
                 } catch (err) {
                     setError(err instanceof Error ? err.message : 'Failed execution');
                 } finally {
@@ -888,10 +951,13 @@ export default function Hooks() {
         [
             calculationLogic,
             variableName,
+            editingCalculationId, // Include editingCalculationId in dependencies
+            oldVariableName, // Include oldVariableName in dependencies
             variableNames,
             parameterNames,
             filterNames,
             setVariableAtom,
+            resetVariableAtom, // Include resetVariableAtom in dependencies
             setVariableNames,
             setUpdateTrigger,
             setStoredLogics,
@@ -903,6 +969,8 @@ export default function Hooks() {
     const editStoredLogic = useCallback((logic: StoredLogic) => {
         setCalculationLogic(logic.logic);
         setVariableName(logic.variableName);
+        setEditingCalculationId(logic.id); // Track which calculation we're editing
+        setOldVariableName(logic.variableName); // Track old variable name to clean up if changed
         setTabValue(0);
         setError(null);
         setSuccess(null);
