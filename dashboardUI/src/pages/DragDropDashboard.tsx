@@ -15,7 +15,8 @@ import { filterNamesState } from '../recoil/FiltersFamily';
 import { isChartVisibleSelector, chartDynamicDimensionsSelector } from '../recoil/DashboardVisibility';
 import { IsEditModeState } from "../recoil/IsEditeMode";
 import { dahboardNameMain } from "../recoil/DashboardName";
-import { Typography } from "@mui/material";
+import { Typography, Box, CircularProgress } from "@mui/material";
+import { dataLoadedState } from '../components/DataInitializer';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -118,6 +119,7 @@ export default function DropDragDashboard() {
   const variableUpdateTrigger = useRecoilValue(variableUpdateTriggerState);
   const variableNames = useRecoilValue(variableNamesState);
   const filterNames = useRecoilValue(filterNamesState);
+  const dataLoaded = useRecoilValue(dataLoadedState);
 
   const [layouts, setLayouts] = useRecoilState(layoutState);
   const [showFilters, setShowFilters] = useState(false);
@@ -190,17 +192,96 @@ export default function DropDragDashboard() {
     }
   }, [isEditingName]);
 
-  // 🔥 Initialize TRUE original positions ONCE on mount - these never change unless user manually moves
+  // 🔥 CRITICAL FIX: Create default layouts for charts that have configs but no layouts
   useEffect(() => {
-    const currentLayout = layouts[currentBreakpoint] || [];
+    if (!dataLoaded) return; // Wait for data to load
     
-    currentLayout.forEach((item: Layout) => {
-      if (!trueOriginalPositionsRef.current[item.i]) {
-        trueOriginalPositionsRef.current[item.i] = makeMutableLayoutItem(item);
-        console.log(`📍 [INIT] Stored TRUE original position for ${item.i}:`, item);
-      }
-    });
-  }, []);
+    const chartIds = Object.keys(chartConfigs);
+    if (chartIds.length === 0) {
+      console.log('📊 No chart configs found');
+      return;
+    }
+    
+    // Check if we have layouts for any breakpoint
+    const hasAnyLayouts = Object.values(layouts).some(layout => layout && layout.length > 0);
+    
+    if (!hasAnyLayouts && chartIds.length > 0) {
+      console.log(`⚠️ Found ${chartIds.length} chart configs but no layouts. Creating default layouts...`);
+      
+      // Create default layouts for all breakpoints
+      const defaultLayouts: { [key: string]: Layout[] } = {
+        lg: [],
+        md: [],
+        sm: [],
+        xs: [],
+        xxs: []
+      };
+      
+      // Arrange charts in a grid (4 columns for lg, adjust for others)
+      const colsPerRow = { lg: 4, md: 3, sm: 2, xs: 2, xxs: 1 };
+      const defaultWidth = { lg: 3, md: 4, sm: 6, xs: 6, xxs: 2 };
+      const defaultHeight = 4;
+      
+      chartIds.forEach((chartId, index) => {
+        const row = Math.floor(index / colsPerRow.lg);
+        const col = index % colsPerRow.lg;
+        
+        Object.keys(defaultLayouts).forEach(bp => {
+          const bpKey = bp as keyof typeof colsPerRow;
+          const rowForBp = Math.floor(index / colsPerRow[bpKey]);
+          const colForBp = index % colsPerRow[bpKey];
+          
+          defaultLayouts[bp].push({
+            i: chartId,
+            x: colForBp * defaultWidth[bpKey],
+            y: rowForBp * defaultHeight,
+            w: defaultWidth[bpKey],
+            h: defaultHeight,
+            minW: 2,
+            minH: 1  // Allow charts to be resized down to 1 unit
+          });
+        });
+        
+        // Store as true original position
+        trueOriginalPositionsRef.current[chartId] = {
+          i: chartId,
+          x: col * defaultWidth.lg,
+          y: row * defaultHeight,
+          w: defaultWidth.lg,
+          h: defaultHeight,
+          minW: 2,
+          minH: 1  // Allow charts to be resized down to 1 unit
+        };
+      });
+      
+      console.log(`✅ Created default layouts for ${chartIds.length} charts`);
+      setLayouts(defaultLayouts);
+      
+      // Save layouts to database
+      fetch('http://localhost:3002/api/layouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ layouts: defaultLayouts })
+      }).catch(err => {
+        console.warn('Failed to save default layouts:', err);
+      });
+    } else {
+      // Initialize TRUE original positions for existing layouts
+      const currentLayout = layouts[currentBreakpoint] || [];
+      currentLayout.forEach((item: Layout) => {
+        if (!trueOriginalPositionsRef.current[item.i]) {
+          const originalPos = makeMutableLayoutItem(item);
+          // Override minH to 1 to allow flexible resizing
+          originalPos.minH = 1;
+          trueOriginalPositionsRef.current[item.i] = originalPos;
+          console.log(`📍 [INIT] Stored TRUE original position for ${item.i}:`, originalPos);
+        } else {
+          // Update existing stored position to have minH: 1
+          trueOriginalPositionsRef.current[item.i].minH = 1;
+        }
+      });
+    }
+  }, [dataLoaded, chartConfigs, layouts, currentBreakpoint, setLayouts]);
 
   const getAllVariables = useRecoilCallback(({ snapshot }) => async (): Promise<Record<string, any>> => {
     const variables: Record<string, any> = {};
@@ -257,16 +338,28 @@ export default function DropDragDashboard() {
 
   // 🔥 KEY FIX: When visibility changes, restore ALL items to their TRUE original positions
   useEffect(() => {
+    if (!dataLoaded) return; // Wait for data to load
+    
     getChartVisibility().then((newVisibility) => {
+      // Ensure all charts in configs have visibility set (default to true if not set)
+      const allChartIds = Object.keys(chartConfigs);
+      allChartIds.forEach(chartId => {
+        if (newVisibility[chartId] === undefined) {
+          newVisibility[chartId] = true; // Default to visible
+          console.log(`👁️ [Visibility] Chart ${chartId} had no visibility rule, defaulting to visible`);
+        }
+      });
+      
       const hasChanged = Object.keys(newVisibility).some(
         chartId => previousVisibilityRef.current[chartId] !== newVisibility[chartId]
       );
 
-      if (!hasChanged) {
+      if (!hasChanged && Object.keys(previousVisibilityRef.current).length > 0) {
         return;
       }
 
       console.log('👁️ Visibility changed:', newVisibility);
+      console.log(`   Total charts: ${allChartIds.length}, Visible: ${Object.values(newVisibility).filter(v => v !== false).length}`);
 
       // Check if any hidden card is becoming visible
       const anyBecameVisible = Object.keys(newVisibility).some(chartId => {
@@ -318,7 +411,7 @@ export default function DropDragDashboard() {
       previousVisibilityRef.current = { ...newVisibility };
       setChartVisibility(newVisibility);
     });
-  }, [getChartVisibility, filterNames, variableUpdateTrigger, setLayouts]);
+  }, [dataLoaded, getChartVisibility, filterNames, variableUpdateTrigger, setLayouts, chartConfigs]);
 
   useEffect(() => {
     getChartDimensions().then(setChartDimensions);
@@ -443,9 +536,17 @@ export default function DropDragDashboard() {
     const currentLayout = layouts[currentBreakpoint] || [];
     const filtered = currentLayout.filter((item: Layout) => chartVisibility[item.i] !== false);
     
-    console.log(`🔍 ${isEditMode ? 'Edit' : 'View'} mode: Showing ${filtered.length} visible charts`);
+    // Debug logging
+    console.log(`🔍 ${isEditMode ? 'Edit' : 'View'} mode:`);
+    console.log(`   Total layouts: ${currentLayout.length}`);
+    console.log(`   Chart configs: ${Object.keys(chartConfigs).length}`);
+    console.log(`   Visible charts: ${filtered.length}`);
+    console.log(`   Chart IDs in layout:`, currentLayout.map(l => l.i));
+    console.log(`   Chart IDs in configs:`, Object.keys(chartConfigs));
+    console.log(`   Visibility map:`, chartVisibility);
+    
     return filtered;
-  }, [layouts, currentBreakpoint, chartVisibility, isEditMode]);
+  }, [layouts, currentBreakpoint, chartVisibility, isEditMode, chartConfigs]);
 
   const hiddenChartCount = useMemo(() => {
     const currentLayout = layouts[currentBreakpoint] || [];
@@ -480,7 +581,7 @@ export default function DropDragDashboard() {
           h: dynamicDims ? Number(dynamicDims.height) : (Number(item.h) || 4),
           minW: item.minW !== undefined ? Math.max(1, Number(item.minW)) : 1,
           maxW: item.maxW !== undefined ? Math.min(12, Number(item.maxW)) : 12,
-          minH: item.minH !== undefined ? Math.max(1, Number(item.minH)) : 1,
+          minH: 1, // Always allow resizing down to 1 unit (override database value)
           maxH: item.maxH !== undefined ? Math.min(20, Number(item.maxH)) : 20,
         };
         
@@ -532,22 +633,27 @@ export default function DropDragDashboard() {
     const updatedLayout = currentLayout.map((item: Layout) => {
       const updated = incomingMap.get(item.i);
       if (updated) {
+        const mutableItem = makeMutableLayoutItem(updated);
+        mutableItem.minH = 1; // Ensure minH is always 1 for flexible resizing
         // 🔥 CRITICAL: Update TRUE original position when user manually moves
         if (chartVisibility[item.i] !== false) {
-          trueOriginalPositionsRef.current[item.i] = makeMutableLayoutItem(updated);
-          console.log(`📍 Updated TRUE original position for ${item.i}:`, updated);
+          trueOriginalPositionsRef.current[item.i] = { ...mutableItem };
+          console.log(`📍 Updated TRUE original position for ${item.i}:`, mutableItem);
         }
-        return makeMutableLayoutItem(updated);
+        return mutableItem;
       }
-      return makeMutableLayoutItem(item);
+      const mutableItem = makeMutableLayoutItem(item);
+      mutableItem.minH = 1; // Ensure minH is always 1
+      return mutableItem;
     });
 
     mutableLayout.forEach(item => {
       const existsInCurrent = currentLayout.some((existing: Layout) => existing.i === item.i);
       if (!existsInCurrent && item.i !== "__dropping-elem__") {
         const newItem = makeMutableLayoutItem(item);
+        newItem.minH = 1; // Ensure minH is always 1
         updatedLayout.push(newItem);
-        trueOriginalPositionsRef.current[item.i] = makeMutableLayoutItem(newItem);
+        trueOriginalPositionsRef.current[item.i] = { ...newItem };
       }
     });
 
@@ -852,7 +958,7 @@ export default function DropDragDashboard() {
                 {isEditMode && (
                   <button 
                     onClick={(e) => handleEditClick(e, item.i)} 
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                    className="non-draggable-configure-btn inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
                   >
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -867,6 +973,30 @@ export default function DropDragDashboard() {
       </>
     );
   };
+
+  // Show loading state if data isn't loaded yet
+  if (!dataLoaded) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+        }}
+      >
+        <CircularProgress size={60} sx={{ mb: 2 }} />
+        <Typography variant="h6" color="text.secondary">
+          Loading dashboard data...
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          Please wait while we load charts, filters, and calculations
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <div 
@@ -1217,7 +1347,7 @@ export default function DropDragDashboard() {
           isDroppable={isEditMode}
           isResizable={isEditMode}
           isDraggable={isEditMode}
-          draggableCancel=".non-draggable-close-btn, .non-draggable-edit-btn, .non-draggable-visibility-btn"
+          draggableCancel=".non-draggable-close-btn, .non-draggable-edit-btn, .non-draggable-visibility-btn, .non-draggable-configure-btn"
           resizeHandles={isEditMode ? resizeHandle : []}
           allowOverlap={false}
           margin={[12, 12]}

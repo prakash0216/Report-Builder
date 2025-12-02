@@ -31,6 +31,7 @@
     "react-dom": "^18.3.1",
     "react-draggable": "^4.5.0",
     "react-grid-layout": "^1.5.2",
+    "react-mentions": "^4.4.10",
     "react-router-dom": "^7.7.1",
     "react-scripts": "5.0.1",
     "react-select": "^5.10.2",

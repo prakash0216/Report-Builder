@@ -1,2 +1,3 @@
 backend/db/data/
 backend/db/parquet_files/
+.cursor

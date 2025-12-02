@@ -51,6 +51,7 @@ export const useGlobalRecalculation = () => {
   
   const recalculationInProgressRef = useRef(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
+  const cancellationTokenRef = useRef<{ cancelled: boolean }>({ cancelled: false });
   
   // Track initialization and previous snapshot
   const initializedRef = useRef(false);
@@ -203,6 +204,8 @@ export const useGlobalRecalculation = () => {
       return;
     }
 
+    // Reset cancellation token
+    cancellationTokenRef.current = { cancelled: false };
     recalculationInProgressRef.current = true;
     setIsRecalculating(true);
     
@@ -214,10 +217,21 @@ export const useGlobalRecalculation = () => {
       const filterNames = await snapshot.getPromise(filterNamesState);
       const parameterNames = await snapshot.getPromise(parameterNamesState);
       
+      // Check for cancellation
+      if (cancellationTokenRef.current.cancelled) {
+        console.log('⏸️ [Global Recalc] Cancelled during filter/parameter loading');
+        return;
+      }
+      
       // Quick check - if we have filters, verify at least one is loaded
       if (filterNames.length > 0) {
         console.log(`⏳ [Global Recalc] Verifying ${filterNames.length} filters are loaded...`);
         for (const filterVariableName of filterNames) {
+          if (cancellationTokenRef.current.cancelled) {
+            console.log('⏸️ [Global Recalc] Cancelled during filter verification');
+            return;
+          }
+          
           try {
             const filterConfig = await snapshot.getPromise(filterConfigFamily(filterVariableName));
             if (filterConfig?.variableName) {
@@ -227,6 +241,8 @@ export const useGlobalRecalculation = () => {
             console.warn(`⚠️ [Global Recalc] Filter ${filterVariableName} not ready yet, waiting...`);
             // Wait a bit and retry
             await new Promise(resolve => setTimeout(resolve, 200));
+            if (cancellationTokenRef.current.cancelled) return;
+            
             const retryConfig = await snapshot.getPromise(filterConfigFamily(filterVariableName));
             if (retryConfig?.variableName) {
               await snapshot.getPromise(liveFilterFamily(retryConfig.variableName));
@@ -240,9 +256,19 @@ export const useGlobalRecalculation = () => {
       if (parameterNames.length > 0) {
         console.log(`⏳ [Global Recalc] Verifying ${parameterNames.length} parameters are loaded...`);
         for (const paramName of parameterNames) {
+          if (cancellationTokenRef.current.cancelled) {
+            console.log('⏸️ [Global Recalc] Cancelled during parameter verification');
+            return;
+          }
           await snapshot.getPromise(parameterAtomFamily(paramName));
         }
         console.log(`✅ [Global Recalc] All ${parameterNames.length} parameters verified`);
+      }
+      
+      // Check for cancellation before starting calculations
+      if (cancellationTokenRef.current.cancelled) {
+        console.log('⏸️ [Global Recalc] Cancelled before calculations');
+        return;
       }
       
       // Execute in creation order
@@ -255,29 +281,53 @@ export const useGlobalRecalculation = () => {
       
       // 🔑 CRITICAL: Pass executedSoFar to each iteration
       for (const logic of sortedLogics) {
-        console.log(`\n═══════════════════════════════════════`);
-        console.log(`Iteration ${results.length + 1}/${sortedLogics.length}`);
-        console.log(`Previously executed:`, executedSoFar.map(l => l.variableName));
-        console.log(`═══════════════════════════════════════`);
+        // Check for cancellation before each calculation
+        if (cancellationTokenRef.current.cancelled) {
+          console.log(`⏸️ [Global Recalc] Cancelled during calculation loop (completed ${results.length}/${sortedLogics.length})`);
+          break;
+        }
         
-        const result = await executeSingleLogic(logic, executedSoFar);
-        results.push({ logic: logic.variableName, ...result });
-        
-        // Add to executed list so next iteration can see it
-        if (result.success) {
-          executedSoFar.push(logic);
+        try {
+          console.log(`\n═══════════════════════════════════════`);
+          console.log(`Iteration ${results.length + 1}/${sortedLogics.length}`);
+          console.log(`Previously executed:`, executedSoFar.map(l => l.variableName));
+          console.log(`═══════════════════════════════════════`);
+          
+          const result = await executeSingleLogic(logic, executedSoFar);
+          results.push({ logic: logic.variableName, ...result });
+          
+          // Add to executed list so next iteration can see it
+          if (result.success) {
+            executedSoFar.push(logic);
+          }
+        } catch (err) {
+          console.error(`❌ [Global Recalc] Error executing ${logic.variableName}:`, err);
+          results.push({ 
+            logic: logic.variableName, 
+            success: false, 
+            error: err instanceof Error ? err.message : 'Unknown error' 
+          });
+          // Continue with next calculation instead of breaking
         }
       }
 
-      // Trigger dashboard update
-      const currentTrigger = await snapshot.getPromise(variableUpdateTriggerState);
-      set(variableUpdateTriggerState, currentTrigger + 1);
-      console.log(`✅ [Global Recalc] Update trigger set to ${currentTrigger + 1}`);
-
-      console.log('✅ [Global Recalc] Completed:', results);
+      // Only trigger update if not cancelled
+      if (!cancellationTokenRef.current.cancelled) {
+        const currentTrigger = await snapshot.getPromise(variableUpdateTriggerState);
+        set(variableUpdateTriggerState, currentTrigger + 1);
+        console.log(`✅ [Global Recalc] Update trigger set to ${currentTrigger + 1}`);
+        console.log('✅ [Global Recalc] Completed:', results);
+      } else {
+        console.log('⏸️ [Global Recalc] Cancelled - skipping update trigger');
+      }
+      
       return results;
+    } catch (err) {
+      console.error('❌ [Global Recalc] Fatal error during recalculation:', err);
+      // Don't throw - just log and reset state
+      return [];
     } finally {
-      // Reset state
+      // Always reset state, even if cancelled or errored
       setTimeout(() => {
         recalculationInProgressRef.current = false;
         setIsRecalculating(false);
@@ -285,6 +335,16 @@ export const useGlobalRecalculation = () => {
       }, 300);
     }
   });
+  
+  // Cleanup on unmount - cancel any running calculations
+  useEffect(() => {
+    return () => {
+      console.log('🧹 [Global Recalc] Component unmounting - cancelling calculations');
+      cancellationTokenRef.current.cancelled = true;
+      recalculationInProgressRef.current = false;
+      setIsRecalculating(false);
+    };
+  }, []);
 
   // Initialize filter defaults
   const initializeFilterDefaults = useRecoilCallback(({ snapshot, set }) => async () => {

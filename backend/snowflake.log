@@ -5581,3 +5581,116 @@
 {"level":"INFO","message":"[1:50:55.626 PM]: No config file path found. Client config will not be used."}
 {"level":"INFO","message":"[1:50:55.627 PM]: Easy Logging is disabled as no config has been found"}
 {"level":"INFO","message":"[1:50:55.649 PM]: Connection[id: ef095135-6b88-4db4-8335-e6d580439bd4] - connected successfully after 58.846800001338124 milliseconds"}
+{"level":"INFO","message":"[4:32:21.076 PM]: Creating new connection object"}
+{"level":"INFO","message":"[4:32:21.130 PM]: Creating Connection[id: 6e0b63dd-69f9-447f-9e44-dde9e89d8435] with host: iqviaidporg-pandpreporting.snowflakecomputing.com, account: iqviaidporg-pandpreporting, accessUrl: https://iqviaidporg-pandpreporting.snowflakecomputing.com, user: maasreaduser, role: undefined, database: PNPREPORTING_LIB, schema: PNPREPORTING_DATAMART, warehouse: PNPLIBRARIES, proxy was not configured, password is not provided, region: undefined, authenticator: SNOWFLAKE_JWT, ocsp mode: FAIL_OPEN, os: win32, os version: 10"}
+{"level":"INFO","message":"[4:32:21.133 PM]: Connection[id: 6e0b63dd-69f9-447f-9e44-dde9e89d8435] additional details: passcode in password is provided, passcode is not provided, private key is provided, application: undefined, client name: snowflake-sdk, client version: 2.2.0, retry timeout: 300, private key path: undefined, private key pass is not provided, client store temporary credential: false, browser response timeout: 120000"}
+{"level":"INFO","message":"[4:32:21.137 PM]: Connection[id: 6e0b63dd-69f9-447f-9e44-dde9e89d8435] - connection object created successfully."}
+{"level":"INFO","message":"[4:32:21.141 PM]: Connection[id: 6e0b63dd-69f9-447f-9e44-dde9e89d8435] - connecting. Associated Snowflake domain: GLOBAL"}
+{"level":"INFO","message":"[4:32:21.153 PM]: Connection[id: 6e0b63dd-69f9-447f-9e44-dde9e89d8435] - authentication successful using: SNOWFLAKE_JWT"}
+{"level":"INFO","message":"[4:32:21.157 PM]: Trying to initialize Easy Logging"}
+{"level":"INFO","message":"[4:32:21.169 PM]: No client config detected."}
+{"level":"INFO","message":"[4:32:21.171 PM]: No config file path found. Client config will not be used."}
+{"level":"INFO","message":"[4:32:21.174 PM]: Easy Logging is disabled as no config has been found"}
+{"level":"INFO","message":"[4:32:21.194 PM]: Connection[id: 6e0b63dd-69f9-447f-9e44-dde9e89d8435] - connected successfully after 53.59230000000389 milliseconds"}
+{"level":"INFO","message":"[4:40:50.554 PM]: Creating new connection object"}
+{"level":"INFO","message":"[4:40:50.556 PM]: Creating Connection[id: 31299b7b-b712-4dd1-871a-70f8e86616a4] with host: iqviaidporg-pandpreporting.snowflakecomputing.com, account: iqviaidporg-pandpreporting, accessUrl: https://iqviaidporg-pandpreporting.snowflakecomputing.com, user: maasreaduser, role: undefined, database: PNPREPORTING_LIB, schema: PNPREPORTING_DATAMART, warehouse: PNPLIBRARIES, proxy was not configured, password is not provided, region: undefined, authenticator: SNOWFLAKE_JWT, ocsp mode: FAIL_OPEN, os: win32, os version: 10"}
+{"level":"INFO","message":"[4:40:50.557 PM]: Connection[id: 31299b7b-b712-4dd1-871a-70f8e86616a4] additional details: passcode in password is provided, passcode is not provided, private key is provided, application: undefined, client name: snowflake-sdk, client version: 2.2.0, retry timeout: 300, private key path: undefined, private key pass is not provided, client store temporary credential: false, browser response timeout: 120000"}
+{"level":"INFO","message":"[4:40:50.557 PM]: Connection[id: 31299b7b-b712-4dd1-871a-70f8e86616a4] - connection object created successfully."}
+{"level":"INFO","message":"[4:40:50.557 PM]: Connection[id: 31299b7b-b712-4dd1-871a-70f8e86616a4] - connecting. Associated Snowflake domain: GLOBAL"}
+{"level":"INFO","message":"[4:40:50.561 PM]: Connection[id: 31299b7b-b712-4dd1-871a-70f8e86616a4] - authentication successful using: SNOWFLAKE_JWT"}
+{"level":"INFO","message":"[4:40:50.564 PM]: Connection[id: 31299b7b-b712-4dd1-871a-70f8e86616a4] - connected successfully after 6.061100000049919 milliseconds"}
+{"level":"INFO","message":"[4:46:54.376 PM]: Creating new connection object"}
+{"level":"INFO","message":"[4:46:54.451 PM]: Creating Connection[id: 6c52b48e-bb5a-407e-aca1-055ecd014fe8] with host: iqviaidporg-pandpreporting.snowflakecomputing.com, account: iqviaidporg-pandpreporting, accessUrl: https://iqviaidporg-pandpreporting.snowflakecomputing.com, user: maasreaduser, role: undefined, database: PNPREPORTING_LIB, schema: PNPREPORTING_DATAMART, warehouse: PNPLIBRARIES, proxy was not configured, password is not provided, region: undefined, authenticator: SNOWFLAKE_JWT, ocsp mode: FAIL_OPEN, os: win32, os version: 10"}
+{"level":"INFO","message":"[4:46:54.459 PM]: Connection[id: 6c52b48e-bb5a-407e-aca1-055ecd014fe8] additional details: passcode in password is provided, passcode is not provided, private key is provided, application: undefined, client name: snowflake-sdk, client version: 2.2.0, retry timeout: 300, private key path: undefined, private key pass is not provided, client store temporary credential: false, browser response timeout: 120000"}
+{"level":"INFO","message":"[4:46:54.460 PM]: Connection[id: 6c52b48e-bb5a-407e-aca1-055ecd014fe8] - connection object created successfully."}
+{"level":"INFO","message":"[4:46:54.462 PM]: Connection[id: 6c52b48e-bb5a-407e-aca1-055ecd014fe8] - connecting. Associated Snowflake domain: GLOBAL"}
+{"level":"INFO","message":"[4:46:54.479 PM]: Connection[id: 6c52b48e-bb5a-407e-aca1-055ecd014fe8] - authentication successful using: SNOWFLAKE_JWT"}
+{"level":"INFO","message":"[4:46:54.482 PM]: Trying to initialize Easy Logging"}
+{"level":"INFO","message":"[4:46:54.492 PM]: No client config detected."}
+{"level":"INFO","message":"[4:46:54.493 PM]: No config file path found. Client config will not be used."}
+{"level":"INFO","message":"[4:46:54.495 PM]: Easy Logging is disabled as no config has been found"}
+{"level":"INFO","message":"[4:46:54.511 PM]: Connection[id: 6c52b48e-bb5a-407e-aca1-055ecd014fe8] - connected successfully after 47.94160000000011 milliseconds"}
+{"level":"INFO","message":"[4:58:25.216 PM]: Creating new connection object"}
+{"level":"INFO","message":"[4:58:25.267 PM]: Creating Connection[id: 41d43f18-a79f-4d13-aa19-657c05eb71fb] with host: iqviaidporg-pandpreporting.snowflakecomputing.com, account: iqviaidporg-pandpreporting, accessUrl: https://iqviaidporg-pandpreporting.snowflakecomputing.com, user: maasreaduser, role: undefined, database: PNPREPORTING_LIB, schema: PNPREPORTING_DATAMART, warehouse: PNPLIBRARIES, proxy was not configured, password is not provided, region: undefined, authenticator: SNOWFLAKE_JWT, ocsp mode: FAIL_OPEN, os: win32, os version: 10"}
+{"level":"INFO","message":"[4:58:25.269 PM]: Connection[id: 41d43f18-a79f-4d13-aa19-657c05eb71fb] additional details: passcode in password is provided, passcode is not provided, private key is provided, application: undefined, client name: snowflake-sdk, client version: 2.2.0, retry timeout: 300, private key path: undefined, private key pass is not provided, client store temporary credential: false, browser response timeout: 120000"}
+{"level":"INFO","message":"[4:58:25.271 PM]: Connection[id: 41d43f18-a79f-4d13-aa19-657c05eb71fb] - connection object created successfully."}
+{"level":"INFO","message":"[4:58:25.273 PM]: Connection[id: 41d43f18-a79f-4d13-aa19-657c05eb71fb] - connecting. Associated Snowflake domain: GLOBAL"}
+{"level":"INFO","message":"[4:58:25.284 PM]: Connection[id: 41d43f18-a79f-4d13-aa19-657c05eb71fb] - authentication successful using: SNOWFLAKE_JWT"}
+{"level":"INFO","message":"[4:58:25.286 PM]: Trying to initialize Easy Logging"}
+{"level":"INFO","message":"[4:58:25.293 PM]: No client config detected."}
+{"level":"INFO","message":"[4:58:25.295 PM]: No config file path found. Client config will not be used."}
+{"level":"INFO","message":"[4:58:25.297 PM]: Easy Logging is disabled as no config has been found"}
+{"level":"INFO","message":"[4:58:25.309 PM]: Connection[id: 41d43f18-a79f-4d13-aa19-657c05eb71fb] - connected successfully after 36.33560000000034 milliseconds"}
+{"level":"INFO","message":"[5:04:29.038 PM]: Creating new connection object"}
+{"level":"INFO","message":"[5:04:29.076 PM]: Creating Connection[id: 30bb75c1-1f3f-405f-87b1-807e4e6a1f80] with host: iqviaidporg-pandpreporting.snowflakecomputing.com, account: iqviaidporg-pandpreporting, accessUrl: https://iqviaidporg-pandpreporting.snowflakecomputing.com, user: maasreaduser, role: undefined, database: PNPREPORTING_LIB, schema: PNPREPORTING_DATAMART, warehouse: PNPLIBRARIES, proxy was not configured, password is not provided, region: undefined, authenticator: SNOWFLAKE_JWT, ocsp mode: FAIL_OPEN, os: win32, os version: 10"}
+{"level":"INFO","message":"[5:04:29.078 PM]: Connection[id: 30bb75c1-1f3f-405f-87b1-807e4e6a1f80] additional details: passcode in password is provided, passcode is not provided, private key is provided, application: undefined, client name: snowflake-sdk, client version: 2.2.0, retry timeout: 300, private key path: undefined, private key pass is not provided, client store temporary credential: false, browser response timeout: 120000"}
+{"level":"INFO","message":"[5:04:29.080 PM]: Connection[id: 30bb75c1-1f3f-405f-87b1-807e4e6a1f80] - connection object created successfully."}
+{"level":"INFO","message":"[5:04:29.081 PM]: Connection[id: 30bb75c1-1f3f-405f-87b1-807e4e6a1f80] - connecting. Associated Snowflake domain: GLOBAL"}
+{"level":"INFO","message":"[5:04:29.094 PM]: Connection[id: 30bb75c1-1f3f-405f-87b1-807e4e6a1f80] - authentication successful using: SNOWFLAKE_JWT"}
+{"level":"INFO","message":"[5:04:29.096 PM]: Trying to initialize Easy Logging"}
+{"level":"INFO","message":"[5:04:29.104 PM]: No client config detected."}
+{"level":"INFO","message":"[5:04:29.106 PM]: No config file path found. Client config will not be used."}
+{"level":"INFO","message":"[5:04:29.108 PM]: Easy Logging is disabled as no config has been found"}
+{"level":"INFO","message":"[5:04:29.122 PM]: Connection[id: 30bb75c1-1f3f-405f-87b1-807e4e6a1f80] - connected successfully after 40.64780000000064 milliseconds"}
+{"level":"INFO","message":"[5:06:14.717 PM]: Creating new connection object"}
+{"level":"INFO","message":"[5:06:14.737 PM]: Creating Connection[id: 8003ee3d-5d2c-4bf6-acce-707ba72542e3] with host: iqviaidporg-pandpreporting.snowflakecomputing.com, account: iqviaidporg-pandpreporting, accessUrl: https://iqviaidporg-pandpreporting.snowflakecomputing.com, user: maasreaduser, role: undefined, database: PNPREPORTING_LIB, schema: PNPREPORTING_DATAMART, warehouse: PNPLIBRARIES, proxy was not configured, password is not provided, region: undefined, authenticator: SNOWFLAKE_JWT, ocsp mode: FAIL_OPEN, os: win32, os version: 10"}
+{"level":"INFO","message":"[5:06:14.738 PM]: Connection[id: 8003ee3d-5d2c-4bf6-acce-707ba72542e3] additional details: passcode in password is provided, passcode is not provided, private key is provided, application: undefined, client name: snowflake-sdk, client version: 2.2.0, retry timeout: 300, private key path: undefined, private key pass is not provided, client store temporary credential: false, browser response timeout: 120000"}
+{"level":"INFO","message":"[5:06:14.741 PM]: Connection[id: 8003ee3d-5d2c-4bf6-acce-707ba72542e3] - connection object created successfully."}
+{"level":"INFO","message":"[5:06:14.742 PM]: Connection[id: 8003ee3d-5d2c-4bf6-acce-707ba72542e3] - connecting. Associated Snowflake domain: GLOBAL"}
+{"level":"INFO","message":"[5:06:14.747 PM]: Connection[id: 8003ee3d-5d2c-4bf6-acce-707ba72542e3] - authentication successful using: SNOWFLAKE_JWT"}
+{"level":"INFO","message":"[5:06:14.748 PM]: Trying to initialize Easy Logging"}
+{"level":"INFO","message":"[5:06:14.751 PM]: No client config detected."}
+{"level":"INFO","message":"[5:06:14.752 PM]: No config file path found. Client config will not be used."}
+{"level":"INFO","message":"[5:06:14.753 PM]: Easy Logging is disabled as no config has been found"}
+{"level":"INFO","message":"[5:06:14.761 PM]: Connection[id: 8003ee3d-5d2c-4bf6-acce-707ba72542e3] - connected successfully after 19.62699999999859 milliseconds"}
+{"level":"INFO","message":"[5:11:12.709 PM]: Creating new connection object"}
+{"level":"INFO","message":"[5:11:12.786 PM]: Creating Connection[id: 3a481105-f09b-4081-85e0-636ecc78322c] with host: iqviaidporg-pandpreporting.snowflakecomputing.com, account: iqviaidporg-pandpreporting, accessUrl: https://iqviaidporg-pandpreporting.snowflakecomputing.com, user: maasreaduser, role: undefined, database: PNPREPORTING_LIB, schema: PNPREPORTING_DATAMART, warehouse: PNPLIBRARIES, proxy was not configured, password is not provided, region: undefined, authenticator: SNOWFLAKE_JWT, ocsp mode: FAIL_OPEN, os: win32, os version: 10"}
+{"level":"INFO","message":"[5:11:12.789 PM]: Connection[id: 3a481105-f09b-4081-85e0-636ecc78322c] additional details: passcode in password is provided, passcode is not provided, private key is provided, application: undefined, client name: snowflake-sdk, client version: 2.2.0, retry timeout: 300, private key path: undefined, private key pass is not provided, client store temporary credential: false, browser response timeout: 120000"}
+{"level":"INFO","message":"[5:11:12.792 PM]: Connection[id: 3a481105-f09b-4081-85e0-636ecc78322c] - connection object created successfully."}
+{"level":"INFO","message":"[5:11:12.801 PM]: Connection[id: 3a481105-f09b-4081-85e0-636ecc78322c] - connecting. Associated Snowflake domain: GLOBAL"}
+{"level":"INFO","message":"[5:11:12.818 PM]: Connection[id: 3a481105-f09b-4081-85e0-636ecc78322c] - authentication successful using: SNOWFLAKE_JWT"}
+{"level":"INFO","message":"[5:11:12.820 PM]: Trying to initialize Easy Logging"}
+{"level":"INFO","message":"[5:11:12.828 PM]: No client config detected."}
+{"level":"INFO","message":"[5:11:12.829 PM]: No config file path found. Client config will not be used."}
+{"level":"INFO","message":"[5:11:12.831 PM]: Easy Logging is disabled as no config has been found"}
+{"level":"INFO","message":"[5:11:12.844 PM]: Connection[id: 3a481105-f09b-4081-85e0-636ecc78322c] - connected successfully after 42.227100000000064 milliseconds"}
+{"level":"INFO","message":"[5:11:47.614 PM]: Creating new connection object"}
+{"level":"INFO","message":"[5:11:47.616 PM]: Creating Connection[id: 5fe52930-b8f7-4258-8d5d-18d4e9e1b702] with host: iqviaidporg-pandpreporting.snowflakecomputing.com, account: iqviaidporg-pandpreporting, accessUrl: https://iqviaidporg-pandpreporting.snowflakecomputing.com, user: maasreaduser, role: undefined, database: PNPREPORTING_LIB, schema: PNPREPORTING_DATAMART, warehouse: PNPLIBRARIES, proxy was not configured, password is not provided, region: undefined, authenticator: SNOWFLAKE_JWT, ocsp mode: FAIL_OPEN, os: win32, os version: 10"}
+{"level":"INFO","message":"[5:11:47.617 PM]: Connection[id: 5fe52930-b8f7-4258-8d5d-18d4e9e1b702] additional details: passcode in password is provided, passcode is not provided, private key is provided, application: undefined, client name: snowflake-sdk, client version: 2.2.0, retry timeout: 300, private key path: undefined, private key pass is not provided, client store temporary credential: false, browser response timeout: 120000"}
+{"level":"INFO","message":"[5:11:47.617 PM]: Connection[id: 5fe52930-b8f7-4258-8d5d-18d4e9e1b702] - connection object created successfully."}
+{"level":"INFO","message":"[5:11:47.618 PM]: Connection[id: 5fe52930-b8f7-4258-8d5d-18d4e9e1b702] - connecting. Associated Snowflake domain: GLOBAL"}
+{"level":"INFO","message":"[5:11:47.622 PM]: Connection[id: 5fe52930-b8f7-4258-8d5d-18d4e9e1b702] - authentication successful using: SNOWFLAKE_JWT"}
+{"level":"INFO","message":"[5:11:47.626 PM]: Connection[id: 5fe52930-b8f7-4258-8d5d-18d4e9e1b702] - connected successfully after 7.966599999999744 milliseconds"}
+{"level":"INFO","message":"[5:12:59.524 PM]: Creating new connection object"}
+{"level":"INFO","message":"[5:12:59.548 PM]: Creating Connection[id: 3c31c3f1-0ef5-4a2a-a7de-eef11df9014a] with host: iqviaidporg-pandpreporting.snowflakecomputing.com, account: iqviaidporg-pandpreporting, accessUrl: https://iqviaidporg-pandpreporting.snowflakecomputing.com, user: maasreaduser, role: undefined, database: PNPREPORTING_LIB, schema: PNPREPORTING_DATAMART, warehouse: PNPLIBRARIES, proxy was not configured, password is not provided, region: undefined, authenticator: SNOWFLAKE_JWT, ocsp mode: FAIL_OPEN, os: win32, os version: 10"}
+{"level":"INFO","message":"[5:12:59.549 PM]: Connection[id: 3c31c3f1-0ef5-4a2a-a7de-eef11df9014a] additional details: passcode in password is provided, passcode is not provided, private key is provided, application: undefined, client name: snowflake-sdk, client version: 2.2.0, retry timeout: 300, private key path: undefined, private key pass is not provided, client store temporary credential: false, browser response timeout: 120000"}
+{"level":"INFO","message":"[5:12:59.551 PM]: Connection[id: 3c31c3f1-0ef5-4a2a-a7de-eef11df9014a] - connection object created successfully."}
+{"level":"INFO","message":"[5:12:59.553 PM]: Connection[id: 3c31c3f1-0ef5-4a2a-a7de-eef11df9014a] - connecting. Associated Snowflake domain: GLOBAL"}
+{"level":"INFO","message":"[5:12:59.563 PM]: Connection[id: 3c31c3f1-0ef5-4a2a-a7de-eef11df9014a] - authentication successful using: SNOWFLAKE_JWT"}
+{"level":"INFO","message":"[5:12:59.564 PM]: Trying to initialize Easy Logging"}
+{"level":"INFO","message":"[5:12:59.567 PM]: No client config detected."}
+{"level":"INFO","message":"[5:12:59.568 PM]: No config file path found. Client config will not be used."}
+{"level":"INFO","message":"[5:12:59.570 PM]: Easy Logging is disabled as no config has been found"}
+{"level":"INFO","message":"[5:12:59.577 PM]: Connection[id: 3c31c3f1-0ef5-4a2a-a7de-eef11df9014a] - connected successfully after 24.199800000000323 milliseconds"}
+{"level":"INFO","message":"[5:15:06.170 PM]: Creating new connection object"}
+{"level":"INFO","message":"[5:15:06.229 PM]: Creating Connection[id: f0e29e2e-07cc-4cdb-a4b6-35312f4a5dac] with host: iqviaidporg-pandpreporting.snowflakecomputing.com, account: iqviaidporg-pandpreporting, accessUrl: https://iqviaidporg-pandpreporting.snowflakecomputing.com, user: maasreaduser, role: undefined, database: PNPREPORTING_LIB, schema: PNPREPORTING_DATAMART, warehouse: PNPLIBRARIES, proxy was not configured, password is not provided, region: undefined, authenticator: SNOWFLAKE_JWT, ocsp mode: FAIL_OPEN, os: win32, os version: 10"}
+{"level":"INFO","message":"[5:15:06.231 PM]: Connection[id: f0e29e2e-07cc-4cdb-a4b6-35312f4a5dac] additional details: passcode in password is provided, passcode is not provided, private key is provided, application: undefined, client name: snowflake-sdk, client version: 2.2.0, retry timeout: 300, private key path: undefined, private key pass is not provided, client store temporary credential: false, browser response timeout: 120000"}
+{"level":"INFO","message":"[5:15:06.233 PM]: Connection[id: f0e29e2e-07cc-4cdb-a4b6-35312f4a5dac] - connection object created successfully."}
+{"level":"INFO","message":"[5:15:06.236 PM]: Connection[id: f0e29e2e-07cc-4cdb-a4b6-35312f4a5dac] - connecting. Associated Snowflake domain: GLOBAL"}
+{"level":"INFO","message":"[5:15:06.251 PM]: Connection[id: f0e29e2e-07cc-4cdb-a4b6-35312f4a5dac] - authentication successful using: SNOWFLAKE_JWT"}
+{"level":"INFO","message":"[5:15:06.253 PM]: Trying to initialize Easy Logging"}
+{"level":"INFO","message":"[5:15:06.261 PM]: No client config detected."}
+{"level":"INFO","message":"[5:15:06.264 PM]: No config file path found. Client config will not be used."}
+{"level":"INFO","message":"[5:15:06.266 PM]: Easy Logging is disabled as no config has been found"}
+{"level":"INFO","message":"[5:15:06.277 PM]: Connection[id: f0e29e2e-07cc-4cdb-a4b6-35312f4a5dac] - connected successfully after 41.13800000000083 milliseconds"}
+{"level":"INFO","message":"[5:16:23.139 PM]: Creating new connection object"}
+{"level":"INFO","message":"[5:16:23.182 PM]: Creating Connection[id: cc93075c-26bb-4838-abd9-1a19c5df9d84] with host: iqviaidporg-pandpreporting.snowflakecomputing.com, account: iqviaidporg-pandpreporting, accessUrl: https://iqviaidporg-pandpreporting.snowflakecomputing.com, user: maasreaduser, role: undefined, database: PNPREPORTING_LIB, schema: PNPREPORTING_DATAMART, warehouse: PNPLIBRARIES, proxy was not configured, password is not provided, region: undefined, authenticator: SNOWFLAKE_JWT, ocsp mode: FAIL_OPEN, os: win32, os version: 10"}
+{"level":"INFO","message":"[5:16:23.187 PM]: Connection[id: cc93075c-26bb-4838-abd9-1a19c5df9d84] additional details: passcode in password is provided, passcode is not provided, private key is provided, application: undefined, client name: snowflake-sdk, client version: 2.2.0, retry timeout: 300, private key path: undefined, private key pass is not provided, client store temporary credential: false, browser response timeout: 120000"}
+{"level":"INFO","message":"[5:16:23.190 PM]: Connection[id: cc93075c-26bb-4838-abd9-1a19c5df9d84] - connection object created successfully."}
+{"level":"INFO","message":"[5:16:23.191 PM]: Connection[id: cc93075c-26bb-4838-abd9-1a19c5df9d84] - connecting. Associated Snowflake domain: GLOBAL"}
+{"level":"INFO","message":"[5:16:23.205 PM]: Connection[id: cc93075c-26bb-4838-abd9-1a19c5df9d84] - authentication successful using: SNOWFLAKE_JWT"}
+{"level":"INFO","message":"[5:16:23.207 PM]: Trying to initialize Easy Logging"}
+{"level":"INFO","message":"[5:16:23.212 PM]: No client config detected."}
+{"level":"INFO","message":"[5:16:23.214 PM]: No config file path found. Client config will not be used."}
+{"level":"INFO","message":"[5:16:23.216 PM]: Easy Logging is disabled as no config has been found"}
+{"level":"INFO","message":"[5:16:23.225 PM]: Connection[id: cc93075c-26bb-4838-abd9-1a19c5df9d84] - connected successfully after 33.41739999999845 milliseconds"}

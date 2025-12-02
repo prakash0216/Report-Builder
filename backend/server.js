@@ -40,6 +40,7 @@ function generateCacheKey(dataSourceName, queryObject) {
     customWhere: queryObject.customWhere || null,
     groupBy: queryObject.groupBy ? [...queryObject.groupBy].sort() : null,
     orderBy: queryObject.orderBy ? [...queryObject.orderBy].sort() : null,
+    limit: queryObject.limit || null,  // 🔥 CRITICAL: Include limit in cache key (for topN parameter)
   };
   
   const keyString = JSON.stringify(normalized);
@@ -1621,11 +1622,13 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
 
 async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
   const cacheKey = generateCacheKey(dataSourceName, queryObject);
+  // console.log(`🔑 Cache key generated: ${cacheKey.substring(0, 80)}... (limit: ${queryObject.limit || 'none'})`);
   
   const cached = fastCache.get(cacheKey);
   
   if (cached) {
     if (cached.expiresAt > Date.now()) {
+      console.log(`✅ Cache HIT for ${dataSourceName} (limit: ${queryObject.limit || 'none'})`);
       const index = cacheAccessOrder.indexOf(cacheKey);
       if (index > -1) cacheAccessOrder.splice(index, 1);
       cacheAccessOrder.push(cacheKey);
@@ -1643,7 +1646,7 @@ async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     }
   }
   
-  console.log(`💾 CACHE MISS for ${dataSourceName} - Executing query...`);
+  console.log(`💾 CACHE MISS for ${dataSourceName} (limit: ${queryObject.limit || 'none'}) - Executing query...`);
   const queryStartTime = Date.now();
   
   try {
@@ -1678,13 +1681,6 @@ app.post('/api/calculate', async (req, res) => {
   }
 
   const allAvailableVariables = { ...existingVariables, ...existingParameters, ...existingFilters };
-
-  // Debug logging to see what's being sent
-  console.log(`📊 [Calculate] Variable: ${variableName}`);
-  console.log(`📊 [Calculate] Parameters:`, Object.keys(existingParameters || {}));
-  console.log(`📊 [Calculate] Filters:`, Object.keys(existingFilters || {}));
-  console.log(`📊 [Calculate] Variables:`, Object.keys(existingVariables || {}));
-  console.log(`📊 [Calculate] All available:`, Object.keys(allAvailableVariables));
 
   try {
     const variableDeclarations = Object.entries(allAvailableVariables)
