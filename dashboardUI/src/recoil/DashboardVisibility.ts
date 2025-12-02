@@ -2,29 +2,36 @@
 import { atom, selectorFamily } from 'recoil';
 import { variableAtomFamily } from './VariableFamily';
 import { cardDimensionConditionsState } from './Carddimensionstate ';
-
 import axios from 'axios';
+import { 
+  shouldBlockSave, 
+  hasValueChanged, 
+  updateLastValue,
+  markAtomInitialized 
+} from './initializationState';
+
+const ATOM_KEY = 'chartVisibilityVariableState';
 
 export const chartVisibilityVariableState = atom<Record<string, string>>({
-  key: 'chartVisibilityVariableState',
+  key: ATOM_KEY,
   default: {},
   effects: [
-    ({ setSelf }) => {
-      // Load chart visibility from API on initialization
-      axios.get('http://localhost:3002/api/chart-visibility')
-        .then(response => {
-          if (response.data.success && response.data.visibility) {
-            setSelf(response.data.visibility);
-          }
-        })
-        .catch(error => {
-          console.error('Failed to load chart visibility:', error);
-        });
-    },
+    // Skip loading - DataInitializer handles this to avoid duplicate API calls
     ({ onSet }) => {
       // Save chart visibility to API when it changes (debounced)
       let timeoutId: NodeJS.Timeout;
-      onSet((newValue, _, isReset) => {
+      onSet((newValue, oldValue, isReset) => {
+        // Skip saving during initialization
+        if (shouldBlockSave()) {
+          updateLastValue(ATOM_KEY, newValue);
+          return;
+        }
+        
+        // Skip if value hasn't actually changed
+        if (!hasValueChanged(ATOM_KEY, newValue)) {
+          return;
+        }
+        
         clearTimeout(timeoutId);
         if (isReset) {
           // If reset, clear all visibility
@@ -36,8 +43,9 @@ export const chartVisibilityVariableState = atom<Record<string, string>>({
               await axios.post('http://localhost:3002/api/chart-visibility', {
                 visibility: newValue,
               });
+              console.log('✅ ChartVisibility: Saved visibility');
             } catch (error) {
-              console.error('Failed to save chart visibility:', error);
+              console.error('❌ ChartVisibility: Failed to save:', error);
             }
           }, 500); // Debounce by 500ms
         }
@@ -65,10 +73,7 @@ export const isChartVisibleSelector = selectorFamily<boolean, string>({
     const visibilityVariables = get(chartVisibilityVariableState);
     const variableName = visibilityVariables[chartId];
     
-    console.log(`[Selector] Checking visibility for chart ${chartId}, variable: ${variableName}`);
-    
     if (!variableName) {
-      console.log(`[Selector] Chart ${chartId}: No variable assigned, visible=true`);
       return true; // No rule = always visible
     }
     
@@ -76,12 +81,8 @@ export const isChartVisibleSelector = selectorFamily<boolean, string>({
       const rawValue = get(variableAtomFamily(variableName));
       const parsedValue = safeParse(rawValue);
       
-      console.log(`[Selector] Chart ${chartId}: Variable ${variableName} = ${parsedValue}`);
-      
       // If variable is true = SHOW, if false = HIDE
-      const isVisible = parsedValue === true;
-      console.log(`[Selector] Chart ${chartId}: isVisible = ${isVisible}`);
-      return isVisible;
+      return parsedValue === true;
     } catch (e) {
       console.warn(`Error checking visibility variable ${variableName}:`, e);
       return true;
@@ -99,17 +100,12 @@ export const chartDynamicDimensionsSelector = selectorFamily<
     const allConditions = get(cardDimensionConditionsState);
     const conditions = allConditions[chartId];
     
-    console.log(`[Dim Selector] Chart ${chartId}: Has ${conditions?.length || 0} conditions`);
-    
     if (!conditions || conditions.length === 0) {
-      console.log(`[Dim Selector] Chart ${chartId}: No conditions, returning null`);
       return null; // No conditions = use default layout dimensions
     }
     
     // Sort by priority (lower number = higher priority)
     const sorted = [...conditions].sort((a, b) => a.priority - b.priority);
-    
-    console.log(`[Dim Selector] Chart ${chartId}: Checking ${sorted.length} conditions in order`);
     
     // Check each condition in order
     for (const condition of sorted) {
@@ -117,11 +113,8 @@ export const chartDynamicDimensionsSelector = selectorFamily<
         const rawValue = get(variableAtomFamily(condition.variableName));
         const parsedValue = safeParse(rawValue);
         
-        console.log(`[Dim Selector] Chart ${chartId}: Condition P${condition.priority} - ${condition.variableName} = ${parsedValue}, expecting ${condition.expectedValue}`);
-        
         if (typeof parsedValue === 'boolean' && parsedValue === condition.expectedValue) {
           // First match wins!
-          console.log(`[Dim Selector] Chart ${chartId}: ✅ MATCH! Returning w=${condition.width}, h=${condition.height}`);
           return {
             width: condition.width,
             height: condition.height,
@@ -132,7 +125,6 @@ export const chartDynamicDimensionsSelector = selectorFamily<
       }
     }
     
-    console.log(`[Dim Selector] Chart ${chartId}: No conditions matched, returning null (use original)`);
     return null; // No conditions matched
   },
 });

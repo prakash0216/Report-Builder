@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Responsive, WidthProvider, Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -11,12 +11,13 @@ import ResizableChart from "../components/ResizableChart";
 import FilterPanel from "../components/FilterPanel";
 import { variableUpdateTriggerState, variableNamesState } from '../recoil/Variabletracker';
 import { variableAtomFamily } from '../recoil/VariableFamily';
-import { filterNamesState } from '../recoil/FiltersFamily';
+import { filterNamesState, filterConfigFamily } from '../recoil/FiltersFamily';
+import { liveFilterFamily } from '../recoil/LiveFilterFamily';
 import { isChartVisibleSelector, chartDynamicDimensionsSelector } from '../recoil/DashboardVisibility';
 import { IsEditModeState } from "../recoil/IsEditeMode";
 import { dahboardNameMain } from "../recoil/DashboardName";
 import { Typography, Box, CircularProgress } from "@mui/material";
-import { dataLoadedState } from '../components/DataInitializer';
+import { dataLoadedState } from '../recoil/initializationState';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -113,6 +114,7 @@ const makeMutableLayoutItem = (item: Layout): Layout => {
 
 export default function DropDragDashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const idRef = useRef(1);
 
   const [chartConfigs, setChartConfigs] = useRecoilState<Record<string, ChartConfigData>>(chartConfigState);
@@ -139,6 +141,8 @@ export default function DropDragDashboard() {
   const trueOriginalPositionsRef = useRef<Record<string, Layout>>({});
   const isInternalUpdateRef = useRef<boolean>(false);
   const previousVisibilityRef = useRef<Record<string, boolean>>({});
+  const previousPathnameRef = useRef<string>('');
+  const hasInitializedFiltersRef = useRef<boolean>(false);
 
   const [selectedView, setSelectedView] = useState<string>("dashboardName");
   const [selectedCustomView, setSelectedCustomView] = useState<string>("default");
@@ -191,6 +195,63 @@ export default function DropDragDashboard() {
       nameInputRef.current.select();
     }
   }, [isEditingName]);
+
+  // 🔥 Reset filters to default values when navigating to /dashboards
+  const resetFiltersToDefaults = useRecoilCallback(
+    ({ snapshot, set }) =>
+      async () => {
+        console.log('🔄 [Dashboard] Resetting filters to default values...');
+        
+        try {
+          const currentFilterNames = await snapshot.getPromise(filterNamesState);
+          
+          for (const filterVariableName of currentFilterNames) {
+            try {
+              const filterConfig = await snapshot.getPromise(filterConfigFamily(filterVariableName));
+              
+              if (filterConfig?.defaultValues && filterConfig.defaultValues.length > 0) {
+                set(liveFilterFamily(filterConfig.variableName), filterConfig.defaultValues);
+              }
+            } catch (err) {
+              // Silently skip individual filter errors
+            }
+          }
+          
+          console.log('✅ [Dashboard] All filters reset to default values');
+        } catch (err) {
+          console.error('❌ [Dashboard] Error resetting filters:', err);
+        }
+      },
+    []
+  );
+
+  // Reset filters when navigating to /dashboards route
+  useEffect(() => {
+    const currentPath = location.pathname;
+    const previousPath = previousPathnameRef.current;
+    
+    // Reset filters if:
+    // 1. We're on /dashboards
+    // 2. Data is loaded
+    // 3. Either: we came from another route OR this is the first time we're on dashboards
+    const isOnDashboards = currentPath === '/dashboards';
+    const cameFromAnotherRoute = previousPath !== '' && previousPath !== '/dashboards';
+    const isFirstTime = !hasInitializedFiltersRef.current;
+    
+    if (isOnDashboards && dataLoaded && (cameFromAnotherRoute || isFirstTime)) {
+      console.log('🔄 [Dashboard] Resetting filters to defaults', {
+        currentPath,
+        previousPath,
+        cameFromAnotherRoute,
+        isFirstTime
+      });
+      resetFiltersToDefaults();
+      hasInitializedFiltersRef.current = true;
+    }
+    
+    // Update previous pathname
+    previousPathnameRef.current = currentPath;
+  }, [location.pathname, dataLoaded, resetFiltersToDefaults]);
 
   // 🔥 CRITICAL FIX: Create default layouts for charts that have configs but no layouts
   useEffect(() => {

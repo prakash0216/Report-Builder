@@ -7,7 +7,5 @@ import { localStorageEffect } from "./persistence";
 export const liveFilterFamily = atomFamily<any, string>({
     key: 'LiveFilterFamily',
     default: null, // Default to null until initialized with the filter's default value
-    effects: (variableName) => [
-        localStorageEffect(`liveFilter_${variableName}`),
-    ],
+
 });

@@ -34,22 +34,11 @@ function dbToStoredLogic(dbCalc: DbCalculation): StoredLogic {
 }
 
 // Custom effect for syncing calculations with database
+// Note: DataInitializer loads calculations at startup, so this effect is disabled
+// to avoid duplicate API calls and race conditions
 const calculationsDbEffect = ({ setSelf, onSet, trigger }: any) => {
-  // Load initial value from database
-  if (trigger === 'get') {
-    axios.get(`${API_BASE_URL}/api/calculations`)
-      .then(response => {
-        if (response.data.success && response.data.calculations) {
-          const storedLogics = response.data.calculations.map(dbToStoredLogic);
-          setSelf(storedLogics);
-          console.log('✅ Loaded calculations from database:', storedLogics.length);
-        }
-      })
-      .catch(error => {
-        console.error('❌ Error loading calculations from database:', error);
-        // Keep default value on error
-      });
-  }
+  // Skip loading - DataInitializer handles this to avoid duplicate API calls
+  // Calculations are loaded by DataInitializer from /api/calculations endpoint
 
   // Note: Individual calculation additions/updates/deletes are handled via API calls in components
   // This effect is primarily for loading the initial state

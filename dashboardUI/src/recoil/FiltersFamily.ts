@@ -62,25 +62,13 @@ function dbToFilterConfig(dbFilter: DbFilter): FilterConfig {
 }
 
 // Custom effect for syncing filter config with database
+// Note: DataInitializer loads all filters at startup, so this effect is a fallback
+// for filters accessed before DataInitializer completes or for dynamically added filters
 const filterConfigDbEffect = (variableName: string) => ({ setSelf, onSet, trigger }: any) => {
-  // Load initial value from database
-  if (trigger === 'get' && variableName) {
-    axios.get(`${API_BASE_URL}/api/filters/${variableName}`)
-      .then(response => {
-        if (response.data.success && response.data.filter) {
-          const filterConfig = dbToFilterConfig(response.data.filter);
-          setSelf(filterConfig);
-        }
-      })
-      .catch(error => {
-        // 404 is expected if filter doesn't exist yet
-        if (error.response?.status !== 404) {
-          console.error(`❌ Error loading filter ${variableName} from database:`, error);
-        }
-        // Keep default value (null) on error
-      });
-  }
-
+  // Skip loading - DataInitializer handles this to avoid duplicate API calls
+  // Individual filter data is loaded by DataInitializer from the main /api/filters endpoint
+  // This prevents N+1 API calls (one for each filter)
+  
   // Note: Individual filter save/update/delete operations are handled via API calls in components
   // This effect is primarily for loading the initial state
   // We don't auto-save on every change to avoid too many API calls
@@ -97,22 +85,10 @@ export const filterConfigFamily = atomFamily<FilterConfig | null, string>({
 });
 
 // Custom effect for syncing filter names with database
+// Note: DataInitializer loads filter names at startup, so this effect is a fallback
 const filterNamesDbEffect = ({ setSelf, onSet, trigger }: any) => {
-  // Load initial value from database
-  if (trigger === 'get') {
-    axios.get(`${API_BASE_URL}/api/filters`)
-      .then(response => {
-        if (response.data.success && response.data.filters) {
-          const filterNames = response.data.filters.map((f: DbFilter) => f.variable_name);
-          setSelf(filterNames);
-          console.log('✅ Loaded filter names from database:', filterNames.length);
-        }
-      })
-      .catch(error => {
-        console.error('❌ Error loading filter names from database:', error);
-        // Keep default value on error
-      });
-  }
+  // Skip loading - DataInitializer handles this to avoid duplicate API calls
+  // Filter names are loaded by DataInitializer from the main /api/filters endpoint
 
   // Note: Individual filter additions/removals are handled via API calls in components
   // This effect is primarily for loading the initial state

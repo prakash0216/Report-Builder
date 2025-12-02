@@ -1,8 +1,5 @@
 import { atom, selector } from 'recoil';
-import axios from 'axios';
 import { parameterAtomFamily } from './ParameterFamliy';
-
-const API_BASE_URL = 'http://localhost:3002';
 
 // Track whether parameters have been loaded from database
 export const parametersLoadedState = atom<boolean>({
@@ -11,24 +8,9 @@ export const parametersLoadedState = atom<boolean>({
 });
 
 // Custom effect for syncing parameter names with database
+// Note: DataInitializer loads parameter names at startup, so this effect is disabled
 const parameterNamesDbEffect = ({ setSelf, onSet, trigger, getPromise, set }: any) => {
-  // Load initial value from database
-  if (trigger === 'get') {
-    axios.get(`${API_BASE_URL}/api/parameters/names`)
-      .then(response => {
-        if (response.data.success && response.data.parameterNames) {
-          setSelf(response.data.parameterNames);
-          console.log('✅ Loaded parameter names from database:', response.data.parameterNames);
-        }
-      })
-      .catch(error => {
-        console.error('❌ Error loading parameter names:', error);
-        // Keep default value on error
-      });
-  }
-
-  // Note: Individual parameter additions/removals are handled via API calls in components
-  // This effect is primarily for loading the initial state
+  // Skip loading - DataInitializer handles this to avoid duplicate API calls
 };
 
 export const parameterNamesState = atom<string[]>({

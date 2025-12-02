@@ -30,6 +30,11 @@ import { allFiltersSelector, filterNamesState, filterConfigFamily } from "../rec
 import { liveFilterFamily } from "../recoil/LiveFilterFamily";
 import { atom } from 'recoil';
 import { IsEditModeState } from "../recoil/IsEditeMode";
+import { 
+  shouldBlockSave, 
+  hasValueChanged, 
+  updateLastValue 
+} from "../recoil/initializationState";
 
 interface FilterPanelProps {
   showFilters: boolean;
@@ -41,41 +46,91 @@ interface FilterPosition {
   y: number;
 }
 
+const POSITIONS_ATOM_KEY = 'filterPositionsState';
+const ACTIVE_FILTERS_ATOM_KEY = 'activeFilterIdsState';
+
+// Track current values for combined save
+let currentPositions: Record<string, FilterPosition> = {};
+let currentActiveFilterIds: string[] = [];
+let saveTimeoutId: NodeJS.Timeout | null = null;
+
+// Combined save function - API requires both positions and activeFilterIds together
+const saveFilterPanelState = () => {
+  if (saveTimeoutId) {
+    clearTimeout(saveTimeoutId);
+  }
+  
+  saveTimeoutId = setTimeout(async () => {
+    // Skip saving during initialization
+    if (shouldBlockSave()) {
+      return;
+    }
+    
+    try {
+      await axios.post('http://localhost:3002/api/filter-panel-state', {
+        positions: currentPositions,
+        activeFilterIds: currentActiveFilterIds,
+      });
+      console.log('✅ FilterPanelState: Saved positions and active filters');
+    } catch (error) {
+      console.error('❌ FilterPanelState: Failed to save:', error);
+    }
+  }, 500);
+};
+
 // Recoil state for filter positions
 export const filterPositionsState = atom<Record<string, FilterPosition>>({
-  key: 'filterPositionsState',
+  key: POSITIONS_ATOM_KEY,
   default: {},
   effects: [
-    ({ setSelf }) => {
-      // Load filter positions from API on initialization
-      axios.get('http://localhost:3002/api/filter-panel-state')
-        .then(response => {
-          if (response.data.success && response.data.positions) {
-            setSelf(response.data.positions);
-          }
-        })
-        .catch(error => {
-          console.error('Failed to load filter positions:', error);
-        });
+    // Skip loading - DataInitializer handles this to avoid duplicate API calls
+    ({ onSet }) => {
+      onSet((newValue) => {
+        // Always update current value
+        currentPositions = newValue;
+        
+        // Skip saving during initialization
+        if (shouldBlockSave()) {
+          updateLastValue(POSITIONS_ATOM_KEY, newValue);
+          return;
+        }
+        
+        // Skip if value hasn't changed
+        if (!hasValueChanged(POSITIONS_ATOM_KEY, newValue)) {
+          return;
+        }
+        
+        // Trigger combined save
+        saveFilterPanelState();
+      });
     },
   ]
 });
 
 export const activeFilterIdsState = atom<string[]>({
-  key: 'activeFilterIdsState',
+  key: ACTIVE_FILTERS_ATOM_KEY,
   default: [],
   effects: [
-    ({ setSelf }) => {
-      // Load active filter IDs from API on initialization
-      axios.get('http://localhost:3002/api/filter-panel-state')
-        .then(response => {
-          if (response.data.success && response.data.activeFilterIds) {
-            setSelf(response.data.activeFilterIds);
-          }
-        })
-        .catch(error => {
-          console.error('Failed to load active filter IDs:', error);
-        });
+    // Skip loading - DataInitializer handles this to avoid duplicate API calls
+    ({ onSet }) => {
+      onSet((newValue) => {
+        // Always update current value
+        currentActiveFilterIds = newValue;
+        
+        // Skip saving during initialization
+        if (shouldBlockSave()) {
+          updateLastValue(ACTIVE_FILTERS_ATOM_KEY, newValue);
+          return;
+        }
+        
+        // Skip if value hasn't changed
+        if (!hasValueChanged(ACTIVE_FILTERS_ATOM_KEY, newValue)) {
+          return;
+        }
+        
+        // Trigger combined save
+        saveFilterPanelState();
+      });
     },
   ]
 });

@@ -2646,6 +2646,19 @@ app.post('/api/card-dimension-conditions', async (req, res) => {
   }
 });
 
+//get all table details
+app.get('/api/tables/:tableName',async(req,res)=>{
+  try{
+    const{tableName}=req.params;
+    const tableDetails=await dbClient.query(`SELECT * FROM ${tableName}`);
+    res.json({success:true,tableDetails});
+  }catch(err){
+    console.error('❌ Error fetching table details:',err.message);
+    res.status(500).json({success:false,error:err.message});
+  }
+}
+);
+
 (async()=> {
   try {
     await dbClient.query('SELECT 1');

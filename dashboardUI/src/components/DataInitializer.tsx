@@ -1,6 +1,6 @@
 // components/DataInitializer.tsx
 import React, { useEffect } from 'react';
-import { atom, useSetRecoilState, useRecoilCallback } from 'recoil';
+import { useSetRecoilState, useRecoilCallback } from 'recoil';
 import { storedLogicsState } from '../recoil/StoredLogic';
 import { parameterNamesState } from '../recoil/ParameterTracker';
 import { parameterAtomFamily } from '../recoil/ParameterFamliy';
@@ -10,75 +10,89 @@ import { chartConfigState } from '../recoil/ChartConfig';
 import { layoutState } from '../recoil/LayoutState';
 import { chartVisibilityVariableState } from '../recoil/DashboardVisibility';
 import { cardDimensionConditionsState } from '../recoil/Carddimensionstate ';
+import { filterPositionsState, activeFilterIdsState } from './FilterPanel';
+import { 
+  dataLoadedState,
+  startDataInitialization, 
+  completeDataInitialization,
+  updateLastValue 
+} from '../recoil/initializationState';
 import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:3002';
 
-// Atom to track if all data has been loaded
-export const dataLoadedState = atom<boolean>({
-  key: 'dataLoadedState',
-  default: false,
-});
+// Re-export dataLoadedState for backwards compatibility
+export { dataLoadedState } from '../recoil/initializationState';
 
 // Component to preload all data at app startup
 export const DataInitializer: React.FC = () => {
   const setDataLoaded = useSetRecoilState(dataLoadedState);
 
-  const initializeAllData = useRecoilCallback(({ set, snapshot }) => async () => {
+  const initializeAllData = useRecoilCallback(({ set }) => async () => {
     console.log('🚀 [Data Initializer] Starting to preload all data from database...');
+    
+    // Signal that initialization is starting - block all saves
+    startDataInitialization();
     
     try {
       // 1. Load all calculations
       console.log('📊 [Data Initializer] Loading calculations...');
-      const calculationsResponse = await axios.get(`${API_BASE_URL}/api/calculations`);
-      if (calculationsResponse.data.success && calculationsResponse.data.calculations) {
-        const storedLogics = calculationsResponse.data.calculations.map((dbCalc: any) => ({
-          id: dbCalc.id.toString(),
-          variableName: dbCalc.variable_name,
-          logic: dbCalc.logic,
-          createdAt: new Date(dbCalc.created_at).getTime(),
-          lastExecuted: dbCalc.last_executed ? new Date(dbCalc.last_executed).getTime() : undefined,
-        }));
-        set(storedLogicsState, storedLogics);
-        console.log(`✅ [Data Initializer] Loaded ${storedLogics.length} calculations`);
+      try {
+        const calculationsResponse = await axios.get(`${API_BASE_URL}/api/calculations`);
+        if (calculationsResponse.data.success && calculationsResponse.data.calculations) {
+          const storedLogics = calculationsResponse.data.calculations.map((dbCalc: any) => ({
+            id: dbCalc.id.toString(),
+            variableName: dbCalc.variable_name,
+            logic: dbCalc.logic,
+            createdAt: new Date(dbCalc.created_at).getTime(),
+            lastExecuted: dbCalc.last_executed ? new Date(dbCalc.last_executed).getTime() : undefined,
+          }));
+          set(storedLogicsState, storedLogics);
+          console.log(`✅ [Data Initializer] Loaded ${storedLogics.length} calculations`);
+        }
+      } catch (err) {
+        console.warn('⚠️ [Data Initializer] Failed to load calculations:', err);
       }
 
       // 2. Load all parameter names and values
       console.log('📊 [Data Initializer] Loading parameters...');
-      const paramsResponse = await axios.get(`${API_BASE_URL}/api/parameters/names`);
-      if (paramsResponse.data.success && paramsResponse.data.parameterNames) {
-        const paramNames = paramsResponse.data.parameterNames;
-        set(parameterNamesState, paramNames);
-        console.log(`✅ [Data Initializer] Loaded ${paramNames.length} parameter names`);
-        
-        // Load each parameter value
-        for (const paramName of paramNames) {
-          try {
-            const paramValueResponse = await axios.get(`${API_BASE_URL}/api/parameters/${paramName}`);
-            if (paramValueResponse.data.success && paramValueResponse.data.value !== undefined) {
-              set(parameterAtomFamily(paramName), paramValueResponse.data.value);
+      try {
+        const paramsResponse = await axios.get(`${API_BASE_URL}/api/parameters/names`);
+        if (paramsResponse.data.success && paramsResponse.data.parameterNames) {
+          const paramNames = paramsResponse.data.parameterNames;
+          set(parameterNamesState, paramNames);
+          console.log(`✅ [Data Initializer] Loaded ${paramNames.length} parameter names`);
+          
+          // Load each parameter value
+          for (const paramName of paramNames) {
+            try {
+              const paramValueResponse = await axios.get(`${API_BASE_URL}/api/parameters/${paramName}`);
+              if (paramValueResponse.data.success && paramValueResponse.data.value !== undefined) {
+                set(parameterAtomFamily(paramName), paramValueResponse.data.value);
+              }
+            } catch (err) {
+              // Silently skip individual parameter errors
             }
-          } catch (err) {
-            console.warn(`⚠️ [Data Initializer] Failed to load parameter ${paramName}:`, err);
           }
+          console.log(`✅ [Data Initializer] Loaded all parameter values`);
         }
-        console.log(`✅ [Data Initializer] Loaded all parameter values`);
+      } catch (err) {
+        console.warn('⚠️ [Data Initializer] Failed to load parameters:', err);
       }
 
-      // 3. Load all filters
+      // 3. Load all filters from the main filters endpoint (not individual ones)
       console.log('📊 [Data Initializer] Loading filters...');
-      const filtersResponse = await axios.get(`${API_BASE_URL}/api/filters`);
-      if (filtersResponse.data.success && filtersResponse.data.filters) {
-        const filterNames = filtersResponse.data.filters.map((f: any) => f.variable_name);
-        set(filterNamesState, filterNames);
-        console.log(`✅ [Data Initializer] Loaded ${filterNames.length} filter names`);
-        
-        // Load each filter config and initialize default values
-        for (const filterVariableName of filterNames) {
-          try {
-            const filterResponse = await axios.get(`${API_BASE_URL}/api/filters/${filterVariableName}`);
-            if (filterResponse.data.success && filterResponse.data.filter) {
-              const dbFilter = filterResponse.data.filter;
+      try {
+        const filtersResponse = await axios.get(`${API_BASE_URL}/api/filters`);
+        if (filtersResponse.data.success && filtersResponse.data.filters) {
+          const filters = filtersResponse.data.filters;
+          const filterNames = filters.map((f: any) => f.variable_name);
+          set(filterNamesState, filterNames);
+          console.log(`✅ [Data Initializer] Loaded ${filterNames.length} filter names`);
+          
+          // Process each filter from the already-fetched data (no additional API calls)
+          for (const dbFilter of filters) {
+            try {
               const filterConfig = {
                 id: dbFilter.id.toString(),
                 category: dbFilter.category,
@@ -95,18 +109,20 @@ export const DataInitializer: React.FC = () => {
                 valuekey: dbFilter.value_key || undefined,
               };
               
-              set(filterConfigFamily(filterVariableName), filterConfig);
+              set(filterConfigFamily(dbFilter.variable_name), filterConfig);
               
-              // Initialize filter default values
+              // Initialize filter with default values
               if (filterConfig.defaultValues && filterConfig.defaultValues.length > 0) {
-                set(liveFilterFamily(filterVariableName), filterConfig.defaultValues);
+                set(liveFilterFamily(dbFilter.variable_name), filterConfig.defaultValues);
               }
+            } catch (parseErr) {
+              console.warn(`⚠️ [Data Initializer] Failed to parse filter ${dbFilter.variable_name}:`, parseErr);
             }
-          } catch (err) {
-            console.warn(`⚠️ [Data Initializer] Failed to load filter ${filterVariableName}:`, err);
           }
+          console.log(`✅ [Data Initializer] Loaded all filter configs and default values`);
         }
-        console.log(`✅ [Data Initializer] Loaded all filter configs and default values`);
+      } catch (err) {
+        console.warn('⚠️ [Data Initializer] Failed to load filters:', err);
       }
 
       // 4. Load chart configs
@@ -114,11 +130,13 @@ export const DataInitializer: React.FC = () => {
       try {
         const configsResponse = await axios.get(`${API_BASE_URL}/api/chart-configs`);
         if (configsResponse.data.success && configsResponse.data.configs) {
-          set(chartConfigState, configsResponse.data.configs);
-          console.log(`✅ [Data Initializer] Loaded chart configs for ${Object.keys(configsResponse.data.configs).length} charts`);
+          const configs = configsResponse.data.configs;
+          set(chartConfigState, configs);
+          updateLastValue('chartConfigState', configs);
+          console.log(`✅ [Data Initializer] Loaded chart configs for ${Object.keys(configs).length} charts`);
         }
       } catch (err) {
-        console.warn(`⚠️ [Data Initializer] Failed to load chart configs:`, err);
+        console.warn('⚠️ [Data Initializer] Failed to load chart configs:', err);
       }
 
       // 5. Load layouts
@@ -126,11 +144,13 @@ export const DataInitializer: React.FC = () => {
       try {
         const layoutsResponse = await axios.get(`${API_BASE_URL}/api/layouts`);
         if (layoutsResponse.data.success && layoutsResponse.data.layouts) {
-          set(layoutState, layoutsResponse.data.layouts);
+          const layouts = layoutsResponse.data.layouts;
+          set(layoutState, layouts);
+          updateLastValue('layoutState', layouts);
           console.log(`✅ [Data Initializer] Loaded layouts for all breakpoints`);
         }
       } catch (err) {
-        console.warn(`⚠️ [Data Initializer] Failed to load layouts:`, err);
+        console.warn('⚠️ [Data Initializer] Failed to load layouts:', err);
       }
 
       // 6. Load chart visibility
@@ -138,11 +158,13 @@ export const DataInitializer: React.FC = () => {
       try {
         const visibilityResponse = await axios.get(`${API_BASE_URL}/api/chart-visibility`);
         if (visibilityResponse.data.success && visibilityResponse.data.visibility) {
-          set(chartVisibilityVariableState, visibilityResponse.data.visibility);
-          console.log(`✅ [Data Initializer] Loaded visibility for ${Object.keys(visibilityResponse.data.visibility).length} charts`);
+          const visibility = visibilityResponse.data.visibility;
+          set(chartVisibilityVariableState, visibility);
+          updateLastValue('chartVisibilityVariableState', visibility);
+          console.log(`✅ [Data Initializer] Loaded visibility for ${Object.keys(visibility).length} charts`);
         }
       } catch (err) {
-        console.warn(`⚠️ [Data Initializer] Failed to load chart visibility:`, err);
+        console.warn('⚠️ [Data Initializer] Failed to load chart visibility:', err);
       }
 
       // 7. Load card dimension conditions
@@ -150,21 +172,45 @@ export const DataInitializer: React.FC = () => {
       try {
         const conditionsResponse = await axios.get(`${API_BASE_URL}/api/card-dimension-conditions`);
         if (conditionsResponse.data.success && conditionsResponse.data.conditions) {
-          set(cardDimensionConditionsState, conditionsResponse.data.conditions);
-          const totalConditions = Object.values(conditionsResponse.data.conditions).reduce((sum: number, arr: any) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
+          const conditions = conditionsResponse.data.conditions;
+          set(cardDimensionConditionsState, conditions);
+          updateLastValue('cardDimensionConditionsState', conditions);
+          const totalConditions = Object.values(conditions).reduce((sum: number, arr: any) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
           console.log(`✅ [Data Initializer] Loaded ${totalConditions} dimension conditions`);
         }
       } catch (err) {
-        console.warn(`⚠️ [Data Initializer] Failed to load card dimension conditions:`, err);
+        console.warn('⚠️ [Data Initializer] Failed to load card dimension conditions:', err);
       }
 
-      // Mark data as loaded
+      // 8. Load filter panel state (positions and active filters)
+      console.log('📊 [Data Initializer] Loading filter panel state...');
+      try {
+        const filterPanelResponse = await axios.get(`${API_BASE_URL}/api/filter-panel-state`);
+        if (filterPanelResponse.data.success) {
+          if (filterPanelResponse.data.positions) {
+            set(filterPositionsState, filterPanelResponse.data.positions);
+            console.log(`✅ [Data Initializer] Loaded filter positions`);
+          }
+          if (filterPanelResponse.data.activeFilterIds) {
+            set(activeFilterIdsState, filterPanelResponse.data.activeFilterIds);
+            console.log(`✅ [Data Initializer] Loaded ${filterPanelResponse.data.activeFilterIds.length} active filter IDs`);
+          }
+        }
+      } catch (err) {
+        console.warn('⚠️ [Data Initializer] Failed to load filter panel state:', err);
+      }
+
+      // Signal that initialization is complete - allow saves
+      completeDataInitialization();
+      
+      // Mark data as loaded for UI
       setDataLoaded(true);
       console.log('✅ [Data Initializer] All data preloaded successfully!');
       
     } catch (err) {
       console.error('❌ [Data Initializer] Failed to preload data:', err);
-      // Still mark as loaded to prevent app from hanging
+      // Still complete initialization to allow app to function
+      completeDataInitialization();
       setDataLoaded(true);
     }
   }, [setDataLoaded]);
@@ -175,4 +221,3 @@ export const DataInitializer: React.FC = () => {
 
   return null; // This component doesn't render anything
 };
-
