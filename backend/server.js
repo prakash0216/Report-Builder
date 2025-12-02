@@ -1283,6 +1283,19 @@ app.post('/execute-query', async (req, res) => {
                                         await dbClient.run(insertQuery);
                                         console.log(`✅ Data source ${dataSourceName} registered in data_source_registry.`);
                                         
+                                        // 🚀 Create DuckDB table from parquet for FAST queries
+                                        const tableName = `extract_${dataSourceName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+                                        const escapedParquetPath = parquetFilePath.replace(/\\/g, '\\\\');
+                                        try {
+                                            console.log(`📊 Creating DuckDB table '${tableName}' for fast queries...`);
+                                            await dbClient.run(`DROP TABLE IF EXISTS "${tableName}"`);
+                                            await dbClient.run(`CREATE TABLE "${tableName}" AS SELECT * FROM read_parquet('${escapedParquetPath}')`);
+                                            console.log(`✅ DuckDB table '${tableName}' created - queries will be FAST!`);
+                                        } catch (tableErr) {
+                                            console.warn(`⚠️ Could not create DuckDB table: ${tableErr.message}`);
+                                            console.log(`📁 Queries will use parquet file directly (slower)`);
+                                        }
+                                        
                                     } catch (err) {
                                         console.error('❌ Error finalizing parquet write:', err.message);
                                         await writer.close().catch(() => {});
@@ -1536,6 +1549,7 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     const startTime = Date.now();
     console.log('🦆 Loading from DuckDB Extract');
     
+    // Get parquet path as fallback
     const dsDetails = await dbClient.query(
       `SELECT parquet_path FROM data_source_registry WHERE ds_name='${dataSourceName}'`
     );
@@ -1544,73 +1558,64 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     }
     
     const parquetPath = dsDetails[0].parquet_path;
-    console.log('📁 Parquet path:', parquetPath);
+    const escapedPath = parquetPath ? parquetPath.replace(/\\/g, '\\\\') : null;
     
-    const { existsSync } = await import('fs');
-    if (!parquetPath || !existsSync(parquetPath)) {
-      throw new Error(`Parquet file for data source ${dataSourceName} not found at path: ${parquetPath}`);
+    // Table name created during extract
+    const tableName = `extract_${dataSourceName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    
+    // Check if DuckDB table exists (created during extract)
+    let dataSource;
+    try {
+      const tableCheck = await dbClient.query(
+        `SELECT table_name FROM information_schema.tables WHERE table_name='${tableName}'`
+      );
+      
+      if (tableCheck && tableCheck.length > 0) {
+        dataSource = `"${tableName}"`;
+        console.log(`🚀 Using DuckDB table '${tableName}' (FAST)`);
+      } else if (escapedPath) {
+        // Fallback: create table from parquet if it doesn't exist
+        console.log(`📊 Table not found, creating from parquet...`);
+        const { existsSync } = await import('fs');
+        if (existsSync(parquetPath)) {
+          await dbClient.run(`CREATE TABLE IF NOT EXISTS "${tableName}" AS SELECT * FROM read_parquet('${escapedPath}')`);
+          dataSource = `"${tableName}"`;
+          console.log(`✅ Table created, using '${tableName}'`);
+        } else {
+          throw new Error(`Parquet file not found: ${parquetPath}`);
+        }
+      } else {
+        throw new Error(`No table or parquet file found for ${dataSourceName}`);
+      }
+    } catch (tableErr) {
+      // Final fallback to parquet
+      if (escapedPath) {
+        dataSource = `read_parquet('${escapedPath}')`;
+        console.log(`📁 Fallback to parquet file`);
+      } else {
+        throw tableErr;
+      }
     }
     
-    console.log('🔄 Streaming data from Parquet file:', parquetPath);
-    
-    const escapedPath = parquetPath.replace(/\\/g, '\\\\');
-    
+    // Build query
     let customQuery;
-    
     if (columns || whereClause || groupBy || orderBy || limit) {
-      customQuery = `SELECT ${columns && columns.length > 0 ? columns.join(', ') : '*'} FROM read_parquet('${escapedPath}')` +
+      const selectCols = columns && columns.length > 0 ? columns.join(', ') : '*';
+      customQuery = `SELECT ${selectCols} FROM ${dataSource}` +
         (whereClause ? ` WHERE ${whereClause}` : '') +
         (groupBy && groupBy.length > 0 ? ` GROUP BY ${groupBy.join(', ')}` : '') +
         (orderBy && orderBy.length > 0 ? ` ORDER BY ${orderBy.join(', ')}` : '') +
         (limit ? ` LIMIT ${limit}` : '');
     } else {
-      customQuery = `SELECT * FROM read_parquet('${escapedPath}')`;
+      customQuery = `SELECT * FROM ${dataSource}`;
     }
     
-    console.log('📝 Executing DuckDB Query:', customQuery);
+    console.log('📝 Query:', customQuery.substring(0, 200) + (customQuery.length > 200 ? '...' : ''));
     
-    const describeQuery = `DESCRIBE (${customQuery})`;
-    console.log('🔍 Getting column names:', describeQuery);
-    const columnInfo = await dbClient.query(describeQuery);
-    const columnNames = columnInfo.map(col => col.column_name);
-    console.log('📋 Column names:', columnNames);
-    
-    const queryResult = await dbClient.stream(customQuery);
-    
-    let data = [];
-    let chunkCount = 0;
-    let rowsProcessed = 0;
-    
-    while (true) {
-      const chunk = await queryResult.fetchChunk();
-      
-      if (chunk.rowCount === 0) {
-        break;
-      }
-      
-      chunkCount++;
-      rowsProcessed += chunk.rowCount;
-      
-      const rowArrays = chunk.getRows();
-      const rows = rowArrays.map(rowArray => {
-        const obj = {};
-        columnNames.forEach((name, index) => {
-          obj[name] = rowArray[index];
-        });
-        return obj;
-      });
-      
-      data.push(...rows);
-      
-      if (chunkCount % 10 === 0 || rowsProcessed % 50000 === 0) {
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        console.log(`📊 Progress: ${rowsProcessed.toLocaleString()} rows loaded (${chunkCount} chunks) in ${elapsed}s`);
-      }
-    }
+    const data = await dbClient.queryParquet(customQuery);
     
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`✅ DuckDB data loaded in ${totalTime}s`);
-    console.log(`✅ Loaded ${data.length.toLocaleString()} rows from Parquet file`);
+    console.log(`✅ Query: ${totalTime}s | Rows: ${data.length}`);
     
     return data;
   }
@@ -1673,6 +1678,64 @@ async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     throw error;
   }
 }
+
+// Optimize existing extract by creating DuckDB table from parquet
+app.post('/api/optimize-extract/:dsName', async (req, res) => {
+  const { dsName } = req.params;
+  
+  try {
+    // Get parquet path
+    const dsDetails = await dbClient.query(
+      `SELECT parquet_path, type FROM data_source_registry WHERE ds_name='${dsName}'`
+    );
+    
+    if (dsDetails.length === 0) {
+      return res.status(404).json({ success: false, error: `Data source '${dsName}' not found` });
+    }
+    
+    if (dsDetails[0].type !== 'Extract') {
+      return res.status(400).json({ success: false, error: `Data source '${dsName}' is not an Extract type` });
+    }
+    
+    const parquetPath = dsDetails[0].parquet_path;
+    if (!parquetPath) {
+      return res.status(400).json({ success: false, error: `No parquet path found for '${dsName}'` });
+    }
+    
+    const { existsSync } = await import('fs');
+    if (!existsSync(parquetPath)) {
+      return res.status(404).json({ success: false, error: `Parquet file not found: ${parquetPath}` });
+    }
+    
+    const tableName = `extract_${dsName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    const escapedPath = parquetPath.replace(/\\/g, '\\\\');
+    
+    console.log(`📊 Optimizing '${dsName}' - Creating DuckDB table '${tableName}'...`);
+    const startTime = Date.now();
+    
+    // Drop existing table and create new one
+    await dbClient.run(`DROP TABLE IF EXISTS "${tableName}"`);
+    await dbClient.run(`CREATE TABLE "${tableName}" AS SELECT * FROM read_parquet('${escapedPath}')`);
+    
+    // Get row count
+    const countResult = await dbClient.query(`SELECT COUNT(*) as cnt FROM "${tableName}"`);
+    const rowCount = countResult[0]?.cnt || 0;
+    
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`✅ Table '${tableName}' created with ${rowCount.toLocaleString()} rows in ${elapsed}s`);
+    
+    res.json({ 
+      success: true, 
+      message: `Extract '${dsName}' optimized successfully`,
+      tableName,
+      rowCount,
+      timeSeconds: parseFloat(elapsed)
+    });
+  } catch (err) {
+    console.error(`❌ Error optimizing extract:`, err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 app.post('/api/calculate', async (req, res) => {
   const { logic, existingVariables, existingParameters, variableName, existingFilters } = req.body;
@@ -2645,19 +2708,13 @@ app.post('/api/card-dimension-conditions', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+//get table information
+app.get("/api/table/tableName", async (req, res) => {
+  const { tableName } = req.params;
+  const result = await dbClient.query(`SELECT * FROM ${tableName}`);
+  res.json({ success: true, data: result });
+});
 
-//get all table details
-app.get('/api/tables/:tableName',async(req,res)=>{
-  try{
-    const{tableName}=req.params;
-    const tableDetails=await dbClient.query(`SELECT * FROM ${tableName}`);
-    res.json({success:true,tableDetails});
-  }catch(err){
-    console.error('❌ Error fetching table details:',err.message);
-    res.status(500).json({success:false,error:err.message});
-  }
-}
-);
 
 (async()=> {
   try {
