@@ -50,6 +50,7 @@ import { filterConfigFamily } from '../recoil/FiltersFamily';
 import { filterNamesState } from '../recoil/FiltersFamily';
 import { parameterNamesState } from '../recoil/ParameterTracker';
 import { liveFilterFamily } from '../recoil/LiveFilterFamily';
+import { CalculationEditor } from './CalculationEditor';
 
 // Helper to safely parse stored strings into arrays/objects/values
 const safeParse = (value: string): any => {
@@ -1318,37 +1319,12 @@ export default function Hooks() {
                     {/* Form Fields */}
                     <Stack spacing={3}>
 
-                        <TextField
+                        <CalculationEditor
                             label="Calculation Logic"
-                            fullWidth
-                            multiline
-                            rows={10}
                             value={calculationLogic}
-                            onChange={(e) => setCalculationLogic(e.target.value)}
-                            placeholder={
-                                variableNames.size > 0
-                                    ? `Example: ${Array.from(variableNames)[0]}.map(x => x * 2)`
-                                    : 'Example: [1, 2, 3, 4, 5].map(x => x * 2)'
-                            }
-                            helperText="Write your JavaScript calculation logic here"
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    fontFamily: '"Fira Code", "Courier New", monospace',
-                                    fontSize: '0.9rem',
-                                    '& fieldset': {
-                                        borderColor: 'rgba(102, 126, 234, 0.3)',
-                                    },
-                                    '&:hover fieldset': {
-                                        borderColor: '#667eea',
-                                    },
-                                    '&.Mui-focused fieldset': {
-                                        borderColor: '#667eea',
-                                    },
-                                },
-                                '& .MuiInputLabel-root.Mui-focused': {
-                                    color: '#667eea',
-                                },
-                            }}
+                            onChange={setCalculationLogic}
+                            height={280}
+                            helperText="Type @ to autocomplete variables, parameters, and filters. Use Ctrl+Space for suggestions."
                         />
 
                           <TextField

@@ -35,16 +35,15 @@ class DuckDBClient {
     this.connection = await db.connect();
     
     // Set performance optimizations for DuckDB
-    const threadCount = Math.min(8, os.cpus().length);
     await this.connection.run(`
       SET memory_limit='16GB';
-      SET threads=${threadCount};
+      SET threads=${Math.min(8, os.cpus().length)};
       SET preserve_insertion_order=false;
       SET enable_object_cache=true;
       SET enable_progress_bar=false;
     `);
     
-    console.log(`✅ DuckDB initialized at ${dbPath} with ${threadCount} threads`);
+    console.log(`✅ DuckDB initialized at ${dbPath} with ${Math.min(8, os.cpus().length)} threads`);
   }
 
   async query(sql, params = []) {
@@ -57,34 +56,49 @@ class DuckDBClient {
   // Optimized method for reading parquet files directly to JSON
   async queryParquet(sql, params = []) {
     await this.ready;
-    const startTime = Date.now();
-    
-    console.log(`🔄 Starting parquet query...`);
-    
     // Use runAndReadAll for better performance on parquet files
     const reader = await this.connection.runAndReadAll(sql, params);
-    const queryTime = Date.now() - startTime;
-    
-    // getRowObjectsJson is the fastest way to get JSON objects from DuckDB
-    const jsonStartTime = Date.now();
-    const result = reader.getRowObjectsJson();
-    const jsonTime = Date.now() - jsonStartTime;
-    
-    if (queryTime > 5000) {
-      console.log(`⚠️  SLOW QUERY: ${(queryTime/1000).toFixed(1)}s for ${result.length} rows`);
-      console.log(`📊 Query: ${sql.substring(0, 200)}...`);
-    } else {
-      console.log(`⚡ DuckDB Query: ${queryTime}ms | JSON: ${jsonTime}ms | Rows: ${result.length}`);
-    }
-    
-    return result;
+    return reader.getRowObjectsJson();
   }
 
   async run(sql, params = []) {
-    
     await this.ready;
-    const stmt = await this.connection.prepare(sql);
-    await stmt.run(...params);
+    try {
+      // Try using runAndReadAll which is more reliable for DML operations
+      await this.connection.runAndReadAll(sql, params);
+    } catch (err) {
+      // Fallback to prepared statement approach if needed
+      try {
+        const stmt = await this.connection.prepare(sql);
+        await stmt.run(...params);
+      } catch (prepErr) {
+        console.error('DuckDB run error:', prepErr.message);
+        throw prepErr;
+      }
+    }
+  }
+
+  // Run with retry logic for transient errors
+  async runWithRetry(sql, params = [], maxRetries = 3) {
+    await this.ready;
+    let lastError;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.connection.runAndReadAll(sql, params);
+        return; // Success
+      } catch (err) {
+        lastError = err;
+        console.warn(`DuckDB run attempt ${attempt}/${maxRetries} failed:`, err.message);
+        
+        if (attempt < maxRetries) {
+          // Wait a bit before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 50 * attempt));
+        }
+      }
+    }
+    
+    throw lastError;
   }
 
   async stream(sql, params = []) {
