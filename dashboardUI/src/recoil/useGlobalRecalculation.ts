@@ -498,16 +498,13 @@ export const useGlobalRecalculation = () => {
     if (!initializedRef.current) {
       initializedRef.current = true;
       previousSnapshotRef.current = allFiltersSnapshot;
-      console.log('🎬 [Global Recalc] Initialized filter watcher (after mount calculation):', allFiltersSnapshot);
       return;
     }
 
     // Only trigger if filters actually changed (not just initialized)
     if (allFiltersSnapshot !== previousSnapshotRef.current) {
       console.log('🔔 [Global Recalc] Filter values changed, triggering recalculation...');
-      console.log('Previous:', previousSnapshotRef.current);
-      console.log('Current:', allFiltersSnapshot);
-      
+
       previousSnapshotRef.current = allFiltersSnapshot;
       
       // 🔥 PERFORMANCE: Reduced debounce from 150ms to 30ms

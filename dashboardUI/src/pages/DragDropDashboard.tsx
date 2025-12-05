@@ -1,17 +1,18 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Responsive, WidthProvider, Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import "../App";
-import { useRecoilState, useRecoilValue, useRecoilCallback } from "recoil";
+import { useRecoilState, useRecoilValue, useRecoilCallback, useSetRecoilState } from "recoil";
 import { chartConfigState } from "../recoil/ChartConfig";
 import { layoutState } from "../recoil/LayoutState";
 import ResizableChart from "../components/ResizableChart";
 import FilterPanel from "../components/FilterPanel";
 import { variableUpdateTriggerState, variableNamesState } from '../recoil/Variabletracker';
 import { variableAtomFamily } from '../recoil/VariableFamily';
-import { filterNamesState } from '../recoil/FiltersFamily';
+import { filterNamesState, filterConfigFamily } from '../recoil/FiltersFamily';
+import { liveFilterFamily } from '../recoil/LiveFilterFamily';
 import { isChartVisibleSelector, chartDynamicDimensionsSelector } from '../recoil/DashboardVisibility';
 import { IsEditModeState } from "../recoil/IsEditeMode";
 import { dahboardNameMain } from "../recoil/DashboardName";
@@ -113,6 +114,7 @@ const makeMutableLayoutItem = (item: Layout): Layout => {
 
 export default function DropDragDashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const idRef = useRef(1);
 
   const [chartConfigs, setChartConfigs] = useRecoilState<Record<string, ChartConfigData>>(chartConfigState);
@@ -124,6 +126,77 @@ export default function DropDragDashboard() {
   const [layouts, setLayouts] = useRecoilState(layoutState);
   const [showFilters, setShowFilters] = useState(false);
   const [isEditMode, setIsEditMode] = useRecoilState<boolean>(IsEditModeState);
+
+  // Track if we've already reset filters for this dashboard visit
+  const hasResetForThisVisitRef = useRef<boolean>(false);
+
+  // 🔥 Reset filters to default values when navigating to /dashboards
+  const resetFiltersToDefaults = useRecoilCallback(
+    ({ snapshot, set }) =>
+      async () => {
+        console.log('🔄 [Dashboard] Resetting filters to default values...');
+        
+        try {
+          const currentFilterNames = await snapshot.getPromise(filterNamesState);
+          console.log(`   Found ${currentFilterNames.length} filters to reset`);
+          
+          let resetCount = 0;
+          for (const filterVariableName of currentFilterNames) {
+            try {
+              const filterConfig = await snapshot.getPromise(filterConfigFamily(filterVariableName));
+              
+              if (filterConfig?.defaultValues && filterConfig.defaultValues.length > 0) {
+                console.log(`   Resetting ${filterConfig.variableName} to:`, filterConfig.defaultValues);
+                set(liveFilterFamily(filterConfig.variableName), filterConfig.defaultValues);
+                resetCount++;
+              } else {
+                console.log(`   Skipping ${filterVariableName} - no default values`);
+              }
+            } catch (err) {
+              console.warn(`   Error resetting ${filterVariableName}:`, err);
+            }
+          }
+          
+          // Small delay to ensure state propagates
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          console.log(`✅ [Dashboard] Reset ${resetCount} filters to default values`);
+          return resetCount;
+        } catch (err) {
+          console.error('❌ [Dashboard] Error resetting filters:', err);
+          throw err;
+        }
+      },
+    []
+  );
+
+  // Reset filters to defaults whenever we're on /dashboards route
+  useEffect(() => {
+    const currentPath = location.pathname;
+    const isOnDashboards = currentPath === '/dashboards';
+    
+    // Reset filters if:
+    // 1. We're on /dashboards
+    // 2. Data is loaded
+    // 3. We haven't reset for this visit yet
+    if (isOnDashboards && dataLoaded && !hasResetForThisVisitRef.current) {
+      console.log('🔄 [Dashboard] Resetting filters to defaults (always reset on /dashboards)');
+      
+      // Reset filters and wait for it to complete
+      resetFiltersToDefaults().then(() => {
+        console.log('✅ [Dashboard] Filter reset completed');
+        hasResetForThisVisitRef.current = true; // Mark as reset for this visit
+      }).catch(err => {
+        console.error('❌ [Dashboard] Filter reset failed:', err);
+      });
+    }
+    
+    // Reset the flag when we leave /dashboards (so it resets again on next visit)
+    if (!isOnDashboards && hasResetForThisVisitRef.current) {
+      hasResetForThisVisitRef.current = false;
+      console.log('📍 [Dashboard] Left /dashboards, reset flag cleared for next visit');
+    }
+  }, [location.pathname, dataLoaded, resetFiltersToDefaults]);
 
   const [availableVariables, setAvailableVariables] = useState<Record<string, any>>({});
   const [chartVisibility, setChartVisibility] = useState<Record<string, boolean>>({});
