@@ -283,15 +283,19 @@ export default function DropDragDashboard() {
     }
   }, [dataLoaded, chartConfigs, layouts, currentBreakpoint, setLayouts]);
 
-  const getAllVariables = useRecoilCallback(({ snapshot }) => async (): Promise<Record<string, any>> => {
+  // 🔥 PERFORMANCE: Use synchronous getLoadable instead of async getPromise
+  const getAllVariables = useRecoilCallback(({ snapshot }) => (): Record<string, any> => {
     const variables: Record<string, any> = {};
     const varNameArray: string[] = Array.from(variableNames);
 
     for (const varName of varNameArray) {
       try {
-        const varValue = await snapshot.getPromise(variableAtomFamily(varName));
-        if (varValue !== undefined && varValue !== null) {
-          variables[varName] = typeof varValue === 'string' ? safeParse(varValue) : varValue;
+        const loadable = snapshot.getLoadable(variableAtomFamily(varName));
+        if (loadable.state === 'hasValue') {
+          const varValue = loadable.contents;
+          if (varValue !== undefined && varValue !== null) {
+            variables[varName] = typeof varValue === 'string' ? safeParse(varValue) : varValue;
+          }
         }
       } catch (e) {
         console.warn(`Could not get variable ${varName}:`, e);
@@ -332,8 +336,12 @@ export default function DropDragDashboard() {
     return dimensionMap;
   }, [chartConfigs]);
 
+  // 🔥 PERFORMANCE: Synchronous variable loading
   useEffect(() => {
-    getAllVariables().then(setAvailableVariables);
+    console.log(`🔄 variableUpdateTrigger changed to: ${variableUpdateTrigger}`);
+    const vars = getAllVariables();
+    console.log(`📦 Got ${Object.keys(vars).length} variables`);
+    setAvailableVariables(vars);
   }, [getAllVariables, variableUpdateTrigger]);
 
   // 🔥 KEY FIX: When visibility changes, restore ALL items to their TRUE original positions
@@ -417,6 +425,7 @@ export default function DropDragDashboard() {
     getChartDimensions().then(setChartDimensions);
   }, [getChartDimensions, filterNames, variableUpdateTrigger]);
 
+  // Process chart configs with variable replacement (no caching - causes stale data)
   const processedChartConfigs = useMemo(() => {
     const processed: Record<string, any> = {};
 
@@ -429,16 +438,9 @@ export default function DropDragDashboard() {
       if (config.type === 'html' && config.htmlContent) {
         try {
           const htmlWithVariables = replaceVariableReferences(config.htmlContent, availableVariables);
-          processed[id] = {
-            html: htmlWithVariables,
-            type: 'html'
-          };
+          processed[id] = { html: htmlWithVariables, type: 'html' };
         } catch (error) {
-          console.warn(`Error processing HTML config for ${id}:`, error);
-          processed[id] = {
-            html: config.htmlContent,
-            type: 'html'
-          };
+          processed[id] = { html: config.htmlContent, type: 'html' };
         }
         return;
       }
@@ -463,7 +465,6 @@ export default function DropDragDashboard() {
           const parsedConfig = JSON.parse(configWithVariables);
           processed[id] = parsedConfig;
         } catch (error) {
-          console.warn(`Error processing chart config for ${id}:`, error);
           processed[id] = null;
         }
       } else {

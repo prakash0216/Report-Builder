@@ -53,6 +53,9 @@ export const useGlobalRecalculation = () => {
   const [isRecalculating, setIsRecalculating] = useState(false);
   const cancellationTokenRef = useRef<{ cancelled: boolean }>({ cancelled: false });
   
+  // 🔥 PERFORMANCE: Store calculated variables to avoid re-reading atoms
+  const lastCalculatedVariablesRef = useRef<Record<string, any>>({});
+  
   // Track initialization and previous snapshot
   const initializedRef = useRef(false);
   const previousSnapshotRef = useRef<string>('');
@@ -62,78 +65,66 @@ export const useGlobalRecalculation = () => {
   // Check if we're on dashboard route
   const isDashboardRoute = location.pathname === '/dashboards';
 
-  // 🔑 CRITICAL FIX: Execute single logic with FRESH snapshot
-  // Pass in logicsExecutedSoFar to get variables that were JUST calculated
-  const executeSingleLogic = useRecoilCallback(({ set, snapshot }) => async (
-    logic: StoredLogic,
-    logicsExecutedSoFar: StoredLogic[] = []
-  ) => {
-    try {
-      // 🔑 CRITICAL: Get FRESH filter and parameter names from snapshot (not closure!)
-      const currentFilterNames = await snapshot.getPromise(filterNamesState);
-      const currentParameterNames = await snapshot.getPromise(parameterNamesState);
-      const currentVariableNames = await snapshot.getPromise(variableNamesState);
-      
-      // 🔑 CRITICAL: Build list of variables from BOTH sources:
-      // 1. currentVariableNames (existing variables from snapshot)
-      // 2. logicsExecutedSoFar (variables just calculated in THIS batch)
-      const allVariableNamesToRead = new Set([
-        ...Array.from(currentVariableNames),
-        ...logicsExecutedSoFar.map(l => l.variableName)
-      ]);
-
-      // 🔥 PERFORMANCE: Reduced logging - only log variable name
-      console.log(`🔄 [Global Recalc] Executing: ${logic.variableName}`);
-      
-      const allVariables: Record<string, any> = {};
-      const allParameters: Record<string, any> = {};
-      const allFilters: Record<string, any> = {};
-      
-      // Get all computed variables (including those just calculated!)
-      allVariableNamesToRead.forEach(varName => {
+  // 🔥 PERFORMANCE: Pre-fetch all context once, not per-calculation
+  const getCalculationContext = useRecoilCallback(({ snapshot }) => async () => {
+    const currentFilterNames = await snapshot.getPromise(filterNamesState);
+    const currentParameterNames = await snapshot.getPromise(parameterNamesState);
+    const currentVariableNames = await snapshot.getPromise(variableNamesState);
+    
+    const allParameters: Record<string, any> = {};
+    const allFilters: Record<string, any> = {};
+    
+    // Get parameters (only non-filter ones)
+    const filterNamesSet = new Set(currentFilterNames);
+    for (const paramName of currentParameterNames) {
+      if (!filterNamesSet.has(paramName)) {
         try {
-          const rawValue = snapshot.getLoadable(variableAtomFamily(varName)).contents;
+          const rawValue = await snapshot.getPromise(parameterAtomFamily(paramName));
           const parsedValue = safeParse(rawValue);
           if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
-            allVariables[varName] = parsedValue;
+            allParameters[paramName] = parsedValue;
           }
-        } catch (err) {
-          console.warn(`[Global Recalc] Failed to load variable ${varName}:`, err);
+        } catch (err) { /* skip */ }
+      }
+    }
+    
+    // Get all live filter values
+    for (const filterId of currentFilterNames) {
+      try {
+        const filterConfig = await snapshot.getPromise(filterConfigFamily(filterId));
+        if (filterConfig?.variableName) {
+          const selectedOptions = await snapshot.getPromise(liveFilterFamily(filterConfig.variableName));
+          allFilters[filterConfig.variableName] = selectedOptions;
         }
-      });
+      } catch (err) { /* skip */ }
+    }
+    
+    return { currentVariableNames, allParameters, allFilters };
+  });
 
-      // Get explicit parameter values - use getPromise to wait for values to load
-      const filterNamesSet = new Set(currentFilterNames);
+  // 🔥 PERFORMANCE: Execute single logic with pre-fetched context
+  const executeSingleLogicFast = useRecoilCallback(({ set, snapshot }) => async (
+    logic: StoredLogic,
+    context: { allParameters: Record<string, any>; allFilters: Record<string, any> },
+    calculatedVariables: Record<string, any> // Variables calculated so far in this batch
+  ) => {
+    try {
+      // Get current variables from snapshot + already calculated ones
+      const currentVariableNames = await snapshot.getPromise(variableNamesState);
+      const allVariables: Record<string, any> = { ...calculatedVariables };
       
-      for (const paramName of currentParameterNames) {
-        if (!filterNamesSet.has(paramName)) { 
+      // Add existing variables from atoms
+      currentVariableNames.forEach(varName => {
+        if (!(varName in allVariables)) {
           try {
-            // Use getPromise to ensure we wait for the parameter value to load from API
-            const rawValue = await snapshot.getPromise(parameterAtomFamily(paramName));
+            const rawValue = snapshot.getLoadable(variableAtomFamily(varName)).contents;
             const parsedValue = safeParse(rawValue);
             if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
-              allParameters[paramName] = parsedValue;
+              allVariables[varName] = parsedValue;
             }
-          } catch (err) {
-            console.warn(`[Global Recalc] Failed to load explicit parameter ${paramName}:`, err);
-          }
+          } catch (err) { /* skip */ }
         }
-      }
-
-      // Get live filter values - use getPromise to wait for values to load
-      // 🔑 CRITICAL: Use currentFilterNames from snapshot, not closure!
-      for (const filterId of currentFilterNames) {
-        try {
-          const filterConfig = await snapshot.getPromise(filterConfigFamily(filterId));
-          
-          if (filterConfig && filterConfig.variableName) {
-            const selectedOptions = await snapshot.getPromise(liveFilterFamily(filterConfig.variableName));
-            allFilters[filterConfig.variableName] = selectedOptions;
-          }
-        } catch (err) {
-          console.warn(`[Global Recalc] Failed to load live filter value for ${filterId}:`, err);
-        }
-      }
+      });
       
       const response = await fetch('http://localhost:3002/api/calculate', {
         method: 'POST',
@@ -141,8 +132,8 @@ export const useGlobalRecalculation = () => {
         body: JSON.stringify({
           logic: logic.logic,
           existingVariables: allVariables,
-          existingParameters: allParameters,
-          existingFilters: allFilters,
+          existingParameters: context.allParameters,
+          existingFilters: context.allFilters,
           variableName: logic.variableName
         }),
       });
@@ -155,28 +146,31 @@ export const useGlobalRecalculation = () => {
       const result = await response.json();
       const calculatedValue = typeof result.value === 'string' ? safeParse(result.value) : result.value;
 
-      console.log(`✅ [Global Recalc] Success for ${logic.variableName}:`, 
-        Array.isArray(calculatedValue) ? `Array with ${calculatedValue.length} items` : calculatedValue);
-
-      // Update the variable atom
-      set(variableAtomFamily(logic.variableName), JSON.stringify(calculatedValue));
-
-      // Update variable names set - get current value from snapshot and update
-      const currentVarNames = await snapshot.getPromise(variableNamesState);
-      if (!currentVarNames.has(logic.variableName)) {
-        const newVarNames = new Set(currentVarNames);
-        newVarNames.add(logic.variableName);
-        set(variableNamesState, newVarNames);
-      }
-
-      // 🔥 PERFORMANCE: Removed lastExecuted update - it caused unnecessary re-renders
-      // The storedLogicsState update was triggering component re-renders for each calculation
-
-      return { success: true, result: calculatedValue };
+      return { success: true, variableName: logic.variableName, value: calculatedValue };
     } catch (err) {
-      console.error(`❌ [Global Recalc] Failed to execute logic for ${logic.variableName}:`, err);
-      return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+      console.error(`❌ ${logic.variableName}:`, err);
+      return { success: false, variableName: logic.variableName, error: err instanceof Error ? err.message : 'Unknown error' };
     }
+  });
+
+  // 🔥 PERFORMANCE: Batch update all variables at once
+  const batchUpdateVariables = useRecoilCallback(({ set, snapshot }) => async (
+    updates: Array<{ variableName: string; value: any }>
+  ) => {
+    console.log(`📦 Batch updating ${updates.length} variables...`);
+    
+    const currentVarNames = await snapshot.getPromise(variableNamesState);
+    const newVarNames = new Set(currentVarNames);
+    
+    // Apply all updates in one go
+    for (const { variableName, value } of updates) {
+      set(variableAtomFamily(variableName), JSON.stringify(value));
+      newVarNames.add(variableName);
+    }
+    
+    // Update variable names once
+    set(variableNamesState, newVarNames);
+    console.log(`✅ Batch update complete`);
   });
 
   // Global recalculation function
@@ -203,93 +197,49 @@ export const useGlobalRecalculation = () => {
     console.log(`🚀 [Global Recalc] Starting recalculation for ${currentLogics.length} logics...`);
 
     try {
-      // 🔑 CRITICAL: Ensure filters and parameters are loaded before running calculations
-      // This is especially important when triggered by filter change watcher
-      const filterNames = await snapshot.getPromise(filterNamesState);
-      const parameterNames = await snapshot.getPromise(parameterNamesState);
+      // 🔥 PERFORMANCE: Pre-fetch ALL context ONCE before calculations
+      console.log(`🔍 Fetching fresh context for calculations...`);
+      const context = await getCalculationContext();
+      console.log(`📋 Filter context:`, Object.keys(context.allFilters));
+      console.log(`📋 Filter values:`, JSON.stringify(context.allFilters).substring(0, 200));
       
-      // Check for cancellation
       if (cancellationTokenRef.current.cancelled) {
-        console.log('⏸️ [Global Recalc] Cancelled during filter/parameter loading');
-        return;
-      }
-      
-      // Quick check - if we have filters, verify at least one is loaded
-      if (filterNames.length > 0) {
-        console.log(`⏳ [Global Recalc] Verifying ${filterNames.length} filters are loaded...`);
-        for (const filterVariableName of filterNames) {
-          if (cancellationTokenRef.current.cancelled) {
-            console.log('⏸️ [Global Recalc] Cancelled during filter verification');
-            return;
-          }
-          
-          try {
-            const filterConfig = await snapshot.getPromise(filterConfigFamily(filterVariableName));
-            if (filterConfig?.variableName) {
-              await snapshot.getPromise(liveFilterFamily(filterConfig.variableName));
-            }
-          } catch (err) {
-            console.warn(`⚠️ [Global Recalc] Filter ${filterVariableName} not ready yet, waiting...`);
-            // Wait a bit and retry
-            await new Promise(resolve => setTimeout(resolve, 200));
-            if (cancellationTokenRef.current.cancelled) return;
-            
-            const retryConfig = await snapshot.getPromise(filterConfigFamily(filterVariableName));
-            if (retryConfig?.variableName) {
-              await snapshot.getPromise(liveFilterFamily(retryConfig.variableName));
-            }
-          }
-        }
-        console.log(`✅ [Global Recalc] All ${filterNames.length} filters verified`);
-      }
-      
-      // Quick check - if we have parameters, verify they're loaded
-      if (parameterNames.length > 0) {
-        console.log(`⏳ [Global Recalc] Verifying ${parameterNames.length} parameters are loaded...`);
-        for (const paramName of parameterNames) {
-          if (cancellationTokenRef.current.cancelled) {
-            console.log('⏸️ [Global Recalc] Cancelled during parameter verification');
-            return;
-          }
-          await snapshot.getPromise(parameterAtomFamily(paramName));
-        }
-        console.log(`✅ [Global Recalc] All ${parameterNames.length} parameters verified`);
-      }
-      
-      // Check for cancellation before starting calculations
-      if (cancellationTokenRef.current.cancelled) {
-        console.log('⏸️ [Global Recalc] Cancelled before calculations');
+        console.log('⏸️ [Global Recalc] Cancelled during context loading');
         return;
       }
       
       // Execute in creation order
       const sortedLogics = [...currentLogics].sort((a, b) => a.createdAt - b.createdAt);
+      console.log(`🚀 Calculating ${sortedLogics.length} logics...`);
       
-      console.log(`📋 [Global Recalc] Execution order:`, sortedLogics.map(l => l.variableName));
+      const results: Array<{ variableName: string; value: any; success: boolean }> = [];
+      const calculatedVariables: Record<string, any> = {}; // Track calculated values for dependencies
       
-      const results = [];
-      const executedSoFar: StoredLogic[] = [];
-      
-      // Execute calculations sequentially, passing executed logics for dependency resolution
+      // Execute calculations sequentially (for dependency order) but with pre-fetched context
       for (const logic of sortedLogics) {
-        if (cancellationTokenRef.current.cancelled) {
-          console.log(`⏸️ [Global Recalc] Cancelled (${results.length}/${sortedLogics.length})`);
-          break;
-        }
+        if (cancellationTokenRef.current.cancelled) break;
         
-        try {
-          const result = await executeSingleLogic(logic, executedSoFar);
-          results.push({ logic: logic.variableName, ...result });
-          if (result.success) {
-            executedSoFar.push(logic);
-          }
-        } catch (err) {
-          console.error(`❌ [Global Recalc] Error: ${logic.variableName}:`, err);
-          results.push({ 
-            logic: logic.variableName, 
-            success: false, 
-            error: err instanceof Error ? err.message : 'Unknown error' 
-          });
+        const result = await executeSingleLogicFast(logic, context, calculatedVariables);
+        
+        if (result.success && 'value' in result) {
+          calculatedVariables[result.variableName] = result.value;
+          results.push({ variableName: result.variableName, value: result.value, success: true });
+        } else {
+          results.push({ variableName: result.variableName, value: null, success: false });
+        }
+      }
+      
+      // 🔥 PERFORMANCE: Batch update ALL variables at once (single React re-render)
+      if (!cancellationTokenRef.current.cancelled && results.length > 0) {
+        const successfulUpdates = results
+          .filter(r => r.success)
+          .map(r => ({ variableName: r.variableName, value: r.value }));
+        
+        if (successfulUpdates.length > 0) {
+          await batchUpdateVariables(successfulUpdates);
+          
+          // 🔥 PERFORMANCE: Cache calculated variables to avoid re-reading atoms
+          lastCalculatedVariablesRef.current = { ...calculatedVariables };
         }
       }
 
@@ -297,10 +247,7 @@ export const useGlobalRecalculation = () => {
       if (!cancellationTokenRef.current.cancelled) {
         const currentTrigger = await snapshot.getPromise(variableUpdateTriggerState);
         set(variableUpdateTriggerState, currentTrigger + 1);
-        console.log(`✅ [Global Recalc] Update trigger set to ${currentTrigger + 1}`);
-        console.log('✅ [Global Recalc] Completed:', results);
-      } else {
-        console.log('⏸️ [Global Recalc] Cancelled - skipping update trigger');
+        console.log(`✅ Recalc complete: ${results.length} logics`);
       }
       
       return results;
@@ -309,12 +256,9 @@ export const useGlobalRecalculation = () => {
       // Don't throw - just log and reset state
       return [];
     } finally {
-      // Always reset state, even if cancelled or errored
-      setTimeout(() => {
-        recalculationInProgressRef.current = false;
-        setIsRecalculating(false);
-        console.log('🏁 [Global Recalc] State reset');
-      }, 300);
+      // 🔥 PERFORMANCE: Reset immediately, no delay needed
+      recalculationInProgressRef.current = false;
+      setIsRecalculating(false);
     }
   });
   
@@ -566,16 +510,23 @@ export const useGlobalRecalculation = () => {
       
       previousSnapshotRef.current = allFiltersSnapshot;
       
+      // 🔥 PERFORMANCE: Reduced debounce from 150ms to 30ms
       const timer = setTimeout(() => {
         recalculateAllLogics();
-      }, 150);
+      }, 30);
 
       return () => clearTimeout(timer);
     }
   }, [allFiltersSnapshot, storedLogics.length, recalculateAllLogics, isDashboardRoute]);
 
+  // 🔥 PERFORMANCE: Get cached variables without re-reading atoms
+  const getLastCalculatedVariables = useCallback(() => {
+    return lastCalculatedVariablesRef.current;
+  }, []);
+
   return {
     recalculateAllLogics,
-    isRecalculating
+    isRecalculating,
+    getLastCalculatedVariables
   };
 };

@@ -25,6 +25,8 @@ import {
   ToggleButtonGroup,
   ToggleButton,
 } from '@mui/material';
+import { JsonEditor } from './JsonEditor';
+import { HtmlEditor } from './HtmlEditor';
 import {
   Save as SaveIcon,
   Dashboard as DashboardIcon,
@@ -536,9 +538,8 @@ export default function HighChartField() {
     }
   }, [htmlContent, availableVariables, viewMode]);
 
-  // Handle chart config changes
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
+  // Handle chart config changes (for JsonEditor)
+  const handleJsonChange = (value: string) => {
     setChartConfig(value);
 
     if (!value.trim()) {
@@ -569,9 +570,13 @@ export default function HighChartField() {
     }
   };
 
-  // Handle HTML content changes
-  const handleHtmlChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
+  // Handle chart config changes (legacy for TextField - kept for compatibility)
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    handleJsonChange(e.target.value);
+  };
+
+  // Handle HTML content changes (for HtmlEditor)
+  const handleHtmlContentChange = (value: string) => {
     setHtmlContent(value);
 
     if (!id) return;
@@ -585,6 +590,11 @@ export default function HighChartField() {
         template: prev[id]?.template || ''
       },
     }));
+  };
+
+  // Handle HTML content changes (legacy for TextField - kept for compatibility)
+  const handleHtmlChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    handleHtmlContentChange(e.target.value);
   };
 
   const handleTemplateSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -899,52 +909,26 @@ export default function HighChartField() {
 
               <Box sx={{ flex: 1, p: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 {viewMode === 'chart' ? (
-                  <TextField
-                    multiline
-                    fullWidth
-                    value={chartConfig}
-                    onChange={handleChange}
-                    placeholder="Enter your Highcharts configuration here..."
-                    error={!!error}
-                    sx={{
-                      flex: 1,
-                      '& .MuiInputBase-root': {
-                        height: '100%',
-                        alignItems: 'flex-start',
-                        fontFamily: 'monospace',
-                        fontSize: '0.875rem',
-                        lineHeight: 1.6,
-                        borderRadius: 2,
-                      },
-                      '& textarea': {
-                        height: '100% !important',
-                        overflow: 'auto !important',
-                      },
-                    }}
-                  />
+                  <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                    <JsonEditor
+                      value={chartConfig}
+                      onChange={handleJsonChange}
+                      height={400}
+                      error={error}
+                      availableVariables={availableVariables}
+                      placeholder="Enter Highcharts JSON configuration. Use ${variableName} syntax for variables."
+                    />
+                  </Box>
                 ) : viewMode === 'html' ? (
-                  <TextField
-                    multiline
-                    fullWidth
-                    value={htmlContent}
-                    onChange={handleHtmlChange}
-                    placeholder="Enter your HTML content here with inline styles... Use ${variableName} to insert variables"
-                    sx={{
-                      flex: 1,
-                      '& .MuiInputBase-root': {
-                        height: '100%',
-                        alignItems: 'flex-start',
-                        fontFamily: 'monospace',
-                        fontSize: '0.875rem',
-                        lineHeight: 1.6,
-                        borderRadius: 2,
-                      },
-                      '& textarea': {
-                        height: '100% !important',
-                        overflow: 'auto !important',
-                      },
-                    }}
-                  />
+                  <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                    <HtmlEditor
+                      value={htmlContent}
+                      onChange={handleHtmlContentChange}
+                      height={400}
+                      availableVariables={availableVariables}
+                      placeholder="Enter HTML with inline styles. Use ${variableName} to insert variables."
+                    />
+                  </Box>
                 ) : viewMode === 'table' ? (
                   <Paper
                     variant="outlined"
