@@ -82,10 +82,8 @@ export const useGlobalRecalculation = () => {
         ...logicsExecutedSoFar.map(l => l.variableName)
       ]);
 
-      console.log(`🔄 [Global Recalc] Executing logic for: ${logic.variableName}`);
-      console.log(`   Variables to read:`, Array.from(allVariableNamesToRead));
-      console.log(`   Filters available:`, currentFilterNames);
-      console.log(`   Parameters available:`, currentParameterNames);
+      // 🔥 PERFORMANCE: Reduced logging - only log variable name
+      console.log(`🔄 [Global Recalc] Executing: ${logic.variableName}`);
       
       const allVariables: Record<string, any> = {};
       const allParameters: Record<string, any> = {};
@@ -137,11 +135,6 @@ export const useGlobalRecalculation = () => {
         }
       }
       
-      
-      console.log(`📦 [Global Recalc] Fresh variables:`, Object.keys(allVariables));
-      console.log(`📦 [Global Recalc] Fresh parameters:`, Object.keys(allParameters));
-      console.log(`📦 [Global Recalc] Fresh filters:`, Object.keys(allFilters));
-      
       const response = await fetch('http://localhost:3002/api/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -170,16 +163,14 @@ export const useGlobalRecalculation = () => {
 
       // Update variable names set - get current value from snapshot and update
       const currentVarNames = await snapshot.getPromise(variableNamesState);
-      const newVarNames = new Set(currentVarNames);
-      newVarNames.add(logic.variableName);
-      set(variableNamesState, newVarNames);
+      if (!currentVarNames.has(logic.variableName)) {
+        const newVarNames = new Set(currentVarNames);
+        newVarNames.add(logic.variableName);
+        set(variableNamesState, newVarNames);
+      }
 
-      // Update last executed time - get current logics from snapshot and update
-      const currentLogics = await snapshot.getPromise(storedLogicsState);
-      const updatedLogics = currentLogics.map(l => 
-        l.id === logic.id ? { ...l, lastExecuted: Date.now() } : l
-      );
-      set(storedLogicsState, updatedLogics);
+      // 🔥 PERFORMANCE: Removed lastExecuted update - it caused unnecessary re-renders
+      // The storedLogicsState update was triggering component re-renders for each calculation
 
       return { success: true, result: calculatedValue };
     } catch (err) {
@@ -279,35 +270,26 @@ export const useGlobalRecalculation = () => {
       const results = [];
       const executedSoFar: StoredLogic[] = [];
       
-      // 🔑 CRITICAL: Pass executedSoFar to each iteration
+      // Execute calculations sequentially, passing executed logics for dependency resolution
       for (const logic of sortedLogics) {
-        // Check for cancellation before each calculation
         if (cancellationTokenRef.current.cancelled) {
-          console.log(`⏸️ [Global Recalc] Cancelled during calculation loop (completed ${results.length}/${sortedLogics.length})`);
+          console.log(`⏸️ [Global Recalc] Cancelled (${results.length}/${sortedLogics.length})`);
           break;
         }
         
         try {
-          console.log(`\n═══════════════════════════════════════`);
-          console.log(`Iteration ${results.length + 1}/${sortedLogics.length}`);
-          console.log(`Previously executed:`, executedSoFar.map(l => l.variableName));
-          console.log(`═══════════════════════════════════════`);
-          
           const result = await executeSingleLogic(logic, executedSoFar);
           results.push({ logic: logic.variableName, ...result });
-          
-          // Add to executed list so next iteration can see it
           if (result.success) {
             executedSoFar.push(logic);
           }
         } catch (err) {
-          console.error(`❌ [Global Recalc] Error executing ${logic.variableName}:`, err);
+          console.error(`❌ [Global Recalc] Error: ${logic.variableName}:`, err);
           results.push({ 
             logic: logic.variableName, 
             success: false, 
             error: err instanceof Error ? err.message : 'Unknown error' 
           });
-          // Continue with next calculation instead of breaking
         }
       }
 

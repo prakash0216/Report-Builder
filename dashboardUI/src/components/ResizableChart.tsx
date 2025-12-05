@@ -43,7 +43,7 @@ interface ResizableChartProps {
   showExport?: boolean;
 }
 
-const ResizableChart: React.FC<ResizableChartProps> = ({ options, showExport = false }) => {
+const ResizableChartInner: React.FC<ResizableChartProps> = ({ options, showExport = false }) => {
   const chartComponentRef = useRef<HighchartsReact.RefObject>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -323,5 +323,58 @@ const ResizableChart: React.FC<ResizableChartProps> = ({ options, showExport = f
     </div>
   );
 };
+
+// 🔥 PERFORMANCE: Optimized comparison function for React.memo
+// Uses quick checks before expensive JSON.stringify
+const arePropsEqual = (prevProps: ResizableChartProps, nextProps: ResizableChartProps): boolean => {
+  // Quick check: showExport
+  if (prevProps.showExport !== nextProps.showExport) {
+    return false;
+  }
+
+  // Quick check: both undefined or null
+  if (!prevProps.options && !nextProps.options) {
+    return true;
+  }
+  if (!prevProps.options || !nextProps.options) {
+    return false;
+  }
+
+  // Quick check: HTML content - just compare strings
+  if (prevProps.options.type === 'html' || nextProps.options.type === 'html') {
+    return prevProps.options.html === nextProps.options.html;
+  }
+
+  // Quick check: compare series data length first (fast fail)
+  const prevSeries = (prevProps.options as any).series;
+  const nextSeries = (nextProps.options as any).series;
+  if (Array.isArray(prevSeries) && Array.isArray(nextSeries)) {
+    if (prevSeries.length !== nextSeries.length) {
+      return false;
+    }
+    // Check first series data length
+    if (prevSeries[0]?.data?.length !== nextSeries[0]?.data?.length) {
+      return false;
+    }
+  }
+
+  // Quick check: compare title
+  const prevTitle = (prevProps.options as any).title?.text;
+  const nextTitle = (nextProps.options as any).title?.text;
+  if (prevTitle !== nextTitle) {
+    return false;
+  }
+
+  // Only do expensive JSON comparison if quick checks pass
+  const prevWithoutRefresh = { ...prevProps.options };
+  const nextWithoutRefresh = { ...nextProps.options };
+  delete (prevWithoutRefresh as any)._lastRefresh;
+  delete (nextWithoutRefresh as any)._lastRefresh;
+
+  return JSON.stringify(prevWithoutRefresh) === JSON.stringify(nextWithoutRefresh);
+};
+
+// Memoized version to prevent unnecessary re-renders
+const ResizableChart = React.memo(ResizableChartInner, arePropsEqual);
 
 export default ResizableChart;

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Responsive, WidthProvider, Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -11,13 +11,12 @@ import ResizableChart from "../components/ResizableChart";
 import FilterPanel from "../components/FilterPanel";
 import { variableUpdateTriggerState, variableNamesState } from '../recoil/Variabletracker';
 import { variableAtomFamily } from '../recoil/VariableFamily';
-import { filterNamesState, filterConfigFamily } from '../recoil/FiltersFamily';
-import { liveFilterFamily } from '../recoil/LiveFilterFamily';
+import { filterNamesState } from '../recoil/FiltersFamily';
 import { isChartVisibleSelector, chartDynamicDimensionsSelector } from '../recoil/DashboardVisibility';
 import { IsEditModeState } from "../recoil/IsEditeMode";
 import { dahboardNameMain } from "../recoil/DashboardName";
 import { Typography, Box, CircularProgress } from "@mui/material";
-import { dataLoadedState } from '../recoil/initializationState';
+import { dataLoadedState } from '../components/DataInitializer';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -114,7 +113,6 @@ const makeMutableLayoutItem = (item: Layout): Layout => {
 
 export default function DropDragDashboard() {
   const navigate = useNavigate();
-  const location = useLocation();
   const idRef = useRef(1);
 
   const [chartConfigs, setChartConfigs] = useRecoilState<Record<string, ChartConfigData>>(chartConfigState);
@@ -141,8 +139,6 @@ export default function DropDragDashboard() {
   const trueOriginalPositionsRef = useRef<Record<string, Layout>>({});
   const isInternalUpdateRef = useRef<boolean>(false);
   const previousVisibilityRef = useRef<Record<string, boolean>>({});
-  const previousPathnameRef = useRef<string>('');
-  const hasInitializedFiltersRef = useRef<boolean>(false);
 
   const [selectedView, setSelectedView] = useState<string>("dashboardName");
   const [selectedCustomView, setSelectedCustomView] = useState<string>("default");
@@ -195,63 +191,6 @@ export default function DropDragDashboard() {
       nameInputRef.current.select();
     }
   }, [isEditingName]);
-
-  // 🔥 Reset filters to default values when navigating to /dashboards
-  const resetFiltersToDefaults = useRecoilCallback(
-    ({ snapshot, set }) =>
-      async () => {
-        console.log('🔄 [Dashboard] Resetting filters to default values...');
-        
-        try {
-          const currentFilterNames = await snapshot.getPromise(filterNamesState);
-          
-          for (const filterVariableName of currentFilterNames) {
-            try {
-              const filterConfig = await snapshot.getPromise(filterConfigFamily(filterVariableName));
-              
-              if (filterConfig?.defaultValues && filterConfig.defaultValues.length > 0) {
-                set(liveFilterFamily(filterConfig.variableName), filterConfig.defaultValues);
-              }
-            } catch (err) {
-              // Silently skip individual filter errors
-            }
-          }
-          
-          console.log('✅ [Dashboard] All filters reset to default values');
-        } catch (err) {
-          console.error('❌ [Dashboard] Error resetting filters:', err);
-        }
-      },
-    []
-  );
-
-  // Reset filters when navigating to /dashboards route
-  useEffect(() => {
-    const currentPath = location.pathname;
-    const previousPath = previousPathnameRef.current;
-    
-    // Reset filters if:
-    // 1. We're on /dashboards
-    // 2. Data is loaded
-    // 3. Either: we came from another route OR this is the first time we're on dashboards
-    const isOnDashboards = currentPath === '/dashboards';
-    const cameFromAnotherRoute = previousPath !== '' && previousPath !== '/dashboards';
-    const isFirstTime = !hasInitializedFiltersRef.current;
-    
-    if (isOnDashboards && dataLoaded && (cameFromAnotherRoute || isFirstTime)) {
-      console.log('🔄 [Dashboard] Resetting filters to defaults', {
-        currentPath,
-        previousPath,
-        cameFromAnotherRoute,
-        isFirstTime
-      });
-      resetFiltersToDefaults();
-      hasInitializedFiltersRef.current = true;
-    }
-    
-    // Update previous pathname
-    previousPathnameRef.current = currentPath;
-  }, [location.pathname, dataLoaded, resetFiltersToDefaults]);
 
   // 🔥 CRITICAL FIX: Create default layouts for charts that have configs but no layouts
   useEffect(() => {
@@ -535,27 +474,6 @@ export default function DropDragDashboard() {
     return processed;
   }, [chartConfigs, availableVariables]);
 
-  const forceChartRefresh = useRecoilCallback(({ set }) => () => {
-    setChartConfigs(current => {
-      const refreshed = { ...current };
-      Object.keys(refreshed).forEach(id => {
-        if (refreshed[id]) {
-          refreshed[id] = {
-            ...refreshed[id],
-            _lastRefresh: Date.now()
-          };
-        }
-      });
-      return refreshed;
-    });
-  }, [setChartConfigs]);
-
-  useEffect(() => {
-    if (variableUpdateTrigger > 0) {
-      forceChartRefresh();
-    }
-  }, [variableUpdateTrigger, forceChartRefresh]);
-
   // Initialize idRef from database on mount
   useEffect(() => {
     const initializeChartId = async () => {
@@ -595,29 +513,21 @@ export default function DropDragDashboard() {
   // Filter by visibility in both modes
   const visibleCharts = useMemo(() => {
     const currentLayout = layouts[currentBreakpoint] || [];
-    const filtered = currentLayout.filter((item: Layout) => chartVisibility[item.i] !== false);
-    
-    // Debug logging
-    console.log(`🔍 ${isEditMode ? 'Edit' : 'View'} mode:`);
-    console.log(`   Total layouts: ${currentLayout.length}`);
-    console.log(`   Chart configs: ${Object.keys(chartConfigs).length}`);
-    console.log(`   Visible charts: ${filtered.length}`);
-    console.log(`   Chart IDs in layout:`, currentLayout.map(l => l.i));
-    console.log(`   Chart IDs in configs:`, Object.keys(chartConfigs));
-    console.log(`   Visibility map:`, chartVisibility);
-    
-    return filtered;
-  }, [layouts, currentBreakpoint, chartVisibility, isEditMode, chartConfigs]);
+    return currentLayout.filter((item: Layout) => chartVisibility[item.i] !== false);
+  }, [layouts, currentBreakpoint, chartVisibility]);
 
   const hiddenChartCount = useMemo(() => {
     const currentLayout = layouts[currentBreakpoint] || [];
     return currentLayout.filter((item: Layout) => chartVisibility[item.i] === false).length;
   }, [layouts, currentBreakpoint, chartVisibility]);
 
+  // 🔥 PERFORMANCE FIX: Remove variableUpdateTrigger from key
+  // Including it caused entire grid to remount on every calculation update
+  // Charts already update via their props changing, no need to remount
   const gridStateKey = useMemo(() => {
     const visibleIds = visibleCharts.map(c => c.i).sort().join(',');
-    return `${currentBreakpoint}-${variableUpdateTrigger}-${visibleIds}-${isEditMode ? 'edit' : 'view'}`;
-  }, [currentBreakpoint, variableUpdateTrigger, visibleCharts, isEditMode]);
+    return `${currentBreakpoint}-${visibleIds}-${isEditMode ? 'edit' : 'view'}`;
+  }, [currentBreakpoint, visibleCharts, isEditMode]);
 
   const getCleanLayouts = useCallback(() => {
     const clean: { [key: string]: Layout[] } = {};
@@ -987,7 +897,7 @@ export default function DropDragDashboard() {
 
         <div className="flex-1 p-4" style={{ minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 0 }}>
           {chartConfig ? (
-            <ResizableChart key={`${item.i}-${variableUpdateTrigger}`} options={chartConfig} showExport= {isEditMode ? false : true}/>
+            <ResizableChart key={item.i} options={chartConfig} showExport={isEditMode ? false : true} />
           ) : (
             <div className="h-full flex items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 rounded-xl border-2 border-dashed border-slate-300">
               <div className="text-center px-6 py-8">
