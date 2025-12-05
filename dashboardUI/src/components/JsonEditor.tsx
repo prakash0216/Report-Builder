@@ -52,35 +52,46 @@ export function JsonEditor({
     disposablesRef.current.forEach(d => d.dispose());
     disposablesRef.current = [];
 
-    // Variable completion provider - triggers on $ or "
+    // Variable completion provider
     const varProvider = monaco.languages.registerCompletionItemProvider('json', {
-      triggerCharacters: ['$', '"', '{'],
+      triggerCharacters: ['$', '{'],
       provideCompletionItems: (model, position) => {
-        const word = model.getWordUntilPosition(position);
-        const range = {
-          startLineNumber: position.lineNumber,
-          endLineNumber: position.lineNumber,
-          startColumn: word.startColumn,
-          endColumn: word.endColumn
-        };
-
-        // Get text before cursor to check context
         const lineContent = model.getLineContent(position.lineNumber);
         const textBefore = lineContent.substring(0, position.column - 1);
+        const textAfter = lineContent.substring(position.column - 1);
 
         const suggestions: any[] = [];
 
-        // If we're in a string value context or after ${ 
-        if (textBefore.includes('"') || textBefore.endsWith('$') || textBefore.endsWith('${')) {
-          variableNames.forEach(name => {
+        // Match: $ or ${ or ${partialName
+        const match = textBefore.match(/\$(\{(\w*))?$/);
+        
+        if (match) {
+          const partialName = match[2] || ''; // The partial variable name if any
+          const hasClosingBrace = textAfter.startsWith('}');
+          
+          // Calculate what to replace: from $ to current position (and } if present)
+          const dollarPos = textBefore.lastIndexOf('$');
+          const range = {
+            startLineNumber: position.lineNumber,
+            endLineNumber: position.lineNumber,
+            startColumn: dollarPos + 1,
+            endColumn: hasClosingBrace ? position.column + 1 : position.column
+          };
+
+          // Filter variables if partial name typed
+          const filteredVars = partialName
+            ? variableNames.filter(name => 
+                name.toLowerCase().startsWith(partialName.toLowerCase())
+              )
+            : variableNames;
+
+          filteredVars.forEach(name => {
             suggestions.push({
               label: `\${${name}}`,
               kind: monaco.languages.CompletionItemKind.Variable,
               detail: `Variable: ${name}`,
               documentation: `Insert variable reference: \${${name}}`,
-              insertText: textBefore.endsWith('$') ? `{${name}}` : 
-                          textBefore.endsWith('${') ? `${name}}` : 
-                          `"\${${name}}"`,
+              insertText: `\${${name}}`,
               range
             });
           });
@@ -93,7 +104,7 @@ export function JsonEditor({
   }, [variableNames]);
 
   const handleEditorWillMount: BeforeMount = (monaco) => {
-    // Define custom JSON theme
+    // Define custom JSON theme with variable highlighting
     monaco.editor.defineTheme('jsonTheme', {
       base: 'vs',
       inherit: true,
@@ -105,6 +116,9 @@ export function JsonEditor({
         { token: 'delimiter.bracket.json', foreground: '64748B' },
         { token: 'delimiter.colon.json', foreground: '64748B' },
         { token: 'delimiter.comma.json', foreground: '64748B' },
+        // Variable highlighting
+        { token: 'variable', foreground: 'E91E63', fontStyle: 'bold' },
+        { token: 'variable.bracket', foreground: 'AD1457' },
       ],
       colors: {
         'editor.background': '#FAFBFC',
@@ -132,6 +146,40 @@ export function JsonEditor({
     });
   };
 
+  // Function to highlight ${variableName} patterns
+  const updateVariableDecorations = useCallback((editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
+    const model = editor.getModel();
+    if (!model) return;
+
+    const content = model.getValue();
+    const decorations: editor.IModelDeltaDecoration[] = [];
+    
+    // Find all ${...} patterns
+    const regex = /\$\{[^}]+\}/g;
+    let match;
+    
+    while ((match = regex.exec(content)) !== null) {
+      const startPos = model.getPositionAt(match.index);
+      const endPos = model.getPositionAt(match.index + match[0].length);
+      
+      decorations.push({
+        range: new monaco.Range(
+          startPos.lineNumber,
+          startPos.column,
+          endPos.lineNumber,
+          endPos.column
+        ),
+        options: {
+          inlineClassName: 'variable-highlight',
+          hoverMessage: { value: `**Variable:** ${match[0]}` }
+        }
+      });
+    }
+
+    // Apply decorations
+    editor.deltaDecorations([], decorations);
+  }, []);
+
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
@@ -147,6 +195,14 @@ export function JsonEditor({
 
     // Register variable completions
     registerVariableCompletions(monaco);
+
+    // Initial variable highlighting
+    updateVariableDecorations(editor, monaco);
+
+    // Update decorations on content change
+    editor.onDidChangeModelContent(() => {
+      updateVariableDecorations(editor, monaco);
+    });
 
     // Add format shortcut
     editor.addAction({
@@ -223,6 +279,16 @@ export function JsonEditor({
 
   return (
     <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+      {/* Variable highlight styles */}
+      <style>{`
+        .variable-highlight {
+          color: #E91E63 !important;
+          font-weight: 600 !important;
+          background-color: rgba(233, 30, 99, 0.1);
+          border-radius: 3px;
+          padding: 0 2px;
+        }
+      `}</style>
       {/* Header with actions */}
       <Box sx={{ 
         display: 'flex', 
@@ -409,21 +475,6 @@ export function JsonEditor({
           )}
         </List>
       </Popover>
-
-      {/* Error display */}
-      {error && (
-        <Box sx={{ 
-          px: 1.5, 
-          py: 0.5, 
-          bgcolor: 'rgba(239, 68, 68, 0.1)', 
-          borderRadius: 1,
-          borderLeft: '3px solid #EF4444'
-        }}>
-          <Typography variant="caption" color="error" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>
-            {error}
-          </Typography>
-        </Box>
-      )}
 
       {/* Monaco Editor */}
       <Box sx={{ 

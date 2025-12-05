@@ -891,33 +891,37 @@ export default function HighChartField() {
                   )}
                 </Box>
 
-                {error && viewMode === 'chart' && (
-                  <Alert 
-                    severity="error" 
-                    sx={{ 
-                      mb: 2,
-                      borderRadius: 2,
-                      border: '1px solid rgba(239, 68, 68, 0.3)',
-                      background: 'linear-gradient(135deg, rgba(254, 226, 226, 0.5) 0%, rgba(254, 202, 202, 0.5) 100%)',
-                    }}
-                  >
-                    <AlertTitle sx={{ fontWeight: 700 }}>Configuration Error</AlertTitle>
-                    {error}
-                  </Alert>
-                )}
               </Box>
 
-              <Box sx={{ flex: 1, p: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ flex: 1, p: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                 {viewMode === 'chart' ? (
-                  <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                    <JsonEditor
-                      value={chartConfig}
-                      onChange={handleJsonChange}
-                      height={400}
-                      error={error}
-                      availableVariables={availableVariables}
-                      placeholder="Enter Highcharts JSON configuration. Use ${variableName} syntax for variables."
-                    />
+                  <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+                    {error && (
+                      <Alert 
+                        severity="error" 
+                        sx={{ 
+                          mb: 1,
+                          py: 0.5,
+                          borderRadius: 2,
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          background: 'linear-gradient(135deg, rgba(254, 226, 226, 0.5) 0%, rgba(254, 202, 202, 0.5) 100%)',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <AlertTitle sx={{ fontWeight: 700, mb: 0 }}>Configuration Error</AlertTitle>
+                        <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>{error}</Typography>
+                      </Alert>
+                    )}
+                    <Box sx={{ flex: 1, minHeight: 0 }}>
+                      <JsonEditor
+                        value={chartConfig}
+                        onChange={handleJsonChange}
+                        height={error ? 320 : 400}
+                        error={error}
+                        availableVariables={availableVariables}
+                        placeholder="Enter Highcharts JSON configuration. Use ${variableName} syntax for variables."
+                      />
+                    </Box>
                   </Box>
                 ) : viewMode === 'html' ? (
                   <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>

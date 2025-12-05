@@ -151,29 +151,41 @@ export function HtmlEditor({
     const varProvider = monaco.languages.registerCompletionItemProvider('html', {
       triggerCharacters: ['$', '{'],
       provideCompletionItems: (model, position) => {
-        const word = model.getWordUntilPosition(position);
-        const range = {
-          startLineNumber: position.lineNumber,
-          endLineNumber: position.lineNumber,
-          startColumn: word.startColumn,
-          endColumn: word.endColumn
-        };
-
         const lineContent = model.getLineContent(position.lineNumber);
         const textBefore = lineContent.substring(0, position.column - 1);
+        const textAfter = lineContent.substring(position.column - 1);
 
         const suggestions: any[] = [];
 
-        if (textBefore.endsWith('$') || textBefore.endsWith('${')) {
-          variableNames.forEach(name => {
+        // Match: $ or ${ or ${partialName
+        const match = textBefore.match(/\$(\{(\w*))?$/);
+        
+        if (match) {
+          const partialName = match[2] || ''; // The partial variable name if any
+          const hasClosingBrace = textAfter.startsWith('}');
+          
+          // Calculate what to replace: from $ to current position (and } if present)
+          const dollarPos = textBefore.lastIndexOf('$');
+          const range = {
+            startLineNumber: position.lineNumber,
+            endLineNumber: position.lineNumber,
+            startColumn: dollarPos + 1,
+            endColumn: hasClosingBrace ? position.column + 1 : position.column
+          };
+
+          // Filter variables if partial name typed
+          const filteredVars = partialName
+            ? variableNames.filter(name => 
+                name.toLowerCase().startsWith(partialName.toLowerCase())
+              )
+            : variableNames;
+
+          filteredVars.forEach(name => {
             suggestions.push({
               label: `\${${name}}`,
               kind: monaco.languages.CompletionItemKind.Variable,
               detail: `Variable: ${name}`,
-              insertText: textBefore.endsWith('$') ? `{${name}}` : 
-                          textBefore.endsWith('${') ? `${name}}` : 
-                          `\${${name}}`,
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              insertText: `\${${name}}`,
               range
             });
           });
@@ -249,6 +261,40 @@ export function HtmlEditor({
     disposablesRef.current.push(snippetProvider);
   }, [variableNames]);
 
+  // Function to highlight ${variableName} patterns
+  const updateVariableDecorations = useCallback((editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
+    const model = editor.getModel();
+    if (!model) return;
+
+    const content = model.getValue();
+    const decorations: editor.IModelDeltaDecoration[] = [];
+    
+    // Find all ${...} patterns
+    const regex = /\$\{[^}]+\}/g;
+    let match;
+    
+    while ((match = regex.exec(content)) !== null) {
+      const startPos = model.getPositionAt(match.index);
+      const endPos = model.getPositionAt(match.index + match[0].length);
+      
+      decorations.push({
+        range: new monaco.Range(
+          startPos.lineNumber,
+          startPos.column,
+          endPos.lineNumber,
+          endPos.column
+        ),
+        options: {
+          inlineClassName: 'variable-highlight',
+          hoverMessage: { value: `**Variable:** ${match[0]}` }
+        }
+      });
+    }
+
+    // Apply decorations
+    editor.deltaDecorations([], decorations);
+  }, []);
+
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
@@ -262,6 +308,14 @@ export function HtmlEditor({
     });
 
     registerHtmlCompletions(monaco);
+
+    // Initial variable highlighting
+    updateVariableDecorations(editor, monaco);
+
+    // Update decorations on content change
+    editor.onDidChangeModelContent(() => {
+      updateVariableDecorations(editor, monaco);
+    });
 
     // Shortcuts
     editor.addAction({
@@ -335,6 +389,16 @@ export function HtmlEditor({
 
   return (
     <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+      {/* Variable highlight styles */}
+      <style>{`
+        .variable-highlight {
+          color: #E91E63 !important;
+          font-weight: 600 !important;
+          background-color: rgba(233, 30, 99, 0.1);
+          border-radius: 3px;
+          padding: 0 2px;
+        }
+      `}</style>
       {/* Header with actions */}
       <Box sx={{ 
         display: 'flex', 

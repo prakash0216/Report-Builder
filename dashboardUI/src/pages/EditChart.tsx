@@ -149,33 +149,6 @@ const NavBar: React.FC<{ chartId: string }> = ({ chartId }) => {
             </Box>
           </Box>
         </Box>
-
-        {/* Right section */}
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Button 
-            variant="contained"
-            startIcon={<SaveIcon />}
-            onClick={() => navigate("/dashboards")}
-            sx={{ 
-              textTransform: 'none',
-              fontWeight: 600,
-              borderRadius: 2,
-              px: 3,
-              py: 1.25,
-              bgcolor: 'white',
-              color: '#667eea',
-              boxShadow: '0 4px 15px rgba(255, 255, 255, 0.3)',
-              '&:hover': {
-                bgcolor: 'rgba(255, 255, 255, 0.95)',
-                transform: 'translateY(-2px)',
-                boxShadow: '0 6px 20px rgba(255, 255, 255, 0.4)',
-              },
-              transition: 'all 0.3s ease',
-            }}
-          >
-            Save Changes
-          </Button>
-        </Box>
       </Toolbar>
     </AppBar>
   );
