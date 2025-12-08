@@ -332,6 +332,31 @@ async function createFilterPanelStateTable() {
   }
 }
 
+// Materialized views table definition
+const materializedViewsTable = `
+CREATE TABLE IF NOT EXISTS materialized_views (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('materialized_views_seq'),
+  data_source_name VARCHAR NOT NULL,
+  view_name VARCHAR NOT NULL UNIQUE,
+  query_hash VARCHAR NOT NULL,
+  query_object_json TEXT,
+  base_table_name VARCHAR NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_refreshed TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+`
+
+async function createMaterializedViewsTable() {
+  try {
+    // Ensure sequence exists first
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS materialized_views_seq START 1;`);
+    await dbClient.run(materializedViewsTable);
+    console.log("✅ Table 'materialized_views' created successfully.");
+  } catch (err) {
+    console.error("❌ Error creating table 'materialized_views':", err.message);
+  }
+}
+
 
 const createTables = async () => {
   await createChartConfigsTable();
@@ -351,5 +376,6 @@ export {
   createFilterPanelStateTable,
   createParametersTable,
   createCalculationsTable,
-  createFiltersTable
+  createFiltersTable,
+  createMaterializedViewsTable
 };

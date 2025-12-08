@@ -1283,6 +1283,50 @@ app.post('/execute-query', async (req, res) => {
                                         await dbClient.run(insertQuery);
                                         console.log(`✅ Data source ${dataSourceName} registered in data_source_registry.`);
                                         
+                                        // ============================================
+                                        // SIMPLIFIED: Create base table from parquet
+                                        // ============================================
+                                        try {
+                                          console.log(`🔨 Creating base table for ${dataSourceName}...`);
+                                          
+                                          // Delete existing base table and materialized views if refreshing
+                                          const existing = await dbClient.query(`
+                                            SELECT refresh_interval_days, last_refreshed FROM data_source_registry 
+                                            WHERE ds_name='${dataSourceName.replace(/'/g, "''")}'
+                                          `).catch(() => []);
+                                          
+                                          if (existing.length > 0) {
+                                            // Delete base table
+                                            const tableName = `ds_${dataSourceName}`;
+                                            try {
+                                              await dbClient.run(`DROP TABLE IF EXISTS ${tableName}`);
+                                              console.log(`✅ Deleted existing base table: ${tableName}`);
+                                            } catch (err) {
+                                              console.warn(`⚠️ Could not delete base table:`, err.message);
+                                            }
+                                            
+                                            // Delete all materialized views
+                                            await deleteMaterializedViews(dataSourceName, dbClient);
+                                            
+                                            // Clear cache for this data source
+                                            clearCacheForDataSource(dataSourceName);
+                                          }
+                                          
+                                          // Create base table
+                                          await createBaseTable(dataSourceName, parquetFilePath, dbClient);
+                                          
+                                          // Update last_refreshed timestamp
+                                          await dbClient.run(`
+                                            UPDATE data_source_registry 
+                                            SET last_refreshed=CURRENT_TIMESTAMP 
+                                            WHERE ds_name='${dataSourceName.replace(/'/g, "''")}'
+                                          `);
+                                          
+                                          console.log(`✅ Base table creation complete for ${dataSourceName}`);
+                                        } catch (optErr) {
+                                          console.warn('⚠️ Base table creation failed (non-critical):', optErr.message);
+                                        }
+                                        
                                     } catch (err) {
                                         console.error('❌ Error finalizing parquet write:', err.message);
                                         await writer.close().catch(() => {});
@@ -1389,14 +1433,229 @@ function buildWhereClause(filters) {
   }
 
   const whereClause = conditions.length > 0 ? conditions.join(' AND ') : '';
-  console.log(`📝 Filter-based WHERE clause: ${whereClause || '(none - all data)'}`);
+  // console.log(`📝 Filter-based WHERE clause: ${whereClause || '(none - all data)'}`);
   
   return whereClause;
 }
 
+// ============================================
+// SIMPLIFIED BASE TABLE & MATERIALIZED VIEW FUNCTIONS
+// ============================================
+
+/**
+ * Generate hash for a query (used for materialized views)
+ */
+function generateQueryHash(queryObject) {
+  const normalized = {
+    columns: queryObject.columns ? [...queryObject.columns].sort() : null,
+    filters: queryObject.filters ? JSON.stringify(queryObject.filters, Object.keys(queryObject.filters).sort()) : null,
+    customWhere: queryObject.customWhere || null,
+    groupBy: queryObject.groupBy ? [...queryObject.groupBy].sort() : null,
+    orderBy: queryObject.orderBy ? [...queryObject.orderBy].sort() : null,
+    limit: queryObject.limit || null,
+  };
+  
+  const keyString = JSON.stringify(normalized);
+  return crypto.createHash('md5').update(keyString).digest('hex');
+}
+
+/**
+ * Create base table from parquet file (simple approach)
+ */
+async function createBaseTable(dataSourceName, parquetPath, dbClient) {
+  const tableName = `ds_${dataSourceName}`;
+  
+  // Step 1: Check if table exists in DuckDB
+  try {
+    const tableInfo = await dbClient.query(`PRAGMA table_info('${tableName}')`);
+    if (tableInfo && tableInfo.length > 0) {
+      console.log(`✅ Base table ${tableName} already exists`);
+      return tableName;
+    }
+  } catch (err) {
+    // Table doesn't exist, continue
+  }
+  
+  // Step 2: Create table from parquet file with quoted column names
+  try {
+    console.log(`🔨 Creating base table ${tableName} from parquet file...`);
+    
+    // First, get column names from parquet file
+    const sampleQuery = `SELECT * FROM read_parquet('${parquetPath.replace(/\\/g, '/')}') LIMIT 1`;
+    const sample = await dbClient.query(sampleQuery);
+    
+    if (sample.length === 0) {
+      throw new Error('Parquet file is empty or cannot be read');
+    }
+    
+    // Get column names (preserve exact casing and spaces)
+    const columnNames = Object.keys(sample[0]);
+    const quotedColumns = columnNames.map(col => `"${col}"`).join(', ');
+    
+    // Create table with quoted column names to preserve casing
+    const createQuery = `CREATE TABLE ${tableName} AS SELECT ${quotedColumns} FROM read_parquet('${parquetPath.replace(/\\/g, '/')}')`;
+    
+    const startTime = Date.now();
+    await dbClient.run(createQuery);
+    const time = ((Date.now() - startTime) / 1000).toFixed(2);
+    
+    const rowCount = await dbClient.query(`SELECT COUNT(*) as cnt FROM ${tableName}`);
+    console.log(`✅ Base table ${tableName} created in ${time}s (${rowCount[0].cnt.toLocaleString()} rows)`);
+    
+    return tableName;
+  } catch (err) {
+    console.error(`❌ Error creating base table ${tableName}:`, err.message);
+    throw err;
+  }
+}
+
+/**
+ * Get materialized view for a query (if exists)
+ */
+async function getMaterializedView(dataSourceName, queryHash, dbClient) {
+  try {
+    const existing = await dbClient.query(`
+      SELECT view_name FROM materialized_views 
+      WHERE query_hash='${queryHash}' AND data_source_name='${dataSourceName}'
+    `);
+    if (existing.length > 0) {
+      // Verify the table still exists
+      try {
+        await dbClient.query(`SELECT 1 FROM ${existing[0].view_name} LIMIT 1`);
+        return existing[0].view_name;
+      } catch (err) {
+        // Table doesn't exist, remove from metadata
+        await dbClient.run(`
+          DELETE FROM materialized_views 
+          WHERE query_hash='${queryHash}' AND data_source_name='${dataSourceName}'
+        `);
+        return null;
+      }
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Create materialized view (table) for a query
+ */
+async function createMaterializedView(dataSourceName, queryObject, baseTableName, dbClient) {
+  const queryHash = generateQueryHash(queryObject);
+  
+  // Check if already exists
+  const existing = await getMaterializedView(dataSourceName, queryHash, dbClient);
+  if (existing) {
+    return existing;
+  }
+  
+  const viewName = `mv_${dataSourceName}_${queryHash.substring(0, 8)}`;
+  
+  // Build query
+  const {columns, filters, customWhere, groupBy, orderBy, limit} = queryObject;
+  const filterWhereClause = buildWhereClause(filters);
+  
+  let whereClause = '';
+  if (filterWhereClause && customWhere) {
+    whereClause = `${filterWhereClause} AND ${customWhere}`;
+  } else if (filterWhereClause) {
+    whereClause = filterWhereClause;
+  } else if (customWhere) {
+    whereClause = customWhere;
+  }
+  
+  const selectCols = columns && columns.length > 0 ? columns.join(', ') : '*';
+  const groupByClause = groupBy && groupBy.length > 0 ? ` GROUP BY ${groupBy.join(', ')}` : '';
+  const orderByClause = orderBy && orderBy.length > 0 ? ` ORDER BY ${orderBy.join(', ')}` : '';
+  const limitClause = limit ? ` LIMIT ${limit}` : '';
+  const whereClauseSQL = whereClause ? ` WHERE ${whereClause}` : '';
+  
+  // Create TABLE to materialize the results
+  try {
+    await dbClient.run(`DROP TABLE IF EXISTS ${viewName}`);
+  } catch (dropErr) {
+    // Ignore
+  }
+  
+  const createViewQuery = `CREATE TABLE ${viewName} AS 
+    SELECT ${selectCols} FROM ${baseTableName}${whereClauseSQL}${groupByClause}${orderByClause}${limitClause}`;
+  
+  try {
+    console.log(`🔨 Creating materialized view: ${viewName}`);
+    const startTime = Date.now();
+    await dbClient.run(createViewQuery);
+    const time = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`✅ Materialized view created in ${time}s`);
+    
+    // Store metadata
+    await dbClient.run(`
+      INSERT INTO materialized_views (data_source_name, view_name, query_hash, query_object_json, base_table_name, created_at, last_refreshed)
+      VALUES ('${dataSourceName}', '${viewName}', '${queryHash}', 
+              '${JSON.stringify(queryObject).replace(/'/g, "''")}', 
+              '${baseTableName}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `);
+    
+    return viewName;
+  } catch (err) {
+    console.error(`❌ Error creating materialized view:`, err.message);
+    throw err;
+  }
+}
+
+/**
+ * Delete all materialized views for a data source
+ */
+async function deleteMaterializedViews(dataSourceName, dbClient) {
+  try {
+    const views = await dbClient.query(`
+      SELECT view_name FROM materialized_views WHERE data_source_name='${dataSourceName}'
+    `);
+    
+    for (const view of views) {
+      try {
+        await dbClient.run(`DROP TABLE IF EXISTS ${view.view_name}`);
+        console.log(`✅ Deleted materialized view: ${view.view_name}`);
+      } catch (err) {
+        console.warn(`⚠️ Could not delete view ${view.view_name}:`, err.message);
+      }
+    }
+    
+    await dbClient.run(`DELETE FROM materialized_views WHERE data_source_name='${dataSourceName}'`);
+    console.log(`✅ Deleted ${views.length} materialized views for ${dataSourceName}`);
+  } catch (err) {
+    console.warn(`⚠️ Error deleting materialized views:`, err.message);
+  }
+}
+
+/**
+ * Clear cache entries for a specific data source
+ */
+function clearCacheForDataSource(dataSourceName) {
+  let cleared = 0;
+  const keysToDelete = [];
+  
+  for (const [key, value] of fastCache.entries()) {
+    if (key.startsWith(`query:${dataSourceName}:`)) {
+      keysToDelete.push(key);
+    }
+  }
+  
+  for (const key of keysToDelete) {
+    fastCache.delete(key);
+    const index = cacheAccessOrder.indexOf(key);
+    if (index > -1) cacheAccessOrder.splice(index, 1);
+    cleared++;
+  }
+  
+  if (cleared > 0) {
+    console.log(`🧹 Cleared ${cleared} cache entries for ${dataSourceName}`);
+  }
+}
+
 async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
   const {columns, filters, customWhere, groupBy, orderBy, limit} = queryObject;
-  console.log('📦 Query Object:', queryObject);
+  // console.log('📦 Query Object:', queryObject);
   
   console.log(`🔄 Loading data from: ${dataSourceName}`);
   
@@ -1421,7 +1680,7 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     console.log(`🔗 Using custom WHERE only`);
   }
   
-  console.log(`🔍 Final WHERE clause: ${whereClause || '(none - fetching all data)'}`);
+  // console.log(`🔍 Final WHERE clause: ${whereClause || '(none - fetching all data)'}`);
 
   if (type === 'Live') {
     const startTime = Date.now();
@@ -1551,66 +1810,76 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
       throw new Error(`Parquet file for data source ${dataSourceName} not found at path: ${parquetPath}`);
     }
     
-    console.log('🔄 Streaming data from Parquet file:', parquetPath);
+    // ============================================
+    // SIMPLIFIED: Check materialized view first, then base table
+    // ============================================
     
-    const escapedPath = parquetPath.replace(/\\/g, '\\\\');
-    
-    let customQuery;
-    
-    if (columns || whereClause || groupBy || orderBy || limit) {
-      customQuery = `SELECT ${columns && columns.length > 0 ? columns.join(', ') : '*'} FROM read_parquet('${escapedPath}')` +
-        (whereClause ? ` WHERE ${whereClause}` : '') +
-        (groupBy && groupBy.length > 0 ? ` GROUP BY ${groupBy.join(', ')}` : '') +
-        (orderBy && orderBy.length > 0 ? ` ORDER BY ${orderBy.join(', ')}` : '') +
-        (limit ? ` LIMIT ${limit}` : '');
-    } else {
-      customQuery = `SELECT * FROM read_parquet('${escapedPath}')`;
-    }
-    
-    console.log('📝 Executing DuckDB Query:', customQuery);
-    
-    const describeQuery = `DESCRIBE (${customQuery})`;
-    console.log('🔍 Getting column names:', describeQuery);
-    const columnInfo = await dbClient.query(describeQuery);
-    const columnNames = columnInfo.map(col => col.column_name);
-    console.log('📋 Column names:', columnNames);
-    
-    const queryResult = await dbClient.stream(customQuery);
-    
-    let data = [];
-    let chunkCount = 0;
-    let rowsProcessed = 0;
-    
-    while (true) {
-      const chunk = await queryResult.fetchChunk();
-      
-      if (chunk.rowCount === 0) {
-        break;
-      }
-      
-      chunkCount++;
-      rowsProcessed += chunk.rowCount;
-      
-      const rowArrays = chunk.getRows();
-      const rows = rowArrays.map(rowArray => {
-        const obj = {};
-        columnNames.forEach((name, index) => {
-          obj[name] = rowArray[index];
-        });
-        return obj;
-      });
-      
-      data.push(...rows);
-      
-      if (chunkCount % 10 === 0 || rowsProcessed % 50000 === 0) {
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        console.log(`📊 Progress: ${rowsProcessed.toLocaleString()} rows loaded (${chunkCount} chunks) in ${elapsed}s`);
+    // STEP 1: Check if materialized view exists for this exact query
+    const queryHash = generateQueryHash(queryObject);
+    const materializedViewName = await getMaterializedView(dataSourceName, queryHash, dbClient);
+    if (materializedViewName) {
+      console.log(`⚡ FAST PATH: Using materialized view: ${materializedViewName}`);
+      try {
+        const viewResult = await dbClient.query(`SELECT * FROM ${materializedViewName}`);
+        const viewTime = ((Date.now() - startTime) / 1000).toFixed(2);
+        console.log(`✅ Materialized view query completed in ${viewTime}s (${viewResult.length.toLocaleString()} rows)`);
+        return viewResult;
+      } catch (err) {
+        console.warn(`⚠️ Materialized view query failed, falling back:`, err.message);
       }
     }
+    
+    // STEP 2: Ensure base table exists (2-step verification)
+    let tableName;
+    try {
+      // Step 2a: Check if table exists in DuckDB
+      tableName = `ds_${dataSourceName}`;
+      const tableInfo = await dbClient.query(`PRAGMA table_info('${tableName}')`).catch(() => []);
+      
+      if (tableInfo.length === 0) {
+        // Step 2b: Table doesn't exist, create it
+        console.log(`🔨 Base table ${tableName} not found, creating from parquet file...`);
+        tableName = await createBaseTable(dataSourceName, parquetPath, dbClient);
+      } else {
+        console.log(`✅ Base table ${tableName} exists`);
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not create base table, using direct parquet read:', err.message);
+      tableName = null;
+    }
+    
+    // STEP 3: Execute query on base table (or parquet if table doesn't exist)
+    const sourceTable = tableName || `read_parquet('${parquetPath.replace(/\\/g, '\\\\')}')`;
+    
+    console.log(`📊 Executing query on ${tableName ? 'base table' : 'parquet file'}`);
+    
+    // Build query
+    const selectCols = columns && columns.length > 0 ? columns.join(', ') : '*';
+    const groupByClause = groupBy && groupBy.length > 0 ? ` GROUP BY ${groupBy.join(', ')}` : '';
+    const orderByClause = orderBy && orderBy.length > 0 ? ` ORDER BY ${orderBy.join(', ')}` : '';
+    const limitClause = limit ? ` LIMIT ${limit}` : '';
+    const whereClauseSQL = whereClause ? ` WHERE ${whereClause}` : '';
+    
+    const customQuery = `SELECT ${selectCols} FROM ${sourceTable}${whereClauseSQL}${groupByClause}${orderByClause}${limitClause}`;
+    
+    // console.log('📝 Executing DuckDB Query:', customQuery);
+    
+    const queryStartTime = Date.now();
+    const data = await dbClient.query(customQuery);
+    const queryTime = ((Date.now() - queryStartTime) / 1000).toFixed(2);
     
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`✅ DuckDB data loaded in ${totalTime}s`);
-    console.log(`✅ Loaded ${data.length.toLocaleString()} rows from Parquet file`);
+    console.log(`✅ Query completed in ${queryTime}s (${data.length.toLocaleString()} rows) | Total: ${totalTime}s`);
+    
+    // STEP 4: Create materialized view for future queries (if base table exists)
+    if (tableName) {
+      try {
+        await createMaterializedView(dataSourceName, queryObject, tableName, dbClient);
+        console.log(`✅ Created materialized view for future queries`);
+      } catch (mvErr) {
+        console.warn(`⚠️ Could not create materialized view:`, mvErr.message);
+      }
+    }
     
     return data;
   }
@@ -2721,6 +2990,207 @@ app.get('/api/table/:tableName', async (req, res) => {
   }
 });
 
+// ============================================
+// EXTRACT SCHEDULER API ENDPOINTS
+// ============================================
+
+/**
+ * Set refresh interval for a data source
+ * PUT /api/data-sources/:dsName/schedule
+ */
+app.put('/api/data-sources/:dsName/schedule', async (req, res) => {
+  const { dsName } = req.params;
+  const { refresh_interval_days } = req.body;
+  
+  if (refresh_interval_days !== null && refresh_interval_days !== undefined && (typeof refresh_interval_days !== 'number' || refresh_interval_days < 1)) {
+    return res.status(400).json({ success: false, error: 'refresh_interval_days must be a positive number or null' });
+  }
+  
+  try {
+    const updateQuery = refresh_interval_days === null || refresh_interval_days === undefined
+      ? `UPDATE data_source_registry SET refresh_interval_days=NULL WHERE ds_name='${dsName.replace(/'/g, "''")}'`
+      : `UPDATE data_source_registry SET refresh_interval_days=${refresh_interval_days} WHERE ds_name='${dsName.replace(/'/g, "''")}'`;
+    
+    await dbClient.run(updateQuery);
+    
+    console.log(`✅ Updated refresh schedule for ${dsName}: ${refresh_interval_days || 'disabled'} days`);
+    res.json({ 
+      success: true, 
+      message: `Refresh schedule updated for ${dsName}`,
+      refresh_interval_days: refresh_interval_days || null
+    });
+  } catch (err) {
+    console.error('❌ Error updating schedule:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get refresh schedule for a data source
+ * GET /api/data-sources/:dsName/schedule
+ */
+app.get('/api/data-sources/:dsName/schedule', async (req, res) => {
+  const { dsName } = req.params;
+  
+  try {
+    const result = await dbClient.query(`
+      SELECT refresh_interval_days, last_refreshed 
+      FROM data_source_registry 
+      WHERE ds_name='${dsName.replace(/'/g, "''")}'
+    `);
+    
+    if (result.length === 0) {
+      return res.status(404).json({ success: false, error: 'Data source not found' });
+    }
+    
+    res.json({
+      success: true,
+      refresh_interval_days: result[0].refresh_interval_days,
+      last_refreshed: result[0].last_refreshed
+    });
+  } catch (err) {
+    console.error('❌ Error fetching schedule:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// EXTRACT SCHEDULER FUNCTION
+// ============================================
+
+function startExtractScheduler() {
+  console.log('⏰ Extract scheduler started (checking every hour)');
+  
+  const checkAndRefresh = async () => {
+    try {
+      // Query extracts needing refresh
+      const extracts = await dbClient.query(`
+        SELECT ds_name, refresh_interval_days, last_refreshed, parquet_path, connection_id, type, query
+        FROM data_source_registry 
+        WHERE type='Extract' 
+        AND refresh_interval_days IS NOT NULL
+      `);
+      
+      const now = new Date();
+      const extractsToRefresh = [];
+      
+      for (const extract of extracts) {
+        if (!extract.last_refreshed) {
+          // Never refreshed, needs refresh
+          extractsToRefresh.push(extract);
+        } else {
+          const lastRefreshed = new Date(extract.last_refreshed);
+          const daysSinceRefresh = (now - lastRefreshed) / (1000 * 60 * 60 * 24);
+          
+          if (daysSinceRefresh >= extract.refresh_interval_days) {
+            extractsToRefresh.push(extract);
+          }
+        }
+      }
+      
+      if (extractsToRefresh.length > 0) {
+        console.log(`🔄 Found ${extractsToRefresh.length} extract(s) needing refresh`);
+        
+        for (const extract of extractsToRefresh) {
+          try {
+            console.log(`🔄 Cleaning up tables/views for extract: ${extract.ds_name}`);
+            
+            // Delete base table
+            const tableName = `ds_${extract.ds_name}`;
+            try {
+              await dbClient.run(`DROP TABLE IF EXISTS ${tableName}`);
+              console.log(`✅ Deleted base table: ${tableName}`);
+            } catch (err) {
+              console.warn(`⚠️ Could not delete base table:`, err.message);
+            }
+            
+            // Delete all materialized views
+            await deleteMaterializedViews(extract.ds_name, dbClient);
+            
+            // Clear cache for this data source
+            clearCacheForDataSource(extract.ds_name);
+            
+            console.log(`⚠️ Extract ${extract.ds_name} needs manual refresh. Base table and materialized views have been deleted.`);
+            console.log(`   Please recreate the extract via the UI to refresh the data.`);
+          } catch (err) {
+            console.error(`❌ Error cleaning up extract ${extract.ds_name}:`, err.message);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('❌ Error in extract scheduler:', err.message);
+    }
+  };
+  
+  // Run immediately on startup, then every hour
+  checkAndRefresh();
+  setInterval(checkAndRefresh, 60 * 60 * 1000); // Every hour
+}
+
+// ============================================
+// EXTRACT SCHEDULER API ENDPOINTS
+// ============================================
+
+/**
+ * Set refresh interval for a data source
+ * PUT /api/data-sources/:dsName/schedule
+ */
+app.put('/api/data-sources/:dsName/schedule', async (req, res) => {
+  const { dsName } = req.params;
+  const { refresh_interval_days } = req.body;
+  
+  if (refresh_interval_days !== null && refresh_interval_days !== undefined && (typeof refresh_interval_days !== 'number' || refresh_interval_days < 1)) {
+    return res.status(400).json({ success: false, error: 'refresh_interval_days must be a positive number or null' });
+  }
+  
+  try {
+    const updateQuery = refresh_interval_days === null || refresh_interval_days === undefined
+      ? `UPDATE data_source_registry SET refresh_interval_days=NULL WHERE ds_name='${dsName.replace(/'/g, "''")}'`
+      : `UPDATE data_source_registry SET refresh_interval_days=${refresh_interval_days} WHERE ds_name='${dsName.replace(/'/g, "''")}'`;
+    
+    await dbClient.run(updateQuery);
+    
+    console.log(`✅ Updated refresh schedule for ${dsName}: ${refresh_interval_days || 'disabled'} days`);
+    res.json({ 
+      success: true, 
+      message: `Refresh schedule updated for ${dsName}`,
+      refresh_interval_days: refresh_interval_days || null
+    });
+  } catch (err) {
+    console.error('❌ Error updating schedule:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get refresh schedule for a data source
+ * GET /api/data-sources/:dsName/schedule
+ */
+app.get('/api/data-sources/:dsName/schedule', async (req, res) => {
+  const { dsName } = req.params;
+  
+  try {
+    const result = await dbClient.query(`
+      SELECT refresh_interval_days, last_refreshed 
+      FROM data_source_registry 
+      WHERE ds_name='${dsName.replace(/'/g, "''")}'
+    `);
+    
+    if (result.length === 0) {
+      return res.status(404).json({ success: false, error: 'Data source not found' });
+    }
+    
+    res.json({
+      success: true,
+      refresh_interval_days: result[0].refresh_interval_days,
+      last_refreshed: result[0].last_refreshed
+    });
+  } catch (err) {
+    console.error('❌ Error fetching schedule:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 (async () => {
   try {
     await dbClient.query('SELECT 1');
@@ -2749,9 +3219,65 @@ app.get('/api/table/:tableName', async (req, res) => {
     await createChartVisibilityTable();
     await createCardDimensionConditionsTable();
     await createFilterPanelStateTable();
+    
+    // Import materialized views table creation
+    const { createMaterializedViewsTable } = await import('./db/initDb.js');
+    await createMaterializedViewsTable();
 
-    app.listen(PORT, () => {
+    // Start extract scheduler
+    startExtractScheduler();
+    
+    const server = app.listen(PORT, () => {
       console.log(`🚀 Server is running at http://localhost:${PORT}`);
+    });
+    
+    // Graceful shutdown handlers
+    const gracefulShutdown = async (signal) => {
+      console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+      
+      // Stop accepting new connections
+      server.close(() => {
+        console.log('✅ HTTP server closed');
+      });
+      
+      // Close DuckDB connection
+      try {
+        await dbClient.close();
+      } catch (err) {
+        console.warn('⚠️ Error closing DuckDB:', err.message);
+      }
+      
+      // Give processes time to finish
+      setTimeout(() => {
+        console.log('✅ Graceful shutdown complete');
+        process.exit(0);
+      }, 2000);
+    };
+    
+    // Handle shutdown signals
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    
+    // Handle uncaught exceptions
+    process.on('uncaughtException', async (err) => {
+      console.error('❌ Uncaught Exception:', err);
+      try {
+        await dbClient.close();
+      } catch (closeErr) {
+        // Ignore
+      }
+      process.exit(1);
+    });
+    
+    // Handle unhandled promise rejections
+    process.on('unhandledRejection', async (reason, promise) => {
+      console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+      try {
+        await dbClient.close();
+      } catch (closeErr) {
+        // Ignore
+      }
+      process.exit(1);
     });
   } catch (err) {
     console.error('❌ Failed to connect to DuckDB:', err.message);

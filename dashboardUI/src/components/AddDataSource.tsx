@@ -29,6 +29,11 @@ import {
   Select,
   Tooltip,
   Alert,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Divider,
+  Chip,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -40,6 +45,7 @@ import {
   Edit as EditIcon,
   Check as CheckIcon,
   Close as CloseIcon,
+  Schedule as ScheduleIcon,
 } from '@mui/icons-material';
 
 interface QueryResult {
@@ -88,6 +94,13 @@ export default function AddDataSourceMui() {
   const [editingDS, setEditingDS] = useState<string | null>(null);
   const [editedName, setEditedName] = useState<string>('');
 
+  // Scheduler states
+  const [refreshIntervalDays, setRefreshIntervalDays] = useState<number | null>(null);
+  const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState<boolean>(false);
+  const [nextRunDateTime, setNextRunDateTime] = useState<string>('');
+  const [schedulerExpanded, setSchedulerExpanded] = useState<boolean>(false);
+
   // Use a conditional Recoil state hook to get/set the query for the selected data source.
   const [sqlQuery, setSqlQuery] = useRecoilState(dataSourceAtomFamily(selectedDS));
 
@@ -121,6 +134,69 @@ export default function AddDataSourceMui() {
   useEffect(() => {
     fetchConnectionNames();
   }, []);
+
+  // Fetch schedule when Extract data source is selected
+  useEffect(() => {
+    if (selectedDS && connectionType === 'Extract') {
+      fetchSchedule();
+      // Initialize next run date-time to current date-time
+      const now = new Date();
+      const formattedDateTime = now.toISOString().slice(0, 16);
+      setNextRunDateTime(formattedDateTime);
+    } else {
+      setRefreshIntervalDays(null);
+      setLastRefreshed(null);
+      setNextRunDateTime('');
+    }
+  }, [selectedDS, connectionType]);
+
+  const fetchSchedule = async () => {
+    if (!selectedDS) return;
+    setIsLoadingSchedule(true);
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/api/data-sources/${selectedDS}/schedule`
+      );
+      if (response.data.success) {
+        setRefreshIntervalDays(response.data.refresh_interval_days);
+        setLastRefreshed(response.data.last_refreshed);
+      }
+    } catch (err: any) {
+      if (err.response?.status !== 404) {
+        console.error('Failed to fetch schedule', err);
+      }
+      // 404 is fine - means no schedule set yet
+      setRefreshIntervalDays(null);
+      setLastRefreshed(null);
+    } finally {
+      setIsLoadingSchedule(false);
+    }
+  };
+
+  const saveSchedule = async (days: number | null) => {
+    if (!selectedDS) return;
+    setIsLoadingSchedule(true);
+    try {
+      const response = await axios.put(
+        `${API_BASE_URL}/api/data-sources/${selectedDS}/schedule`,
+        { refresh_interval_days: days }
+      );
+      if (response.data.success) {
+        setRefreshIntervalDays(days);
+        showAlert(
+          days 
+            ? `Refresh schedule set to ${days} day(s)` 
+            : 'Refresh schedule disabled',
+          'success'
+        );
+      }
+    } catch (err) {
+      console.error('Failed to save schedule', err);
+      showAlert('Failed to save schedule', 'error');
+    } finally {
+      setIsLoadingSchedule(false);
+    }
+  };
 
   // Note: Data sources are now automatically loaded from database via Recoil effect
   // No need for manual fetching here
@@ -1021,6 +1097,342 @@ export default function AddDataSourceMui() {
                     {isLoading ? 'Executing...' : 'Execute'}
                   </Button>
                 </Box>
+ 
+                
+                {/* Scheduler Section - Collapsible at Top - Only for Extract type */}
+                {/* {selectedDS && connectionType === 'Extract' && (
+                  <Accordion
+                    expanded={schedulerExpanded}
+                    onChange={(_, isExpanded) => setSchedulerExpanded(isExpanded)}
+                    sx={{
+                      mt: 2,
+                      mb: 0,
+                      boxShadow: 'none',
+                      border: '1px solid rgba(102, 126, 234, 0.2)',
+                      borderRadius: 2,
+                      '&:before': {
+                        display: 'none',
+                      },
+                      '&.Mui-expanded': {
+                        margin: '16px 0 0 0',
+                      },
+                    }}
+                  >
+                    <AccordionSummary
+                      expandIcon={<ExpandMoreIcon sx={{ color: '#667eea' }} />}
+                      sx={{
+                        background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%)',
+                        borderRadius: schedulerExpanded ? '8px 8px 0 0' : '8px',
+                        minHeight: 56,
+                        '&.Mui-expanded': {
+                          minHeight: 56,
+                        },
+                        '& .MuiAccordionSummary-content': {
+                          margin: '12px 0',
+                          '&.Mui-expanded': {
+                            margin: '12px 0',
+                          },
+                        },
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+                        <ScheduleIcon sx={{ color: '#667eea', fontSize: 22 }} />
+                        <Typography
+                          variant="subtitle1"
+                          sx={{
+                            fontWeight: 700,
+                            color: '#667eea',
+                            flex: 1,
+                          }}
+                        >
+                          Extract Refresh Scheduler
+                        </Typography>
+                        {refreshIntervalDays && (
+                          <Chip
+                            label={`Every ${refreshIntervalDays} day(s)`}
+                            size="small"
+                            sx={{
+                              bgcolor: 'rgba(102, 126, 234, 0.1)',
+                              color: '#667eea',
+                              fontWeight: 600,
+                              fontSize: '0.75rem',
+                            }}
+                          />
+                        )}
+                        {nextRunDateTime && !refreshIntervalDays && (
+                          <Chip
+                            label={`Next: ${new Date(nextRunDateTime).toLocaleDateString()}`}
+                            size="small"
+                            sx={{
+                              bgcolor: 'rgba(102, 126, 234, 0.1)',
+                              color: '#667eea',
+                              fontWeight: 600,
+                              fontSize: '0.75rem',
+                            }}
+                          />
+                        )}
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails
+                      sx={{
+                        p: 3,
+                        background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.03) 0%, rgba(118, 75, 162, 0.03) 100%)',
+                      }}
+                    > */}
+                      {/* <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}> */}
+                        {/* How It Works Info */}
+                        {/* <Alert 
+                          severity="info" 
+                          icon={<ScheduleIcon />}
+                          sx={{ 
+                            fontSize: '0.8rem',
+                            '& .MuiAlert-message': {
+                              width: '100%',
+                            },
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                            How it works:
+                          </Typography>
+                          <Typography variant="caption" component="div">
+                            • <strong>Next Run Date & Time:</strong> Schedule a one-time extract refresh at a specific date/time
+                            <br />
+                            • <strong>Recurring Interval:</strong> Set up automatic refresh every N days (runs after the next scheduled run)
+                            <br />
+                            • When refresh runs: Base table and materialized views are deleted, cache is cleared
+                          </Typography>
+                        </Alert>
+
+                        <Divider /> */}
+
+                        {/* Next Run Date & Time Section */}
+                        {/* <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography
+                              variant="subtitle2"
+                              sx={{
+                                fontWeight: 700,
+                                color: '#475569',
+                                fontSize: '0.9rem',
+                              }}
+                            >
+                              Next Run Date & Time
+                            </Typography>
+                            <Chip 
+                              label="One-time" 
+                              size="small" 
+                              sx={{ 
+                                height: 20, 
+                                fontSize: '0.7rem',
+                                bgcolor: 'rgba(102, 126, 234, 0.1)',
+                                color: '#667eea',
+                              }} 
+                            />
+                          </Box>
+                          <TextField
+                            type="datetime-local"
+                            size="small"
+                            value={nextRunDateTime}
+                            onChange={(e) => {
+                              const selectedDateTime = e.target.value;
+                              if (!selectedDateTime) {
+                                setNextRunDateTime('');
+                                return;
+                              }
+                              
+                              const selectedDate = new Date(selectedDateTime);
+                              const now = new Date();
+                              now.setSeconds(0, 0);
+                              
+                              if (selectedDate >= now) {
+                                setNextRunDateTime(selectedDateTime);
+                              } else {
+                                showAlert('Please select today or a future date and time', 'warning');
+                                const formattedDateTime = now.toISOString().slice(0, 16);
+                                setNextRunDateTime(formattedDateTime);
+                              }
+                            }}
+                            disabled={isLoadingSchedule}
+                            inputProps={{
+                              min: (() => {
+                                const now = new Date();
+                                return now.toISOString().slice(0, 16);
+                              })(),
+                            }}
+                            sx={{
+                              maxWidth: 320,
+                              '& .MuiOutlinedInput-root': {
+                                bgcolor: 'white',
+                                fontFamily: 'monospace',
+                                fontSize: '0.9rem',
+                                '& fieldset': {
+                                  borderColor: 'rgba(102, 126, 234, 0.3)',
+                                  borderWidth: 2,
+                                },
+                                '&:hover fieldset': {
+                                  borderColor: '#667eea',
+                                },
+                                '&.Mui-focused fieldset': {
+                                  borderColor: '#667eea',
+                                  borderWidth: 2,
+                                },
+                              },
+                              '& .MuiInputLabel-root': {
+                                color: '#64748b',
+                                fontWeight: 500,
+                              },
+                              '& .MuiInputLabel-root.Mui-focused': {
+                                color: '#667eea',
+                              },
+                            }}
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
+                            label="Select Date & Time"
+                            helperText="Choose when to run the next extract refresh (today or future)"
+                          />
+                        </Box>
+
+                        <Divider /> */}
+
+                        {/* Recurring Interval Section */}
+                        {/* <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography
+                              variant="subtitle2"
+                              sx={{
+                                fontWeight: 700,
+                                color: '#475569',
+                                fontSize: '0.9rem',
+                              }}
+                            >
+                              Recurring Interval
+                            </Typography>
+                            <Chip 
+                              label="Optional" 
+                              size="small" 
+                              sx={{ 
+                                height: 20, 
+                                fontSize: '0.7rem',
+                                bgcolor: 'rgba(148, 163, 184, 0.1)',
+                                color: '#64748b',
+                              }} 
+                            />
+                          </Box>
+                          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                            <TextField
+                              size="small"
+                              type="number"
+                              label="Refresh every (days)"
+                              value={refreshIntervalDays || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setRefreshIntervalDays(val === '' ? null : parseInt(val, 10));
+                              }}
+                              disabled={isLoadingSchedule}
+                              inputProps={{ min: 1 }}
+                              sx={{
+                                minWidth: 200,
+                                '& .MuiOutlinedInput-root': {
+                                  bgcolor: 'white',
+                                  '& fieldset': {
+                                    borderColor: 'rgba(102, 126, 234, 0.3)',
+                                  },
+                                  '&:hover fieldset': {
+                                    borderColor: '#667eea',
+                                  },
+                                  '&.Mui-focused fieldset': {
+                                    borderColor: '#667eea',
+                                  },
+                                },
+                              }}
+                              helperText="Runs automatically after the next scheduled run"
+                            />
+
+                            <Button
+                              size="small"
+                              variant="contained"
+                              onClick={() => saveSchedule(refreshIntervalDays)}
+                              disabled={isLoadingSchedule}
+                              sx={{
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                '&:hover': {
+                                  background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                                },
+                                fontWeight: 600,
+                                mt: 0.5,
+                              }}
+                            >
+                              {isLoadingSchedule ? 'Saving...' : 'Save Schedule'}
+                            </Button>
+
+                            {refreshIntervalDays && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => saveSchedule(null)}
+                                disabled={isLoadingSchedule}
+                                sx={{
+                                  borderColor: 'rgba(239, 68, 68, 0.5)',
+                                  color: '#ef4444',
+                                  '&:hover': {
+                                    borderColor: '#ef4444',
+                                    bgcolor: 'rgba(239, 68, 68, 0.05)',
+                                  },
+                                  mt: 0.5,
+                                }}
+                              >
+                                Disable
+                              </Button>
+                            )}
+                          </Box>
+                        </Box> */}
+
+                        {/* Status Information */}
+                        {/* {(lastRefreshed || nextRunDateTime) && (
+                          <>
+                            <Divider />
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                              {lastRefreshed && (
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 0.5,
+                                    color: '#64748b',
+                                    fontSize: '0.8rem',
+                                  }}
+                                >
+                                  <span style={{ fontWeight: 600 }}>Last refreshed:</span>
+                                  {new Date(lastRefreshed).toLocaleString()}
+                                </Typography>
+                              )}
+                              
+                              {nextRunDateTime && (
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 0.5,
+                                    color: '#667eea',
+                                    fontWeight: 600,
+                                    fontSize: '0.8rem',
+                                  }}
+                                >
+                                  <span>Next run scheduled:</span>
+                                  {new Date(nextRunDateTime).toLocaleString()}
+                                </Typography>
+                              )}
+                            </Box>
+                          </>
+                        )}
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
+                )} */}
+
               </Box>
 
               <Box
