@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Responsive, WidthProvider, Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
@@ -16,8 +17,18 @@ import { liveFilterFamily } from '../recoil/LiveFilterFamily';
 import { isChartVisibleSelector, chartDynamicDimensionsSelector } from '../recoil/DashboardVisibility';
 import { IsEditModeState } from "../recoil/IsEditeMode";
 import { dahboardNameMain } from "../recoil/DashboardName";
-import { Typography, Box, CircularProgress } from "@mui/material";
+import { Typography, Box, CircularProgress, Menu, MenuItem, Divider } from "@mui/material";
 import { dataLoadedState } from '../components/DataInitializer';
+import Highcharts from 'highcharts';
+import {
+  exportAllAsPNG,
+  exportAllAsJPEG,
+  exportAllAsPDF,
+  exportAllAsSVG,
+  exportAllAsCSV,
+  exportAllAsExcel,
+  ChartRef,
+} from '../utils/downloadUtilities';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -215,8 +226,9 @@ export default function DropDragDashboard() {
 
   const [selectedView, setSelectedView] = useState<string>("dashboardName");
   const [selectedCustomView, setSelectedCustomView] = useState<string>("default");
-  const [selectDownloadOption, setSelectedDownloadOption] = useState<string>("jpeg");
   const [selectedBranch, setSelectedbranch] = useState<string>("createBranch");
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [downloadMenuAnchor, setDownloadMenuAnchor] = useState<null | HTMLElement>(null);
 
   const [views] = useState([
     { id: "dashboardName", name: dashboardName },
@@ -233,12 +245,12 @@ export default function DropDragDashboard() {
   ]);
 
   const [downloadOptions] = useState([
-    { id: "png", name: "PNG" },
-    { id: "jpeg", name: "JPEG" },
-    { id: "pdf", name: "PDF" },
-    { id: "svg", name: "SVG" },
-    { id: "csv", name: "CSV" },
-    { id: "Xls", name: "XLS" },
+    { id: "png", name: "Image (PNG)", icon: "🖼️", description: "Download all as PNG" },
+    { id: "jpeg", name: "Image (JPEG)", icon: "📷", description: "Download all as JPEG" },
+    { id: "pdf", name: "PDF", icon: "📄", description: "Download combined PDF" },
+    { id: "svg", name: "SVG", icon: "🎨", description: "Vector export for charts" },
+    { id: "csv", name: "CSV", icon: "📊", description: "Data export as CSV" },
+    { id: "xls", name: "Excel", icon: "📗", description: "All cards as sheets" },
   ]);
 
   const [branchOptions] = useState([
@@ -264,6 +276,7 @@ export default function DropDragDashboard() {
       nameInputRef.current.select();
     }
   }, [isEditingName]);
+
 
   // 🔥 CRITICAL FIX: Create default layouts for charts that have configs but no layouts
   useEffect(() => {
@@ -594,6 +607,87 @@ export default function DropDragDashboard() {
     const currentLayout = layouts[currentBreakpoint] || [];
     return currentLayout.filter((item: Layout) => chartVisibility[item.i] === false).length;
   }, [layouts, currentBreakpoint, chartVisibility]);
+
+  // Collect chart references for export (after configs & visibility are computed)
+  const collectChartRefs = useCallback((): ChartRef[] => {
+    const refs: ChartRef[] = [];
+    for (const item of visibleCharts) {
+      const configData = chartConfigs[item.i];
+      const contentType = (configData?.type as any) || 'chart';
+      const container = document.querySelector(`[data-chart-id="${item.i}"]`) as HTMLElement | null;
+
+      let title = `Chart_${item.i}`;
+      if (contentType === 'chart' && processedChartConfigs[item.i]) {
+        const chartTitle = processedChartConfigs[item.i]?.title?.text;
+        if (chartTitle) title = typeof chartTitle === 'string' ? chartTitle : String(chartTitle);
+      } else if (contentType === 'html' && configData?.htmlContent) {
+        const temp = document.createElement('div');
+        temp.innerHTML = configData.htmlContent;
+        const h = temp.querySelector('h1,h2,h3');
+        if (h?.textContent) title = h.textContent;
+      }
+
+      let chartInstance: Highcharts.Chart | null = null;
+      if (contentType === 'chart' && container) {
+        const hc = container.querySelector('.highcharts-container') as HTMLElement | null;
+        if (hc) {
+          chartInstance = Highcharts.charts.find((ch: any) => ch?.renderTo === hc) as Highcharts.Chart | null;
+        }
+        if (!chartInstance) {
+          chartInstance = Highcharts.charts.find((ch: any) => {
+            const renderTo = ch?.renderTo;
+            return renderTo && container.contains(renderTo);
+          }) as Highcharts.Chart | null;
+        }
+      }
+
+      refs.push({
+        chart: chartInstance,
+        chartId: item.i,
+        title: title.replace(/[^a-z0-9]/gi, '_'),
+        type: contentType,
+        htmlContent: contentType === 'html' ? configData?.htmlContent : undefined,
+        containerElement: container || undefined,
+      });
+    }
+    return refs;
+  }, [visibleCharts, chartConfigs, processedChartConfigs]);
+
+  const handleDownload = useCallback(async (format: string) => {
+    if (isDownloading || visibleCharts.length === 0) return;
+    setIsDownloading(true);
+    try {
+      const refs = collectChartRefs();
+      switch (format.toLowerCase()) {
+        case 'png':
+          await exportAllAsPNG(refs);
+          break;
+        case 'jpeg':
+          await exportAllAsJPEG(refs);
+          break;
+        case 'pdf':
+          await exportAllAsPDF(refs, dashboardName);
+          break;
+        case 'svg':
+          await exportAllAsSVG(refs);
+          break;
+        case 'csv':
+          await exportAllAsCSV(refs);
+          break;
+        case 'xls':
+          await exportAllAsExcel(refs, dashboardName);
+          break;
+        default:
+          console.warn('Unknown format', format);
+      }
+    } catch (err) {
+      console.error('Download failed', err);
+      alert('Download failed. Please try again after charts finish rendering.');
+    } finally {
+      setIsDownloading(false);
+      setDownloadMenuAnchor(null);
+    }
+  }, [collectChartRefs, isDownloading, visibleCharts.length, dashboardName]);
 
   // 🔥 PERFORMANCE FIX: Remove variableUpdateTrigger from key
   // Including it caused entire grid to remount on every calculation update
@@ -1044,6 +1138,7 @@ export default function DropDragDashboard() {
   }
 
   return (
+    <>
     <div 
       className="min-h-screen"
       style={{
@@ -1400,23 +1495,29 @@ export default function DropDragDashboard() {
           verticalCompact={true}
           maxRows={100}
         >
-          {visibleCharts.map((item: Layout) => (
-            <div
-              key={item.i}
-              className="rounded-xl shadow-md hover:shadow-xl border overflow-hidden transition-all duration-200 backdrop-blur-sm"
-              style={{
-                background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
-                borderColor: 'rgba(203, 213, 225, 0.6)',
-                display: "flex",
-                flexDirection: "column",
-                position: "relative",
-                minHeight: 0,
-                minWidth: 0,
-              }}
-            >
-              {renderChartContent(item)}
-            </div>
-          ))}
+          {visibleCharts.map((item: Layout) => {
+            const configData = chartConfigs[item.i];
+            const contentType = configData?.type || 'chart';
+            return (
+              <div
+                key={item.i}
+                data-chart-id={item.i}
+                data-chart-type={contentType}
+                className="rounded-xl shadow-md hover:shadow-xl border overflow-hidden transition-all duration-200 backdrop-blur-sm"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+                  borderColor: 'rgba(203, 213, 225, 0.6)',
+                  display: "flex",
+                  flexDirection: "column",
+                  position: "relative",
+                  minHeight: 0,
+                  minWidth: 0,
+                }}
+              >
+                {renderChartContent(item)}
+              </div>
+            );
+          })}
         </ResponsiveGridLayout>
 
         {/* Empty State */}
@@ -1525,27 +1626,88 @@ export default function DropDragDashboard() {
 
           <div className="flex items-center justify-end">
             <div className="flex items-center gap-3 mr-3">
-              <select
-                value={selectDownloadOption}
-                onChange={(e) => setSelectedDownloadOption(e.target.value)}
-                className="bg-white/10 text-white text-sm px-3 py-1.5 rounded border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/50 backdrop-blur-sm"
+              <button
+                onClick={(e) => setDownloadMenuAnchor(e.currentTarget)}
+                disabled={isDownloading || visibleCharts.length === 0}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
-                  backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%)',
+                  background: isDownloading 
+                    ? 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)'
+                    : 'linear-gradient(135deg,rgb(157, 173, 245) 0%,rgb(135, 93, 177) 100%)',
+                  boxShadow: isDownloading 
+                    ? '0 2px 8px rgba(148, 163, 184, 0.3)'
+                    : '0 4px 15px rgba(102, 126, 234, 0.3)',
                 }}
+                title={visibleCharts.length === 0 ? 'No charts to download' : 'Download dashboard'}
               >
-                {downloadOptions.map((view) => (
-                  <option 
-                    key={view.id} 
-                    value={view.id}
-                    style={{
-                      backgroundColor: '#667eea',
-                      color: 'white',
+                {isDownloading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </>
+                )}
+              </button>
+              <Menu
+                anchorEl={downloadMenuAnchor}
+                open={Boolean(downloadMenuAnchor)}
+                onClose={() => setDownloadMenuAnchor(null)}
+                PaperProps={{
+                  sx: {
+                    mt: 1,
+                    minWidth: 260,
+                    borderRadius: 2,
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+                    border: '1px solid rgba(0,0,0,0.08)',
+                  }
+                }}
+                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+              >
+                <Box sx={{ px: 1.5, py: 1 }}>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                    Export Dashboard
+                  </Typography>
+                </Box>
+                <Divider />
+                {downloadOptions.map((option) => (
+                  <MenuItem
+                    key={option.id}
+                    onClick={() => handleDownload(option.id)}
+                    disabled={isDownloading || visibleCharts.length === 0}
+                    sx={{
+                      py: 1.4,
+                      px: 2,
+                      '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.08)' },
+                      '&.Mui-disabled': { opacity: 0.5 },
                     }}
                   >
-                    {view.name}
-                  </option>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                      <Box sx={{ fontSize: '1.2rem', width: 24, textAlign: 'center' }}>{option.icon}</Box>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                          {option.name}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.74rem' }}>
+                          {option.description}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </MenuItem>
                 ))}
-              </select>
+              </Menu>
             </div>
 
             <div className="flex items-center gap-3">
@@ -1579,5 +1741,45 @@ export default function DropDragDashboard() {
         </div>
       </div>
     </div>
+      {isDownloading && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(2px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <div
+            style={{
+              background: 'white',
+              padding: '16px 20px',
+              borderRadius: '12px',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.18)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              minWidth: '220px',
+              justifyContent: 'center',
+              border: '1px solid rgba(148, 163, 184, 0.3)',
+            }}
+          >
+            <svg className="animate-spin h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <div>
+              <div style={{ fontWeight: 700, color: '#111827', fontSize: '14px' }}>Exporting...</div>
+              <div style={{ color: '#475569', fontSize: '12px' }}>Please wait while we prepare your download</div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+  </>
   );
 }

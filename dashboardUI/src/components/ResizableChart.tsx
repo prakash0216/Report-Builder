@@ -67,7 +67,7 @@ const ResizableChartInner: React.FC<ResizableChartProps> = ({ options, showExpor
         ...options.chart,
         animation: false,
         reflow: true,
-        backgroundColor: 'transparent',
+        backgroundColor: '#FFFFFF',
         style: {
           fontFamily: 'inherit',
         },
