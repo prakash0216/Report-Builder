@@ -80,13 +80,14 @@ export const activeFilterIdsState = atom<string[]>({
   ]
 });
 
-// Compact Filter Item with Dropdown
-const CompactFilterItem: React.FC<{ 
+// Compact Filter Item with Dropdown (exported for card-level reuse)
+export const CompactFilterItem: React.FC<{ 
   variableName: string; 
   onRemove: () => void;
-  position: FilterPosition;
-  onPositionChange: (pos: FilterPosition) => void;
-}> = ({ variableName, onRemove, position, onPositionChange }) => {
+  position?: FilterPosition;
+  onPositionChange?: (pos: FilterPosition) => void;
+  variant?: 'global' | 'inline';
+}> = ({ variableName, onRemove, position, onPositionChange, variant = 'global' }) => {
   const filterConfig = useRecoilValue(filterConfigFamily(variableName));
   const [liveValue, setLiveValue] = useRecoilState(liveFilterFamily(variableName));
   const [tempValue, setTempValue] = useState<any[]>([]);
@@ -94,7 +95,8 @@ const CompactFilterItem: React.FC<{
   const nodeRef = useRef(null);
 
   const isOpen = Boolean(anchorEl);
-
+  const isInlineVariant = variant === 'inline';
+  const effectivePosition = position || { x: 0, y: 0 };
   const isEditMode=useRecoilValue(IsEditModeState);
 
   // Initialize with default values
@@ -380,152 +382,161 @@ const CompactFilterItem: React.FC<{
     );
   };
 
+  const filterCard = (
+    <Paper
+      ref={nodeRef}
+      elevation={0}
+      sx={{
+        position: isInlineVariant ? 'relative' : 'absolute',
+        width: isInlineVariant ? '100%' : 280,
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%)',
+        backdropFilter: 'blur(10px)',
+        border: '1px solid rgba(102, 126, 234, 0.2)',
+        borderRadius: 2,
+        overflow: 'hidden',
+        boxShadow: isInlineVariant ? '0 6px 20px rgba(102, 126, 234, 0.12)' : '0 8px 32px rgba(102, 126, 234, 0.15)',
+        mt: isInlineVariant ? 1 : 0,
+      }}
+    >
+      {/* Header with drag handle */}
+      <Box
+        className="drag-handle"
+        sx={{
+          background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+          borderBottom: '1px solid #e2e8f0',
+          px: 1,
+          py: 0.5,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          cursor: isInlineVariant ? 'default' : 'move',
+          '&:hover': {
+            background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+          },
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+          {!isInlineVariant && <DragIndicatorIcon sx={{ fontSize: 16, mr: 0.5, color: '#667eea' }} />}
+          <Typography 
+            variant="caption" 
+            fontWeight="700" 
+            noWrap 
+            sx={{ 
+              flex: 1,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
+          >
+            {filterConfig.displayName}
+          </Typography>
+        </Box>
+        {isEditMode && (
+          <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          sx={{
+            p: 0.25,
+            ml: 0.5,
+            color: '#64748b',
+            '&:hover': {
+              bgcolor: '#fee2e2',
+              color: '#dc2626',
+            },
+          }}
+        >
+          <CloseIcon sx={{ fontSize: 16 }} />
+        </IconButton>
+        )}
+      </Box>
+
+      {/* Dropdown selector */}
+      <Box
+        onClick={handleClick}
+        sx={{
+          px: 1.5,
+          py: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          cursor: 'pointer',
+          bgcolor: 'white',
+          '&:hover': {
+            bgcolor: '#f8fafc',
+          },
+          borderLeft: 3,
+          borderColor: categoryColor.borderColor,
+        }}
+      >
+        <Typography variant="body2" noWrap sx={{ flex: 1, mr: 1, fontWeight: 500 }}>
+          {getDisplayText()}
+        </Typography>
+        <KeyboardArrowDownIcon 
+          sx={{ 
+            fontSize: 18, 
+            color: '#667eea',
+            transform: isOpen ? 'rotate(180deg)' : 'rotate(0)',
+            transition: 'transform 0.2s',
+          }} 
+        />
+      </Box>
+
+      {/* Dropdown Menu */}
+      <Menu
+        anchorEl={anchorEl}
+        open={isOpen}
+        onClose={handleClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'left',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'left',
+        }}
+        disableAutoFocusItem
+        PaperProps={{
+          sx: {
+            mt: 0.5,
+            boxShadow: '0 8px 32px rgba(102, 126, 234, 0.2)',
+            maxHeight: 400,
+            overflow: 'hidden',
+            width: 280,
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(102, 126, 234, 0.1)',
+            borderRadius: 2,
+          },
+        }}
+        MenuListProps={{
+          sx: { p: 0, width: '100%' },
+        }}
+      >
+        {filterConfig.selectionType === 'single' ? renderSingleSelect() : renderMultiSelect()}
+      </Menu>
+    </Paper>
+  );
+
+  if (isInlineVariant) {
+    return filterCard;
+  }
+
   return (
     <Draggable
       nodeRef={nodeRef}
       handle=".drag-handle"
-      position={position}
+      position={effectivePosition}
       onStop={(e, data) => {
-        onPositionChange({ x: data.x, y: data.y });
+        onPositionChange?.({ x: data.x, y: data.y });
       }}
       bounds="parent"
       disabled={!isEditMode}
     >
-      <Paper
-        ref={nodeRef}
-        elevation={0}
-        sx={{
-          position: 'absolute',
-          width: 280,
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(102, 126, 234, 0.2)',
-          borderRadius: 2,
-          overflow: 'hidden',
-          boxShadow: '0 8px 32px rgba(102, 126, 234, 0.15)',
-        }}
-      >
-        {/* Header with drag handle */}
-        <Box
-          className="drag-handle"
-          sx={{
-            background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-            borderBottom: '1px solid #e2e8f0',
-            px: 1,
-            py: 0.5,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            cursor: 'move',
-            '&:hover': {
-              background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
-            },
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
-            <DragIndicatorIcon sx={{ fontSize: 16, mr: 0.5, color: '#667eea' }} />
-            <Typography 
-              variant="caption" 
-              fontWeight="700" 
-              noWrap 
-              sx={{ 
-                flex: 1,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
-              {filterConfig.displayName}
-            </Typography>
-          </Box>
-          {isEditMode && (
-            <IconButton
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemove();
-            }}
-            sx={{
-              p: 0.25,
-              ml: 0.5,
-              color: '#64748b',
-              '&:hover': {
-                bgcolor: '#fee2e2',
-                color: '#dc2626',
-              },
-            }}
-          >
-            <CloseIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-          )}
-        </Box>
-
-        {/* Dropdown selector */}
-        <Box
-          onClick={handleClick}
-          sx={{
-            px: 1.5,
-            py: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            cursor: 'pointer',
-            bgcolor: 'white',
-            '&:hover': {
-              bgcolor: '#f8fafc',
-            },
-            borderLeft: 3,
-            borderColor: categoryColor.borderColor,
-          }}
-        >
-          <Typography variant="body2" noWrap sx={{ flex: 1, mr: 1, fontWeight: 500 }}>
-            {getDisplayText()}
-          </Typography>
-          <KeyboardArrowDownIcon 
-            sx={{ 
-              fontSize: 18, 
-              color: '#667eea',
-              transform: isOpen ? 'rotate(180deg)' : 'rotate(0)',
-              transition: 'transform 0.2s',
-            }} 
-          />
-        </Box>
-
-        {/* Dropdown Menu */}
-        <Menu
-          anchorEl={anchorEl}
-          open={isOpen}
-          onClose={handleClose}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'left',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'left',
-          }}
-          disableAutoFocusItem
-          PaperProps={{
-            sx: {
-              mt: 0.5,
-              boxShadow: '0 8px 32px rgba(102, 126, 234, 0.2)',
-              maxHeight: 400,
-              overflow: 'hidden',
-              width: 280,
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%)',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(102, 126, 234, 0.1)',
-              borderRadius: 2,
-            },
-          }}
-          MenuListProps={{
-            sx: { p: 0, width: '100%' },
-          }}
-        >
-          {filterConfig.selectionType === 'single' ? renderSingleSelect() : renderMultiSelect()}
-        </Menu>
-      </Paper>
+      {filterCard}
     </Draggable>
   );
 };

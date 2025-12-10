@@ -2911,6 +2911,96 @@ app.put('/api/filter-panel-state/:filterId/position', async (req, res) => {
 });
 
 // ============================================
+// CARD FILTER PANEL STATE ENDPOINTS (per card)
+// ============================================
+
+async function saveCardFilterPanelStateToDb(cardId, positions, activeFilterIds) {
+  const escapedCardId = cardId.replace(/'/g, "''");
+
+  try {
+    await dbClient.run(
+      `UPDATE card_filter_panel_state SET is_active = false WHERE card_id='${escapedCardId}'`
+    );
+  } catch (err) {
+    console.log('Note: Could not update existing card filters (may not exist yet)');
+  }
+
+  for (let i = 0; i < activeFilterIds.length; i++) {
+    const filterId = activeFilterIds[i];
+    const position = positions[filterId] || { x: 6, y: 6 + i * 80 };
+    const escapedFilterId = filterId.replace(/'/g, "''");
+
+    try {
+      await dbClient.run(
+        `DELETE FROM card_filter_panel_state WHERE card_id='${escapedCardId}' AND filter_id='${escapedFilterId}'`
+      );
+    } catch (delErr) {
+      // ignore
+    }
+
+    try {
+      await dbClient.run(`
+        INSERT INTO card_filter_panel_state (card_id, filter_id, x_position, y_position, is_active, display_order, last_modified)
+        VALUES ('${escapedCardId}', '${escapedFilterId}', ${Math.round(position.x)}, ${Math.round(position.y)}, true, ${i}, CURRENT_TIMESTAMP)
+      `);
+    } catch (insertErr) {
+      console.warn(`Warning: Could not save card filter state for card ${cardId} filter ${filterId}:`, insertErr.message);
+    }
+  }
+}
+
+app.get('/api/cards/:cardId/filter-panel-state', async (req, res) => {
+  try {
+    const { cardId } = req.params;
+    const escapedCardId = cardId.replace(/'/g, "''");
+    const states = await dbClient.query(
+      `SELECT * FROM card_filter_panel_state WHERE card_id='${escapedCardId}' AND is_active = true ORDER BY COALESCE(display_order, 0), last_modified DESC`
+    );
+
+    const positions = {};
+    const activeFilterIds = [];
+
+    if (states && Array.isArray(states)) {
+      states.forEach((row) => {
+        positions[row.filter_id] = {
+          x: row.x_position,
+          y: row.y_position,
+        };
+        activeFilterIds.push(row.filter_id);
+      });
+    }
+
+    res.json({
+      success: true,
+      positions,
+      activeFilterIds,
+    });
+  } catch (err) {
+    console.error('Error fetching card filter panel state:', err.message || err);
+    res.status(500).json({ success: false, error: err.message || 'Unknown error' });
+  }
+});
+
+app.post('/api/cards/:cardId/filter-panel-state', async (req, res) => {
+  try {
+    const { cardId } = req.params;
+    const { positions, activeFilterIds } = req.body;
+    if (!cardId) {
+      return res.status(400).json({ success: false, error: 'cardId is required' });
+    }
+    if (!positions || !activeFilterIds || !Array.isArray(activeFilterIds)) {
+      return res.status(400).json({ success: false, error: 'positions object and activeFilterIds array are required' });
+    }
+
+    await saveCardFilterPanelStateToDb(cardId, positions, activeFilterIds);
+    res.json({ success: true, message: 'Card filter panel state saved successfully' });
+  } catch (err) {
+    console.error('Error saving card filter panel state:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
 // CARD DIMENSION CONDITIONS ENDPOINTS
 // ============================================
 

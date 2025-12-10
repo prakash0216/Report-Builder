@@ -183,6 +183,7 @@ CREATE SEQUENCE IF NOT EXISTS layouts_seq START 1;
 CREATE SEQUENCE IF NOT EXISTS chart_visibility_seq START 1;
 CREATE SEQUENCE IF NOT EXISTS card_dimension_conditions_seq START 1;
 CREATE SEQUENCE IF NOT EXISTS filter_panel_state_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS card_filter_panel_state_seq START 1;
 `;
 
 const chartConfigsTable=`
@@ -260,7 +261,22 @@ CREATE TABLE IF NOT EXISTS filter_panel_state (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   last_modified TIMESTAMP
 );
-`
+`;
+
+const cardFilterPanelStateTable=`
+CREATE TABLE IF NOT EXISTS card_filter_panel_state (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('card_filter_panel_state_seq'),
+  card_id TEXT NOT NULL,
+  filter_id TEXT NOT NULL,
+  x_position INTEGER NOT NULL,
+  y_position INTEGER NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  display_order INTEGER,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_modified TIMESTAMP,
+  UNIQUE(card_id, filter_id)
+);
+`;
 
 async function initializeSequences() {
   try {
@@ -332,6 +348,16 @@ async function createFilterPanelStateTable() {
   }
 }
 
+async function createCardFilterPanelStateTable() {
+  try {
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS card_filter_panel_state_seq START 1;`);
+    await dbClient.run(cardFilterPanelStateTable);
+    console.log("✅ Table 'card_filter_panel_state' created successfully.");
+  } catch (err) {
+    console.error("❌ Error creating table 'card_filter_panel_state':", err.message);
+  }
+}
+
 // Materialized views table definition
 const materializedViewsTable = `
 CREATE TABLE IF NOT EXISTS materialized_views (
@@ -364,6 +390,7 @@ const createTables = async () => {
   await createChartVisibilityTable();
   await createCardDimensionConditionsTable();
   await createFilterPanelStateTable();
+  await createCardFilterPanelStateTable();
 }
 
 // createTables();

@@ -74,6 +74,44 @@ const captureElementAsPng = async (el: HTMLElement): Promise<string | null> => {
   }
 };
 
+/**
+ * Export entire dashboard as a single image (png/jpeg)
+ */
+export const exportDashboardAsImage = async (
+  rootEl: HTMLElement,
+  format: 'png' | 'jpeg',
+  fileName: string
+) => {
+  const rect = rootEl.getBoundingClientRect();
+  const width = Math.ceil(rect.width);
+  // Cap height to avoid huge canvases that can turn black/freeze the tab
+  const maxHeight = 3000;
+  const height = Math.min(Math.ceil(rootEl.scrollHeight || rect.height), maxHeight);
+
+  const canvas = await html2canvas(rootEl, {
+    backgroundColor: '#ffffff',
+    scale: Math.max(2, (window.devicePixelRatio || 1)),
+    useCORS: true,
+    logging: false,
+    scrollX: -rect.left - window.scrollX,
+    scrollY: -rect.top - window.scrollY,
+    width,
+    height,
+    windowWidth: Math.max(document.documentElement.clientWidth, width),
+    windowHeight: Math.max(document.documentElement.clientHeight, height),
+  });
+
+  const dataUrl =
+    format === 'jpeg'
+      ? canvas.toDataURL('image/jpeg', 0.95)
+      : canvas.toDataURL('image/png');
+
+  const link = document.createElement('a');
+  link.download = `${fileName.replace(/[^a-z0-9]/gi, '_')}.${format}`;
+  link.href = dataUrl;
+  link.click();
+};
+
 // Lazy-load XLSX browser build to avoid node:fs/node:https resolution issues
 const loadXLSX = async (): Promise<any> => {
   // @ts-ignore - dynamic import of browser bundle
