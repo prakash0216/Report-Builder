@@ -55,17 +55,46 @@ const waitForChartsReady = async (chartRefs: ChartRef[]) => {
 const captureElementAsPng = async (el: HTMLElement): Promise<string | null> => {
   try {
     const rect = el.getBoundingClientRect();
+    
+    // Skip if element has no dimensions
+    if (rect.width <= 0 || rect.height <= 0) {
+      console.warn('captureElementAsPng: element has no dimensions');
+      return null;
+    }
+    
+    // Scroll element into view to ensure it's rendered
+    //@ts-ignore
+    el.scrollIntoView({ behavior: 'instant', block: 'center' });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Get fresh rect after scroll
+    const freshRect = el.getBoundingClientRect();
+    
     const canvas = await html2canvas(el, {
       backgroundColor: '#ffffff',
-      scale: Math.max(2, (window.devicePixelRatio || 1)) * 1.5,
+      scale: 1.5,
       useCORS: true,
+      allowTaint: true,
       logging: false,
       scrollX: 0,
-      scrollY: -window.scrollY,
-      width: rect.width,
-      height: rect.height,
+      scrollY: 0,
+      width: freshRect.width,
+      height: freshRect.height,
       windowWidth: document.documentElement.clientWidth,
       windowHeight: document.documentElement.clientHeight,
+      onclone: (clonedDoc: Document, clonedEl: Element) => {
+        // Ensure the cloned element is visible
+        (clonedEl as HTMLElement).style.overflow = 'visible';
+        // Force visibility on any child elements
+        const children = clonedEl.querySelectorAll('*');
+        children.forEach(child => {
+          const htmlChild = child as HTMLElement;
+          if (htmlChild.style) {
+            htmlChild.style.visibility = 'visible';
+            htmlChild.style.opacity = '1';
+          }
+        });
+      },
     });
     return canvas.toDataURL('image/png');
   } catch (err) {
@@ -76,40 +105,93 @@ const captureElementAsPng = async (el: HTMLElement): Promise<string | null> => {
 
 /**
  * Export entire dashboard as a single image (png/jpeg)
+ * Captures the full scrollable content of the dashboard
  */
 export const exportDashboardAsImage = async (
   rootEl: HTMLElement,
   format: 'png' | 'jpeg',
   fileName: string
 ) => {
-  const rect = rootEl.getBoundingClientRect();
-  const width = Math.ceil(rect.width);
-  // Cap height to avoid huge canvases that can turn black/freeze the tab
-  const maxHeight = 3000;
-  const height = Math.min(Math.ceil(rootEl.scrollHeight || rect.height), maxHeight);
+  try {
+    // Store original scroll position
+    const originalScrollTop = window.scrollY;
+    const originalScrollLeft = window.scrollX;
+    
+    // Scroll to top to capture from beginning
+    window.scrollTo(0, 0);
+    
+    // Brief wait for scroll to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Get the full dimensions of the content
+    const rect = rootEl.getBoundingClientRect();
+    const scrollWidth = rootEl.scrollWidth || rect.width;
+    const scrollHeight = rootEl.scrollHeight || rect.height;
+    
+    // Calculate dimensions - use full scroll dimensions but cap to prevent crashes
+    const maxDimension = 8000; // Maximum canvas dimension to prevent crashes
+    const width = Math.min(Math.ceil(scrollWidth), maxDimension);
+    const height = Math.min(Math.ceil(scrollHeight), maxDimension);
+    
+    console.log(`[Export] Capturing dashboard: ${width}x${height}`);
+    
+    // Use scale of 1 to prevent memory issues with large dashboards
+    const scale = 1;
+    
+    const canvas = await html2canvas(rootEl, {
+      backgroundColor: '#f8fafc',
+      scale: scale,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      scrollX: 0,
+      scrollY: 0,
+      width: width,
+      height: height,
+      windowWidth: width,
+      windowHeight: height,
+      // Clone the document and wait for images/SVGs to load
+      onclone: (clonedDoc: Document) => {
+        // Force all Highcharts containers to be visible in the clone
+        const charts = clonedDoc.querySelectorAll('.highcharts-container');
+        charts.forEach((chart) => {
+          (chart as HTMLElement).style.overflow = 'visible';
+        });
+        // Make sure all card content is visible
+        const cards = clonedDoc.querySelectorAll('[data-chart-id]');
+        cards.forEach((card) => {
+          (card as HTMLElement).style.overflow = 'visible';
+        });
+      },
+      ignoreElements: (element: Element) => {
+        // Ignore fixed positioned elements (headers, modals, etc.)
+        const style = window.getComputedStyle(element);
+        if (style.position === 'fixed') return true;
+        if (element.classList.contains('MuiMenu-root')) return true;
+        if (element.classList.contains('MuiModal-root')) return true;
+        if (element.classList.contains('MuiPopover-root')) return true;
+        return false;
+      },
+    });
 
-  const canvas = await html2canvas(rootEl, {
-    backgroundColor: '#ffffff',
-    scale: Math.max(2, (window.devicePixelRatio || 1)),
-    useCORS: true,
-    logging: false,
-    scrollX: -rect.left - window.scrollX,
-    scrollY: -rect.top - window.scrollY,
-    width,
-    height,
-    windowWidth: Math.max(document.documentElement.clientWidth, width),
-    windowHeight: Math.max(document.documentElement.clientHeight, height),
-  });
+    // Restore original scroll position
+    window.scrollTo(originalScrollLeft, originalScrollTop);
 
-  const dataUrl =
-    format === 'jpeg'
-      ? canvas.toDataURL('image/jpeg', 0.95)
-      : canvas.toDataURL('image/png');
+    const dataUrl =
+      format === 'jpeg'
+        ? canvas.toDataURL('image/jpeg', 0.92)
+        : canvas.toDataURL('image/png');
 
-  const link = document.createElement('a');
-  link.download = `${fileName.replace(/[^a-z0-9]/gi, '_')}.${format}`;
-  link.href = dataUrl;
-  link.click();
+    const link = document.createElement('a');
+    link.download = `${fileName.replace(/[^a-z0-9]/gi, '_')}.${format}`;
+    link.href = dataUrl;
+    link.click();
+    
+    console.log('[Export] Dashboard image exported successfully');
+  } catch (err) {
+    console.error('Dashboard image export failed:', err);
+    alert('Image export failed. The dashboard may be too large. Try exporting as PDF instead.');
+  }
 };
 
 // Lazy-load XLSX browser build to avoid node:fs/node:https resolution issues
@@ -238,65 +320,93 @@ export const exportAllAsSVG = async (chartRefs: ChartRef[]) => {
 };
 
 export const exportAllAsPDF = async (chartRefs: ChartRef[], fileName = 'Dashboard') => {
+  console.log('[PDF Export] Starting with', chartRefs.length, 'cards');
   await waitForChartsReady(chartRefs);
   const pdf = new jsPDF('p', 'mm', 'a4');
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 10;
   let y = margin;
+  let cardsExported = 0;
 
   for (let i = 0; i < chartRefs.length; i++) {
     const ref = chartRefs[i];
+    console.log(`[PDF Export] Processing card ${ref.chartId}, type: ${ref.type}, hasContainer: ${!!ref.containerElement}`);
+    
     try {
       let dataUrl: string | undefined;
+      
       if (ref.type === 'chart') {
+        // For chart type, try to get SVG first
         const chart = ref.chart || (ref.containerElement ? await getChartWithRetry(ref.containerElement) : null);
-        if (!chart) continue;
-        const svg = (chart as any).getSVG?.();
-        if (!svg) continue;
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const img = new Image();
-        await new Promise((resolve, reject) => {
-          img.onload = () => {
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx?.drawImage(img, 0, 0);
-            dataUrl = canvas.toDataURL('image/png');
-            resolve(null);
-          };
-          img.onerror = reject;
-          img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
-        });
-      } else if (ref.containerElement) {
-        const shot = await captureElementAsPng(ref.containerElement);
-        dataUrl = shot || undefined;
+        if (chart) {
+          const svg = (chart as any).getSVG?.();
+          if (svg) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            await new Promise((resolve, reject) => {
+              img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx?.drawImage(img, 0, 0);
+                dataUrl = canvas.toDataURL('image/png');
+                resolve(null);
+              };
+              img.onerror = reject;
+              img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+            });
+          }
+        }
+        // Fallback to container capture if SVG failed
+        if (!dataUrl && ref.containerElement) {
+          console.log(`[PDF Export] Chart SVG failed for ${ref.chartId}, trying container capture`);
+          const shot = await captureElementAsPng(ref.containerElement);
+          dataUrl = shot || undefined;
+        }
+      } else {
+        // For HTML/table/other types, capture the container element
+        if (ref.containerElement) {
+          console.log(`[PDF Export] Capturing container for ${ref.chartId} (type: ${ref.type})`);
+          const shot = await captureElementAsPng(ref.containerElement);
+          dataUrl = shot || undefined;
+        }
       }
 
-      if (!dataUrl) continue;
+      if (!dataUrl) {
+        console.warn(`[PDF Export] No image data for ${ref.chartId}, skipping`);
+        continue;
+      }
 
       const img = new Image();
       await new Promise((resolve) => {
         img.onload = () => {
           const ratio = (pageWidth - margin * 2) / img.width;
-          const imgHeight = img.height * ratio;
-          if (y + imgHeight > pageHeight - margin) {
+          const imgHeight = Math.min(img.height * ratio, pageHeight - margin * 2 - 10); // Cap height to fit page
+          if (y + imgHeight + 10 > pageHeight - margin) {
             pdf.addPage();
             y = margin;
           }
-          pdf.text(ref.title || `Chart ${i + 1}`, margin, y);
+          pdf.text(ref.title || `Card ${i + 1}`, margin, y);
           y += 6;
           pdf.addImage(dataUrl!, 'PNG', margin, y, pageWidth - margin * 2, imgHeight);
           y += imgHeight + 10;
+          cardsExported++;
+          console.log(`[PDF Export] Added ${ref.chartId} to PDF`);
+          resolve(null);
+        };
+        img.onerror = () => {
+          console.warn(`[PDF Export] Failed to load image for ${ref.chartId}`);
           resolve(null);
         };
         img.src = dataUrl!;
       });
     } catch (err) {
-      console.warn('PDF export failed for', ref.chartId, err);
+      console.warn('[PDF Export] Failed for', ref.chartId, err);
     }
   }
 
+  console.log(`[PDF Export] Complete - exported ${cardsExported} of ${chartRefs.length} cards`);
   pdf.save(`${fileName.replace(/[^a-z0-9]/gi, '_')}.pdf`);
 };
 

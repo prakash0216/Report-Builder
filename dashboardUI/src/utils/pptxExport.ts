@@ -20,21 +20,49 @@ const getChartWithRetry = async (container: HTMLElement, maxRetries = 6): Promis
 const captureElementAsPng = async (el: HTMLElement): Promise<string | null> => {
   try {
     const rect = el.getBoundingClientRect();
+    
+    // Skip if element has no dimensions
+    if (rect.width <= 0 || rect.height <= 0) {
+      console.warn('[PPTX] captureElementAsPng: element has no dimensions');
+      return null;
+    }
+    
+    // Scroll element into view to ensure it's rendered
+    el.scrollIntoView({ behavior: 'auto', block: 'center' });
+    await sleep(100);
+    
+    // Get fresh rect after scroll
+    const freshRect = el.getBoundingClientRect();
+    
     const canvas = await html2canvas(el, {
       backgroundColor: '#ffffff',
-      scale: Math.max(2, (window.devicePixelRatio || 1)) * 1.5,
+      scale: 1.5,
       useCORS: true,
+      allowTaint: true,
       logging: false,
       scrollX: 0,
-      scrollY: -window.scrollY,
-      width: rect.width,
-      height: rect.height,
+      scrollY: 0,
+      width: freshRect.width,
+      height: freshRect.height,
       windowWidth: document.documentElement.clientWidth,
       windowHeight: document.documentElement.clientHeight,
+      onclone: (clonedDoc: Document, clonedEl: Element) => {
+        // Ensure the cloned element is visible
+        (clonedEl as HTMLElement).style.overflow = 'visible';
+        // Force visibility on any child elements
+        const children = clonedEl.querySelectorAll('*');
+        children.forEach(child => {
+          const htmlChild = child as HTMLElement;
+          if (htmlChild.style) {
+            htmlChild.style.visibility = 'visible';
+            htmlChild.style.opacity = '1';
+          }
+        });
+      },
     });
     return canvas.toDataURL('image/png');
   } catch (err) {
-    console.warn('captureElementAsPng failed', err);
+    console.warn('[PPTX] captureElementAsPng failed', err);
     return null;
   }
 };
@@ -254,7 +282,48 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
         console.log(`[PPTX Export] Capturing chart as image for ${ref.chartId}`);
         const dataUrl = await captureChartAsPng(ref.chart);
         if (dataUrl) {
-          slide.addImage({ data: dataUrl, x: slideMargin, y: 0.9, w: 10, sizing: { type: 'contain', w: 10, h: 5.5 } });
+          // Load image to get actual dimensions
+          const img = new Image();
+          await new Promise<void>((resolve) => {
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+            img.src = dataUrl;
+          });
+          
+          // Slide dimensions (default layout is 10" x 7.5")
+          const slideWidth = 10;
+          const slideHeight = 7.5;
+          const margin = 0.5;
+          const titleHeight = 0.8;
+          
+          const availableWidth = slideWidth - (margin * 2);
+          const availableHeight = slideHeight - titleHeight - (margin * 2);
+          const contentY = titleHeight + margin;
+          
+          const imgAspect = (img.width && img.height) ? img.width / img.height : 1.5;
+          const areaAspect = availableWidth / availableHeight;
+          
+          let finalWidth: number;
+          let finalHeight: number;
+          
+          if (imgAspect > areaAspect) {
+            finalWidth = availableWidth;
+            finalHeight = finalWidth / imgAspect;
+          } else {
+            finalHeight = availableHeight;
+            finalWidth = finalHeight * imgAspect;
+          }
+          
+          const xPos = (slideWidth - finalWidth) / 2;
+          const yPos = contentY + (availableHeight - finalHeight) / 2;
+          
+          slide.addImage({ 
+            data: dataUrl, 
+            x: xPos,
+            y: yPos,
+            w: finalWidth,
+            h: finalHeight
+          });
           console.log(`[PPTX Export] Added chart image for ${ref.chartId}`);
           continue;
         }
@@ -265,7 +334,56 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
         console.log(`[PPTX Export] Capturing element as image for ${ref.chartId}`);
         const dataUrl = await captureElementAsPng(ref.containerElement);
         if (dataUrl) {
-          slide.addImage({ data: dataUrl, x: slideMargin, y: 0.9, w: 9, sizing: { type: 'contain', w: 9, h: 4.5 } });
+          // Load image to get actual dimensions
+          const img = new Image();
+          await new Promise<void>((resolve) => {
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+            img.src = dataUrl;
+          });
+          
+          // Slide dimensions (default layout is 10" x 7.5")
+          const slideWidth = 10;
+          const slideHeight =5;
+          const margin = 0.5;
+          const titleHeight = 0.8;
+          
+          // Available area for content
+          const availableWidth = slideWidth - (margin * 2);  // 9"
+          const availableHeight = slideHeight - titleHeight - (margin * 2);  // 5.7"
+          const contentY = titleHeight + margin;  // 1.3"
+          
+          // Calculate scaled dimensions maintaining aspect ratio
+          const imgAspect = (img.width && img.height) ? img.width / img.height : 1.5;
+          const areaAspect = availableWidth / availableHeight;
+          
+          let finalWidth: number;
+          let finalHeight: number;
+          
+          if (imgAspect > areaAspect) {
+            // Image is wider than area - constrain by width
+            finalWidth = availableWidth;
+            finalHeight = finalWidth / imgAspect;
+          } else {
+            // Image is taller than area - constrain by height
+            finalHeight = availableHeight;
+            finalWidth = finalHeight * imgAspect;
+          }
+          
+          // Center horizontally within slide
+          const xPos = (slideWidth - finalWidth) / 2;
+          // Center vertically within available area
+          const yPos = contentY + (availableHeight - finalHeight) / 2;
+          
+          console.log(`[PPTX Export] Image: ${img.width}x${img.height}, aspect=${imgAspect.toFixed(2)}, final=${finalWidth.toFixed(2)}x${finalHeight.toFixed(2)}, pos=(${xPos.toFixed(2)}, ${yPos.toFixed(2)})`);
+          
+          slide.addImage({ 
+            data: dataUrl, 
+            x: xPos,
+            y: yPos,
+            w: finalWidth,
+            h: finalHeight
+          });
           console.log(`[PPTX Export] Added element image for ${ref.chartId}`);
         } else {
           slide.addText('Content unavailable', { x: slideMargin, y: 1.2, fontSize: 14, color: '888888' });

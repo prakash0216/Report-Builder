@@ -22,12 +22,11 @@ import { Typography, Box, CircularProgress, Menu, MenuItem, Divider } from "@mui
 import { dataLoadedState } from '../components/DataInitializer';
 import Highcharts from 'highcharts';
 import {
-  exportAllAsPNG,
-  exportAllAsJPEG,
   exportAllAsPDF,
   exportAllAsSVG,
   exportAllAsCSV,
   exportAllAsExcel,
+  exportDashboardAsImage,
   ChartRef,
 } from '../utils/downloadUtilities';
 import { exportDashboardPPTXEditable } from '../utils/pptxExport';
@@ -221,6 +220,7 @@ export default function DropDragDashboard() {
   const [dashboardName, setDashboardName] = useRecoilState(dahboardNameMain);
   const [isEditingName, setIsEditingName] = useState<boolean>(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const dashboardGridRef = useRef<HTMLDivElement>(null);
 
   // 🔥 CRITICAL: Store TRUE original positions (before any visibility changes)
   const trueOriginalPositionsRef = useRef<Record<string, Layout>>({});
@@ -248,8 +248,8 @@ export default function DropDragDashboard() {
   ]);
 
   const [downloadOptions] = useState([
-    { id: "png", name: "Image (PNG)", icon: "🖼️", description: "Download all as PNG" },
-    { id: "jpeg", name: "Image (JPEG)", icon: "📷", description: "Download all as JPEG" },
+    { id: "png", name: "Image (PNG)", icon: "🖼️", description: "Dashboard as single PNG" },
+    { id: "jpeg", name: "Image (JPEG)", icon: "📷", description: "Dashboard as single JPEG" },
     { id: "pdf", name: "PDF", icon: "📄", description: "Download combined PDF" },
     { id: "svg", name: "SVG", icon: "🎨", description: "Vector export for charts" },
     { id: "csv", name: "CSV", icon: "📊", description: "Data export as CSV" },
@@ -660,14 +660,45 @@ export default function DropDragDashboard() {
   const handleDownload = useCallback(async (format: string) => {
     if (isDownloading || visibleCharts.length === 0) return;
     setIsDownloading(true);
+    
+    // Small delay to let the loading overlay render before heavy processing
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
     try {
       const refs = collectChartRefs();
+      
+      // For image exports, wait for all charts to be fully rendered
+      if (format === 'png' || format === 'jpeg') {
+        // Quick wait for Highcharts to finish rendering
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Force reflow on all charts
+        Highcharts.charts.forEach(chart => {
+          if (chart) {
+            try {
+              chart.reflow();
+            } catch (e) {
+              // Ignore reflow errors
+            }
+          }
+        });
+        
+        // Brief wait after reflow
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
       switch (format.toLowerCase()) {
         case 'png':
-          await exportAllAsPNG(refs);
+          // Export entire dashboard as single PNG image
+          if (dashboardGridRef.current) {
+            await exportDashboardAsImage(dashboardGridRef.current, 'png', dashboardName);
+          }
           break;
         case 'jpeg':
-          await exportAllAsJPEG(refs);
+          // Export entire dashboard as single JPEG image
+          if (dashboardGridRef.current) {
+            await exportDashboardAsImage(dashboardGridRef.current, 'jpeg', dashboardName);
+          }
           break;
         case 'pdf':
           await exportAllAsPDF(refs, dashboardName);
@@ -1497,6 +1528,7 @@ export default function DropDragDashboard() {
 
       {/* Main Content */}
       <div 
+        ref={dashboardGridRef}
         className={`px-2 pb-16 transition-all duration-300 ${isEditMode ? 'pt-48' : 'pt-32'} ${showFilters ? 'mr-80' : 'mr-0'}`}
         style={{
           backgroundImage: isEditMode ? `radial-gradient(circle, #94a3b8 1.5px, transparent 1.5px)` : 'none',
