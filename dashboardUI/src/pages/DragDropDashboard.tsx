@@ -30,6 +30,7 @@ import {
   exportAllAsExcel,
   ChartRef,
 } from '../utils/downloadUtilities';
+import { exportDashboardPPTXEditable } from '../utils/pptxExport';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -253,6 +254,7 @@ export default function DropDragDashboard() {
     { id: "svg", name: "SVG", icon: "🎨", description: "Vector export for charts" },
     { id: "csv", name: "CSV", icon: "📊", description: "Data export as CSV" },
     { id: "xls", name: "Excel", icon: "📗", description: "All cards as sheets" },
+    { id: "pptx-editable", name: "PowerPoint (PPTX)", icon: "📑", description: "Editable charts (pptxgen)" },
   ]);
 
   const [branchOptions] = useState([
@@ -679,6 +681,9 @@ export default function DropDragDashboard() {
         case 'xls':
           await exportAllAsExcel(refs, dashboardName);
           break;
+        case 'pptx-editable':
+          await exportDashboardPPTXEditable(refs, dashboardName);
+          break;
         default:
           console.warn('Unknown format', format);
       }
@@ -994,21 +999,12 @@ export default function DropDragDashboard() {
 
     return (
       <>
-        <div
-          className="absolute top-4 flex flex-row flex-nowrap items-center gap-1.5"
-          style={{
-            zIndex: 9999,
-            pointerEvents: 'auto',
-            right: isEditMode ? '0.75rem' : '4rem', // leave space for Highcharts export in save mode
-          }}
-        >
+        <div className="absolute top-3 right-3 flex flex-row flex-nowrap items-center gap-1.5" style={{ zIndex: 9999, pointerEvents: 'auto' }}>
           {showFilterButton && (
             <button
               type="button"
               className={`non-draggable-filter-btn group relative p-2 rounded-lg text-xs font-semibold transition-all duration-200 border backdrop-blur-sm whitespace-nowrap ${
-                isFilterOpen
-                  ? "bg-amber-100 text-amber-900 border-amber-300"
-                  : "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 hover:text-amber-900"
+                isEditMode ? (isFilterOpen ? "mr-0" : "mr-0") : "mr-12 mt-1.5"
               }`}
               onClick={(e) => {
                 e.preventDefault();

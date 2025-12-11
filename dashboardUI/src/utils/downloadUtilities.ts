@@ -445,16 +445,12 @@ const loadPptxFromCdn = (): Promise<any> => {
 };
 
 const loadPptx = async (): Promise<any> => {
+  // CDN-only to avoid bundling node:fs dependencies
+  if ((window as any).PptxGenJS) return (window as any).PptxGenJS;
   try {
     return await loadPptxFromCdn();
-  } catch {
-    try {
-      // @ts-ignore - fallback to bundled browser build if available
-      const mod = await import(/* webpackChunkName: "pptxgen" */ 'pptxgenjs/dist/pptxgen.bundle.js');
-      return (mod as any).default || mod;
-    } catch (err) {
-      throw err;
-    }
+  } catch (err) {
+    throw err;
   }
 };
 
@@ -468,7 +464,8 @@ export const exportAllAsPPT = async (chartRefs: ChartRef[], fileName = 'Dashboar
     return;
   }
 
-  const pptx = new PPTX.default();
+  // PptxGenJS CDN exposes as window.PptxGenJS which is the constructor directly
+  const pptx = typeof PPTX === 'function' ? new PPTX() : new (PPTX.default || PPTX)();
   const slideMargin = 0.5;
 
   for (const ref of chartRefs) {
@@ -518,6 +515,12 @@ export const exportAllAsPPT = async (chartRefs: ChartRef[], fileName = 'Dashboar
     }
   }
 
-  await pptx.writeFile(`${fileName.replace(/[^a-z0-9]/gi, '_')}.pptx`);
+  const outputFileName = `${fileName.replace(/[^a-z0-9]/gi, '_')}.pptx`;
+  try {
+    await pptx.writeFile({ fileName: outputFileName });
+  } catch {
+    // Fallback: try the older API signature
+    await pptx.writeFile(outputFileName);
+  }
 };
 
