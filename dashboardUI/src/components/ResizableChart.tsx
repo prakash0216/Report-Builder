@@ -61,6 +61,54 @@ const ResizableChartInner: React.FC<ResizableChartProps> = ({ options, showExpor
     }
 
     // Otherwise, enhance for Highcharts
+    const userExporting = options.exporting || {};
+    const userContext = userExporting.buttons?.contextButton || {};
+    const mergedExporting = showExport
+      ? {
+          ...userExporting,
+          enabled: true,
+          buttons: {
+            contextButton: {
+              menuItems: [
+                'viewFullscreen',
+                'printChart',
+                'separator',
+                'downloadPNG',
+                'downloadJPEG',
+                'downloadPDF',
+                'downloadSVG',
+                'separator',
+                'downloadCSV',
+                'downloadXLS',
+              ],
+              theme: {
+                fill: '#f3e8ff', // violet-100
+                stroke: '#a855f7', // violet-500
+                style: { color: '#6b21a8' }, // violet-800
+                states: {
+                  hover: {
+                    fill: '#e9d5ff', // violet-200
+                    stroke: '#9333ea', // violet-600
+                    style: { color: '#6b21a8' },
+                  },
+                  select: {
+                    fill: '#d8b4fe', // violet-300
+                    stroke: '#7e22ce', // violet-700
+                    style: { color: '#581c87' }, // deeper violet
+                  },
+                },
+              },
+              ...userContext,
+            },
+          },
+          filename: options.title?.text
+            ? (typeof options.title.text === 'string'
+                ? options.title.text.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+                : 'chart')
+            : 'chart',
+        }
+      : { enabled: false };
+
     return {
       ...options,
       chart: {
@@ -76,43 +124,7 @@ const ResizableChartInner: React.FC<ResizableChartProps> = ({ options, showExpor
         enabled: false,
         ...options.credits,
       },
-      exporting: showExport ? {
-        enabled: true,
-        buttons: {
-          contextButton: {
-            menuItems: [
-              'viewFullscreen',
-              'printChart',
-              'separator',
-              'downloadPNG',
-              'downloadJPEG',
-              'downloadPDF',
-              'downloadSVG',
-              'separator',
-              'downloadCSV',
-              'downloadXLS',
-            ],
-            theme: {
-              fill: 'transparent',
-              stroke: '#cccccc',
-              states: {
-                hover: {
-                  fill: '#f0f0f0',
-                },
-                select: {
-                  fill: '#e0e0e0',
-                }
-              }
-            }
-          },
-        },
-        filename: options.title?.text ? 
-          (typeof options.title.text === 'string' ? options.title.text.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'chart') 
-          : 'chart',
-        ...options.exporting,
-      } : {
-        enabled: false,
-      },
+      exporting: mergedExporting,
       responsive: {
         rules: [{
           condition: {

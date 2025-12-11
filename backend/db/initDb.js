@@ -16,6 +16,7 @@ async function createSnowFlakeConnnection() {
     );
     `;
   try {
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS snowflake_conn_id_seq START 1;`);
     await dbClient.run(createSnowFlakeTable);
     console.log("✅ Table 'connections' created successfully.");
   } catch (err) {
@@ -36,10 +37,12 @@ async function createDataSourceRegistry(){
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   last_refreshed TIMESTAMP,
   las_modified TIMESTAMP,
-  FOREIGN KEY (connection_id) REFERENCES snow_flake_connections(id),
+  refresh_interval_days INTEGER,
+  FOREIGN KEY (connection_id) REFERENCES snow_flake_connections(id)
 );
-`
+`;
   try{
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS ds_registry_seq START 1;`);
     await dbClient.run(createDataSourceRegistryTable);
     console.log("✅ Table 'data_source_registry' created successfully.");
   }catch(err){
@@ -396,6 +399,8 @@ const createTables = async () => {
 // createTables();
 
 export {
+  createSnowFlakeConnnection,
+  createDataSourceRegistry,
   createChartConfigsTable,
   createLayoutsTable,
   createChartVisibilityTable,

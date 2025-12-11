@@ -994,12 +994,21 @@ export default function DropDragDashboard() {
 
     return (
       <>
-        <div className="absolute top-3 right-3 flex flex-row flex-nowrap items-center gap-1.5" style={{ zIndex: 9999, pointerEvents: 'auto' }}>
+        <div
+          className="absolute top-4 flex flex-row flex-nowrap items-center gap-1.5"
+          style={{
+            zIndex: 9999,
+            pointerEvents: 'auto',
+            right: isEditMode ? '0.75rem' : '4rem', // leave space for Highcharts export in save mode
+          }}
+        >
           {showFilterButton && (
             <button
               type="button"
               className={`non-draggable-filter-btn group relative p-2 rounded-lg text-xs font-semibold transition-all duration-200 border backdrop-blur-sm whitespace-nowrap ${
-                isEditMode ? (isFilterOpen ? "mr-0" : "mr-0") : "mr-12 mt-1.5"
+                isFilterOpen
+                  ? "bg-amber-100 text-amber-900 border-amber-300"
+                  : "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 hover:text-amber-900"
               }`}
               onClick={(e) => {
                 e.preventDefault();

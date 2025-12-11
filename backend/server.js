@@ -3293,11 +3293,14 @@ app.get('/api/data-sources/:dsName/schedule', async (req, res) => {
 
      // Initialize new tables
      const { 
+      createSnowFlakeConnnection,
+      createDataSourceRegistry,
       createChartConfigsTable, 
       createLayoutsTable, 
       createChartVisibilityTable, 
       createCardDimensionConditionsTable,
       createFilterPanelStateTable,
+      createCardFilterPanelStateTable,
       createParametersTable,
       createCalculationsTable,
       createFiltersTable
@@ -3307,6 +3310,8 @@ app.get('/api/data-sources/:dsName/schedule', async (req, res) => {
     await createParametersTable();
     await createCalculationsTable();
     await createFiltersTable();
+    await createSnowFlakeConnnection();
+    await createDataSourceRegistry();
     
     // Create UI-related tables
     await createChartConfigsTable();
@@ -3314,6 +3319,7 @@ app.get('/api/data-sources/:dsName/schedule', async (req, res) => {
     await createChartVisibilityTable();
     await createCardDimensionConditionsTable();
     await createFilterPanelStateTable();
+    await createCardFilterPanelStateTable();
     
     // Import materialized views table creation
     const { createMaterializedViewsTable } = await import('./db/initDb.js');
