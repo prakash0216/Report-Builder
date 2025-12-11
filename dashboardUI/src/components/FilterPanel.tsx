@@ -99,6 +99,27 @@ export const CompactFilterItem: React.FC<{
   const effectivePosition = position || { x: 0, y: 0 };
   const isEditMode=useRecoilValue(IsEditModeState);
 
+  // Debug: Log when component mounts or edit mode changes
+  useEffect(() => {
+    console.log('🔍 [CompactFilterItem] Component state:', {
+      variant,
+      variableName,
+      isEditMode,
+      position: effectivePosition,
+      disabled: !isEditMode,
+    });
+    
+    // Verify drag handle exists
+    if (nodeRef.current) {
+      const dragHandle = (nodeRef.current as HTMLElement).querySelector('.drag-handle');
+      console.log('🔍 [CompactFilterItem] Drag handle check:', {
+        nodeRefExists: !!nodeRef.current,
+        dragHandleExists: !!dragHandle,
+        dragHandleElement: dragHandle,
+      });
+    }
+  }, [variant, variableName, isEditMode, effectivePosition]);
+
   // Initialize with default values
   useEffect(() => {
     if (!liveValue && filterConfig?.defaultValues && filterConfig.defaultValues.length > 0) {
@@ -385,22 +406,43 @@ export const CompactFilterItem: React.FC<{
   const filterCard = (
     <Paper
       ref={nodeRef}
+      className="local-filter-card"
       elevation={0}
       sx={{
-        position: isInlineVariant ? 'relative' : 'absolute',
-        width: isInlineVariant ? '100%' : 280,
+        position: isInlineVariant && !position ? 'relative' : 'absolute', // Relative if inline and no saved position (flexbox), otherwise absolute
+        width: 280,
+        maxWidth: '100%', // Ensure it doesn't exceed container width
+        flexShrink: 0, // Don't shrink in flexbox
         background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%)',
         backdropFilter: 'blur(10px)',
         border: '1px solid rgba(102, 126, 234, 0.2)',
         borderRadius: 2,
         overflow: 'hidden',
         boxShadow: isInlineVariant ? '0 6px 20px rgba(102, 126, 234, 0.12)' : '0 8px 32px rgba(102, 126, 234, 0.15)',
-        mt: isInlineVariant ? 1 : 0,
+        touchAction: 'none', // Prevent touch scrolling on mobile
+        pointerEvents: 'auto', // Ensure pointer events work
+        boxSizing: 'border-box', // Include border in width
+      }}
+      onMouseDown={(e) => {
+        // Only prevent grid drag if NOT clicking on drag handle
+        const isDragHandle = !!(e.target as HTMLElement)?.closest('.drag-handle');
+        console.log('🖱️ [CompactFilterItem] MouseDown on Paper:', {
+          variant,
+          variableName,
+          target: (e.target as HTMLElement)?.className,
+          isDragHandle,
+        });
+        // If clicking on drag handle, let react-draggable handle it
+        // Otherwise, prevent grid drag
+        if (!isDragHandle) {
+          e.stopPropagation();
+        }
       }}
     >
-      {/* Header with drag handle */}
+      {/* Header with drag handle (shown for both inline and global; drag active in edit mode) */}
       <Box
         className="drag-handle"
+        data-draggable-handle="true"
         sx={{
           background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
           borderBottom: '1px solid #e2e8f0',
@@ -409,14 +451,34 @@ export const CompactFilterItem: React.FC<{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          cursor: isInlineVariant ? 'default' : 'move',
+          cursor: isEditMode ? 'move' : 'default', // always show move cursor in edit mode
+          userSelect: 'none', // Prevent text selection during drag
+          WebkitUserSelect: 'none',
+          MozUserSelect: 'none',
+          msUserSelect: 'none',
+          position: 'relative',
+          zIndex: 10, // Ensure drag handle is above other elements
+          pointerEvents: 'auto', // Ensure pointer events work
           '&:hover': {
             background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
           },
         }}
+        onMouseDown={(e) => {
+          console.log('🖱️ [CompactFilterItem] MouseDown on drag-handle:', {
+            variant,
+            variableName,
+            isEditMode,
+            target: (e.target as HTMLElement)?.className,
+            currentTarget: (e.currentTarget as HTMLElement)?.className,
+            nodeRef: !!nodeRef.current,
+          });
+          // CRITICAL: Don't stop propagation here - let react-draggable handle it first
+          // The grid's draggableCancel will prevent grid drag, and react-draggable needs the event
+        }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
-          {!isInlineVariant && <DragIndicatorIcon sx={{ fontSize: 16, mr: 0.5, color: '#667eea' }} />}
+          {/* Always show drag indicator in edit mode for visual cue */}
+          {isEditMode && <DragIndicatorIcon sx={{ fontSize: 16, mr: 0.5, color: '#667eea' }} />}
           <Typography 
             variant="caption" 
             fontWeight="700" 
@@ -439,6 +501,7 @@ export const CompactFilterItem: React.FC<{
             e.stopPropagation();
             onRemove();
           }}
+          onMouseDown={(e) => e.stopPropagation()}
           sx={{
             p: 0.25,
             ml: 0.5,
@@ -521,20 +584,61 @@ export const CompactFilterItem: React.FC<{
     </Paper>
   );
 
-  if (isInlineVariant) {
-    return filterCard;
-  }
+  // For inline variant: use flexbox layout initially, but allow dragging to reposition
+  // Once dragged, switch to absolute positioning
+  // For global variant: always use absolute positioning with dragging
+  
+  // Inline variant: allow dragging even if no saved position (uses defaultPosition)
+  // Global variant: controlled position
+  const shouldDisableDrag = !isEditMode;
+  const draggablePosition = position ? effectivePosition : undefined; // uncontrolled when no saved position
+  const draggableDefault = position ? effectivePosition : { x: 0, y: 0 };
 
   return (
     <Draggable
       nodeRef={nodeRef}
       handle=".drag-handle"
-      position={effectivePosition}
+      position={draggablePosition}
+      defaultPosition={draggableDefault}
+      onStart={(e, data) => {
+        console.log('🎯 [CompactFilterItem] Drag START:', {
+          variant,
+          variableName,
+          isEditMode,
+          position: effectivePosition,
+          dataX: data.x,
+          dataY: data.y,
+          eventType: e?.type,
+          target: (e?.target as HTMLElement)?.className,
+          disabled: shouldDisableDrag,
+        });
+        // prevent parent chart/card drag when moving inline filter
+        if (e && typeof e.stopPropagation === 'function') {
+          e.stopPropagation();
+        }
+        // DO NOT call preventDefault() here - let react-draggable handle it
+      }}
+      onDrag={(e, data) => {
+        console.log('🔄 [CompactFilterItem] Drag MOVE:', {
+          variant,
+          variableName,
+          x: data.x,
+          y: data.y,
+        });
+        onPositionChange?.({ x: data.x, y: data.y });
+      }}
       onStop={(e, data) => {
+        console.log('✅ [CompactFilterItem] Drag STOP:', {
+          variant,
+          variableName,
+          finalX: data.x,
+          finalY: data.y,
+        });
         onPositionChange?.({ x: data.x, y: data.y });
       }}
       bounds="parent"
-      disabled={!isEditMode}
+      disabled={shouldDisableDrag}
+      cancel=".MuiMenu-root, .MuiMenu-paper, .MuiButton-root, .MuiIconButton-root"
     >
       {filterCard}
     </Draggable>

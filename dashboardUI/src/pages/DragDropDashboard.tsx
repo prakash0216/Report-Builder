@@ -989,26 +989,40 @@ export default function DropDragDashboard() {
     const contentType = configData?.type || 'chart';
     const isFilterOpen = openCardFilterId === item.i;
 
+    // Only show filter button for chart type cards
+    const showFilterButton = contentType === 'chart';
+
     return (
       <>
-        <div className="absolute top-3 right-3 flex items-center gap-1.5" style={{ zIndex: 9999, pointerEvents: 'auto' }}>
+        <div className="absolute top-3 right-3 flex flex-row flex-nowrap items-center gap-1.5" style={{ zIndex: 9999, pointerEvents: 'auto' }}>
+          {showFilterButton && (
+            <button
+              type="button"
+              className={`non-draggable-filter-btn group relative p-2 rounded-lg text-xs font-semibold transition-all duration-200 border backdrop-blur-sm whitespace-nowrap ${
+                isEditMode ? (isFilterOpen ? "mr-0" : "mr-0") : "mr-12 mt-1.5"
+              }`}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleCardFilterPanel(item.i);
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+              }}
+              title={isFilterOpen ? "Hide filters" : "Show filters"}
+              style={{ pointerEvents: 'auto', cursor: 'pointer', position: 'relative', zIndex: 10000 }}
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 7V4z" />
+              </svg>
+            </button>
+          )}
           {isEditMode && (
             <>
               <button
                 type="button"
-                className="non-draggable-visibility-btn group relative bg-slate-100/90 backdrop-blur-sm hover:bg-indigo-100 text-slate-700 hover:text-indigo-700 p-2 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-slate-300/50 hover:border-indigo-400"
-                onClick={(e) => handleVisibilityClick(e, item.i)}
-                onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
-                title="Visibility Settings"
-                style={{ pointerEvents: 'auto', cursor: 'pointer', position: 'relative', zIndex: 10000 }}
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 4H21L14 11V18L10 21V11L3 4Z" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                className="non-draggable-edit-btn group relative bg-slate-100/90 backdrop-blur-sm hover:bg-blue-100 text-slate-700 hover:text-blue-700 p-2 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-slate-300/50 hover:border-blue-400"
+                className="non-draggable-edit-btn group relative bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 p-2 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-blue-200 hover:border-blue-400"
                 onClick={(e) => handleEditClick(e, item.i)}
                 onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
                 title="Edit Content"
@@ -1020,7 +1034,7 @@ export default function DropDragDashboard() {
               </button>
               <button
                 type="button"
-                className="non-draggable-close-btn group relative bg-slate-100/90 backdrop-blur-sm hover:bg-red-100 text-slate-700 hover:text-red-700 p-2 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-slate-300/50 hover:border-red-400"
+                className="non-draggable-close-btn group relative bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800 p-2 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-red-200 hover:border-red-400"
                 onClick={(e) => handleRemoveClick(e, item.i)}
                 onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
                 title="Remove"
@@ -1032,32 +1046,6 @@ export default function DropDragDashboard() {
               </button>
             </>
           )}
-          <button
-            type="button"
-            className={`non-draggable-filter-btn group relative px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 border backdrop-blur-sm ${
-              isFilterOpen
-                ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                : "bg-white/80 text-slate-700 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700"
-            }`}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              toggleCardFilterPanel(item.i);
-            }}
-            onMouseDown={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-            }}
-            title={isFilterOpen ? "Hide filters" : "Show filters"}
-            style={{ pointerEvents: 'auto', cursor: 'pointer', position: 'relative', zIndex: 10000 }}
-          >
-            <span className="inline-flex items-center gap-1">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 7V4z" />
-              </svg>
-              {isFilterOpen ? "Hide Filters" : "Filters"}
-            </span>
-          </button>
         </div>
 
         {isEditMode && chartConfig && (
@@ -1103,7 +1091,7 @@ export default function DropDragDashboard() {
         )}
 
         <div className="flex-1 p-4" style={{ minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 0 }}>
-          {isFilterOpen && (
+          {showFilterButton && isFilterOpen && (
             <div className="mb-3" style={{ position: 'relative', zIndex: 5 }}>
               <CardFilterPanel cardId={item.i} onClose={closeCardFilterPanel} />
             </div>
@@ -1531,7 +1519,7 @@ export default function DropDragDashboard() {
           isDroppable={isEditMode}
           isResizable={isEditMode}
           isDraggable={isEditMode}
-          draggableCancel=".non-draggable-close-btn, .non-draggable-edit-btn, .non-draggable-visibility-btn, .non-draggable-configure-btn, .non-draggable-filter-btn"
+          draggableCancel=".non-draggable-close-btn, .non-draggable-edit-btn, .non-draggable-visibility-btn, .non-draggable-configure-btn, .non-draggable-filter-btn, .drag-handle, .local-filter-card, .MuiMenu-root, .MuiMenu-paper, .MuiSelect-root, .MuiButton-root, .MuiIconButton-root, .MuiCheckbox-root, .MuiRadio-root"
           resizeHandles={isEditMode ? resizeHandle : []}
           allowOverlap={false}
           margin={[12, 12]}

@@ -401,6 +401,7 @@ export {
   createChartVisibilityTable,
   createCardDimensionConditionsTable,
   createFilterPanelStateTable,
+  createCardFilterPanelStateTable,
   createParametersTable,
   createCalculationsTable,
   createFiltersTable,

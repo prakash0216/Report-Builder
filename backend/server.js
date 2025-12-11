@@ -2917,6 +2917,9 @@ app.put('/api/filter-panel-state/:filterId/position', async (req, res) => {
 async function saveCardFilterPanelStateToDb(cardId, positions, activeFilterIds) {
   const escapedCardId = cardId.replace(/'/g, "''");
 
+  // Deduplicate incoming ids to avoid unique constraint issues
+  const uniqueActiveIds = Array.from(new Set(activeFilterIds || []));
+
   try {
     await dbClient.run(
       `UPDATE card_filter_panel_state SET is_active = false WHERE card_id='${escapedCardId}'`
@@ -2925,23 +2928,25 @@ async function saveCardFilterPanelStateToDb(cardId, positions, activeFilterIds) 
     console.log('Note: Could not update existing card filters (may not exist yet)');
   }
 
-  for (let i = 0; i < activeFilterIds.length; i++) {
-    const filterId = activeFilterIds[i];
-    const position = positions[filterId] || { x: 6, y: 6 + i * 80 };
+  for (let i = 0; i < uniqueActiveIds.length; i++) {
+    const filterId = uniqueActiveIds[i];
+    const rawPos = positions[filterId];
+    const hasPosition = rawPos && typeof rawPos.x === 'number' && typeof rawPos.y === 'number';
+    // If no position, store sentinel (-1) so client can render in flex mode without stacking
+    const position = hasPosition ? { x: Math.round(rawPos.x), y: Math.round(rawPos.y) } : { x: -1, y: -1 };
     const escapedFilterId = filterId.replace(/'/g, "''");
-
-    try {
-      await dbClient.run(
-        `DELETE FROM card_filter_panel_state WHERE card_id='${escapedCardId}' AND filter_id='${escapedFilterId}'`
-      );
-    } catch (delErr) {
-      // ignore
-    }
 
     try {
       await dbClient.run(`
         INSERT INTO card_filter_panel_state (card_id, filter_id, x_position, y_position, is_active, display_order, last_modified)
-        VALUES ('${escapedCardId}', '${escapedFilterId}', ${Math.round(position.x)}, ${Math.round(position.y)}, true, ${i}, CURRENT_TIMESTAMP)
+        VALUES ('${escapedCardId}', '${escapedFilterId}', ${position.x}, ${position.y}, true, ${i}, CURRENT_TIMESTAMP)
+        ON CONFLICT (card_id, filter_id)
+        DO UPDATE SET 
+          x_position = EXCLUDED.x_position,
+          y_position = EXCLUDED.y_position,
+          is_active = EXCLUDED.is_active,
+          display_order = EXCLUDED.display_order,
+          last_modified = EXCLUDED.last_modified
       `);
     } catch (insertErr) {
       console.warn(`Warning: Could not save card filter state for card ${cardId} filter ${filterId}:`, insertErr.message);

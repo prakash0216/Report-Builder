@@ -54,10 +54,12 @@ const CardFilterPanel: React.FC<CardFilterPanelProps> = ({ cardId, onClose }) =>
 
   const persistCardFilters = useCallback(
     async (ids: string[], positions: Record<string, { x: number; y: number }>) => {
+      // Deduplicate to avoid duplicate inserts and unique constraint errors
+      const uniqueIds = Array.from(new Set(ids));
       try {
         setIsSaving(true);
         await axios.post(`http://localhost:3002/api/cards/${cardId}/filter-panel-state`, {
-          activeFilterIds: ids,
+          activeFilterIds: uniqueIds,
           positions,
         });
       } catch (error) {
@@ -98,21 +100,16 @@ const CardFilterPanel: React.FC<CardFilterPanelProps> = ({ cardId, onClose }) =>
   };
 
   const handleApplyFilters = () => {
-    const filtersToAdd = tempSelectedFilters.filter((name) => !activeFilterIds.includes(name));
-    const filtersToRemove = activeFilterIds.filter((name) => !tempSelectedFilters.includes(name));
+    const dedupTemp = Array.from(new Set(tempSelectedFilters));
+    const filtersToAdd = dedupTemp.filter((name) => !activeFilterIds.includes(name));
+    const filtersToRemove = activeFilterIds.filter((name) => !dedupTemp.includes(name));
 
-    const newActiveFilters = tempSelectedFilters.filter((name) => filterNames.includes(name));
+    const newActiveFilters = dedupTemp.filter((name) => filterNames.includes(name));
     setActiveFilterIds(newActiveFilters);
 
     const newPositions = { ...filterPositions };
-    let yOffset = 6 + newActiveFilters.filter((id) => filterPositions[id]).length * 80;
-
-    filtersToAdd.forEach((filterId) => {
-      if (!newPositions[filterId]) {
-        newPositions[filterId] = { x: 6, y: yOffset };
-        yOffset += 80;
-      }
-    });
+    // Don't set initial positions for new filters - let them use flexbox layout
+    // Positions will be set only when user drags them
 
     filtersToRemove.forEach((filterId) => {
       delete newPositions[filterId];
@@ -129,11 +126,12 @@ const CardFilterPanel: React.FC<CardFilterPanelProps> = ({ cardId, onClose }) =>
   };
 
   const handleRemoveFilter = (filterId: string) => {
-    setActiveFilterIds(activeFilterIds.filter((id) => id !== filterId));
+    const nextIds = activeFilterIds.filter((id) => id !== filterId);
+    setActiveFilterIds(nextIds);
     const newPositions = { ...filterPositions };
     delete newPositions[filterId];
     setFilterPositions(newPositions);
-    persistCardFilters(activeFilterIds.filter((id) => id !== filterId), newPositions);
+    persistCardFilters(nextIds, newPositions);
   };
 
   const handlePositionChange = (filterId: string, position: { x: number; y: number }) => {
@@ -141,41 +139,32 @@ const CardFilterPanel: React.FC<CardFilterPanelProps> = ({ cardId, onClose }) =>
       ...filterPositions,
       [filterId]: position,
     };
+    const dedupIds = Array.from(new Set(activeFilterIds));
     setFilterPositions(updated);
-    persistCardFilters(activeFilterIds, updated);
+    persistCardFilters(dedupIds, updated);
   };
+
+  const isPositioned = (pos?: { x: number; y: number }) =>
+    pos !== undefined && typeof pos.x === "number" && typeof pos.y === "number" && pos.x >= 0 && pos.y >= 0;
+
+  const positionedCount = activeFilterIds.filter((id) => isPositioned(filterPositions[id])).length;
+  const minHeight = positionedCount > 0 ? Math.ceil(positionedCount / 2) * 85 : undefined;
 
   return (
     <Paper
       elevation={0}
       sx={{
         width: "100%",
-        background: "linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%)",
+        maxWidth: "100%", // Ensure it doesn't exceed parent width
+        background: "linear-gradient(135deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.95) 100%)",
         border: "1px solid rgba(102, 126, 234, 0.18)",
         borderRadius: 2,
-        p: 1.5,
+        p: 2,
         boxShadow: "0 10px 30px rgba(102, 126, 234, 0.18)",
+        overflow: "hidden", // Prevent content from overflowing
+        boxSizing: "border-box", // Include padding in width calculation
       }}
     >
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-        <Typography variant="subtitle2" fontWeight={700} sx={{ color: "#1f2937" }}>
-          Filters
-        </Typography>
-        <IconButton
-          size="small"
-          onClick={onClose}
-          className="non-draggable-filter-btn"
-          sx={{
-            color: "#475569",
-            "&:hover": {
-              color: "#1f2937",
-              bgcolor: "rgba(148, 163, 184, 0.2)",
-            },
-          }}
-        >
-          <CloseIcon fontSize="small" />
-        </IconButton>
-      </Box>
 
       {isEditMode && (
         <FormControl fullWidth size="small" sx={{ mb: 1 }}>
@@ -371,16 +360,32 @@ const CardFilterPanel: React.FC<CardFilterPanelProps> = ({ cardId, onClose }) =>
         </FormControl>
       )}
 
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      <Box 
+        sx={{ 
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 1.5,
+          py:1,
+          background: "transparent",
+          minHeight, // add space if any positioned filters exist
+          width: "100%",
+          maxWidth: "100%", // Ensure it doesn't exceed parent
+          overflow: "hidden", // Prevent overflow
+          boxSizing: "border-box",
+          position: "relative", // Needed for absolute positioned children (after dragging)
+        }}
+      >
         {activeFilterIds.length === 0 ? (
           <Box
             sx={{
               textAlign: "center",
               py: 2,
+              px: 3,
               color: "#64748b",
               border: "1px dashed #cbd5e1",
               borderRadius: 2,
               bgcolor: "#fff",
+              width: "100%",
             }}
           >
             <Typography variant="body2" fontWeight={600}>
@@ -391,16 +396,20 @@ const CardFilterPanel: React.FC<CardFilterPanelProps> = ({ cardId, onClose }) =>
             </Typography>
           </Box>
         ) : (
-          activeFilterIds.map((filterId) => (
-            <CompactFilterItem
-              key={filterId}
-              variableName={filterId}
-              onRemove={() => handleRemoveFilter(filterId)}
-              position={filterPositions[filterId] || { x: 0, y: 0 }}
-              onPositionChange={(pos) => handlePositionChange(filterId, pos)}
-              variant="inline"
-            />
-          ))
+          activeFilterIds.map((filterId) => {
+            const storedPos = filterPositions[filterId];
+            const validPos = isPositioned(storedPos) ? storedPos : undefined;
+            return (
+              <CompactFilterItem
+                key={filterId}
+                variableName={filterId}
+                onRemove={() => handleRemoveFilter(filterId)}
+                position={validPos} // undefined => flex layout; defined => absolute
+                onPositionChange={(pos) => handlePositionChange(filterId, pos)}
+                variant="inline"
+              />
+            );
+          })
         )}
       </Box>
     </Paper>
