@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRecoilState, useResetRecoilState } from 'recoil';
 import { dataSourceAtomFamily } from '../recoil/DataSourceFamily';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { dataSourceNamesState } from '../recoil/DataSourceTracker';
+import Editor, { OnMount, Monaco } from '@monaco-editor/react';
+import type { editor } from 'monaco-editor';
 import {
   Box,
   Button,
@@ -103,6 +105,110 @@ export default function AddDataSourceMui() {
 
   // Use a conditional Recoil state hook to get/set the query for the selected data source.
   const [sqlQuery, setSqlQuery] = useRecoilState(dataSourceAtomFamily(selectedDS));
+  
+  // Monaco Editor ref
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+
+  // Monaco Editor mount handler
+  const handleEditorDidMount: OnMount = (editor, monaco) => {
+    editorRef.current = editor;
+    
+    // Register SQL keywords for autocomplete
+    monaco.languages.registerCompletionItemProvider('sql', {
+      provideCompletionItems: (model, position) => {
+        const word = model.getWordUntilPosition(position);
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        };
+        
+        // SQL Keywords
+        const sqlKeywords = [
+          'SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'NOT', 'IN', 'LIKE', 'BETWEEN',
+          'JOIN', 'INNER JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'FULL JOIN', 'CROSS JOIN',
+          'ON', 'AS', 'ORDER BY', 'GROUP BY', 'HAVING', 'LIMIT', 'OFFSET',
+          'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE', 'CREATE', 'ALTER', 'DROP',
+          'TABLE', 'INDEX', 'VIEW', 'DATABASE', 'SCHEMA',
+          'DISTINCT', 'ALL', 'TOP', 'PERCENT',
+          'ASC', 'DESC', 'NULLS FIRST', 'NULLS LAST',
+          'UNION', 'UNION ALL', 'INTERSECT', 'EXCEPT',
+          'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
+          'NULL', 'IS NULL', 'IS NOT NULL',
+          'TRUE', 'FALSE',
+          'WITH', 'RECURSIVE', 'CTE',
+        ];
+        
+        // SQL Functions
+        const sqlFunctions = [
+          'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'ROUND', 'FLOOR', 'CEIL', 'ABS',
+          'UPPER', 'LOWER', 'TRIM', 'LTRIM', 'RTRIM', 'LENGTH', 'SUBSTRING', 'CONCAT',
+          'COALESCE', 'NULLIF', 'CAST', 'CONVERT', 'IFNULL', 'NVL', 'IIF',
+          'DATE', 'DATETIME', 'TIME', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND',
+          'DATEADD', 'DATEDIFF', 'GETDATE', 'NOW', 'CURRENT_DATE', 'CURRENT_TIMESTAMP',
+          'ROW_NUMBER', 'RANK', 'DENSE_RANK', 'NTILE', 'LAG', 'LEAD',
+          'PARTITION BY', 'OVER',
+          'STRING_AGG', 'GROUP_CONCAT', 'LISTAGG',
+          'JSON_VALUE', 'JSON_QUERY', 'JSON_EXTRACT',
+        ];
+        
+        // Data Types
+        const dataTypes = [
+          'INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'TINYINT',
+          'DECIMAL', 'NUMERIC', 'FLOAT', 'REAL', 'DOUBLE',
+          'CHAR', 'VARCHAR', 'TEXT', 'NCHAR', 'NVARCHAR', 'NTEXT',
+          'DATE', 'DATETIME', 'DATETIME2', 'TIME', 'TIMESTAMP',
+          'BOOLEAN', 'BIT',
+          'BINARY', 'VARBINARY', 'BLOB',
+          'JSON', 'XML',
+        ];
+        
+        const suggestions: any[] = [];
+        
+        // Add keywords
+        sqlKeywords.forEach((keyword) => {
+          suggestions.push({
+            label: keyword,
+            kind: monaco.languages.CompletionItemKind.Keyword,
+            insertText: keyword,
+            range: range,
+            detail: 'SQL Keyword',
+          });
+        });
+        
+        // Add functions with snippets
+        sqlFunctions.forEach((func) => {
+          suggestions.push({
+            label: func,
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: func + '($0)',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            range: range,
+            detail: 'SQL Function',
+          });
+        });
+        
+        // Add data types
+        dataTypes.forEach((type) => {
+          suggestions.push({
+            label: type,
+            kind: monaco.languages.CompletionItemKind.TypeParameter,
+            insertText: type,
+            range: range,
+            detail: 'Data Type',
+          });
+        });
+        
+        return { suggestions };
+      },
+    });
+    
+    // Add Ctrl+Enter command to execute query
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+      executeQuery();
+    });
+  };
 
   const showAlert = (
     message: string,
@@ -1435,6 +1541,7 @@ export default function AddDataSourceMui() {
 
               </Box>
 
+              {/* Monaco SQL Editor */}
               <Box
                 sx={{
                   position: 'relative',
@@ -1449,71 +1556,79 @@ export default function AddDataSourceMui() {
               >
                 <Box
                   sx={{
-                    position: 'absolute',
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: 48,
-                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-                    borderRight: '1px solid rgba(102, 126, 234, 0.2)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    pt: 1.5,
-                    gap: 0.5,
+                    height: 350,
+                    '.monaco-editor': {
+                      borderRadius: '8px',
+                    },
+                    '.monaco-editor .margin': {
+                      background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                    },
                   }}
                 >
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <Typography
-                      key={i + 1}
-                      variant="caption"
-                      sx={{
-                        color: '#94a3b8',
-                        fontFamily: 'monospace',
-                        fontSize: '0.75rem',
-                        lineHeight: 1.5,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {i + 1}
-                    </Typography>
-                  ))}
-                </Box>
+                  <Editor
+                    height="100%"
+                    defaultLanguage="sql"
+                    language="sql"
+                    value={sqlQuery}
+                    onChange={(value) => setSqlQuery(value || '')}
+                    onMount={handleEditorDidMount}
+                    theme="vs"
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 14,
+                      fontFamily: '"Fira Code", "JetBrains Mono", "Cascadia Code", Consolas, monospace',
+                      fontLigatures: true,
+                      lineNumbers: 'on',
+                      lineNumbersMinChars: 3,
+                      folding: true,
+                      wordWrap: 'on',
+                      automaticLayout: true,
+                      scrollBeyondLastLine: false,
+                      renderLineHighlight: 'all',
+                      suggestOnTriggerCharacters: true,
+                      quickSuggestions: {
+                        other: true,
+                        comments: false,
+                        strings: true,
+                      },
+                      acceptSuggestionOnEnter: 'on',
+                      tabCompletion: 'on',
+                      snippetSuggestions: 'top',
+                      suggest: {
+                        showKeywords: true,
+                        showFunctions: true,
+                        showSnippets: true,
+                        insertMode: 'insert',
+                        filterGraceful: true,
+                        localityBonus: true,
+                        shareSuggestSelections: true,
+                      },
+                      padding: { top: 12, bottom: 12 },
+                      smoothScrolling: true,
+                      cursorBlinking: 'smooth',
+                      cursorSmoothCaretAnimation: 'on',
+                      formatOnPaste: true,
+                      formatOnType: true,
+                      autoClosingBrackets: 'always',
+                      autoClosingQuotes: 'always',
+                      matchBrackets: 'always',
+                      bracketPairColorization: { enabled: true },
+                      guides: {
+                        indentation: true,
+                        bracketPairs: true,
+                      },
+                      placeholder: `-- Enter your SQL query here...
 
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={12}
-                  variant="standard"
-                  value={sqlQuery}
-                  onChange={(e) => setSqlQuery(e.target.value)}
-                  placeholder="Enter your SQL query here...
-
-Example:
-SELECT * FROM users 
+-- Example:
+SELECT * 
+FROM users 
 WHERE age > 18
 ORDER BY created_at DESC;
 
-Press Ctrl+Enter to execute"
-                  sx={{
-                    '& .MuiInputBase-root': {
-                      fontFamily: '"Fira Code", "Courier New", monospace',
-                      fontSize: '0.9rem',
-                      lineHeight: 1.5,
-                      pl: 7,
-                      pr: 2,
-                      py: 1.5,
-                      bgcolor: 'white',
-                    },
-                    '& .MuiInputBase-root:before, & .MuiInputBase-root:after': {
-                      display: 'none',
-                    },
-                  }}
-                  onKeyDown={handleQueryKeyPress}
-                  InputProps={{
-                    disableUnderline: true,
-                  }}
-                />
+-- Press Ctrl+Enter to execute`,
+                    }}
+                  />
+                </Box>
 
                 <Box
                   sx={{
@@ -1528,6 +1643,7 @@ Press Ctrl+Enter to execute"
                     fontSize: '0.75rem',
                     fontWeight: 600,
                     boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
+                    zIndex: 10,
                   }}
                 >
                   Ctrl + Enter to execute

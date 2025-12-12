@@ -85,21 +85,154 @@ const captureChartAsPng = async (chart: Highcharts.Chart): Promise<string | null
   });
 };
 
-const mapChartType = (t?: string): string => {
-  if (!t) return 'column';
+/**
+ * pptxgenjs Chart Type Support:
+ * 
+ * FULLY SUPPORTED (native editable charts):
+ * - bar (with barDir: 'bar' for horizontal, 'col' for vertical)
+ * - line
+ * - area  
+ * - pie
+ * - doughnut
+ * - scatter (XY scatter)
+ * 
+ * PARTIALLY SUPPORTED (may not match Highcharts exactly):
+ * - stacked bar/column (via barGrouping: 'stacked')
+ * - 100% stacked (via barGrouping: 'percentStacked')
+ * 
+ * NOT SUPPORTED (fallback to image):
+ * - spline, areaspline (use line/area as fallback or image)
+ * - waterfall, funnel, pyramid
+ * - gauge, solidgauge
+ * - heatmap, treemap, sunburst
+ * - bubble (pptxgenjs has limited bubble support)
+ * - boxplot, errorbar
+ * - sankey, dependencywheel
+ * - organization, wordcloud
+ * - variwide, vector, windbarb
+ */
+
+// Chart types that can be rendered natively in pptxgenjs
+const SUPPORTED_CHART_TYPES = new Set([
+  'column', 'bar', 'line', 'area', 'pie', 'doughnut', 'scatter'
+]);
+
+// Chart types that should fall back to image (complex or unsupported)
+const FALLBACK_TO_IMAGE_TYPES = new Set([
+  'spline', 'areaspline', 'arearange', 'areasplinerange', 'columnrange',
+  'waterfall', 'funnel', 'funnel3d', 'pyramid', 'pyramid3d',
+  'gauge', 'solidgauge',
+  'heatmap', 'tilemap', 'treemap', 'sunburst',
+  'bubble', 'packedbubble',
+  'boxplot', 'errorbar',
+  'sankey', 'dependencywheel', 'networkgraph',
+  'organization', 'wordcloud',
+  'variwide', 'vector', 'windbarb', 'xrange',
+  'bellcurve', 'histogram', 'pareto',
+  'bullet', 'cylinder', 'item', 'lollipop', 'dumbell',
+  'venn', 'euler'
+]);
+
+interface ChartTypeInfo {
+  pptxType: string;
+  isSupported: boolean;
+  barDir?: 'bar' | 'col';
+  barGrouping?: 'clustered' | 'stacked' | 'percentStacked';
+}
+
+const mapChartType = (t?: string, stacking?: string): ChartTypeInfo => {
+  if (!t) return { pptxType: 'bar', isSupported: true, barDir: 'col' };
   const type = t.toLowerCase();
-  if (['column', 'col'].includes(type)) return 'column';
-  if (['bar'].includes(type)) return 'bar';
-  if (['line', 'spline', 'areaspline'].includes(type)) return 'line';
-  if (['area'].includes(type)) return 'area';
-  if (['pie', 'donut', 'doughnut'].includes(type)) return 'pie';
-  return 'column';
+  
+  // Check if this type should fall back to image
+  if (FALLBACK_TO_IMAGE_TYPES.has(type)) {
+    return { pptxType: type, isSupported: false };
+  }
+  
+  // Map to supported pptxgenjs types
+  if (['column', 'col'].includes(type)) {
+    const barGrouping = stacking === 'normal' ? 'stacked' : 
+                        stacking === 'percent' ? 'percentStacked' : 'clustered';
+    return { pptxType: 'bar', isSupported: true, barDir: 'col', barGrouping };
+  }
+  
+  if (type === 'bar') {
+    const barGrouping = stacking === 'normal' ? 'stacked' : 
+                        stacking === 'percent' ? 'percentStacked' : 'clustered';
+    return { pptxType: 'bar', isSupported: true, barDir: 'bar', barGrouping };
+  }
+  
+  if (['line', 'spline'].includes(type)) {
+    return { pptxType: 'line', isSupported: true };
+  }
+  
+  if (['area', 'areaspline'].includes(type)) {
+    return { pptxType: 'area', isSupported: true };
+  }
+  
+  if (['pie'].includes(type)) {
+    return { pptxType: 'pie', isSupported: true };
+  }
+  
+  if (['donut', 'doughnut'].includes(type)) {
+    return { pptxType: 'doughnut', isSupported: true };
+  }
+  
+  if (['scatter'].includes(type)) {
+    return { pptxType: 'scatter', isSupported: true };
+  }
+  
+  // Default to column chart for unknown types
+  return { pptxType: 'bar', isSupported: true, barDir: 'col' };
 };
 
-const buildChartData = (chart: Highcharts.Chart) => {
+// Helper to convert color to hex (handles rgba, rgb, hex, named colors)
+const toHex = (color: string | undefined): string => {
+  if (!color) return '4472C4'; // Default blue
+  if (color.startsWith('#')) return color.slice(1).toUpperCase();
+  if (color.startsWith('rgb')) {
+    const match = color.match(/\d+/g);
+    if (match && match.length >= 3) {
+      const [r, g, b] = match.map(Number);
+      return ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+    }
+  }
+  // Named colors fallback
+  const namedColors: Record<string, string> = {
+    red: 'FF0000', blue: '0000FF', green: '00FF00', yellow: 'FFFF00',
+    orange: 'FFA500', purple: '800080', pink: 'FFC0CB', black: '000000',
+    white: 'FFFFFF', gray: '808080', grey: '808080'
+  };
+  return namedColors[color.toLowerCase()] || '4472C4';
+};
+
+interface ChartDataResult {
+  chartTypeInfo: ChartTypeInfo;
+  rawChartType: string;
+  data: Array<{ name: string; labels: string[]; values: number[] }>;
+  categories: string[];
+  colors: string[];
+  isInverted: boolean;
+  xAxisTitle: string;
+  yAxisTitle: string;
+  stacking?: string;
+}
+
+const buildChartData = (chart: Highcharts.Chart): ChartDataResult | null => {
   try {
     const options = chart.options || {};
-    const chartType = mapChartType(options.chart?.type || (chart.series?.[0] as any)?.type);
+    const rawChartType = options.chart?.type || (chart.series?.[0] as any)?.type || 'column';
+    
+    // Get stacking info for bar/column charts
+    const stacking = (options.plotOptions as any)?.series?.stacking || 
+                     (options.plotOptions as any)?.column?.stacking ||
+                     (options.plotOptions as any)?.bar?.stacking;
+    
+    const chartTypeInfo = mapChartType(rawChartType, stacking);
+    
+    // Determine if chart is inverted (horizontal bar)
+    // Highcharts: inverted=true OR type='bar' means horizontal bars
+    const isInverted = options.chart?.inverted === true || rawChartType === 'bar';
     
     // Get categories from xAxis
     let categories: string[] = [];
@@ -107,25 +240,90 @@ const buildChartData = (chart: Highcharts.Chart) => {
       categories = chart.xAxis[0].categories as string[];
     }
     
-    console.log('[PPTX Export] buildChartData - chartType:', chartType, 'categories:', categories);
+    // Extract colors from Highcharts
+    const defaultColors = (options.colors as string[]) || 
+      ['#7cb5ec', '#434348', '#90ed7d', '#f7a35c', '#8085e9', '#f15c80', '#e4d354', '#2b908f', '#f45b5b', '#91e8e1'];
+    
+    // Extract axis titles - handle both single object and array formats
+    const xAxisOpts = Array.isArray(options.xAxis) ? options.xAxis[0] : options.xAxis;
+    const yAxisOpts = Array.isArray(options.yAxis) ? options.yAxis[0] : options.yAxis;
+    const xAxisTitle = (xAxisOpts as any)?.title?.text || '';
+    const yAxisTitle = (yAxisOpts as any)?.title?.text || '';
+    
+    console.log('[PPTX Export] Raw chart type:', rawChartType, 'stacking:', stacking, 'isSupported:', chartTypeInfo.isSupported);
+    console.log('[PPTX Export] isInverted:', isInverted, 'xAxisTitle:', xAxisTitle, 'yAxisTitle:', yAxisTitle);
 
-    if (chartType === 'pie') {
+    if (chartTypeInfo.pptxType === 'pie' || chartTypeInfo.pptxType === 'doughnut') {
       const s = chart.series.find((sr) => sr.visible !== false);
       if (!s || !s.data || s.data.length === 0) {
-        console.log('[PPTX Export] buildChartData - pie chart has no data');
+        console.log('[PPTX Export] buildChartData - pie/doughnut chart has no data');
         return null;
       }
       const labels = s.data.map((p: any, idx: number) => String(p.name || categories[idx] || `Slice ${idx + 1}`));
       const values = s.data.map((p: any) => (typeof p.y === 'number' ? p.y : Number(p.y) || 0));
-      console.log('[PPTX Export] buildChartData - pie labels:', labels, 'values:', values);
+      // Extract pie slice colors
+      const colors = s.data.map((p: any, idx: number) => toHex(p.color || defaultColors[idx % defaultColors.length]));
+      
+      console.log('[PPTX Export] buildChartData - pie/doughnut labels:', labels, 'values:', values);
       return {
-        chartType,
+        chartTypeInfo,
+        rawChartType,
         data: [{ name: s.name || 'Series', labels, values }],
         categories: labels,
+        colors,
+        isInverted,
+        xAxisTitle,
+        yAxisTitle,
+        stacking,
       };
     }
 
-    // For bar/line/area charts
+    // For scatter charts - need x,y pairs
+    if (chartTypeInfo.pptxType === 'scatter') {
+      const seriesColors: string[] = [];
+      const seriesData = chart.series
+        .filter((s) => s.visible !== false && s.data && s.data.length > 0)
+        .map((s, seriesIdx) => {
+          // For scatter, extract x,y pairs
+          const values = (s.data || []).map((p: any) => {
+            if (typeof p.y === 'number') return p.y;
+            if (Array.isArray(p) && p.length >= 2) return p[1];
+            return Number(p.y) || 0;
+          });
+          const labels = (s.data || []).map((p: any, idx: number) => {
+            if (typeof p.x === 'number') return String(p.x);
+            if (Array.isArray(p) && p.length >= 1) return String(p[0]);
+            return categories[idx] || `${idx + 1}`;
+          });
+          
+          const seriesColor = (s as any).color || (s.options as any)?.color || defaultColors[seriesIdx % defaultColors.length];
+          seriesColors.push(toHex(seriesColor));
+          
+          return {
+            name: s.name || `Series ${seriesIdx + 1}`,
+            labels,
+            values,
+          };
+        })
+        .filter((d) => d.values && d.values.length > 0);
+
+      if (!seriesData.length) return null;
+      
+      return {
+        chartTypeInfo,
+        rawChartType,
+        data: seriesData,
+        categories: seriesData[0]?.labels || [],
+        colors: seriesColors,
+        isInverted,
+        xAxisTitle,
+        yAxisTitle,
+        stacking,
+      };
+    }
+
+    // For bar/line/area charts - extract series with their colors
+    const seriesColors: string[] = [];
     const seriesData = chart.series
       .filter((s) => s.visible !== false && s.data && s.data.length > 0)
       .map((s, seriesIdx) => {
@@ -134,6 +332,11 @@ const buildChartData = (chart: Highcharts.Chart) => {
         const labels = categories.length > 0 
           ? categories 
           : values.map((_, idx) => `Point ${idx + 1}`);
+        
+        // Get series color
+        const seriesColor = (s as any).color || (s.options as any)?.color || defaultColors[seriesIdx % defaultColors.length];
+        seriesColors.push(toHex(seriesColor));
+        
         return {
           name: s.name || `Series ${seriesIdx + 1}`,
           labels,
@@ -142,7 +345,7 @@ const buildChartData = (chart: Highcharts.Chart) => {
       })
       .filter((d) => d.values && d.values.length > 0);
 
-    console.log('[PPTX Export] buildChartData - seriesData:', seriesData);
+    console.log('[PPTX Export] buildChartData - seriesData count:', seriesData.length, 'colors:', seriesColors);
 
     if (!seriesData.length) {
       console.log('[PPTX Export] buildChartData - no valid series data');
@@ -150,9 +353,15 @@ const buildChartData = (chart: Highcharts.Chart) => {
     }
     
     return { 
-      chartType, 
+      chartTypeInfo,
+      rawChartType,
       data: seriesData, 
-      categories: seriesData[0]?.labels || [] 
+      categories: seriesData[0]?.labels || [],
+      colors: seriesColors,
+      isInverted,
+      xAxisTitle,
+      yAxisTitle,
+      stacking,
     };
   } catch (err) {
     console.error('[PPTX Export] buildChartData error:', err);
@@ -233,7 +442,16 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
       
       if (ref.type === 'chart' && ref.chart) {
         const mapped = buildChartData(ref.chart);
-        console.log(`[PPTX Export] Chart data mapped:`, JSON.stringify(mapped, null, 2));
+        console.log(`[PPTX Export] Chart data mapped:`, mapped ? {
+          chartType: mapped.chartTypeInfo.pptxType,
+          isSupported: mapped.chartTypeInfo.isSupported,
+          rawType: mapped.rawChartType,
+          seriesCount: mapped.data.length,
+          stacking: mapped.stacking
+        } : null);
+        
+        // Check if chart type is supported for native rendering
+        const shouldUseNativeChart = mapped?.chartTypeInfo.isSupported === true;
         
         // Validate chart data before adding
         const isValidChartData = mapped && 
@@ -249,18 +467,43 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
             d.labels.length === d.values.length
           );
         
-        if (isValidChartData) {
+        if (shouldUseNativeChart && isValidChartData) {
           try {
-            // Map chart type to pptxgenjs chart type string
-            const pptxChartType = mapped.chartType === 'pie' ? pptx.ChartType?.pie || 'pie' 
-              : mapped.chartType === 'line' ? pptx.ChartType?.line || 'line'
-              : mapped.chartType === 'area' ? pptx.ChartType?.area || 'area'
-              : mapped.chartType === 'bar' ? pptx.ChartType?.bar || 'bar'
-              : pptx.ChartType?.bar || 'bar'; // default to bar/column
+            // Get the pptxgenjs chart type constant
+            const typeInfo = mapped.chartTypeInfo;
+            let pptxChartType: string;
             
-            console.log(`[PPTX Export] Using chart type: ${pptxChartType}, data:`, mapped.data);
+            switch (typeInfo.pptxType) {
+              case 'pie':
+                pptxChartType = pptx.ChartType?.pie || 'pie';
+                break;
+              case 'doughnut':
+                pptxChartType = pptx.ChartType?.doughnut || 'doughnut';
+                break;
+              case 'line':
+                pptxChartType = pptx.ChartType?.line || 'line';
+                break;
+              case 'area':
+                pptxChartType = pptx.ChartType?.area || 'area';
+                break;
+              case 'scatter':
+                pptxChartType = pptx.ChartType?.scatter || 'scatter';
+                break;
+              case 'bar':
+              default:
+                pptxChartType = pptx.ChartType?.bar || 'bar';
+                break;
+            }
             
-            slide.addChart(pptxChartType, mapped.data, {
+            // Determine bar direction from mapping or inversion
+            const barDirection = typeInfo.barDir || (mapped.isInverted ? 'bar' : 'col');
+            
+            console.log(`[PPTX Export] Native chart: ${pptxChartType}, barDir: ${barDirection}, barGrouping: ${typeInfo.barGrouping}`);
+            console.log(`[PPTX Export] Axis titles - cat: "${mapped.xAxisTitle}", val: "${mapped.yAxisTitle}"`);
+            console.log(`[PPTX Export] Colors:`, mapped.colors);
+            
+            // Build chart options with exact colors and axis settings
+            const chartOptions: any = {
               x: slideMargin,
               y: 0.9,
               w: 9,
@@ -268,17 +511,55 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
               showTitle: false,
               showLegend: true,
               legendPos: 'b',
-            });
-            console.log(`[PPTX Export] Added native chart for ${ref.chartId}`);
+              // Apply extracted colors
+              chartColors: mapped.colors,
+              // Additional styling
+              showValue: false,
+            };
+            
+            // Add bar-specific options
+            if (typeInfo.pptxType === 'bar') {
+              chartOptions.barDir = barDirection;
+              if (typeInfo.barGrouping && typeInfo.barGrouping !== 'clustered') {
+                chartOptions.barGrouping = typeInfo.barGrouping;
+              }
+            }
+            
+            // Remove all grid lines
+            chartOptions.catGridLine = { style: 'none' };
+            chartOptions.valGridLine = { style: 'none' };
+            
+            // Add axis titles if present
+            if (mapped.xAxisTitle) {
+              chartOptions.catAxisTitle = mapped.xAxisTitle;
+              chartOptions.catAxisTitleColor = '333333';
+              chartOptions.catAxisTitleFontSize = 10;
+            }
+            if (mapped.yAxisTitle) {
+              chartOptions.valAxisTitle = mapped.yAxisTitle;
+              chartOptions.valAxisTitleColor = '333333';
+              chartOptions.valAxisTitleFontSize = 10;
+            }
+            
+            // Axis label formatting
+            chartOptions.catAxisLabelColor = '333333';
+            chartOptions.catAxisLabelFontSize = 9;
+            chartOptions.valAxisLabelColor = '333333';
+            chartOptions.valAxisLabelFontSize = 9;
+            
+            slide.addChart(pptxChartType, mapped.data, chartOptions);
+            console.log(`[PPTX Export] ✓ Added native ${typeInfo.pptxType} chart for ${ref.chartId}`);
             continue;
           } catch (chartErr) {
             console.warn(`[PPTX Export] Native chart failed for ${ref.chartId}, falling back to image:`, chartErr);
           }
+        } else if (mapped && !mapped.chartTypeInfo.isSupported) {
+          console.log(`[PPTX Export] Chart type "${mapped.rawChartType}" not supported in pptxgenjs, using image fallback`);
         } else {
           console.log(`[PPTX Export] Invalid chart data for ${ref.chartId}, falling back to image`);
         }
         
-        // Fallback to image if chart data mapping failed or native chart failed
+        // Fallback to image if chart type is unsupported or data mapping failed
         console.log(`[PPTX Export] Capturing chart as image for ${ref.chartId}`);
         const dataUrl = await captureChartAsPng(ref.chart);
         if (dataUrl) {
@@ -324,7 +605,7 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
             w: finalWidth,
             h: finalHeight
           });
-          console.log(`[PPTX Export] Added chart image for ${ref.chartId}`);
+          console.log(`[PPTX Export] ✓ Added chart image (fallback) for ${ref.chartId}`);
           continue;
         }
       }
@@ -344,14 +625,14 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
           
           // Slide dimensions (default layout is 10" x 7.5")
           const slideWidth = 10;
-          const slideHeight =5;
+          const slideHeight = 5;
           const margin = 0.5;
           const titleHeight = 0.8;
           
           // Available area for content
-          const availableWidth = slideWidth - (margin * 2);  // 9"
-          const availableHeight = slideHeight - titleHeight - (margin * 2);  // 5.7"
-          const contentY = titleHeight + margin;  // 1.3"
+          const availableWidth = slideWidth - (margin * 2);
+          const availableHeight = slideHeight - titleHeight - (margin * 2);
+          const contentY = titleHeight + margin;
           
           // Calculate scaled dimensions maintaining aspect ratio
           const imgAspect = (img.width && img.height) ? img.width / img.height : 1.5;
@@ -361,11 +642,9 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
           let finalHeight: number;
           
           if (imgAspect > areaAspect) {
-            // Image is wider than area - constrain by width
             finalWidth = availableWidth;
             finalHeight = finalWidth / imgAspect;
           } else {
-            // Image is taller than area - constrain by height
             finalHeight = availableHeight;
             finalWidth = finalHeight * imgAspect;
           }
@@ -375,7 +654,7 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
           // Center vertically within available area
           const yPos = contentY + (availableHeight - finalHeight) / 2;
           
-          console.log(`[PPTX Export] Image: ${img.width}x${img.height}, aspect=${imgAspect.toFixed(2)}, final=${finalWidth.toFixed(2)}x${finalHeight.toFixed(2)}, pos=(${xPos.toFixed(2)}, ${yPos.toFixed(2)})`);
+          console.log(`[PPTX Export] Image: ${img.width}x${img.height}, final=${finalWidth.toFixed(2)}x${finalHeight.toFixed(2)}`);
           
           slide.addImage({ 
             data: dataUrl, 
@@ -384,7 +663,7 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
             w: finalWidth,
             h: finalHeight
           });
-          console.log(`[PPTX Export] Added element image for ${ref.chartId}`);
+          console.log(`[PPTX Export] ✓ Added element image for ${ref.chartId}`);
         } else {
           slide.addText('Content unavailable', { x: slideMargin, y: 1.2, fontSize: 14, color: '888888' });
         }

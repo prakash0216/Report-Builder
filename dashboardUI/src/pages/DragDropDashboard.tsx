@@ -1030,12 +1030,21 @@ export default function DropDragDashboard() {
 
     return (
       <>
-        <div className="absolute top-3 right-3 flex flex-row flex-nowrap items-center gap-1.5" style={{ zIndex: 9999, pointerEvents: 'auto' }}>
+        <div 
+          className="absolute top-5 flex flex-row flex-nowrap items-center gap-1.5" 
+          style={{ 
+            right: isEditMode ? '0.75rem' : '3.8rem',
+            zIndex: 50, 
+            pointerEvents: 'none' 
+          }}
+        >
           {showFilterButton && (
             <button
               type="button"
               className={`non-draggable-filter-btn group relative p-2 rounded-lg text-xs font-semibold transition-all duration-200 border backdrop-blur-sm whitespace-nowrap ${
-                isEditMode ? (isFilterOpen ? "mr-0" : "mr-0") : "mr-12 mt-1.5"
+                isFilterOpen
+                  ? "bg-amber-200 text-amber-900 border-amber-300"
+                  : "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 hover:text-amber-900 hover:border-amber-300"
               }`}
               onClick={(e) => {
                 e.preventDefault();
@@ -1047,7 +1056,7 @@ export default function DropDragDashboard() {
                 e.preventDefault();
               }}
               title={isFilterOpen ? "Hide filters" : "Show filters"}
-              style={{ pointerEvents: 'auto', cursor: 'pointer', position: 'relative', zIndex: 10000 }}
+              style={{ pointerEvents: 'auto', cursor: 'pointer' }}
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 7V4z" />
