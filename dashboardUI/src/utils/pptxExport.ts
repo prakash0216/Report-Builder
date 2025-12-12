@@ -435,7 +435,21 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
 
   for (const ref of chartRefs) {
     const slide = pptx.addSlide();
-    slide.addText(ref.title || ref.chartId, { x: slideMargin, y: slideMargin, fontSize: 18, bold: true });
+    let slideTitle = ref.title || ref.chartId;
+
+    // Check if Highcharts instance exists and has a configured title
+    if (ref.chart) {
+      // Access the title from Highcharts options
+      const hcTitle = ref.chart.options?.title?.text;
+      
+      // If a valid string title exists in Highcharts, use it
+      if (hcTitle && typeof hcTitle === 'string' && hcTitle.trim() !== '') {
+        slideTitle = hcTitle;
+      }
+    }
+
+    // 2. Add Title to Slide
+    slide.addText(slideTitle, { x: slideMargin, y: slideMargin, fontSize: 18, bold: true });
 
     try {
       console.log(`[PPTX Export] Processing card ${ref.chartId}, type: ${ref.type}, hasChart: ${!!ref.chart}`);
