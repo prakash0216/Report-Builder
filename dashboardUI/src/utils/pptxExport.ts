@@ -1,7 +1,7 @@
 import Highcharts from 'highcharts';
 // @ts-ignore
 import html2canvas from 'html2canvas';
-import { ChartRef } from './downloadUtilities';
+import { ChartRef, TableData } from './downloadUtilities';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -83,6 +83,80 @@ const captureChartAsPng = async (chart: Highcharts.Chart): Promise<string | null
     img.onerror = () => resolve(null);
     img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
   });
+};
+
+/**
+ * Build table rows for pptxgenjs table
+ * Format: Array of rows, where each row is an array of cells
+ * First row is header
+ */
+const buildPptxTableData = (tableData: TableData, maxRows: number = 50): { rows: any[][], hasMore: boolean } => {
+  const { columns, rows } = tableData;
+  
+  if (!columns || columns.length === 0 || !rows || rows.length === 0) {
+    return { rows: [], hasMore: false };
+  }
+  
+  // Build header row with styling
+  const headerRow = columns.map(col => ({
+    text: String(col),
+    options: {
+      bold: true,
+      fill: { color: 'E0E7FF' },
+      color: '1E293B',
+      fontSize: 9,
+      align: 'left',
+      valign: 'middle',
+    }
+  }));
+  
+  // Build data rows (limit to maxRows for performance)
+  const limitedRows = rows.slice(0, maxRows);
+  const dataRows = limitedRows.map((row, rowIdx) => 
+    columns.map(col => ({
+      text: typeof row[col] === 'object' 
+        ? JSON.stringify(row[col]) 
+        : String(row[col] ?? ''),
+      options: {
+        fill: { color: rowIdx % 2 === 0 ? 'FFFFFF' : 'F8FAFC' },
+        color: '475569',
+        fontSize: 8,
+        align: 'left',
+        valign: 'middle',
+      }
+    }))
+  );
+  
+  return {
+    rows: [headerRow, ...dataRows],
+    hasMore: rows.length > maxRows
+  };
+};
+
+/**
+ * Calculate optimal column widths for pptxgenjs table
+ */
+const calculateColumnWidths = (columns: string[], rows: Array<Record<string, any>>, availableWidth: number): number[] => {
+  const numCols = columns.length;
+  
+  // Calculate max content width for each column (approximation)
+  const maxLengths = columns.map((col, colIdx) => {
+    let maxLen = col.length;
+    rows.slice(0, 20).forEach(row => {
+      const val = row[col];
+      const strVal = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '');
+      maxLen = Math.max(maxLen, strVal.length);
+    });
+    return Math.min(maxLen, 30); // Cap at 30 chars
+  });
+  
+  const totalLen = maxLengths.reduce((a, b) => a + b, 0);
+  
+  // Distribute width proportionally, with minimum width
+  const minColWidth = 0.8;
+  return maxLengths.map(len => 
+    Math.max(minColWidth, (len / totalLen) * availableWidth)
+  );
 };
 
 /**
@@ -435,24 +509,10 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
 
   for (const ref of chartRefs) {
     const slide = pptx.addSlide();
-    let slideTitle = ref.title || ref.chartId;
-
-    // Check if Highcharts instance exists and has a configured title
-    if (ref.chart) {
-      // Access the title from Highcharts options
-      const hcTitle = ref.chart.options?.title?.text;
-      
-      // If a valid string title exists in Highcharts, use it
-      if (hcTitle && typeof hcTitle === 'string' && hcTitle.trim() !== '') {
-        slideTitle = hcTitle;
-      }
-    }
-
-    // 2. Add Title to Slide
-    slide.addText(slideTitle, { x: slideMargin, y: slideMargin, fontSize: 18, bold: true });
+    slide.addText(ref.title || ref.chartId, { x: slideMargin, y: slideMargin, fontSize: 18, bold: true });
 
     try {
-      console.log(`[PPTX Export] Processing card ${ref.chartId}, type: ${ref.type}, hasChart: ${!!ref.chart}`);
+      console.log(`[PPTX Export] Processing card ${ref.chartId}, type: ${ref.type}`);
       
       if (ref.type === 'chart' && ref.chart) {
         const mapped = buildChartData(ref.chart);
@@ -624,7 +684,60 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
         }
       }
 
-      // HTML/table or fallback to image
+      // Handle table type with native PPTX table
+      if (ref.type === 'table' && ref.tableData && ref.tableData.columns.length > 0 && ref.tableData.rows.length > 0) {
+        console.log(`[PPTX Export] Creating native table for ${ref.chartId}, columns: ${ref.tableData.columns.length}, rows: ${ref.tableData.rows.length}`);
+        
+        try {
+          const slideWidth = 10;
+          const margin = 0.4;
+          const titleHeight = 0.7;
+          const availableWidth = slideWidth - (margin * 2);
+          
+          // Build table data with max 50 rows per slide
+          const { rows: tableRows, hasMore } = buildPptxTableData(ref.tableData, 50);
+          
+          if (tableRows.length > 1) { // At least header + 1 data row
+            // Calculate column widths
+            const colWidths = calculateColumnWidths(
+              ref.tableData.columns, 
+              ref.tableData.rows, 
+              availableWidth
+            );
+            
+            // Add table to slide
+            slide.addTable(tableRows, {
+              x: margin,
+              y: titleHeight + margin,
+              w: availableWidth,
+              colW: colWidths,
+              border: { pt: 0.5, color: 'CBD5E1' },
+              fontFace: 'Arial',
+              autoPage: true,
+              autoPageRepeatHeader: true,
+              autoPageLineWeight: 0.5,
+            });
+            
+            // Add note if there are more rows
+            if (hasMore) {
+              slide.addText(`Showing first 50 of ${ref.tableData.rows.length} rows`, {
+                x: margin,
+                y: 6.8,
+                fontSize: 8,
+                color: '64748B',
+                italic: true,
+              });
+            }
+            
+            console.log(`[PPTX Export] ✓ Added native table for ${ref.chartId}`);
+            continue;
+          }
+        } catch (tableErr) {
+          console.warn(`[PPTX Export] Native table failed for ${ref.chartId}, falling back to image:`, tableErr);
+        }
+      }
+
+      // HTML or fallback to image
       if (ref.containerElement) {
         console.log(`[PPTX Export] Capturing element as image for ${ref.chartId}`);
         const dataUrl = await captureElementAsPng(ref.containerElement);

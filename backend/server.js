@@ -2414,6 +2414,8 @@ app.get('/api/chart-configs', async (req, res) => {
           type: row.type,
           processed: row.processed_config_json ? JSON.parse(row.processed_config_json) : null,
           htmlContent: row.html_content || '',
+          tableDataSource: row.table_data_source || '',
+          tableSettings: row.table_settings_json ? JSON.parse(row.table_settings_json) : null,
         };
       });
     }
@@ -2443,6 +2445,8 @@ app.get('/api/chart-configs/:chartId', async (req, res) => {
         type: row.type,
         processed: row.processed_config_json ? JSON.parse(row.processed_config_json) : null,
         htmlContent: row.html_content || '',
+        tableDataSource: row.table_data_source || '',
+        tableSettings: row.table_settings_json ? JSON.parse(row.table_settings_json) : null,
       }
     });
   } catch (err) {
@@ -2457,31 +2461,34 @@ app.get('/api/chart-configs/:chartId', async (req, res) => {
  */
 app.post('/api/chart-configs', async (req, res) => {
   try {
-    const { chartId, template, type, processed, htmlContent } = req.body;
+    const { chartId, template, type, processed, htmlContent, tableDataSource, tableSettings } = req.body;
     if (!chartId || !type) {
       return res.status(400).json({ success: false, error: 'chartId and type are required' });
     }
 
     const processedJson = processed ? JSON.stringify(processed) : null;
+    const tableSettingsJson = tableSettings ? JSON.stringify(tableSettings) : null;
     const existing = await dbClient.query(`SELECT id FROM chart_configs WHERE chart_id='${chartId.replace(/'/g, "''")}'`);
     
     const escapedChartId = chartId.replace(/'/g, "''");
     const escapedTemplate = (template || '').replace(/'/g, "''");
     const escapedHtmlContent = (htmlContent || '').replace(/'/g, "''");
     const escapedProcessedJson = (processedJson || '').replace(/'/g, "''");
+    const escapedTableDataSource = (tableDataSource || '').replace(/'/g, "''");
+    const escapedTableSettingsJson = (tableSettingsJson || '').replace(/'/g, "''");
     
     if (existing.length > 0) {
       // Update
       await dbClient.run(`
         UPDATE chart_configs 
-        SET template='${escapedTemplate}', type='${type}', processed_config_json='${escapedProcessedJson}', html_content='${escapedHtmlContent}', last_modified=CURRENT_TIMESTAMP
+        SET template='${escapedTemplate}', type='${type}', processed_config_json='${escapedProcessedJson}', html_content='${escapedHtmlContent}', table_data_source='${escapedTableDataSource}', table_settings_json='${escapedTableSettingsJson}', last_modified=CURRENT_TIMESTAMP
         WHERE chart_id='${escapedChartId}'
       `);
     } else {
       // Insert
       await dbClient.run(`
-        INSERT INTO chart_configs (chart_id, template, type, processed_config_json, html_content, last_modified)
-        VALUES ('${escapedChartId}', '${escapedTemplate}', '${type}', '${escapedProcessedJson}', '${escapedHtmlContent}', CURRENT_TIMESTAMP)
+        INSERT INTO chart_configs (chart_id, template, type, processed_config_json, html_content, table_data_source, table_settings_json, last_modified)
+        VALUES ('${escapedChartId}', '${escapedTemplate}', '${type}', '${escapedProcessedJson}', '${escapedHtmlContent}', '${escapedTableDataSource}', '${escapedTableSettingsJson}', CURRENT_TIMESTAMP)
       `);
     }
 
@@ -3303,7 +3310,8 @@ app.get('/api/data-sources/:dsName/schedule', async (req, res) => {
       createCardFilterPanelStateTable,
       createParametersTable,
       createCalculationsTable,
-      createFiltersTable
+      createFiltersTable,
+      migrateChartConfigsTable
     } = await import('./db/initDb.js');
     
     // Create essential tables first (parameters, calculations, filters)
@@ -3315,6 +3323,7 @@ app.get('/api/data-sources/:dsName/schedule', async (req, res) => {
     
     // Create UI-related tables
     await createChartConfigsTable();
+    await migrateChartConfigsTable(); // Run migrations for new columns
     await createLayoutsTable();
     await createChartVisibilityTable();
     await createCardDimensionConditionsTable();

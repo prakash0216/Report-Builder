@@ -11,6 +11,7 @@ import { layoutState } from "../recoil/LayoutState";
 import ResizableChart from "../components/ResizableChart";
 import FilterPanel from "../components/FilterPanel";
 import CardFilterPanel from "../components/CardFilterPanel";
+import DashboardTable from "../components/DashboardTable";
 import { variableUpdateTriggerState, variableNamesState } from '../recoil/Variabletracker';
 import { variableAtomFamily } from '../recoil/VariableFamily';
 import { filterNamesState, filterConfigFamily } from '../recoil/FiltersFamily';
@@ -18,7 +19,22 @@ import { liveFilterFamily } from '../recoil/LiveFilterFamily';
 import { isChartVisibleSelector, chartDynamicDimensionsSelector } from '../recoil/DashboardVisibility';
 import { IsEditModeState } from "../recoil/IsEditeMode";
 import { dahboardNameMain } from "../recoil/DashboardName";
-import { Typography, Box, CircularProgress, Menu, MenuItem, Divider } from "@mui/material";
+import { 
+  Typography, 
+  Box, 
+  CircularProgress, 
+  Menu, 
+  MenuItem, 
+  Divider,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
+  Paper,
+} from "@mui/material";
 import { dataLoadedState } from '../components/DataInitializer';
 import Highcharts from 'highcharts';
 import {
@@ -613,23 +629,12 @@ export default function DropDragDashboard() {
   }, [layouts, currentBreakpoint, chartVisibility]);
 
   // Collect chart references for export (after configs & visibility are computed)
-  const collectChartRefs = useCallback((): ChartRef[] => {
+  const collectChartRefs = useRecoilCallback(({ snapshot }) => (): ChartRef[] => {
     const refs: ChartRef[] = [];
     for (const item of visibleCharts) {
       const configData = chartConfigs[item.i];
       const contentType = (configData?.type as any) || 'chart';
       const container = document.querySelector(`[data-chart-id="${item.i}"]`) as HTMLElement | null;
-
-      let title = `Chart_${item.i}`;
-      if (contentType === 'chart' && processedChartConfigs[item.i]) {
-        const chartTitle = processedChartConfigs[item.i]?.title?.text;
-        if (chartTitle) title = typeof chartTitle === 'string' ? chartTitle : String(chartTitle);
-      } else if (contentType === 'html' && configData?.htmlContent) {
-        const temp = document.createElement('div');
-        temp.innerHTML = configData.htmlContent;
-        const h = temp.querySelector('h1,h2,h3');
-        if (h?.textContent) title = h.textContent;
-      }
 
       let chartInstance: Highcharts.Chart | null = null;
       if (contentType === 'chart' && container) {
@@ -645,13 +650,66 @@ export default function DropDragDashboard() {
         }
       }
 
+      // Extract title based on content type
+      let title = `Chart_${item.i}`;
+      if (contentType === 'chart') {
+        // First try to get title from processed config
+        const processedTitle = processedChartConfigs[item.i]?.title?.text;
+        if (processedTitle) {
+          title = typeof processedTitle === 'string' ? processedTitle : String(processedTitle);
+        }
+        // Fallback: get title from live Highcharts instance
+        else if (chartInstance) {
+          const liveTitle = (chartInstance.options as any)?.title?.text;
+          if (liveTitle) {
+            title = typeof liveTitle === 'string' ? liveTitle : String(liveTitle);
+          }
+        }
+      } else if (contentType === 'html' && configData?.htmlContent) {
+        const temp = document.createElement('div');
+        temp.innerHTML = configData.htmlContent;
+        const h = temp.querySelector('h1,h2,h3');
+        if (h?.textContent) title = h.textContent;
+      } else if (contentType === 'table' && configData?.tableDataSource) {
+        title = `Table_${configData.tableDataSource}`;
+      }
+
+      // Get table data for table type cards
+      let tableData: { columns: string[]; rows: Array<Record<string, any>> } | undefined;
+      if (contentType === 'table' && configData?.tableDataSource) {
+        try {
+          const loadable = snapshot.getLoadable(variableAtomFamily(configData.tableDataSource));
+          if (loadable.state === 'hasValue') {
+            let rawData: any = loadable.contents;
+            // Parse if string
+            if (typeof rawData === 'string') {
+              try {
+                rawData = JSON.parse(rawData);
+              } catch (e) {
+                rawData = undefined;
+              }
+            }
+            // Validate it's an array of objects
+            if (Array.isArray(rawData) && rawData.length > 0 && typeof rawData[0] === 'object') {
+              tableData = {
+                columns: Object.keys(rawData[0]),
+                rows: rawData,
+              };
+            }
+          }
+        } catch (e) {
+          console.warn(`[collectChartRefs] Failed to get table data for ${item.i}:`, e);
+        }
+      }
+
       refs.push({
         chart: chartInstance,
         chartId: item.i,
-        title: title.replace(/[^a-z0-9]/gi, '_'),
+        title: title, // Keep original title for display in PPTX
         type: contentType,
         htmlContent: contentType === 'html' ? configData?.htmlContent : undefined,
         containerElement: container || undefined,
+        tableData,
       });
     }
     return refs;
@@ -1033,7 +1091,7 @@ export default function DropDragDashboard() {
         <div 
           className="absolute top-5 flex flex-row flex-nowrap items-center gap-1.5" 
           style={{ 
-            right: isEditMode ? '0.75rem' : '3.8rem',
+            right: isEditMode ? '0.75rem' : '4rem',
             zIndex: 50, 
             pointerEvents: 'none' 
           }}
@@ -1135,13 +1193,23 @@ export default function DropDragDashboard() {
           </div>
         )}
 
-        <div className="flex-1 p-4" style={{ minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 0 }}>
+        <div className="flex-1 p-4" style={{ minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 0, overflow: 'hidden', height: '100%' }}>
           {showFilterButton && isFilterOpen && (
             <div className="mb-3" style={{ position: 'relative', zIndex: 5 }}>
               <CardFilterPanel cardId={item.i} onClose={closeCardFilterPanel} />
             </div>
           )}
-          {chartConfig ? (
+          {/* Render Table when contentType is 'table' */}
+          {contentType === 'table' && configData?.tableDataSource ? (
+            <div style={{ flex: 1, minHeight: 0, maxHeight: '100%', overflow: 'hidden', position: 'relative' }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
+                <DashboardTable 
+                  dataSource={configData.tableDataSource} 
+                  settings={configData.tableSettings}
+                />
+              </div>
+            </div>
+          ) : chartConfig ? (
             <ResizableChart key={item.i} options={chartConfig} showExport={isEditMode ? false : true} />
           ) : (
             <div className="h-full flex items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 rounded-xl border-2 border-dashed border-slate-300">

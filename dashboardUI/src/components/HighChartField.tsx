@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { chartConfigState } from "../recoil/ChartConfig";
 import { useRecoilState, useRecoilValue, useRecoilCallback } from "recoil";
 import { variableAtomFamily } from '../recoil/VariableFamily';
-import { variableNamesState, variableUpdateTriggerState } from '../recoil/Variabletracker';
+import { variableNamesState, variableUpdateTriggerState, hooksArrayOfObjectsSelector } from '../recoil/Variabletracker';
 import ResizableChart from "./ResizableChart";
 import {
   Box,
@@ -24,6 +24,19 @@ import {
   Collapse,
   ToggleButtonGroup,
   ToggleButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
+  FormControl,
+  InputLabel,
+  Select,
+  SelectChangeEvent,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import { JsonEditor } from './JsonEditor';
 import { HtmlEditor } from './HtmlEditor';
@@ -457,6 +470,12 @@ interface ChartConfigData {
   htmlContent?: string;
   type?: 'chart' | 'html' | 'table' | 'tableChart';
   processed?: any;
+  tableDataSource?: string; // Variable name for table data
+  tableSettings?: {
+    pagination: boolean;
+    scrollContent: boolean;
+    lazyLoad: boolean;
+  };
   [key: string]: any;
 }
 
@@ -475,7 +494,24 @@ export default function HighChartField() {
   const [viewMode, setViewMode] = useState<ViewMode>('chart');
   const navigate = useNavigate();
 
+  // Table configuration state
+  const [selectedTableDataSource, setSelectedTableDataSource] = useState<string>("");
+  const [tablePage, setTablePage] = useState<number>(0);
+  const [tableRowsPerPage, setTableRowsPerPage] = useState<number>(10);
+  const [tableSettings, setTableSettings] = useState<{
+    pagination: boolean;
+    scrollContent: boolean;
+    lazyLoad: boolean;
+  }>({
+    pagination: true,
+    scrollContent: false,
+    lazyLoad: false,
+  });
+
   const availableVariables = useAllVariables();
+  
+  // Get variables that are arrays of objects (suitable for tables)
+  const arrayOfObjectsVariables = useRecoilValue(hooksArrayOfObjectsSelector);
 
   // Load saved config on mount
   useEffect(() => {
@@ -488,18 +524,24 @@ export default function HighChartField() {
         setViewMode('html');
         setHtmlContent(config.htmlContent || '');
         setChartConfig('');
+        setSelectedTableDataSource('');
       } else if (config.type === 'table') {
         setViewMode('table');
         setChartConfig('');
         setHtmlContent('');
+        setSelectedTableDataSource(config.tableDataSource || '');
+        setTableSettings(config.tableSettings || { pagination: true, scrollContent: false, lazyLoad: false });
       } else if (config.type === 'tableChart') {
         setViewMode('tableChart');
         setChartConfig('');
         setHtmlContent('');
+        setSelectedTableDataSource(config.tableDataSource || '');
+        setTableSettings(config.tableSettings || { pagination: true, scrollContent: false, lazyLoad: false });
       } else {
         setViewMode('chart');
         setChartConfig(config.template || '');
         setHtmlContent('');
+        setSelectedTableDataSource('');
       }
     }
   }, [id, chartConfigs]);
@@ -643,6 +685,7 @@ export default function HighChartField() {
   const handleViewModeChange = (_event: React.MouseEvent<HTMLElement>, newMode: ViewMode | null) => {
     if (newMode !== null) {
       setViewMode(newMode);
+      setTablePage(0); // Reset pagination when switching views
       
       if (id && chartConfigs[id]) {
         setChartConfigs(prev => ({
@@ -655,6 +698,94 @@ export default function HighChartField() {
       }
     }
   };
+
+  // Handle table data source selection
+  const handleTableDataSourceChange = (event: SelectChangeEvent<string>) => {
+    const variableName = event.target.value;
+    setSelectedTableDataSource(variableName);
+    setTablePage(0); // Reset pagination when data source changes
+    
+    if (id) {
+      setChartConfigs(prev => ({
+        ...prev,
+        [id]: {
+          ...prev[id],
+          type: viewMode,
+          tableDataSource: variableName,
+          tableSettings: tableSettings,
+        }
+      }));
+    }
+  };
+
+  // Handle table settings change
+  const handleTableSettingChange = (setting: 'pagination' | 'scrollContent' | 'lazyLoad') => {
+    const newSettings = {
+      ...tableSettings,
+      [setting]: !tableSettings[setting],
+    };
+    setTableSettings(newSettings);
+    setTablePage(0); // Reset pagination
+    
+    if (id) {
+      setChartConfigs(prev => ({
+        ...prev,
+        [id]: {
+          ...prev[id],
+          type: viewMode,
+          tableDataSource: selectedTableDataSource,
+          tableSettings: newSettings,
+        }
+      }));
+    }
+  };
+
+  // Get table data from selected variable
+  const tableData = useMemo(() => {
+    if (!selectedTableDataSource || !availableVariables[selectedTableDataSource]) {
+      return [];
+    }
+    
+    const data = availableVariables[selectedTableDataSource];
+    
+    // Parse if it's a string
+    const parsedData = typeof data === 'string' ? safeParse(data) : data;
+    
+    if (!Array.isArray(parsedData) || parsedData.length === 0) {
+      return [];
+    }
+    
+    // Verify it's an array of objects
+    if (typeof parsedData[0] !== 'object' || parsedData[0] === null) {
+      return [];
+    }
+    
+    return parsedData;
+  }, [selectedTableDataSource, availableVariables]);
+
+  // Get table columns from the first row of data
+  const tableColumns = useMemo(() => {
+    if (tableData.length === 0) return [];
+    return Object.keys(tableData[0]);
+  }, [tableData]);
+
+  // Handle table pagination
+  const handleTablePageChange = (_event: unknown, newPage: number) => {
+    setTablePage(newPage);
+  };
+
+  const handleTableRowsPerPageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setTableRowsPerPage(parseInt(event.target.value, 10));
+    setTablePage(0);
+  };
+
+  // Get paginated table data
+  const paginatedTableData = useMemo(() => {
+    return tableData.slice(
+      tablePage * tableRowsPerPage,
+      tablePage * tableRowsPerPage + tableRowsPerPage
+    );
+  }, [tableData, tablePage, tableRowsPerPage]);
 
   return (
     <Box 
@@ -934,28 +1065,211 @@ export default function HighChartField() {
                     />
                   </Box>
                 ) : viewMode === 'table' ? (
-                  <Paper
-                    variant="outlined"
-                    sx={{
-                      flex: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: 2,
-                      border: '2px dashed rgba(59, 130, 246, 0.3)',
-                      bgcolor: 'rgba(224, 242, 254, 0.3)',
-                    }}
-                  >
-                    <Box sx={{ textAlign: 'center', p: 4 }}>
-                      <TableChartIcon sx={{ fontSize: 60, color: '#3b82f6', mb: 2 }} />
-                      <Typography variant="h6" fontWeight={700} gutterBottom color="#1e293b">
-                        Table Configuration
+                  <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {/* Data Source Selection */}
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        bgcolor: 'rgba(224, 242, 254, 0.1)',
+                      }}
+                    >
+                      <Typography 
+                        variant="subtitle2" 
+                        fontWeight={700} 
+                        sx={{ mb: 1.5, color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 1 }}
+                      >
+                        <TableChartIcon fontSize="small" />
+                        Select Data Source
                       </Typography>
-                      <Typography variant="body2" color="#64748b" fontWeight={500}>
-                        Table editor coming soon
+                      <FormControl fullWidth size="small">
+                        <InputLabel id="table-data-source-label">Calculation Variable</InputLabel>
+                        <Select
+                          labelId="table-data-source-label"
+                          value={selectedTableDataSource}
+                          label="Calculation Variable"
+                          onChange={handleTableDataSourceChange}
+                          sx={{
+                            bgcolor: 'white',
+                            borderRadius: 1.5,
+                            '& .MuiOutlinedInput-notchedOutline': {
+                              borderColor: 'rgba(59, 130, 246, 0.3)',
+                            },
+                            '&:hover .MuiOutlinedInput-notchedOutline': {
+                              borderColor: '#3b82f6',
+                            },
+                            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                              borderColor: '#3b82f6',
+                            },
+                          }}
+                        >
+                          <MenuItem value="">
+                            <em>Select a variable...</em>
+                          </MenuItem>
+                          {arrayOfObjectsVariables.map((varName: string) => (
+                            <MenuItem key={varName} value={varName}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Chip 
+                                  size="small" 
+                                  label="Array" 
+                                  sx={{ 
+                                    height: 20, 
+                                    fontSize: '0.7rem',
+                                    bgcolor: 'rgba(59, 130, 246, 0.1)',
+                                    color: '#3b82f6',
+                                  }} 
+                                />
+                                <Typography variant="body2" fontWeight={500}>{varName}</Typography>
+                              </Box>
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      {arrayOfObjectsVariables.length === 0 && (
+                        <Alert severity="info" sx={{ mt: 1.5, py: 0.5 }}>
+                          <Typography variant="caption">
+                            No array-of-objects variables found. Create a calculation that returns an array of objects first.
+                          </Typography>
+                        </Alert>
+                      )}
+                      {selectedTableDataSource && tableData.length > 0 && (
+                        <Typography variant="caption" color="#64748b" sx={{ mt: 1, display: 'block' }}>
+                          {tableData.length} rows × {tableColumns.length} columns
+                        </Typography>
+                      )}
+                    </Paper>
+
+                    {/* Table Display Settings */}
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        bgcolor: 'rgba(224, 242, 254, 0.1)',
+                      }}
+                    >
+                      <Typography 
+                        variant="subtitle2" 
+                        fontWeight={700} 
+                        sx={{ mb: 2, color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 1 }}
+                      >
+                        <VisibilityIcon fontSize="small" />
+                        Display Settings
                       </Typography>
-                    </Box>
-                  </Paper>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={tableSettings.pagination}
+                              onChange={() => handleTableSettingChange('pagination')}
+                              size="small"
+                              sx={{
+                                '& .MuiSwitch-switchBase.Mui-checked': {
+                                  color: '#3b82f6',
+                                },
+                                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                  backgroundColor: '#3b82f6',
+                                },
+                              }}
+                            />
+                          }
+                          label={
+                            <Box>
+                              <Typography variant="body2" fontWeight={600} color="#1e293b">
+                                Pagination
+                              </Typography>
+                              <Typography variant="caption" color="#64748b">
+                                Show page controls at the bottom
+                              </Typography>
+                            </Box>
+                          }
+                          sx={{ m: 0, mb: 1 }}
+                        />
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={tableSettings.scrollContent}
+                              onChange={() => handleTableSettingChange('scrollContent')}
+                              size="small"
+                              sx={{
+                                '& .MuiSwitch-switchBase.Mui-checked': {
+                                  color: '#3b82f6',
+                                },
+                                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                  backgroundColor: '#3b82f6',
+                                },
+                              }}
+                            />
+                          }
+                          label={
+                            <Box>
+                              <Typography variant="body2" fontWeight={600} color="#1e293b">
+                                Scroll Entire Content
+                              </Typography>
+                              <Typography variant="caption" color="#64748b">
+                                Enable vertical scrolling for all rows
+                              </Typography>
+                            </Box>
+                          }
+                          sx={{ m: 0, mb: 1 }}
+                        />
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={tableSettings.lazyLoad}
+                              onChange={() => handleTableSettingChange('lazyLoad')}
+                              size="small"
+                              sx={{
+                                '& .MuiSwitch-switchBase.Mui-checked': {
+                                  color: '#3b82f6',
+                                },
+                                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                  backgroundColor: '#3b82f6',
+                                },
+                              }}
+                            />
+                          }
+                          label={
+                            <Box>
+                              <Typography variant="body2" fontWeight={600} color="#1e293b">
+                                Lazy Load
+                              </Typography>
+                              <Typography variant="caption" color="#64748b">
+                                Load rows as you scroll (for large datasets)
+                              </Typography>
+                            </Box>
+                          }
+                          sx={{ m: 0 }}
+                        />
+                      </Box>
+                    </Paper>
+
+                    {/* Empty State - Only show when no data source selected */}
+                    {!selectedTableDataSource && (
+                      <Paper
+                        variant="outlined"
+                        sx={{
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: 2,
+                          border: '2px dashed rgba(59, 130, 246, 0.3)',
+                          bgcolor: 'rgba(224, 242, 254, 0.3)',
+                        }}
+                      >
+                        <Box sx={{ textAlign: 'center', p: 4 }}>
+                          <TableChartIcon sx={{ fontSize: 48, color: '#3b82f6', opacity: 0.5, mb: 1 }} />
+                          <Typography variant="body2" color="#64748b" fontWeight={500}>
+                            Select a data source to preview the table
+                          </Typography>
+                        </Box>
+                      </Paper>
+                    )}
+                  </Box>
                 ) : (
                   <Paper
                     variant="outlined"
@@ -1077,83 +1391,217 @@ export default function HighChartField() {
                 )}
               </Box>
 
-              <Box sx={{ flex: 1, p: 2, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-                <Paper
-                  variant="outlined"
-                  sx={{
-                    flex: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    overflow: 'hidden',
-                    borderRadius: 2,
-                    border: '1px solid rgba(102, 126, 234, 0.2)',
-                    bgcolor: (processedChartConfig || processedHtmlConfig)
-                      ? 'white' 
-                      : error 
-                        ? 'rgba(254, 226, 226, 0.3)' 
-                        : 'rgba(248, 250, 252, 0.5)',
-                  }}
-                >
-                  {viewMode === 'chart' && processedChartConfig ? (
-                    <Box sx={{ width: '100%', height: '100%' }}>
-                      <ResizableChart key={chartKey} options={processedChartConfig} showExport={true}/>
-                    </Box>
-                  ) : viewMode === 'html' && processedHtmlConfig ? (
-                    <Box sx={{ width: '100%', height: '100%' }}>
-                      <ResizableChart options={processedHtmlConfig} showExport={false}/>
-                    </Box>
-                  ) : error && viewMode === 'chart' ? (
-                    <Box sx={{ textAlign: 'center', p: 4 }}>
-                      <Box
+              <Box sx={{ flex: 1, p: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: 'calc(100vh - 200px)' }}>
+                {/* Table Preview - Full Table with Pagination */}
+                {viewMode === 'table' && selectedTableDataSource && tableData.length > 0 ? (
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      overflow: 'hidden',
+                      borderRadius: 2,
+                      border: '1px solid rgba(59, 130, 246, 0.3)',
+                      bgcolor: 'white',
+                      minHeight: 0,
+                      maxHeight: '100%',
+                    }}
+                  >
+                    <TableContainer 
+                      sx={{ 
+                        flex: 1,
+                        overflow: 'auto',
+                        minHeight: 0,
+                        maxHeight: '100%',
+                      }}
+                    >
+                      <Table stickyHeader size="small">
+                        <TableHead>
+                          <TableRow>
+                            {tableColumns.map((col) => (
+                              <TableCell 
+                                key={col}
+                                sx={{ 
+                                  fontWeight: 700, 
+                                  // Solid background for sticky header
+                                  backgroundColor: '#e0e7ff !important',
+                                  background: '#e0e7ff !important',
+                                  color: '#1e293b',
+                                  fontSize: '0.8rem',
+                                  py: 1.5,
+                                  whiteSpace: 'nowrap',
+                                  borderBottom: '2px solid rgba(59, 130, 246, 0.3)',
+                                  zIndex: 2,
+                                  position: 'sticky',
+                                  top: 0,
+                                }}
+                              >
+                                {col}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {(tableSettings.pagination ? paginatedTableData : 
+                            tableSettings.scrollContent ? tableData : tableData.slice(0, 100)
+                          ).map((row: any, rowIdx: number) => (
+                            <TableRow 
+                              key={rowIdx} 
+                              hover
+                              sx={{
+                                '&:nth-of-type(odd)': {
+                                  bgcolor: 'rgba(59, 130, 246, 0.02)',
+                                },
+                                '&:hover': {
+                                  bgcolor: 'rgba(59, 130, 246, 0.08) !important',
+                                },
+                              }}
+                            >
+                              {tableColumns.map((col) => (
+                                <TableCell 
+                                  key={col}
+                                  sx={{ 
+                                    fontSize: '0.8rem',
+                                    py: 1,
+                                    color: '#475569',
+                                    maxWidth: 200,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {typeof row[col] === 'object' 
+                                    ? JSON.stringify(row[col]) 
+                                    : String(row[col] ?? '')}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                    {tableSettings.pagination && (
+                      <TablePagination
+                        component="div"
+                        count={tableData.length}
+                        page={tablePage}
+                        onPageChange={handleTablePageChange}
+                        rowsPerPage={tableRowsPerPage}
+                        onRowsPerPageChange={handleTableRowsPerPageChange}
+                        rowsPerPageOptions={[5, 10, 25, 50, 100]}
                         sx={{
-                          width: 80,
-                          height: 80,
-                          margin: '0 auto 24px',
-                          borderRadius: '50%',
-                          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
+                          borderTop: '1px solid rgba(59, 130, 246, 0.2)',
+                          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(37, 99, 235, 0.05) 100%)',
+                          '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                            color: '#64748b',
+                            fontWeight: 600,
+                            fontSize: '0.8rem',
+                          },
                         }}
-                      >
-                        <ErrorIcon sx={{ fontSize: 40, color: '#ef4444' }} />
+                      />
+                    )}
+                  </Paper>
+                ) : (
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflow: 'hidden',
+                      borderRadius: 2,
+                      border: '1px solid rgba(102, 126, 234, 0.2)',
+                      bgcolor: (processedChartConfig || processedHtmlConfig)
+                        ? 'white' 
+                        : error 
+                          ? 'rgba(254, 226, 226, 0.3)' 
+                          : 'rgba(248, 250, 252, 0.5)',
+                    }}
+                  >
+                    {viewMode === 'chart' && processedChartConfig ? (
+                      <Box sx={{ width: '100%', height: '100%' }}>
+                        <ResizableChart key={chartKey} options={processedChartConfig} showExport={true}/>
                       </Box>
-                      <Typography variant="h6" fontWeight={700} color="#ef4444" gutterBottom>
-                        Chart Error
-                      </Typography>
-                      <Typography variant="body2" color="#991b1b" sx={{ maxWidth: 400, mx: 'auto' }}>
-                        {error}
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <Box sx={{ textAlign: 'center', p: 4 }}>
-                      <Box
-                        sx={{
-                          width: 80,
-                          height: 80,
-                          margin: '0 auto 24px',
-                          borderRadius: '50%',
-                          background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <CodeIcon sx={{ fontSize: 40, color: '#667eea', opacity: 0.6 }} />
+                    ) : viewMode === 'html' && processedHtmlConfig ? (
+                      <Box sx={{ width: '100%', height: '100%' }}>
+                        <ResizableChart options={processedHtmlConfig} showExport={false}/>
                       </Box>
-                      <Typography variant="h6" fontWeight={700} gutterBottom color="#1e293b">
-                        Ready for Configuration
-                      </Typography>
-                      <Typography variant="body2" color="#64748b" fontWeight={500}>
-                        {viewMode === 'chart' && 'Select a template or enter Highcharts JSON'}
-                        {viewMode === 'html' && 'Select a template or enter HTML with inline styles'}
-                        {viewMode === 'table' && 'Table configuration coming soon'}
-                        {viewMode === 'tableChart' && 'Combined configuration coming soon'}
-                      </Typography>
-                    </Box>
-                  )}
-                </Paper>
+                    ) : error && viewMode === 'chart' ? (
+                      <Box sx={{ textAlign: 'center', p: 4 }}>
+                        <Box
+                          sx={{
+                            width: 80,
+                            height: 80,
+                            margin: '0 auto 24px',
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <ErrorIcon sx={{ fontSize: 40, color: '#ef4444' }} />
+                        </Box>
+                        <Typography variant="h6" fontWeight={700} color="#ef4444" gutterBottom>
+                          Chart Error
+                        </Typography>
+                        <Typography variant="body2" color="#991b1b" sx={{ maxWidth: 400, mx: 'auto' }}>
+                          {error}
+                        </Typography>
+                      </Box>
+                    ) : viewMode === 'table' && !selectedTableDataSource ? (
+                      <Box sx={{ textAlign: 'center', p: 4 }}>
+                        <Box
+                          sx={{
+                            width: 80,
+                            height: 80,
+                            margin: '0 auto 24px',
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <TableChartIcon sx={{ fontSize: 40, color: '#3b82f6', opacity: 0.6 }} />
+                        </Box>
+                        <Typography variant="h6" fontWeight={700} gutterBottom color="#1e293b">
+                          Select a Data Source
+                        </Typography>
+                        <Typography variant="body2" color="#64748b" fontWeight={500}>
+                          Choose a calculation variable from the dropdown to display as a table
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Box sx={{ textAlign: 'center', p: 4 }}>
+                        <Box
+                          sx={{
+                            width: 80,
+                            height: 80,
+                            margin: '0 auto 24px',
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <CodeIcon sx={{ fontSize: 40, color: '#667eea', opacity: 0.6 }} />
+                        </Box>
+                        <Typography variant="h6" fontWeight={700} gutterBottom color="#1e293b">
+                          Ready for Configuration
+                        </Typography>
+                        <Typography variant="body2" color="#64748b" fontWeight={500}>
+                          {viewMode === 'chart' && 'Select a template or enter Highcharts JSON'}
+                          {viewMode === 'html' && 'Select a template or enter HTML with inline styles'}
+                          {viewMode === 'tableChart' && 'Combined configuration coming soon'}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Paper>
+                )}
 
                 <Collapse in={showProcessedConfig && !!processedChartConfig && viewMode === 'chart'}>
                   <Paper 

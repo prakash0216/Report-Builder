@@ -40,6 +40,8 @@ export const chartConfigState = atom<{[id:string]:any}>({
                                 type: config.type,
                                 processed: config.processed,
                                 htmlContent: config.htmlContent,
+                                tableDataSource: config.tableDataSource,
+                                tableSettings: config.tableSettings,
                             });
                         }
                         console.log(`✅ ChartConfig: Saved ${Object.keys(newValue).length} configs`);

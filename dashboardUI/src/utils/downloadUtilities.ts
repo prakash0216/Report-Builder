@@ -9,6 +9,11 @@ import jsPDF from 'jspdf';
 
 export type ChartContentType = 'chart' | 'html' | 'table' | 'tableChart';
 
+export interface TableData {
+  columns: string[];
+  rows: Array<Record<string, any>>;
+}
+
 export interface ChartRef {
   chart: Highcharts.Chart | null;
   chartId: string;
@@ -16,6 +21,7 @@ export interface ChartRef {
   type: ChartContentType;
   htmlContent?: string;
   containerElement?: HTMLElement;
+  tableData?: TableData;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

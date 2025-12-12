@@ -197,6 +197,8 @@ CREATE TABLE IF NOT EXISTS chart_configs (
   type TEXT NOT NULL CHECK (type IN ('chart','table','tableChart','html')),
   processed_config_json TEXT,
   html_content TEXT,
+  table_data_source TEXT,
+  table_settings_json TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   last_modified TIMESTAMP
 );
@@ -387,8 +389,36 @@ async function createMaterializedViewsTable() {
 }
 
 
+// Migration function to add new columns to existing tables
+async function migrateChartConfigsTable() {
+  try {
+    // Check if table_data_source column exists
+    const columns = await dbClient.query(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name = 'chart_configs'
+    `);
+    const columnNames = columns.map(c => c.column_name);
+    
+    // Add table_data_source if it doesn't exist
+    if (!columnNames.includes('table_data_source')) {
+      await dbClient.run(`ALTER TABLE chart_configs ADD COLUMN table_data_source TEXT`);
+      console.log("✅ Added 'table_data_source' column to chart_configs");
+    }
+    
+    // Add table_settings_json if it doesn't exist
+    if (!columnNames.includes('table_settings_json')) {
+      await dbClient.run(`ALTER TABLE chart_configs ADD COLUMN table_settings_json TEXT`);
+      console.log("✅ Added 'table_settings_json' column to chart_configs");
+    }
+  } catch (err) {
+    // If the query fails (e.g., table doesn't exist yet), just log and continue
+    console.log("ℹ️ Migration check skipped (table may not exist yet):", err.message);
+  }
+}
+
 const createTables = async () => {
   await createChartConfigsTable();
+  await migrateChartConfigsTable(); // Run migration after table creation
   await createLayoutsTable();
   await createChartVisibilityTable();
   await createCardDimensionConditionsTable();
@@ -410,5 +440,6 @@ export {
   createParametersTable,
   createCalculationsTable,
   createFiltersTable,
-  createMaterializedViewsTable
+  createMaterializedViewsTable,
+  migrateChartConfigsTable
 };
