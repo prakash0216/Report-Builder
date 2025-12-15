@@ -14,6 +14,18 @@ export interface TableData {
   rows: Array<Record<string, any>>;
 }
 
+// Table theme for styling - matches tableTypes.ts
+export interface TableThemeForExport {
+  headerBgColor: string;
+  headerTextColor: string;
+  rowBgColor: string;
+  rowAltBgColor: string;
+  rowTextColor: string;
+  borderColor: string;
+  cellPadding: 'compact' | 'normal' | 'comfortable';
+  fontSize: 'small' | 'medium' | 'large';
+}
+
 export interface ChartRef {
   chart: Highcharts.Chart | null;
   chartId: string;
@@ -22,6 +34,7 @@ export interface ChartRef {
   htmlContent?: string;
   containerElement?: HTMLElement;
   tableData?: TableData;
+  tableTheme?: TableThemeForExport;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

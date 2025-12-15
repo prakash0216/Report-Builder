@@ -710,6 +710,7 @@ export default function DropDragDashboard() {
         htmlContent: contentType === 'html' ? configData?.htmlContent : undefined,
         containerElement: container || undefined,
         tableData,
+        tableTheme: configData?.tableSettings?.theme,
       });
     }
     return refs;

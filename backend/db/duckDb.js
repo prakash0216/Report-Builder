@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename);
 class DuckDBClient {
   constructor() {
     this.connection = null;
+    this.db = null; // Store the database instance
     this.ready = this.init(); // auto-init on import
   }
 
@@ -18,6 +19,7 @@ class DuckDBClient {
     // Define the desired path for the database file
     const dbDir = path.resolve(__dirname, './data');
     const dbPath = path.join(dbDir, 'chartBuilder.db');
+    const walPath = path.join(dbDir, 'chartBuilder.db.wal');
 
     // Ensure the directory exists
     try {
@@ -28,22 +30,109 @@ class DuckDBClient {
       throw err;
     }
 
-    // Create and connect to the DuckDB database with optimized settings
-    const db = await DuckDBInstance.create(dbPath, {
-      threads: Math.min(8, os.cpus().length), // Use up to 8 threads
-    });
-    this.connection = await db.connect();
-    
-    // Set performance optimizations for DuckDB
-    await this.connection.run(`
-      SET memory_limit='16GB';
-      SET threads=${Math.min(8, os.cpus().length)};
-      SET preserve_insertion_order=false;
-      SET enable_object_cache=true;
-      SET enable_progress_bar=false;
-    `);
-    
-    console.log(`✅ DuckDB initialized at ${dbPath} with ${Math.min(8, os.cpus().length)} threads`);
+    try {
+      // Create and connect to the DuckDB database with optimized settings
+      this.db = await DuckDBInstance.create(dbPath, {
+        threads: Math.min(8, os.cpus().length), // Use up to 8 threads
+      });
+      this.connection = await this.db.connect();
+      
+      // Set performance optimizations for DuckDB
+      await this.connection.run(`
+        SET memory_limit='16GB';
+        SET threads=${Math.min(8, os.cpus().length)};
+        SET preserve_insertion_order=false;
+        SET enable_object_cache=true;
+        SET enable_progress_bar=false;
+        SET checkpoint_threshold='1GB';
+      `);
+      
+      console.log(`✅ DuckDB initialized at ${dbPath} with ${Math.min(8, os.cpus().length)} threads`);
+    } catch (err) {
+      // If we get a WAL file error, try to recover by removing the corrupted WAL file
+      if (err.message && err.message.includes('WAL file')) {
+        console.warn('⚠️ WAL file corruption detected. Attempting to recover...');
+        try {
+          // Close any existing connection/instance before cleanup
+          if (this.connection) {
+            try {
+              this.connection.closeSync();
+            } catch (closeErr) {
+              // Ignore close errors during recovery
+            }
+          }
+          if (this.db) {
+            try {
+              this.db.closeSync();
+            } catch (closeErr) {
+              // Ignore close errors during recovery
+            }
+          }
+          
+          // Remove the corrupted WAL file
+          try {
+            await fs.unlink(walPath);
+            console.log('✅ Removed corrupted WAL file');
+          } catch (unlinkErr) {
+            // WAL file might not exist, that's okay
+            if (unlinkErr.code !== 'ENOENT') {
+              console.warn('⚠️ Could not remove WAL file:', unlinkErr.message);
+            }
+          }
+          
+          // Retry initialization
+          this.db = await DuckDBInstance.create(dbPath, {
+            threads: Math.min(8, os.cpus().length),
+          });
+          this.connection = await this.db.connect();
+          
+          // Set performance optimizations for DuckDB
+          await this.connection.run(`
+            SET memory_limit='16GB';
+            SET threads=${Math.min(8, os.cpus().length)};
+            SET preserve_insertion_order=false;
+            SET enable_object_cache=true;
+            SET enable_progress_bar=false;
+            SET checkpoint_threshold='1GB';
+          `);
+          
+          console.log(`✅ DuckDB initialized at ${dbPath} after WAL recovery`);
+        } catch (recoveryErr) {
+          console.error('❌ Failed to recover from WAL corruption:', recoveryErr.message);
+          throw recoveryErr;
+        }
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  async close() {
+    try {
+      // Flush any pending writes before closing
+      if (this.connection) {
+        try {
+          // Ensure all transactions are committed
+          await this.connection.run('COMMIT');
+        } catch (commitErr) {
+          // Ignore commit errors (might not be in a transaction)
+        }
+        // Close the connection synchronously
+        this.connection.closeSync();
+        this.connection = null;
+      }
+      if (this.db) {
+        // Close the database instance synchronously
+        this.db.closeSync();
+        this.db = null;
+      }
+      console.log('✅ DuckDB connection closed');
+    } catch (err) {
+      console.warn('⚠️ Error closing DuckDB:', err.message);
+      // Reset state even if close failed
+      this.connection = null;
+      this.db = null;
+    }
   }
 
   async query(sql, params = []) {
@@ -65,6 +154,7 @@ class DuckDBClient {
     await this.ready;
     try {
       // Try using runAndReadAll which is more reliable for DML operations
+      // DuckDB auto-commits, so this will persist data
       await this.connection.runAndReadAll(sql, params);
     } catch (err) {
       // Fallback to prepared statement approach if needed
@@ -75,6 +165,16 @@ class DuckDBClient {
         console.error('DuckDB run error:', prepErr.message);
         throw prepErr;
       }
+    }
+  }
+
+  // Force a checkpoint to ensure all data is written to disk
+  async checkpoint() {
+    await this.ready;
+    try {
+      await this.connection.run('CHECKPOINT');
+    } catch (err) {
+      console.warn('⚠️ Checkpoint failed:', err.message);
     }
   }
 

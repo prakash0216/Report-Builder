@@ -31,13 +31,24 @@ import {
   TableHead,
   TableRow,
   TablePagination,
+  TableSortLabel,
   FormControl,
   InputLabel,
   Select,
   SelectChangeEvent,
   Switch,
   FormControlLabel,
+  Radio,
+  RadioGroup,
+  Checkbox,
+  IconButton,
+  Tooltip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Slider,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { JsonEditor } from './JsonEditor';
 import { HtmlEditor } from './HtmlEditor';
 import {
@@ -53,8 +64,23 @@ import {
   TableChart as TableChartIcon,
   Html as HtmlIcon,
   InsertChart as InsertChartIcon,
+  Sort as SortIcon,
+  ViewColumn as ViewColumnIcon,
+  Palette as PaletteIcon,
+  DragIndicator as DragIndicatorIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
 } from '@mui/icons-material';
 import { AreaChartIcon, Columns3Icon, DonutIcon, ScatterChartIcon } from "lucide-react";
+import { 
+  TableSettings, 
+  TableDisplayMode, 
+  TableTheme,
+  ColumnConfig, 
+  SortColumn,
+  SummaryCalculation,
+  defaultTableSettings, 
+} from '../types/tableTypes';
 
 
 const safeParse = (value: string): any => {
@@ -471,11 +497,7 @@ interface ChartConfigData {
   type?: 'chart' | 'html' | 'table' | 'tableChart';
   processed?: any;
   tableDataSource?: string; // Variable name for table data
-  tableSettings?: {
-    pagination: boolean;
-    scrollContent: boolean;
-    lazyLoad: boolean;
-  };
+  tableSettings?: TableSettings;
   [key: string]: any;
 }
 
@@ -498,15 +520,11 @@ export default function HighChartField() {
   const [selectedTableDataSource, setSelectedTableDataSource] = useState<string>("");
   const [tablePage, setTablePage] = useState<number>(0);
   const [tableRowsPerPage, setTableRowsPerPage] = useState<number>(10);
-  const [tableSettings, setTableSettings] = useState<{
-    pagination: boolean;
-    scrollContent: boolean;
-    lazyLoad: boolean;
-  }>({
-    pagination: true,
-    scrollContent: false,
-    lazyLoad: false,
-  });
+  const [tableSettings, setTableSettings] = useState<TableSettings>(defaultTableSettings);
+  
+  // Preview sorting state (for interactive sorting in preview)
+  const [previewSortColumn, setPreviewSortColumn] = useState<string>('');
+  const [previewSortDirection, setPreviewSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const availableVariables = useAllVariables();
   
@@ -530,13 +548,13 @@ export default function HighChartField() {
         setChartConfig('');
         setHtmlContent('');
         setSelectedTableDataSource(config.tableDataSource || '');
-        setTableSettings(config.tableSettings || { pagination: true, scrollContent: false, lazyLoad: false });
+        setTableSettings(config.tableSettings || defaultTableSettings);
       } else if (config.type === 'tableChart') {
         setViewMode('tableChart');
         setChartConfig('');
         setHtmlContent('');
         setSelectedTableDataSource(config.tableDataSource || '');
-        setTableSettings(config.tableSettings || { pagination: true, scrollContent: false, lazyLoad: false });
+        setTableSettings(config.tableSettings || defaultTableSettings);
       } else {
         setViewMode('chart');
         setChartConfig(config.template || '');
@@ -703,7 +721,14 @@ export default function HighChartField() {
   const handleTableDataSourceChange = (event: SelectChangeEvent<string>) => {
     const variableName = event.target.value;
     setSelectedTableDataSource(variableName);
-    setTablePage(0); // Reset pagination when data source changes
+    setTablePage(0);
+    
+    // Auto-generate column config when data source changes
+    if (variableName && id) {
+      // Try to get columns from the data
+      const varAtom = chartConfigs[id]?.tableDataSource;
+      // We'll update columns when tableData is available in the effect
+    }
     
     if (id) {
       setChartConfigs(prev => ({
@@ -718,15 +743,167 @@ export default function HighChartField() {
     }
   };
 
-  // Handle table settings change
-  const handleTableSettingChange = (setting: 'pagination' | 'scrollContent' | 'lazyLoad') => {
-    const newSettings = {
+  // Handle display mode change (only one can be selected)
+  const handleDisplayModeChange = (mode: TableDisplayMode) => {
+    const newSettings: TableSettings = {
       ...tableSettings,
-      [setting]: !tableSettings[setting],
+      displayMode: mode,
     };
     setTableSettings(newSettings);
-    setTablePage(0); // Reset pagination
-    
+    setTablePage(0);
+    persistTableSettings(newSettings);
+  };
+
+  // Handle rows per page change
+  const handleRowsPerPageConfigChange = (value: number) => {
+    const newSettings: TableSettings = {
+      ...tableSettings,
+      rowsPerPage: value,
+    };
+    setTableSettings(newSettings);
+    setTableRowsPerPage(value);
+    persistTableSettings(newSettings);
+  };
+
+  // Handle sorting enabled toggle
+  const handleSortingEnabledChange = (enabled: boolean) => {
+    const currentColumns = tableSettings.sorting?.columns || [];
+    const newSettings: TableSettings = {
+      ...tableSettings,
+      sorting: {
+        ...tableSettings.sorting,
+        enabled,
+        columns: enabled ? currentColumns : [],
+      },
+    };
+    setTableSettings(newSettings);
+    persistTableSettings(newSettings);
+  };
+
+  // Handle adding a sort column (multi-select)
+  const handleAddSortColumn = (column: string, direction: 'asc' | 'desc' = 'asc') => {
+    const currentColumns = tableSettings.sorting?.columns || [];
+    if (!column || currentColumns.some(s => s.column === column)) return;
+    const newColumns: SortColumn[] = [...currentColumns, { column, direction }];
+    const newSettings: TableSettings = {
+      ...tableSettings,
+      sorting: { ...tableSettings.sorting, columns: newColumns },
+    };
+    setTableSettings(newSettings);
+    persistTableSettings(newSettings);
+  };
+
+  // Handle removing a sort column
+  const handleRemoveSortColumn = (column: string) => {
+    const currentColumns = tableSettings.sorting?.columns || [];
+    const newColumns = currentColumns.filter(s => s.column !== column);
+    const newSettings: TableSettings = {
+      ...tableSettings,
+      sorting: { ...tableSettings.sorting, columns: newColumns },
+    };
+    setTableSettings(newSettings);
+    persistTableSettings(newSettings);
+  };
+
+  // Handle changing sort direction for a column
+  const handleSortDirectionChange = (column: string, direction: 'asc' | 'desc') => {
+    const currentColumns = tableSettings.sorting?.columns || [];
+    const newColumns = currentColumns.map(s =>
+      s.column === column ? { ...s, direction } : s
+    );
+    const newSettings: TableSettings = {
+      ...tableSettings,
+      sorting: { ...tableSettings.sorting, columns: newColumns },
+    };
+    setTableSettings(newSettings);
+    persistTableSettings(newSettings);
+  };
+
+  // Handle show/hide header toggle
+  const handleShowHeaderChange = (show: boolean) => {
+    const newSettings: TableSettings = {
+      ...tableSettings,
+      showHeader: show,
+    };
+    setTableSettings(newSettings);
+    persistTableSettings(newSettings);
+  };
+
+  // Handle summary row toggle
+  const handleSummaryRowEnabledChange = (enabled: boolean) => {
+    const newSettings: TableSettings = {
+      ...tableSettings,
+      summaryRow: {
+        ...tableSettings.summaryRow,
+        enabled,
+      },
+    };
+    setTableSettings(newSettings);
+    persistTableSettings(newSettings);
+  };
+
+  // Handle summary calculation change for a column
+  const handleSummaryCalculationChange = (column: string, calculation: SummaryCalculation) => {
+    const newCalculations = { ...tableSettings.summaryRow.calculations };
+    if (calculation === 'none') {
+      delete newCalculations[column];
+    } else {
+      newCalculations[column] = calculation;
+    }
+    const newSettings: TableSettings = {
+      ...tableSettings,
+      summaryRow: {
+        ...tableSettings.summaryRow,
+        calculations: newCalculations,
+      },
+    };
+    setTableSettings(newSettings);
+    persistTableSettings(newSettings);
+  };
+
+  // Handle column visibility toggle
+  const handleColumnVisibilityChange = (columnName: string) => {
+    const newColumns = tableSettings.columns.map(col =>
+      col.name === columnName ? { ...col, visible: !col.visible } : col
+    );
+    const newSettings: TableSettings = {
+      ...tableSettings,
+      columns: newColumns,
+    };
+    setTableSettings(newSettings);
+    persistTableSettings(newSettings);
+  };
+
+  // Handle column order change - don't sort here to preserve input focus
+  const handleColumnOrderChange = (columnName: string, newOrder: number) => {
+    const newColumns = tableSettings.columns.map(col =>
+      col.name === columnName ? { ...col, order: newOrder } : col
+    );
+    // Don't sort here - sorting happens in the display logic (tableColumns useMemo)
+    // This preserves the order in the config UI and prevents focus jumping
+    const newSettings: TableSettings = {
+      ...tableSettings,
+      columns: newColumns,
+    };
+    setTableSettings(newSettings);
+    persistTableSettings(newSettings);
+  };
+
+  // Handle theme change
+  const handleThemeChange = (field: keyof TableTheme, value: string) => {
+    const newSettings: TableSettings = {
+      ...tableSettings,
+      theme: {
+        ...tableSettings.theme,
+        [field]: value,
+      },
+    };
+    setTableSettings(newSettings);
+    persistTableSettings(newSettings);
+  };
+
+  // Persist table settings to Recoil state
+  const persistTableSettings = (newSettings: TableSettings) => {
     if (id) {
       setChartConfigs(prev => ({
         ...prev,
@@ -764,10 +941,47 @@ export default function HighChartField() {
   }, [selectedTableDataSource, availableVariables]);
 
   // Get table columns from the first row of data
-  const tableColumns = useMemo(() => {
+  const rawTableColumns = useMemo(() => {
     if (tableData.length === 0) return [];
     return Object.keys(tableData[0]);
   }, [tableData]);
+
+  // Auto-generate column config when columns change
+  useEffect(() => {
+    if (rawTableColumns.length > 0 && tableSettings.columns.length === 0) {
+      const newColumns: ColumnConfig[] = rawTableColumns.map((col, idx) => ({
+        name: col,
+        visible: true,
+        order: idx,
+      }));
+      const newSettings: TableSettings = {
+        ...tableSettings,
+        columns: newColumns,
+      };
+      setTableSettings(newSettings);
+      if (id) {
+        setChartConfigs(prev => ({
+          ...prev,
+          [id]: {
+            ...prev[id],
+            tableSettings: newSettings,
+          }
+        }));
+      }
+    }
+  }, [rawTableColumns, tableSettings.columns.length, id]);
+
+  // Get processed columns (filtered and ordered)
+  const tableColumns = useMemo(() => {
+    if (tableSettings.columns.length === 0) {
+      return rawTableColumns;
+    }
+    return tableSettings.columns
+      .filter(col => col.visible)
+      .sort((a, b) => a.order - b.order)
+      .map(col => col.name)
+      .filter(name => rawTableColumns.includes(name));
+  }, [tableSettings.columns, rawTableColumns]);
 
   // Handle table pagination
   const handleTablePageChange = (_event: unknown, newPage: number) => {
@@ -779,13 +993,105 @@ export default function HighChartField() {
     setTablePage(0);
   };
 
+  // Handle preview sort click
+  const handlePreviewSort = (column: string) => {
+    if (!tableSettings.sorting?.enabled) return;
+    
+    if (previewSortColumn === column) {
+      setPreviewSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setPreviewSortColumn(column);
+      setPreviewSortDirection('asc');
+    }
+  };
+
+  // Get sorted table data for preview
+  const sortedTableData = useMemo(() => {
+    if (!tableSettings.sorting?.enabled) return tableData;
+    
+    // Use preview sort state if set, otherwise use configured default
+    const sortColumns = tableSettings.sorting?.columns || [];
+    const sortColumn = previewSortColumn || (sortColumns.length > 0 ? sortColumns[0].column : '');
+    const sortDirection = previewSortColumn ? previewSortDirection : (sortColumns.length > 0 ? sortColumns[0].direction : 'asc');
+    
+    if (!sortColumn) return tableData;
+    
+    return [...tableData].sort((a, b) => {
+      const aVal = a[sortColumn];
+      const bVal = b[sortColumn];
+      
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return sortDirection === 'asc' ? 1 : -1;
+      if (bVal == null) return sortDirection === 'asc' ? -1 : 1;
+      
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      
+      const aStr = String(aVal).toLowerCase();
+      const bStr = String(bVal).toLowerCase();
+      return sortDirection === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+    });
+  }, [tableData, tableSettings.sorting, previewSortColumn, previewSortDirection]);
+
   // Get paginated table data
   const paginatedTableData = useMemo(() => {
-    return tableData.slice(
-      tablePage * tableRowsPerPage,
-      tablePage * tableRowsPerPage + tableRowsPerPage
+    const rowsPerPage = tableSettings.rowsPerPage || tableRowsPerPage;
+    return sortedTableData.slice(
+      tablePage * rowsPerPage,
+      tablePage * rowsPerPage + rowsPerPage
     );
-  }, [tableData, tablePage, tableRowsPerPage]);
+  }, [sortedTableData, tablePage, tableRowsPerPage, tableSettings.rowsPerPage]);
+
+  // Calculate summary row values
+  const summaryRowData = useMemo(() => {
+    if (!tableSettings.summaryRow?.enabled) return null;
+    
+    const calculations: Record<string, { value: string | number; type: SummaryCalculation }> = {};
+    
+    tableColumns.forEach(col => {
+      const calcType = tableSettings.summaryRow?.calculations?.[col];
+      if (!calcType || calcType === 'none') {
+        calculations[col] = { value: '', type: 'none' };
+        return;
+      }
+      
+      const values = tableData
+        .map(row => row[col])
+        .filter(v => v != null && !isNaN(Number(v)))
+        .map(v => Number(v));
+      
+      if (values.length === 0) {
+        calculations[col] = { value: 'N/A', type: calcType };
+        return;
+      }
+      
+      let calculatedValue: string | number;
+      switch (calcType) {
+        case 'sum':
+          calculatedValue = values.reduce((a, b) => a + b, 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+          break;
+        case 'avg':
+          calculatedValue = (values.reduce((a, b) => a + b, 0) / values.length).toLocaleString(undefined, { maximumFractionDigits: 2 });
+          break;
+        case 'min':
+          calculatedValue = Math.min(...values).toLocaleString(undefined, { maximumFractionDigits: 2 });
+          break;
+        case 'max':
+          calculatedValue = Math.max(...values).toLocaleString(undefined, { maximumFractionDigits: 2 });
+          break;
+        case 'count':
+          calculatedValue = tableData.filter(row => row[col] != null).length;
+          break;
+        default:
+          calculatedValue = '';
+      }
+      
+      calculations[col] = { value: calculatedValue, type: calcType };
+    });
+    
+    return calculations;
+  }, [tableData, tableColumns, tableSettings.summaryRow]);
 
   return (
     <Box 
@@ -1065,7 +1371,7 @@ export default function HighChartField() {
                     />
                   </Box>
                 ) : viewMode === 'table' ? (
-                  <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, overflow: 'auto', maxHeight: 'calc(100vh - 598px)' }}>
                     {/* Data Source Selection */}
                     <Paper
                       variant="outlined"
@@ -1141,111 +1447,504 @@ export default function HighChartField() {
                       )}
                     </Paper>
 
-                    {/* Table Display Settings */}
-                    <Paper
-                      variant="outlined"
-                      sx={{
-                        p: 2,
-                        borderRadius: 2,
+                    {/* Display Mode - Only one can be selected */}
+                    <Accordion 
+                      defaultExpanded 
+                      sx={{ 
+                        borderRadius: '8px !important', 
                         border: '1px solid rgba(59, 130, 246, 0.3)',
                         bgcolor: 'rgba(224, 242, 254, 0.1)',
+                        '&:before': { display: 'none' },
+                        boxShadow: 'none',
+                        flexShrink: 0,
                       }}
                     >
-                      <Typography 
-                        variant="subtitle2" 
-                        fontWeight={700} 
-                        sx={{ mb: 2, color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 1 }}
-                      >
-                        <VisibilityIcon fontSize="small" />
-                        Display Settings
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <VisibilityIcon fontSize="small" />
+                          Display Mode
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <RadioGroup
+                          value={tableSettings.displayMode}
+                          onChange={(e) => handleDisplayModeChange(e.target.value as TableDisplayMode)}
+                        >
+                          <FormControlLabel
+                            value="pagination"
+                            control={<Radio size="small" sx={{ color: '#3b82f6', '&.Mui-checked': { color: '#3b82f6' } }} />}
+                            label={
+                              <Box>
+                                <Typography variant="body2" fontWeight={600} color="#1e293b">Pagination</Typography>
+                                <Typography variant="caption" color="#64748b">Show page controls at the bottom</Typography>
+                              </Box>
+                            }
+                          />
+                          <FormControlLabel
+                            value="scroll"
+                            control={<Radio size="small" sx={{ color: '#3b82f6', '&.Mui-checked': { color: '#3b82f6' } }} />}
+                            label={
+                              <Box>
+                                <Typography variant="body2" fontWeight={600} color="#1e293b">Scroll Content</Typography>
+                                <Typography variant="caption" color="#64748b">Scroll through all rows</Typography>
+                              </Box>
+                            }
+                          />
+                          <FormControlLabel
+                            value="lazyLoad"
+                            control={<Radio size="small" sx={{ color: '#3b82f6', '&.Mui-checked': { color: '#3b82f6' } }} />}
+                            label={
+                              <Box>
+                                <Typography variant="body2" fontWeight={600} color="#1e293b">Lazy Load</Typography>
+                                <Typography variant="caption" color="#64748b">Load rows as you scroll</Typography>
+                              </Box>
+                            }
+                          />
+                        </RadioGroup>
+                        {tableSettings.displayMode === 'pagination' && (
+                          <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                            <FormControl fullWidth size="small">
+                              <InputLabel>Rows Per Page</InputLabel>
+                              <Select
+                                value={tableSettings.rowsPerPage}
+                                label="Rows Per Page"
+                                onChange={(e) => handleRowsPerPageConfigChange(Number(e.target.value))}
+                                sx={{ bgcolor: 'white' }}
+                              >
+                                {[5, 10, 15, 20, 25, 50, 100].map(n => (
+                                  <MenuItem key={n} value={n}>{n} rows</MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Box>
+                        )}
+                        {/* Show/Hide Header Option */}
+                        <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={tableSettings.showHeader !== false}
+                                onChange={(e) => handleShowHeaderChange(e.target.checked)}
+                                size="small"
+                                sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#3b82f6' }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#3b82f6' } }}
+                              />
+                            }
+                            label={<Typography variant="body2" fontWeight={600} color="#1e293b">Show Table Header</Typography>}
+                          />
+                        </Box>
+                      </AccordionDetails>
+                    </Accordion>
+
+                    {/* Sorting Settings - Multi-column */}
+                    <Accordion 
+                      sx={{ 
+                        borderRadius: '8px !important', 
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        bgcolor: 'rgba(224, 242, 254, 0.1)',
+                        '&:before': { display: 'none' },
+                        boxShadow: 'none',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <SortIcon fontSize="small" />
+                          Sorting {(tableSettings.sorting?.columns?.length || 0) > 0 && `(${tableSettings.sorting?.columns?.length})`}
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
                         <FormControlLabel
                           control={
                             <Switch
-                              checked={tableSettings.pagination}
-                              onChange={() => handleTableSettingChange('pagination')}
+                              checked={tableSettings.sorting?.enabled || false}
+                              onChange={(e) => handleSortingEnabledChange(e.target.checked)}
                               size="small"
-                              sx={{
-                                '& .MuiSwitch-switchBase.Mui-checked': {
-                                  color: '#3b82f6',
-                                },
-                                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                                  backgroundColor: '#3b82f6',
-                                },
-                              }}
+                              sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#3b82f6' }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#3b82f6' } }}
                             />
                           }
-                          label={
-                            <Box>
-                              <Typography variant="body2" fontWeight={600} color="#1e293b">
-                                Pagination
-                              </Typography>
-                              <Typography variant="caption" color="#64748b">
-                                Show page controls at the bottom
-                              </Typography>
-                            </Box>
-                          }
-                          sx={{ m: 0, mb: 1 }}
+                          label={<Typography variant="body2" fontWeight={600} color="#1e293b">Enable Sorting</Typography>}
+                          sx={{ mb: 2 }}
                         />
+                        {tableSettings.sorting?.enabled && (
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            {/* Current sort columns */}
+                            {(tableSettings.sorting?.columns?.length || 0) > 0 && (
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                <Typography variant="caption" color="#64748b" fontWeight={600}>Sort Order (drag to reorder):</Typography>
+                                {(tableSettings.sorting?.columns || []).map((sortCol, idx) => (
+                                  <Box 
+                                    key={sortCol.column} 
+                                    sx={{ 
+                                      display: 'flex', 
+                                      alignItems: 'center', 
+                                      gap: 1, 
+                                      p: 1, 
+                                      bgcolor: 'white', 
+                                      borderRadius: 1,
+                                      border: '1px solid rgba(59, 130, 246, 0.2)',
+                                    }}
+                                  >
+                                    <Typography variant="caption" sx={{ width: 20, color: '#64748b', fontWeight: 600 }}>{idx + 1}.</Typography>
+                                    <Typography variant="body2" sx={{ flex: 1, fontWeight: 500 }}>{sortCol.column}</Typography>
+                                    <IconButton 
+                                      size="small" 
+                                      onClick={() => handleSortDirectionChange(sortCol.column, sortCol.direction === 'asc' ? 'desc' : 'asc')}
+                                      sx={{ color: '#3b82f6' }}
+                                    >
+                                      {sortCol.direction === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />}
+                                    </IconButton>
+                                    <IconButton 
+                                      size="small" 
+                                      onClick={() => handleRemoveSortColumn(sortCol.column)}
+                                      sx={{ color: '#ef4444' }}
+                                    >
+                                      <VisibilityOffIcon fontSize="small" />
+                                    </IconButton>
+                                  </Box>
+                                ))}
+                              </Box>
+                            )}
+                            {/* Add new sort column */}
+                            <FormControl fullWidth size="small">
+                              <InputLabel>Add Sort Column</InputLabel>
+                              <Select
+                                value=""
+                                label="Add Sort Column"
+                                onChange={(e) => handleAddSortColumn(e.target.value as string)}
+                                sx={{ bgcolor: 'white' }}
+                              >
+                                {rawTableColumns
+                                  .filter(col => !(tableSettings.sorting?.columns || []).some(s => s.column === col))
+                                  .map(col => (
+                                    <MenuItem key={col} value={col}>{col}</MenuItem>
+                                  ))}
+                              </Select>
+                            </FormControl>
+                            <Typography variant="caption" color="#94a3b8">
+                              Click column headers in preview to sort. Multi-column sorting applies in order listed above.
+                            </Typography>
+                          </Box>
+                        )}
+                      </AccordionDetails>
+                    </Accordion>
+
+                    {/* Column Configuration */}
+                    <Accordion 
+                      sx={{ 
+                        borderRadius: '8px !important', 
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        bgcolor: 'rgba(224, 242, 254, 0.1)',
+                        '&:before': { display: 'none' },
+                        boxShadow: 'none',
+                      }}
+                    >
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <ViewColumnIcon fontSize="small" />
+                          Columns ({tableSettings.columns.filter(c => c.visible).length}/{tableSettings.columns.length})
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Typography variant="caption" color="#64748b" sx={{ mb: 1, display: 'block' }}>
+                          Toggle visibility and set order (lower number = first)
+                        </Typography>
+                        <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
+                          {tableSettings.columns.map((col, idx) => (
+                            <Box 
+                              key={`col-config-${idx}-${col.name}`} 
+                              sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 1, 
+                                py: 0.5,
+                                px: 1,
+                                borderRadius: 1,
+                                '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.05)' },
+                              }}
+                            >
+                              <Checkbox
+                                checked={col.visible}
+                                onChange={() => handleColumnVisibilityChange(col.name)}
+                                size="small"
+                                sx={{ p: 0.5, color: '#3b82f6', '&.Mui-checked': { color: '#3b82f6' } }}
+                              />
+                              <Typography 
+                                variant="body2" 
+                                sx={{ 
+                                  flex: 1, 
+                                  color: col.visible ? '#1e293b' : '#94a3b8',
+                                  textDecoration: col.visible ? 'none' : 'line-through',
+                                }}
+                              >
+                                {col.name}
+                              </Typography>
+                              <TextField
+                                type="number"
+                                size="small"
+                                value={col.order}
+                                onChange={(e) => handleColumnOrderChange(col.name, parseInt(e.target.value) || 0)}
+                                sx={{ width: 60 }}
+                                inputProps={{ 
+                                  min: 0, 
+                                  style: { textAlign: 'center', padding: '4px 8px' },
+                                  'data-column': col.name,
+                                }}
+                              />
+                            </Box>
+                          ))}
+                        </Box>
+                      </AccordionDetails>
+                    </Accordion>
+
+                    {/* Theme/Styling */}
+                    <Accordion 
+                      sx={{ 
+                        borderRadius: '8px !important', 
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        bgcolor: 'rgba(224, 242, 254, 0.1)',
+                        '&:before': { display: 'none' },
+                        boxShadow: 'none',
+                      }}
+                    >
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <PaletteIcon fontSize="small" />
+                          Theme & Styling
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {/* Header Colors */}
+                          <Box>
+                            <Typography variant="caption" fontWeight={600} color="#475569" sx={{ mb: 1, display: 'block' }}>
+                              Header
+                            </Typography>
+                            <Box sx={{ display: 'flex', gap: 2 }}>
+                              <Box sx={{ flex: 1 }}>
+                                <Typography variant="caption" color="#64748b">Background</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <input
+                                    type="color"
+                                    value={tableSettings.theme.headerBgColor}
+                                    onChange={(e) => handleThemeChange('headerBgColor', e.target.value)}
+                                    style={{ width: 32, height: 32, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                                  />
+                                  <TextField
+                                    size="small"
+                                    value={tableSettings.theme.headerBgColor}
+                                    onChange={(e) => handleThemeChange('headerBgColor', e.target.value)}
+                                    sx={{ flex: 1 }}
+                                    inputProps={{ style: { padding: '4px 8px', fontSize: '0.75rem' } }}
+                                  />
+                                </Box>
+                              </Box>
+                              <Box sx={{ flex: 1 }}>
+                                <Typography variant="caption" color="#64748b">Text</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <input
+                                    type="color"
+                                    value={tableSettings.theme.headerTextColor}
+                                    onChange={(e) => handleThemeChange('headerTextColor', e.target.value)}
+                                    style={{ width: 32, height: 32, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                                  />
+                                  <TextField
+                                    size="small"
+                                    value={tableSettings.theme.headerTextColor}
+                                    onChange={(e) => handleThemeChange('headerTextColor', e.target.value)}
+                                    sx={{ flex: 1 }}
+                                    inputProps={{ style: { padding: '4px 8px', fontSize: '0.75rem' } }}
+                                  />
+                                </Box>
+                              </Box>
+                            </Box>
+                          </Box>
+
+                          {/* Row Colors */}
+                          <Box>
+                            <Typography variant="caption" fontWeight={600} color="#475569" sx={{ mb: 1, display: 'block' }}>
+                              Rows
+                            </Typography>
+                            <Box sx={{ display: 'flex', gap: 2, mb: 1 }}>
+                              <Box sx={{ flex: 1 }}>
+                                <Typography variant="caption" color="#64748b">Even Row</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <input
+                                    type="color"
+                                    value={tableSettings.theme.rowBgColor}
+                                    onChange={(e) => handleThemeChange('rowBgColor', e.target.value)}
+                                    style={{ width: 32, height: 32, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                                  />
+                                  <TextField
+                                    size="small"
+                                    value={tableSettings.theme.rowBgColor}
+                                    onChange={(e) => handleThemeChange('rowBgColor', e.target.value)}
+                                    sx={{ flex: 1 }}
+                                    inputProps={{ style: { padding: '4px 8px', fontSize: '0.75rem' } }}
+                                  />
+                                </Box>
+                              </Box>
+                              <Box sx={{ flex: 1 }}>
+                                <Typography variant="caption" color="#64748b">Odd Row</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <input
+                                    type="color"
+                                    value={tableSettings.theme.rowAltBgColor}
+                                    onChange={(e) => handleThemeChange('rowAltBgColor', e.target.value)}
+                                    style={{ width: 32, height: 32, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                                  />
+                                  <TextField
+                                    size="small"
+                                    value={tableSettings.theme.rowAltBgColor}
+                                    onChange={(e) => handleThemeChange('rowAltBgColor', e.target.value)}
+                                    sx={{ flex: 1 }}
+                                    inputProps={{ style: { padding: '4px 8px', fontSize: '0.75rem' } }}
+                                  />
+                                </Box>
+                              </Box>
+                            </Box>
+                            <Box sx={{ display: 'flex', gap: 2 }}>
+                              <Box sx={{ flex: 1 }}>
+                                <Typography variant="caption" color="#64748b">Text Color</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <input
+                                    type="color"
+                                    value={tableSettings.theme.rowTextColor}
+                                    onChange={(e) => handleThemeChange('rowTextColor', e.target.value)}
+                                    style={{ width: 32, height: 32, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                                  />
+                                  <TextField
+                                    size="small"
+                                    value={tableSettings.theme.rowTextColor}
+                                    onChange={(e) => handleThemeChange('rowTextColor', e.target.value)}
+                                    sx={{ flex: 1 }}
+                                    inputProps={{ style: { padding: '4px 8px', fontSize: '0.75rem' } }}
+                                  />
+                                </Box>
+                              </Box>
+                              <Box sx={{ flex: 1 }}>
+                                <Typography variant="caption" color="#64748b">Border</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <input
+                                    type="color"
+                                    value={tableSettings.theme.borderColor}
+                                    onChange={(e) => handleThemeChange('borderColor', e.target.value)}
+                                    style={{ width: 32, height: 32, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                                  />
+                                  <TextField
+                                    size="small"
+                                    value={tableSettings.theme.borderColor}
+                                    onChange={(e) => handleThemeChange('borderColor', e.target.value)}
+                                    sx={{ flex: 1 }}
+                                    inputProps={{ style: { padding: '4px 8px', fontSize: '0.75rem' } }}
+                                  />
+                                </Box>
+                              </Box>
+                            </Box>
+                          </Box>
+
+                          {/* Cell Padding & Font Size */}
+                          <Box sx={{ display: 'flex', gap: 2 }}>
+                            <FormControl size="small" sx={{ flex: 1 }}>
+                              <InputLabel>Cell Padding</InputLabel>
+                              <Select
+                                value={tableSettings.theme.cellPadding}
+                                label="Cell Padding"
+                                onChange={(e) => handleThemeChange('cellPadding', e.target.value)}
+                                sx={{ bgcolor: 'white' }}
+                              >
+                                <MenuItem value="compact">Compact</MenuItem>
+                                <MenuItem value="normal">Normal</MenuItem>
+                                <MenuItem value="comfortable">Comfortable</MenuItem>
+                              </Select>
+                            </FormControl>
+                            <FormControl size="small" sx={{ flex: 1 }}>
+                              <InputLabel>Font Size</InputLabel>
+                              <Select
+                                value={tableSettings.theme.fontSize}
+                                label="Font Size"
+                                onChange={(e) => handleThemeChange('fontSize', e.target.value)}
+                                sx={{ bgcolor: 'white' }}
+                              >
+                                <MenuItem value="small">Small</MenuItem>
+                                <MenuItem value="medium">Medium</MenuItem>
+                                <MenuItem value="large">Large</MenuItem>
+                              </Select>
+                            </FormControl>
+                          </Box>
+                        </Box>
+                      </AccordionDetails>
+                    </Accordion>
+
+                    {/* Summary Row */}
+                    <Accordion 
+                      sx={{ 
+                        borderRadius: '8px !important', 
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        bgcolor: 'rgba(224, 242, 254, 0.1)',
+                        '&:before': { display: 'none' },
+                        boxShadow: 'none',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <InsertChartIcon fontSize="small" />
+                          Summary Row
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
                         <FormControlLabel
                           control={
                             <Switch
-                              checked={tableSettings.scrollContent}
-                              onChange={() => handleTableSettingChange('scrollContent')}
+                              checked={tableSettings.summaryRow?.enabled || false}
+                              onChange={(e) => handleSummaryRowEnabledChange(e.target.checked)}
                               size="small"
-                              sx={{
-                                '& .MuiSwitch-switchBase.Mui-checked': {
-                                  color: '#3b82f6',
-                                },
-                                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                                  backgroundColor: '#3b82f6',
-                                },
-                              }}
+                              sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#3b82f6' }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#3b82f6' } }}
                             />
                           }
-                          label={
-                            <Box>
-                              <Typography variant="body2" fontWeight={600} color="#1e293b">
-                                Scroll Entire Content
-                              </Typography>
-                              <Typography variant="caption" color="#64748b">
-                                Enable vertical scrolling for all rows
-                              </Typography>
-                            </Box>
-                          }
-                          sx={{ m: 0, mb: 1 }}
+                          label={<Typography variant="body2" fontWeight={600} color="#1e293b">Show Summary Row</Typography>}
+                          sx={{ mb: 2 }}
                         />
-                        <FormControlLabel
-                          control={
-                            <Switch
-                              checked={tableSettings.lazyLoad}
-                              onChange={() => handleTableSettingChange('lazyLoad')}
-                              size="small"
-                              sx={{
-                                '& .MuiSwitch-switchBase.Mui-checked': {
-                                  color: '#3b82f6',
-                                },
-                                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                                  backgroundColor: '#3b82f6',
-                                },
-                              }}
-                            />
-                          }
-                          label={
-                            <Box>
-                              <Typography variant="body2" fontWeight={600} color="#1e293b">
-                                Lazy Load
-                              </Typography>
-                              <Typography variant="caption" color="#64748b">
-                                Load rows as you scroll (for large datasets)
-                              </Typography>
-                            </Box>
-                          }
-                          sx={{ m: 0 }}
-                        />
-                      </Box>
-                    </Paper>
+                        {tableSettings.summaryRow?.enabled && (
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxHeight: 200, overflow: 'auto' }}>
+                            <Typography variant="caption" color="#64748b" sx={{ mb: 0.5 }}>
+                              Select calculation for each column:
+                            </Typography>
+                            <Typography variant="caption" color="#3b82f6" sx={{ 
+                              bgcolor: 'rgba(59, 130, 246, 0.1)', 
+                              p: 1, 
+                              borderRadius: 1,
+                              fontSize: '0.7rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.5,
+                            }}>
+                              <InsertChartIcon fontSize="small" />
+                              <strong>Note:</strong> Summary values appear in a sticky row at the bottom of the table, right-aligned in each column.
+                            </Typography>
+                            {rawTableColumns.map(col => (
+                              <Box key={col} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" sx={{ flex: 1, fontWeight: 500, color: '#475569' }}>{col}</Typography>
+                                <FormControl size="small" sx={{ minWidth: 100 }}>
+                                  <Select
+                                    value={tableSettings.summaryRow?.calculations?.[col] || 'none'}
+                                    onChange={(e) => handleSummaryCalculationChange(col, e.target.value as SummaryCalculation)}
+                                    sx={{ bgcolor: 'white', fontSize: '0.75rem' }}
+                                  >
+                                    <MenuItem value="none"><em>None</em></MenuItem>
+                                    <MenuItem value="sum">Sum</MenuItem>
+                                    <MenuItem value="avg">Average</MenuItem>
+                                    <MenuItem value="min">Min</MenuItem>
+                                    <MenuItem value="max">Max</MenuItem>
+                                    <MenuItem value="count">Count</MenuItem>
+                                  </Select>
+                                </FormControl>
+                              </Box>
+                            ))}
+                          </Box>
+                        )}
+                      </AccordionDetails>
+                    </Accordion>
 
                     {/* Empty State - Only show when no data source selected */}
                     {!selectedTableDataSource && (
@@ -1414,47 +2113,77 @@ export default function HighChartField() {
                         overflow: 'auto',
                         minHeight: 0,
                         maxHeight: '100%',
+                        position: 'relative',
                       }}
                     >
-                      <Table stickyHeader size="small">
+                      <Table stickyHeader size={tableSettings.theme.cellPadding === 'compact' ? 'small' : 'medium'}>
+                        {(tableSettings.showHeader !== false) && (
                         <TableHead>
                           <TableRow>
-                            {tableColumns.map((col) => (
-                              <TableCell 
-                                key={col}
-                                sx={{ 
-                                  fontWeight: 700, 
-                                  // Solid background for sticky header
-                                  backgroundColor: '#e0e7ff !important',
-                                  background: '#e0e7ff !important',
-                                  color: '#1e293b',
-                                  fontSize: '0.8rem',
-                                  py: 1.5,
-                                  whiteSpace: 'nowrap',
-                                  borderBottom: '2px solid rgba(59, 130, 246, 0.3)',
-                                  zIndex: 2,
-                                  position: 'sticky',
-                                  top: 0,
-                                }}
-                              >
-                                {col}
-                              </TableCell>
-                            ))}
+                            {tableColumns.map((col) => {
+                              const sortColumns = tableSettings.sorting?.columns || [];
+                              const isActiveSortColumn = previewSortColumn === col || 
+                                (!previewSortColumn && sortColumns.some(s => s.column === col));
+                              const sortDir = previewSortColumn === col 
+                                ? previewSortDirection 
+                                : sortColumns.find(s => s.column === col)?.direction || 'asc';
+                              
+                              return (
+                                <TableCell 
+                                  key={col}
+                                  onClick={() => tableSettings.sorting?.enabled && handlePreviewSort(col)}
+                                  sx={{ 
+                                    fontWeight: 700, 
+                                    backgroundColor: `${tableSettings.theme.headerBgColor} !important`,
+                                    background: `${tableSettings.theme.headerBgColor} !important`,
+                                    color: tableSettings.theme.headerTextColor,
+                                    fontSize: tableSettings.theme.fontSize === 'small' ? '0.75rem' : tableSettings.theme.fontSize === 'large' ? '0.9rem' : '0.8rem',
+                                    py: tableSettings.theme.cellPadding === 'compact' ? 1 : tableSettings.theme.cellPadding === 'comfortable' ? 2 : 1.5,
+                                    whiteSpace: 'nowrap',
+                                    borderBottom: `2px solid ${tableSettings.theme.borderColor}`,
+                                    zIndex: 2,
+                                    position: 'sticky',
+                                    top: 0,
+                                    cursor: tableSettings.sorting?.enabled ? 'pointer' : 'default',
+                                    '&:hover': tableSettings.sorting?.enabled ? {
+                                      backgroundColor: `${tableSettings.theme.headerBgColor}dd !important`,
+                                    } : {},
+                                  }}
+                                >
+                                  {tableSettings.sorting?.enabled ? (
+                                    <TableSortLabel
+                                      active={isActiveSortColumn}
+                                      direction={sortDir}
+                                      sx={{
+                                        color: `${tableSettings.theme.headerTextColor} !important`,
+                                        '& .MuiTableSortLabel-icon': {
+                                          color: `${tableSettings.theme.headerTextColor} !important`,
+                                        },
+                                        '&.Mui-active': {
+                                          color: `${tableSettings.theme.headerTextColor} !important`,
+                                        },
+                                      }}
+                                    >
+                                      {col}
+                                    </TableSortLabel>
+                                  ) : col}
+                                </TableCell>
+                              );
+                            })}
                           </TableRow>
                         </TableHead>
+                        )}
                         <TableBody>
-                          {(tableSettings.pagination ? paginatedTableData : 
-                            tableSettings.scrollContent ? tableData : tableData.slice(0, 100)
+                          {(tableSettings.displayMode === 'pagination' ? paginatedTableData : 
+                            tableSettings.displayMode === 'scroll' ? sortedTableData : sortedTableData.slice(0, 100)
                           ).map((row: any, rowIdx: number) => (
                             <TableRow 
                               key={rowIdx} 
                               hover
                               sx={{
-                                '&:nth-of-type(odd)': {
-                                  bgcolor: 'rgba(59, 130, 246, 0.02)',
-                                },
+                                backgroundColor: rowIdx % 2 === 0 ? tableSettings.theme.rowBgColor : tableSettings.theme.rowAltBgColor,
                                 '&:hover': {
-                                  bgcolor: 'rgba(59, 130, 246, 0.08) !important',
+                                  bgcolor: `${tableSettings.theme.headerBgColor}22 !important`,
                                 },
                               }}
                             >
@@ -1462,9 +2191,10 @@ export default function HighChartField() {
                                 <TableCell 
                                   key={col}
                                   sx={{ 
-                                    fontSize: '0.8rem',
-                                    py: 1,
-                                    color: '#475569',
+                                    fontSize: tableSettings.theme.fontSize === 'small' ? '0.75rem' : tableSettings.theme.fontSize === 'large' ? '0.9rem' : '0.8rem',
+                                    py: tableSettings.theme.cellPadding === 'compact' ? 0.5 : tableSettings.theme.cellPadding === 'comfortable' ? 1.5 : 1,
+                                    color: tableSettings.theme.rowTextColor,
+                                    borderBottom: `1px solid ${tableSettings.theme.borderColor}`,
                                     maxWidth: 200,
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
@@ -1478,18 +2208,109 @@ export default function HighChartField() {
                               ))}
                             </TableRow>
                           ))}
+                          {/* Summary Row */}
+                          {summaryRowData && (
+                            <TableRow sx={{ 
+                              backgroundColor: `${tableSettings.theme.headerBgColor} !important`,
+                              position: 'sticky',
+                              bottom: 0,
+                              zIndex: 1,
+                              '& td': {
+                                fontWeight: 700,
+                                fontSize: tableSettings.theme.fontSize === 'small' ? '0.75rem' : tableSettings.theme.fontSize === 'large' ? '0.9rem' : '0.8rem',
+                                color: tableSettings.theme.headerTextColor,
+                                borderTop: `2px solid ${tableSettings.theme.borderColor}`,
+                                backgroundColor: `${tableSettings.theme.headerBgColor} !important`,
+                                py: tableSettings.theme.cellPadding === 'compact' ? 0.5 : tableSettings.theme.cellPadding === 'comfortable' ? 1.5 : 1,
+                                position: 'sticky',
+                                bottom: 0,
+                              }
+                            }}>
+                              {tableColumns.map((col, idx) => {
+                                const summaryCell = summaryRowData[col];
+                                const getLabel = (type: SummaryCalculation) => {
+                                  switch (type) {
+                                    case 'sum': return 'Sum:';
+                                    case 'avg': return 'Avg:';
+                                    case 'min': return 'Min:';
+                                    case 'max': return 'Max:';
+                                    case 'count': return 'Count:';
+                                    default: return '';
+                                  }
+                                };
+                                
+                                return (
+                                  <TableCell 
+                                    key={col}
+                                    sx={{
+                                      backgroundColor: `${tableSettings.theme.headerBgColor} !important`,
+                                      position: 'sticky',
+                                      bottom: 0,
+                                      fontSize: tableSettings.theme.fontSize === 'small' ? '0.75rem' : tableSettings.theme.fontSize === 'large' ? '0.9rem' : '0.8rem',
+                                      py: tableSettings.theme.cellPadding === 'compact' ? 0.5 : tableSettings.theme.cellPadding === 'comfortable' ? 1.5 : 1,
+                                      color: tableSettings.theme.headerTextColor,
+                                      borderBottom: `1px solid ${tableSettings.theme.borderColor}`,
+                                      maxWidth: 200,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      textAlign: idx === 0 ? 'left' : 'right',
+                                    }}
+                                  >
+                                    {idx === 0 && (!summaryCell || summaryCell.type === 'none' || !summaryCell.value) ? (
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                        <InsertChartIcon fontSize="small" />
+                                        Summary
+                                      </Box>
+                                    ) : summaryCell && summaryCell.value && summaryCell.type !== 'none' ? (
+                                      <Box sx={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: idx === 0 ? 'flex-start' : 'flex-end',
+                                        fontWeight: 700,
+                                        color: tableSettings.theme.headerTextColor,
+                                        gap: 0.5,
+                                        width: '100%',
+                                      }}>
+                                        <Typography variant="body2" sx={{ 
+                                          fontWeight: 600,
+                                          fontSize: '0.7rem',
+                                          opacity: 0.8,
+                                          textTransform: 'uppercase',
+                                          whiteSpace: 'nowrap',
+                                        }}>
+                                          {getLabel(summaryCell.type)}
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ 
+                                          fontWeight: 700,
+                                          whiteSpace: 'nowrap',
+                                        }}>
+                                          {summaryCell.value}
+                                        </Typography>
+                                      </Box>
+                                    ) : null}
+                                  </TableCell>
+                                );
+                              })}
+                            </TableRow>
+                          )}
                         </TableBody>
                       </Table>
                     </TableContainer>
-                    {tableSettings.pagination && (
+                    {tableSettings.displayMode === 'pagination' && (
                       <TablePagination
                         component="div"
-                        count={tableData.length}
+                        count={sortedTableData.length}
                         page={tablePage}
                         onPageChange={handleTablePageChange}
-                        rowsPerPage={tableRowsPerPage}
-                        onRowsPerPageChange={handleTableRowsPerPageChange}
-                        rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                        rowsPerPage={tableSettings.rowsPerPage || tableRowsPerPage}
+                        onRowsPerPageChange={(e) => {
+                          const newValue = parseInt(e.target.value, 10);
+                          setTableRowsPerPage(newValue);
+                          handleRowsPerPageConfigChange(newValue);
+                          setTablePage(0);
+                        }}
+                        rowsPerPageOptions={[5, 10, 15, 20, 25, 50, 100]}
                         sx={{
                           borderTop: '1px solid rgba(59, 130, 246, 0.2)',
                           background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(37, 99, 235, 0.05) 100%)',

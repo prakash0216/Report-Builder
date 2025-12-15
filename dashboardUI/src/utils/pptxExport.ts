@@ -1,7 +1,7 @@
 import Highcharts from 'highcharts';
 // @ts-ignore
 import html2canvas from 'html2canvas';
-import { ChartRef, TableData } from './downloadUtilities';
+import { ChartRef, TableData, TableThemeForExport } from './downloadUtilities';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -85,26 +85,60 @@ const captureChartAsPng = async (chart: Highcharts.Chart): Promise<string | null
   });
 };
 
+// Default theme for tables without custom theme
+const defaultPptxTheme: TableThemeForExport = {
+  headerBgColor: '#e0e7ff',
+  headerTextColor: '#1e293b',
+  rowBgColor: '#ffffff',
+  rowAltBgColor: '#f8fafc',
+  rowTextColor: '#475569',
+  borderColor: '#e2e8f0',
+  cellPadding: 'normal',
+  fontSize: 'medium',
+};
+
+// Convert hex color to PPTX color (no #)
+const toPptxColor = (color: string): string => {
+  if (!color) return 'E0E7FF';
+  return color.replace(/^#/, '').toUpperCase();
+};
+
+// Get font size for PPTX based on setting
+const getPptxFontSize = (size: 'small' | 'medium' | 'large', isHeader: boolean): number => {
+  const sizes = {
+    small: { header: 8, body: 7 },
+    medium: { header: 9, body: 8 },
+    large: { header: 10, body: 9 },
+  };
+  return sizes[size]?.[isHeader ? 'header' : 'body'] || (isHeader ? 9 : 8);
+};
+
 /**
  * Build table rows for pptxgenjs table
  * Format: Array of rows, where each row is an array of cells
  * First row is header
  */
-const buildPptxTableData = (tableData: TableData, maxRows: number = 50): { rows: any[][], hasMore: boolean } => {
+const buildPptxTableData = (
+  tableData: TableData, 
+  maxRows: number = 50, 
+  theme?: TableThemeForExport
+): { rows: any[][], hasMore: boolean } => {
   const { columns, rows } = tableData;
   
   if (!columns || columns.length === 0 || !rows || rows.length === 0) {
     return { rows: [], hasMore: false };
   }
   
+  const t = theme || defaultPptxTheme;
+  
   // Build header row with styling
   const headerRow = columns.map(col => ({
     text: String(col),
     options: {
       bold: true,
-      fill: { color: 'E0E7FF' },
-      color: '1E293B',
-      fontSize: 9,
+      fill: { color: toPptxColor(t.headerBgColor) },
+      color: toPptxColor(t.headerTextColor),
+      fontSize: getPptxFontSize(t.fontSize, true),
       align: 'left',
       valign: 'middle',
     }
@@ -118,9 +152,9 @@ const buildPptxTableData = (tableData: TableData, maxRows: number = 50): { rows:
         ? JSON.stringify(row[col]) 
         : String(row[col] ?? ''),
       options: {
-        fill: { color: rowIdx % 2 === 0 ? 'FFFFFF' : 'F8FAFC' },
-        color: '475569',
-        fontSize: 8,
+        fill: { color: rowIdx % 2 === 0 ? toPptxColor(t.rowBgColor) : toPptxColor(t.rowAltBgColor) },
+        color: toPptxColor(t.rowTextColor),
+        fontSize: getPptxFontSize(t.fontSize, false),
         align: 'left',
         valign: 'middle',
       }
@@ -694,8 +728,8 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
           const titleHeight = 0.7;
           const availableWidth = slideWidth - (margin * 2);
           
-          // Build table data with max 50 rows per slide
-          const { rows: tableRows, hasMore } = buildPptxTableData(ref.tableData, 50);
+          // Build table data with max 50 rows per slide, using theme if available
+          const { rows: tableRows, hasMore } = buildPptxTableData(ref.tableData, 50, ref.tableTheme);
           
           if (tableRows.length > 1) { // At least header + 1 data row
             // Calculate column widths

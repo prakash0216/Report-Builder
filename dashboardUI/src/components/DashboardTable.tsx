@@ -9,17 +9,19 @@ import {
   TableHead,
   TableRow,
   TablePagination,
+  TableSortLabel,
   Paper,
   Box,
   Typography,
   CircularProgress,
 } from '@mui/material';
-
-interface TableSettings {
-  pagination: boolean;
-  scrollContent: boolean;
-  lazyLoad: boolean;
-}
+import { 
+  TableSettings, 
+  defaultTableSettings, 
+  defaultTableTheme,
+  SummaryCalculation,
+} from '../types/tableTypes';
+import { InsertChart as InsertChartIcon } from '@mui/icons-material';
 
 interface DashboardTableProps {
   dataSource: string;
@@ -34,22 +36,47 @@ const safeParse = (value: string): any => {
   }
 };
 
+// Get cell padding based on setting
+const getCellPadding = (padding: 'compact' | 'normal' | 'comfortable'): number => {
+  switch (padding) {
+    case 'compact': return 0.5;
+    case 'comfortable': return 1.5;
+    default: return 1;
+  }
+};
+
+// Get font size based on setting
+const getFontSize = (size: 'small' | 'medium' | 'large'): string => {
+  switch (size) {
+    case 'small': return '0.75rem';
+    case 'large': return '0.9rem';
+    default: return '0.8rem';
+  }
+};
+
 // Lazy load batch size
 const LAZY_LOAD_BATCH_SIZE = 50;
 
 export default function DashboardTable({ dataSource, settings }: DashboardTableProps) {
+  const tableSettings: TableSettings = settings || defaultTableSettings;
+  const theme = tableSettings.theme || defaultTableTheme;
+  
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(tableSettings.rowsPerPage || 10);
   const [loadedRowCount, setLoadedRowCount] = useState(LAZY_LOAD_BATCH_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [sortColumn, setSortColumn] = useState<string>('');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLTableRowElement>(null);
   
-  const tableSettings: TableSettings = settings || {
-    pagination: true,
-    scrollContent: false,
-    lazyLoad: false,
-  };
+  // Sync rowsPerPage with settings when it changes
+  useEffect(() => {
+    if (tableSettings.rowsPerPage && tableSettings.rowsPerPage !== rowsPerPage) {
+      setRowsPerPage(tableSettings.rowsPerPage);
+      setPage(0); // Reset to first page when rows per page changes
+    }
+  }, [tableSettings.rowsPerPage]);
 
   // Get the variable data
   const rawData = useRecoilValue(variableAtomFamily(dataSource));
@@ -72,17 +99,50 @@ export default function DashboardTable({ dataSource, settings }: DashboardTableP
     return parsedData;
   }, [rawData]);
 
-  // Get columns from first row
-  const columns = useMemo(() => {
+  // Get raw columns from first row
+  const rawColumns = useMemo(() => {
     if (tableData.length === 0) return [];
     return Object.keys(tableData[0]);
   }, [tableData]);
+
+  // Get visible and ordered columns based on settings
+  const columns = useMemo(() => {
+    if (tableSettings.columns.length === 0) {
+      return rawColumns;
+    }
+    return tableSettings.columns
+      .filter(col => col.visible)
+      .sort((a, b) => a.order - b.order)
+      .map(col => col.name)
+      .filter(name => rawColumns.includes(name));
+  }, [tableSettings.columns, rawColumns]);
+
+  // Initialize sort state from settings (use first column from multi-sort array)
+  useEffect(() => {
+    if (tableSettings.sorting?.enabled && tableSettings.sorting?.columns?.length > 0) {
+      setSortColumn(tableSettings.sorting.columns[0].column);
+      setSortDirection(tableSettings.sorting.columns[0].direction);
+    }
+  }, [tableSettings.sorting]);
 
   // Reset loaded count when data source changes
   useEffect(() => {
     setLoadedRowCount(LAZY_LOAD_BATCH_SIZE);
     setPage(0);
   }, [dataSource]);
+
+  // Handle sorting
+  const handleSort = (column: string) => {
+    if (!tableSettings.sorting?.enabled) return;
+    
+    if (sortColumn === column) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+    setPage(0);
+  };
 
   // Handle pagination
   const handlePageChange = (_event: unknown, newPage: number) => {
@@ -99,7 +159,6 @@ export default function DashboardTable({ dataSource, settings }: DashboardTableP
     if (isLoadingMore || loadedRowCount >= tableData.length) return;
     
     setIsLoadingMore(true);
-    // Simulate async loading with a small delay for smooth UX
     setTimeout(() => {
       setLoadedRowCount(prev => Math.min(prev + LAZY_LOAD_BATCH_SIZE, tableData.length));
       setIsLoadingMore(false);
@@ -108,7 +167,7 @@ export default function DashboardTable({ dataSource, settings }: DashboardTableP
 
   // Intersection Observer for lazy loading
   useEffect(() => {
-    if (!tableSettings.lazyLoad || !loadMoreTriggerRef.current) return;
+    if (tableSettings.displayMode !== 'lazyLoad' || !loadMoreTriggerRef.current) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -133,25 +192,105 @@ export default function DashboardTable({ dataSource, settings }: DashboardTableP
         observer.unobserve(triggerElement);
       }
     };
-  }, [tableSettings.lazyLoad, loadMoreRows]);
+  }, [tableSettings.displayMode, loadMoreRows]);
+
+  // Sort data if sorting is enabled
+  const sortedData = useMemo(() => {
+    if (!tableSettings.sorting?.enabled || !sortColumn) {
+      return tableData;
+    }
+    
+    return [...tableData].sort((a, b) => {
+      const aVal = a[sortColumn];
+      const bVal = b[sortColumn];
+      
+      // Handle null/undefined
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return sortDirection === 'asc' ? 1 : -1;
+      if (bVal == null) return sortDirection === 'asc' ? -1 : 1;
+      
+      // Compare values
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      
+      const aStr = String(aVal).toLowerCase();
+      const bStr = String(bVal).toLowerCase();
+      return sortDirection === 'asc' 
+        ? aStr.localeCompare(bStr) 
+        : bStr.localeCompare(aStr);
+    });
+  }, [tableData, tableSettings.sorting?.enabled, sortColumn, sortDirection]);
 
   // Get displayed data based on settings
   const displayedData = useMemo(() => {
-    if (tableSettings.pagination) {
-      return tableData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+    const data = sortedData;
+    
+    switch (tableSettings.displayMode) {
+      case 'pagination':
+        return data.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+      case 'lazyLoad':
+        return data.slice(0, loadedRowCount);
+      case 'scroll':
+        return data;
+      default:
+        return data.slice(0, 100);
     }
-    if (tableSettings.lazyLoad) {
-      return tableData.slice(0, loadedRowCount);
-    }
-    if (tableSettings.scrollContent) {
-      return tableData; // Show all for scrolling
-    }
-    // Default: show first 100 rows
-    return tableData.slice(0, 100);
-  }, [tableData, tableSettings, page, rowsPerPage, loadedRowCount]);
+  }, [sortedData, tableSettings.displayMode, page, rowsPerPage, loadedRowCount]);
 
   // Check if more rows can be loaded
-  const hasMoreRows = tableSettings.lazyLoad && loadedRowCount < tableData.length;
+  const hasMoreRows = tableSettings.displayMode === 'lazyLoad' && loadedRowCount < tableData.length;
+
+  // Calculate summary row values
+  const summaryRowData = useMemo(() => {
+    if (!tableSettings.summaryRow?.enabled) return null;
+    
+    const calculations: Record<string, { value: string | number; type: SummaryCalculation }> = {};
+    
+    columns.forEach(col => {
+      const calcType = tableSettings.summaryRow?.calculations?.[col];
+      if (!calcType || calcType === 'none') {
+        calculations[col] = { value: '', type: 'none' };
+        return;
+      }
+      
+      const values = tableData
+        .map(row => row[col])
+        .filter(v => v != null && !isNaN(Number(v)))
+        .map(v => Number(v));
+      
+      // If column has no numeric values, leave the summary blank to avoid misalignment/noise
+      if (values.length === 0) {
+        calculations[col] = { value: '', type: calcType };
+        return;
+      }
+      
+      let calculatedValue: string | number;
+      switch (calcType) {
+        case 'sum':
+          calculatedValue = values.reduce((a, b) => a + b, 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+          break;
+        case 'avg':
+          calculatedValue = (values.reduce((a, b) => a + b, 0) / values.length).toLocaleString(undefined, { maximumFractionDigits: 2 });
+          break;
+        case 'min':
+          calculatedValue = Math.min(...values).toLocaleString(undefined, { maximumFractionDigits: 2 });
+          break;
+        case 'max':
+          calculatedValue = Math.max(...values).toLocaleString(undefined, { maximumFractionDigits: 2 });
+          break;
+        case 'count':
+          calculatedValue = tableData.filter(row => row[col] != null).length;
+          break;
+        default:
+          calculatedValue = '';
+      }
+      
+      calculations[col] = { value: calculatedValue, type: calcType };
+    });
+    
+    return calculations;
+  }, [tableData, columns, tableSettings.summaryRow]);
 
   // No data state
   if (!dataSource || tableData.length === 0) {
@@ -210,47 +349,81 @@ export default function DashboardTable({ dataSource, settings }: DashboardTableP
           flex: 1,
           overflow: 'auto',
           minHeight: 0,
-          maxHeight: tableSettings.pagination ? 'calc(100% - 64px)' : '100%',
+          // Reserve space for pagination footer (52px for the component + some padding)
+          maxHeight: tableSettings.displayMode === 'pagination' ? 'calc(100% - 56px)' : '100%',
         }}
       >
-        <Table stickyHeader size="small">
+        <Table
+          stickyHeader
+          size={theme.cellPadding === 'compact' ? 'small' : 'medium'}
+          sx={{ tableLayout: 'fixed' }}
+        >
+          {(tableSettings.showHeader !== false) && (
           <TableHead>
             <TableRow>
-              {columns.map((col) => (
-                <TableCell 
-                  key={col}
-                  sx={{ 
-                    fontWeight: 700, 
-                    // Solid background color for sticky header - prevents content showing through
-                    backgroundColor: '#e0e7ff !important',
-                    background: '#e0e7ff !important',
-                    color: '#1e293b',
-                    fontSize: '0.8rem',
-                    py: 1.5,
-                    whiteSpace: 'nowrap',
-                    borderBottom: '2px solid rgba(59, 130, 246, 0.3)',
-                    // Ensure header stays on top
-                    zIndex: 2,
-                    position: 'sticky',
-                    top: 0,
-                  }}
-                >
-                  {col}
-                </TableCell>
-              ))}
+              {columns.map((col) => {
+                // Check if this column is in the configured sort columns
+                const sortableColumns = tableSettings.sorting?.columns || [];
+                const sortConfig = sortableColumns.find(s => s.column === col);
+                const isSortableColumn = !!sortConfig;
+                const isActiveSortColumn = sortColumn === col;
+                const sortDirForCol = sortConfig?.direction || 'asc';
+                const canSort = tableSettings.sorting?.enabled && isSortableColumn;
+                
+                return (
+                  <TableCell 
+                    key={col}
+                    onClick={() => canSort && handleSort(col)}
+                    sx={{ 
+                      fontWeight: 700, 
+                      backgroundColor: `${theme.headerBgColor} !important`,
+                      background: `${theme.headerBgColor} !important`,
+                      color: theme.headerTextColor,
+                      fontSize: getFontSize(theme.fontSize),
+                      py: getCellPadding(theme.cellPadding),
+                      whiteSpace: 'nowrap',
+                      borderBottom: `2px solid ${theme.borderColor}`,
+                      zIndex: 2,
+                      position: 'sticky',
+                      top: 0,
+                      cursor: canSort ? 'pointer' : 'default',
+                      '&:hover': canSort ? {
+                        backgroundColor: `${theme.headerBgColor}dd !important`,
+                      } : {},
+                    }}
+                  >
+                    {canSort ? (
+                      <TableSortLabel
+                        active={isActiveSortColumn}
+                        direction={sortDirForCol}
+                        sx={{
+                          color: `${theme.headerTextColor} !important`,
+                          '& .MuiTableSortLabel-icon': {
+                            color: `${theme.headerTextColor} !important`,
+                          },
+                          '&.Mui-active': {
+                            color: `${theme.headerTextColor} !important`,
+                          },
+                        }}
+                      >
+                        {col}
+                      </TableSortLabel>
+                    ) : col}
+                  </TableCell>
+                );
+              })}
             </TableRow>
           </TableHead>
+          )}
           <TableBody>
             {displayedData.map((row: any, rowIdx: number) => (
               <TableRow 
                 key={rowIdx} 
                 hover
                 sx={{
-                  '&:nth-of-type(odd)': {
-                    bgcolor: 'rgba(59, 130, 246, 0.02)',
-                  },
+                  backgroundColor: rowIdx % 2 === 0 ? theme.rowBgColor : theme.rowAltBgColor,
                   '&:hover': {
-                    bgcolor: 'rgba(59, 130, 246, 0.06) !important',
+                    bgcolor: `${theme.headerBgColor}22 !important`,
                   },
                 }}
               >
@@ -258,9 +431,11 @@ export default function DashboardTable({ dataSource, settings }: DashboardTableP
                   <TableCell 
                     key={col}
                     sx={{ 
-                      fontSize: '0.8rem',
-                      py: 1,
-                      color: '#475569',
+                      fontSize: getFontSize(theme.fontSize),
+                      py: getCellPadding(theme.cellPadding),
+                      px: getCellPadding(theme.cellPadding) + 0.5,
+                      color: theme.rowTextColor,
+                      borderBottom: `1px solid ${theme.borderColor}`,
                       maxWidth: 250,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -299,18 +474,98 @@ export default function DashboardTable({ dataSource, settings }: DashboardTableP
                 </TableCell>
               </TableRow>
             )}
+            {/* Summary Row */}
+            {summaryRowData && (
+              <TableRow sx={{ 
+                backgroundColor: `${theme.headerBgColor} !important`,
+                position: 'sticky',
+                bottom: 0,
+                zIndex: 1,
+              }}>
+                {columns.map((col, idx) => {
+                  const summaryCell = summaryRowData[col];
+                  const hasValue = summaryCell && summaryCell.value && summaryCell.type !== 'none';
+                  const getLabel = (type: SummaryCalculation) => {
+                    switch (type) {
+                      case 'sum': return 'Sum:';
+                      case 'avg': return 'Avg:';
+                      case 'min': return 'Min:';
+                      case 'max': return 'Max:';
+                      case 'count': return 'Count:';
+                      default: return '';
+                    }
+                  };
+                  
+                  return (
+                    <TableCell 
+                      key={col}
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: getFontSize(theme.fontSize),
+                        py: getCellPadding(theme.cellPadding),
+                        px: getCellPadding(theme.cellPadding) + 0.5,
+                        color: theme.headerTextColor,
+                        borderTop: `2px solid ${theme.borderColor}`,
+                        borderBottom: `1px solid ${theme.borderColor}`,
+                        maxWidth: 250,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        backgroundColor: `${theme.headerBgColor} !important`,
+                        position: 'sticky',
+                        bottom: 0,
+                        textAlign: 'left',
+                      }}
+                    >
+                      {hasValue ? (
+                        <Box sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'flex-start',
+                          fontWeight: 700,
+                          color: theme.headerTextColor,
+                          gap: 0.5,
+                          width: '100%',
+                        }}>
+                          <Typography variant="body2" sx={{ 
+                            fontWeight: 600,
+                            fontSize: '0.7rem',
+                            opacity: 0.8,
+                            textTransform: 'uppercase',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {getLabel(summaryCell.type)}
+                          </Typography>
+                          <Typography variant="body2" sx={{ 
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {summaryCell.value}
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <InsertChartIcon fontSize="small" />
+                          Summary
+                        </Box>
+                      )}
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </TableContainer>
 
       {/* Lazy load status bar */}
-      {tableSettings.lazyLoad && !tableSettings.pagination && (
+      {tableSettings.displayMode === 'lazyLoad' && (
         <Box 
           sx={{ 
             py: 0.75, 
             px: 2, 
-            borderTop: '1px solid rgba(59, 130, 246, 0.15)',
-            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.03) 0%, rgba(37, 99, 235, 0.03) 100%)',
+            borderTop: `1px solid ${theme.borderColor}`,
+            background: `${theme.headerBgColor}11`,
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -330,23 +585,27 @@ export default function DashboardTable({ dataSource, settings }: DashboardTableP
         </Box>
       )}
       
-      {tableSettings.pagination && (
+      {tableSettings.displayMode === 'pagination' && (
         <TablePagination
           component="div"
-          count={tableData.length}
+          count={sortedData.length}
           page={page}
           onPageChange={handlePageChange}
           rowsPerPage={rowsPerPage}
           onRowsPerPageChange={handleRowsPerPageChange}
-          rowsPerPageOptions={[5, 10, 25, 50, 100]}
+          rowsPerPageOptions={[5, 10, 15, 20, 25, 50, 100]}
           sx={{
             borderTop: '1px solid rgba(59, 130, 246, 0.15)',
             background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.03) 0%, rgba(37, 99, 235, 0.03) 100%)',
             flexShrink: 0,
+            minHeight: 52,
             '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
               color: '#64748b',
               fontWeight: 600,
               fontSize: '0.75rem',
+            },
+            '.MuiTablePagination-toolbar': {
+              minHeight: 52,
             },
           }}
         />
