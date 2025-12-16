@@ -1152,7 +1152,7 @@ export default function DropDragDashboard() {
           )}
         </div>
 
-        {isEditMode && chartConfig && (
+        {isEditMode && configData && (
           <div className="absolute top-3 left-3" style={{ zIndex: 9999, pointerEvents: 'none' }}>
             <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold" style={{
               backgroundColor: contentType === 'html' ? 'rgba(245, 158, 11, 0.9)' : 

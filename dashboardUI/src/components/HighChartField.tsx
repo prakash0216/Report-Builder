@@ -819,6 +819,19 @@ export default function HighChartField() {
     persistTableSettings(newSettings);
   };
 
+  // Handle select all / deselect all sorting columns
+  const handleSelectAllSortColumns = (selectAll: boolean) => {
+    const newColumns: SortColumn[] = selectAll 
+      ? rawTableColumns.map(col => ({ column: col, direction: 'asc' as const }))
+      : [];
+    const newSettings: TableSettings = {
+      ...tableSettings,
+      sorting: { ...tableSettings.sorting, columns: newColumns },
+    };
+    setTableSettings(newSettings);
+    persistTableSettings(newSettings);
+  };
+
   // Handle show/hide header toggle
   const handleShowHeaderChange = (show: boolean) => {
     const newSettings: TableSettings = {
@@ -881,6 +894,31 @@ export default function HighChartField() {
     );
     // Don't sort here - sorting happens in the display logic (tableColumns useMemo)
     // This preserves the order in the config UI and prevents focus jumping
+    const newSettings: TableSettings = {
+      ...tableSettings,
+      columns: newColumns,
+    };
+    setTableSettings(newSettings);
+    persistTableSettings(newSettings);
+  };
+
+  // Handle column reorder via drag and drop
+  const handleColumnReorder = (dragIndex: number, dropIndex: number) => {
+    if (dragIndex === dropIndex) return;
+    
+    // Sort columns by current order first
+    const sortedColumns = [...tableSettings.columns].sort((a, b) => a.order - b.order);
+    
+    // Remove the dragged item and insert at new position
+    const [draggedColumn] = sortedColumns.splice(dragIndex, 1);
+    sortedColumns.splice(dropIndex, 0, draggedColumn);
+    
+    // Reassign order values based on new positions
+    const newColumns = sortedColumns.map((col, idx) => ({
+      ...col,
+      order: idx,
+    }));
+    
     const newSettings: TableSettings = {
       ...tableSettings,
       columns: newColumns,
@@ -1567,10 +1605,25 @@ export default function HighChartField() {
                         />
                         {tableSettings.sorting?.enabled && (
                           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            {/* Select All / Deselect All */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    checked={(tableSettings.sorting?.columns?.length || 0) === rawTableColumns.length}
+                                    indeterminate={(tableSettings.sorting?.columns?.length || 0) > 0 && (tableSettings.sorting?.columns?.length || 0) < rawTableColumns.length}
+                                    onChange={(e) => handleSelectAllSortColumns(e.target.checked)}
+                                    size="small"
+                                    sx={{ p: 0.5, color: '#3b82f6', '&.Mui-checked': { color: '#3b82f6' } }}
+                                  />
+                                }
+                                label={<Typography variant="body2" fontWeight={500} color="#475569">Select All Columns</Typography>}
+                              />
+                            </Box>
                             {/* Current sort columns */}
                             {(tableSettings.sorting?.columns?.length || 0) > 0 && (
                               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                <Typography variant="caption" color="#64748b" fontWeight={600}>Sort Order (drag to reorder):</Typography>
+                                <Typography variant="caption" color="#64748b" fontWeight={600}>Sortable Columns:</Typography>
                                 {(tableSettings.sorting?.columns || []).map((sortCol, idx) => (
                                   <Box 
                                     key={sortCol.column} 
@@ -1590,6 +1643,7 @@ export default function HighChartField() {
                                       size="small" 
                                       onClick={() => handleSortDirectionChange(sortCol.column, sortCol.direction === 'asc' ? 'desc' : 'asc')}
                                       sx={{ color: '#3b82f6' }}
+                                      title={sortCol.direction === 'asc' ? 'Ascending (click to change)' : 'Descending (click to change)'}
                                     >
                                       {sortCol.direction === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />}
                                     </IconButton>
@@ -1597,6 +1651,7 @@ export default function HighChartField() {
                                       size="small" 
                                       onClick={() => handleRemoveSortColumn(sortCol.column)}
                                       sx={{ color: '#ef4444' }}
+                                      title="Remove from sorting"
                                     >
                                       <VisibilityOffIcon fontSize="small" />
                                     </IconButton>
@@ -1605,23 +1660,25 @@ export default function HighChartField() {
                               </Box>
                             )}
                             {/* Add new sort column */}
-                            <FormControl fullWidth size="small">
-                              <InputLabel>Add Sort Column</InputLabel>
-                              <Select
-                                value=""
-                                label="Add Sort Column"
-                                onChange={(e) => handleAddSortColumn(e.target.value as string)}
-                                sx={{ bgcolor: 'white' }}
-                              >
-                                {rawTableColumns
-                                  .filter(col => !(tableSettings.sorting?.columns || []).some(s => s.column === col))
-                                  .map(col => (
-                                    <MenuItem key={col} value={col}>{col}</MenuItem>
-                                  ))}
-                              </Select>
-                            </FormControl>
+                            {rawTableColumns.filter(col => !(tableSettings.sorting?.columns || []).some(s => s.column === col)).length > 0 && (
+                              <FormControl fullWidth size="small">
+                                <InputLabel>Add Sort Column</InputLabel>
+                                <Select
+                                  value=""
+                                  label="Add Sort Column"
+                                  onChange={(e) => handleAddSortColumn(e.target.value as string)}
+                                  sx={{ bgcolor: 'white' }}
+                                >
+                                  {rawTableColumns
+                                    .filter(col => !(tableSettings.sorting?.columns || []).some(s => s.column === col))
+                                    .map(col => (
+                                      <MenuItem key={col} value={col}>{col}</MenuItem>
+                                    ))}
+                                </Select>
+                              </FormControl>
+                            )}
                             <Typography variant="caption" color="#94a3b8">
-                              Click column headers in preview to sort. Multi-column sorting applies in order listed above.
+                              Click column headers in preview to sort. Arrows show on columns selected above.
                             </Typography>
                           </Box>
                         )}
@@ -1646,12 +1703,33 @@ export default function HighChartField() {
                       </AccordionSummary>
                       <AccordionDetails>
                         <Typography variant="caption" color="#64748b" sx={{ mb: 1, display: 'block' }}>
-                          Toggle visibility and set order (lower number = first)
+                          Toggle visibility and drag to reorder columns
                         </Typography>
                         <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
-                          {tableSettings.columns.map((col, idx) => (
+                          {[...tableSettings.columns].sort((a, b) => a.order - b.order).map((col, idx) => (
                             <Box 
                               key={`col-config-${idx}-${col.name}`} 
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData('text/plain', idx.toString());
+                                e.currentTarget.style.opacity = '0.5';
+                              }}
+                              onDragEnd={(e) => {
+                                e.currentTarget.style.opacity = '1';
+                              }}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                              }}
+                              onDragLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = '';
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                e.currentTarget.style.backgroundColor = '';
+                                const dragIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                                handleColumnReorder(dragIndex, idx);
+                              }}
                               sx={{ 
                                 display: 'flex', 
                                 alignItems: 'center', 
@@ -1659,9 +1737,20 @@ export default function HighChartField() {
                                 py: 0.5,
                                 px: 1,
                                 borderRadius: 1,
+                                cursor: 'grab',
                                 '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.05)' },
+                                '&:active': { cursor: 'grabbing' },
                               }}
                             >
+                              <Box sx={{ 
+                                display: 'flex', 
+                                flexDirection: 'column', 
+                                gap: 0, 
+                                color: '#94a3b8',
+                                cursor: 'grab',
+                              }}>
+                                <DragIndicatorIcon fontSize="small" />
+                              </Box>
                               <Checkbox
                                 checked={col.visible}
                                 onChange={() => handleColumnVisibilityChange(col.name)}
@@ -1678,18 +1767,16 @@ export default function HighChartField() {
                               >
                                 {col.name}
                               </Typography>
-                              <TextField
-                                type="number"
-                                size="small"
-                                value={col.order}
-                                onChange={(e) => handleColumnOrderChange(col.name, parseInt(e.target.value) || 0)}
-                                sx={{ width: 60 }}
-                                inputProps={{ 
-                                  min: 0, 
-                                  style: { textAlign: 'center', padding: '4px 8px' },
-                                  'data-column': col.name,
+                              <Typography 
+                                variant="caption" 
+                                sx={{ 
+                                  color: '#94a3b8',
+                                  minWidth: 20,
+                                  textAlign: 'right',
                                 }}
-                              />
+                              >
+                                #{idx + 1}
+                              </Typography>
                             </Box>
                           ))}
                         </Box>

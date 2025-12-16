@@ -517,7 +517,14 @@ export default function DashboardTable({ dataSource, settings }: DashboardTableP
                         textAlign: 'left',
                       }}
                     >
-                      {hasValue ? (
+                      {idx === 0 ? (
+                        // First column shows "Summary" label
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <InsertChartIcon fontSize="small" />
+                          Summary
+                        </Box>
+                      ) : hasValue ? (
+                        // Other columns show value only if they have a calculation
                         <Box sx={{ 
                           display: 'flex', 
                           alignItems: 'center', 
@@ -543,12 +550,7 @@ export default function DashboardTable({ dataSource, settings }: DashboardTableP
                             {summaryCell.value}
                           </Typography>
                         </Box>
-                      ) : (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <InsertChartIcon fontSize="small" />
-                          Summary
-                        </Box>
-                      )}
+                      ) : null}
                     </TableCell>
                   );
                 })}
