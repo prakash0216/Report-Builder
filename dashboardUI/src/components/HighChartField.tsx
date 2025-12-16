@@ -2344,16 +2344,11 @@ export default function HighChartField() {
                                       textAlign: idx === 0 ? 'left' : 'right',
                                     }}
                                   >
-                                    {idx === 0 && (!summaryCell || summaryCell.type === 'none' || !summaryCell.value) ? (
-                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                        <InsertChartIcon fontSize="small" />
-                                        Summary
-                                      </Box>
-                                    ) : summaryCell && summaryCell.value && summaryCell.type !== 'none' ? (
+                                    {summaryCell && summaryCell.value && summaryCell.type !== 'none' ? (
                                       <Box sx={{ 
                                         display: 'flex', 
                                         alignItems: 'center', 
-                                        justifyContent: idx === 0 ? 'flex-start' : 'flex-end',
+                                        justifyContent: 'flex-start',
                                         fontWeight: 700,
                                         color: tableSettings.theme.headerTextColor,
                                         gap: 0.5,

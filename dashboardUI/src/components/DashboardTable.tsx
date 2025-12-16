@@ -517,14 +517,8 @@ export default function DashboardTable({ dataSource, settings }: DashboardTableP
                         textAlign: 'left',
                       }}
                     >
-                      {idx === 0 ? (
-                        // First column shows "Summary" label
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <InsertChartIcon fontSize="small" />
-                          Summary
-                        </Box>
-                      ) : hasValue ? (
-                        // Other columns show value only if they have a calculation
+                      {hasValue ? (
+                        // Show calculation label and value for columns with calculations
                         <Box sx={{ 
                           display: 'flex', 
                           alignItems: 'center', 
