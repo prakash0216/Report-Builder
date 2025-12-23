@@ -1,4 +1,4 @@
 backend/db/data/
 backend/db/parquet_files/
 .cursor
-dashboardUI/reference
+dashboardUI/src/reference/
