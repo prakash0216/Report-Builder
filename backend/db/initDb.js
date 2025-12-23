@@ -411,6 +411,8 @@ CREATE TABLE IF NOT EXISTS child_card_configs (
   enable_container_scroll BOOLEAN DEFAULT FALSE,
   card_min_height INTEGER DEFAULT 500,
   gap INTEGER DEFAULT 8,
+  use_dynamic_height BOOLEAN DEFAULT FALSE,
+  height_data_source TEXT DEFAULT '',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   last_modified TIMESTAMP
 );
@@ -426,6 +428,11 @@ async function createChildCardConfigsTable() {
     try {
       await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS enable_container_scroll BOOLEAN DEFAULT FALSE`);
       await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS card_min_height INTEGER DEFAULT 500`);
+      // 🔥 FIX: Add gap column migration (was missing!)
+      await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS gap INTEGER DEFAULT 8`);
+      // 🔥 Dynamic height columns
+      await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS use_dynamic_height BOOLEAN DEFAULT FALSE`);
+      await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS height_data_source TEXT DEFAULT ''`);
       console.log("✅ Child card configs columns migrated successfully.");
     } catch (migrationErr) {
       // Columns might already exist, ignore

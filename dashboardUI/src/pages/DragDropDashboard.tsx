@@ -656,45 +656,124 @@ export default function DropDragDashboard() {
   // Collect chart references for export (after configs & visibility are computed)
   const collectChartRefs = useRecoilCallback(({ snapshot }) => (): ChartRef[] => {
     const refs: ChartRef[] = [];
+    
+    // Helper to get table data from a data source
+    const getTableData = (dataSource: string) => {
+      try {
+        const loadable = snapshot.getLoadable(variableAtomFamily(dataSource));
+        if (loadable.state === 'hasValue') {
+          let rawData: any = loadable.contents;
+          if (typeof rawData === 'string') {
+            try { rawData = JSON.parse(rawData); } catch { rawData = undefined; }
+          }
+          if (Array.isArray(rawData) && rawData.length > 0 && typeof rawData[0] === 'object') {
+            return { columns: Object.keys(rawData[0]), rows: rawData };
+          }
+        }
+      } catch (e) { /* ignore */ }
+      return undefined;
+    };
+    
+    // Helper to find chart instance in a container
+    const findChartInContainer = (container: HTMLElement): Highcharts.Chart | null => {
+      const hc = container.querySelector('.highcharts-container') as HTMLElement | null;
+      if (hc) {
+        const chart = Highcharts.charts.find((ch: any) => ch?.renderTo === hc) as Highcharts.Chart | null;
+        if (chart) return chart;
+      }
+      return Highcharts.charts.find((ch: any) => {
+        const renderTo = ch?.renderTo;
+        return renderTo && container.contains(renderTo);
+      }) as Highcharts.Chart | null;
+    };
+    
     for (const item of visibleCharts) {
       const configData = chartConfigs[item.i];
-      const contentType = (configData?.type as any) || 'chart';
+      const containerConfig = childCardConfigs[item.i];
+      const isContainerCard = containerConfig?.isContainer && containerConfig.childCards?.length > 0;
       const container = document.querySelector(`[data-chart-id="${item.i}"]`) as HTMLElement | null;
+
+      // 🔥 Handle Multi-Card Containers - collect child cards
+      if (isContainerCard && containerConfig.childCards) {
+        console.log(`[collectChartRefs] Processing multi-card container ${item.i} with ${containerConfig.childCards.length} children`);
+        
+        for (const childConfig of containerConfig.childCards) {
+          // Find the child card container element
+          const childContainer = container?.querySelector(`[data-child-id="${childConfig.id}"]`) as HTMLElement | null;
+          
+          let childChartInstance: Highcharts.Chart | null = null;
+          let childTitle = childConfig.title || `Card_${childConfig.id}`;
+          let childTableData: { columns: string[]; rows: Array<Record<string, any>> } | undefined;
+          // 🔥 FIX: Get rendered HTML content from the container element (has resolved values)
+          let childHtmlContent: string | undefined;
+          
+          if (childConfig.type === 'chart' && childContainer) {
+            childChartInstance = findChartInContainer(childContainer);
+            // Get title from chart instance
+            if (childChartInstance) {
+              const liveTitle = (childChartInstance.options as any)?.title?.text;
+              if (liveTitle) {
+                childTitle = typeof liveTitle === 'string' ? liveTitle : String(liveTitle);
+              }
+            }
+          } else if (childConfig.type === 'table' && childConfig.tableDataSource) {
+            childTableData = getTableData(childConfig.tableDataSource);
+            childTitle = childConfig.title || `Table_${childConfig.tableDataSource}`;
+          } else if (childConfig.type === 'html' && childContainer) {
+            // 🔥 FIX: Extract the rendered text content from the DOM (already has resolved variable values)
+            childHtmlContent = childContainer.innerHTML;
+          }
+          
+          refs.push({
+            chart: childChartInstance,
+            chartId: childConfig.id,
+            title: childTitle,
+            type: childConfig.type,
+            htmlContent: childHtmlContent,
+            containerElement: childContainer || container || undefined,
+            tableData: childTableData,
+            tableTheme: childConfig.tableSettings?.theme,
+          });
+        }
+        continue; // Skip adding the parent container itself
+      }
+
+      // Regular (non-container) cards
+      const contentType = (configData?.type as any) || 'chart';
 
       let chartInstance: Highcharts.Chart | null = null;
       if (contentType === 'chart' && container) {
-        const hc = container.querySelector('.highcharts-container') as HTMLElement | null;
-        if (hc) {
-          chartInstance = Highcharts.charts.find((ch: any) => ch?.renderTo === hc) as Highcharts.Chart | null;
-        }
-        if (!chartInstance) {
-          chartInstance = Highcharts.charts.find((ch: any) => {
-            const renderTo = ch?.renderTo;
-            return renderTo && container.contains(renderTo);
-          }) as Highcharts.Chart | null;
-        }
+        chartInstance = findChartInContainer(container);
       }
 
       // Extract title based on content type
       let title = `Chart_${item.i}`;
+      // 🔥 FIX: Get processed HTML with resolved variable values
+      let resolvedHtmlContent: string | undefined;
+      
       if (contentType === 'chart') {
-        // First try to get title from processed config
         const processedTitle = processedChartConfigs[item.i]?.title?.text;
         if (processedTitle) {
           title = typeof processedTitle === 'string' ? processedTitle : String(processedTitle);
-        }
-        // Fallback: get title from live Highcharts instance
-        else if (chartInstance) {
+        } else if (chartInstance) {
           const liveTitle = (chartInstance.options as any)?.title?.text;
           if (liveTitle) {
             title = typeof liveTitle === 'string' ? liveTitle : String(liveTitle);
           }
         }
-      } else if (contentType === 'html' && configData?.htmlContent) {
-        const temp = document.createElement('div');
-        temp.innerHTML = configData.htmlContent;
-        const h = temp.querySelector('h1,h2,h3');
-        if (h?.textContent) title = h.textContent;
+      } else if (contentType === 'html') {
+        // 🔥 FIX: Use processedChartConfigs which has resolved variable values
+        const processedHtml = processedChartConfigs[item.i]?.html;
+        if (processedHtml) {
+          resolvedHtmlContent = processedHtml;
+          const temp = document.createElement('div');
+          temp.innerHTML = processedHtml;
+          const h = temp.querySelector('h1,h2,h3');
+          if (h?.textContent) title = h.textContent;
+        } else if (container) {
+          // Fallback: get rendered HTML from DOM
+          resolvedHtmlContent = container.innerHTML;
+        }
       } else if (contentType === 'table' && configData?.tableDataSource) {
         title = `Table_${configData.tableDataSource}`;
       }
@@ -702,44 +781,22 @@ export default function DropDragDashboard() {
       // Get table data for table type cards
       let tableData: { columns: string[]; rows: Array<Record<string, any>> } | undefined;
       if (contentType === 'table' && configData?.tableDataSource) {
-        try {
-          const loadable = snapshot.getLoadable(variableAtomFamily(configData.tableDataSource));
-          if (loadable.state === 'hasValue') {
-            let rawData: any = loadable.contents;
-            // Parse if string
-            if (typeof rawData === 'string') {
-              try {
-                rawData = JSON.parse(rawData);
-              } catch (e) {
-                rawData = undefined;
-              }
-            }
-            // Validate it's an array of objects
-            if (Array.isArray(rawData) && rawData.length > 0 && typeof rawData[0] === 'object') {
-              tableData = {
-                columns: Object.keys(rawData[0]),
-                rows: rawData,
-              };
-            }
-          }
-        } catch (e) {
-          console.warn(`[collectChartRefs] Failed to get table data for ${item.i}:`, e);
-        }
+        tableData = getTableData(configData.tableDataSource);
       }
 
       refs.push({
         chart: chartInstance,
         chartId: item.i,
-        title: title, // Keep original title for display in PPTX
+        title: title,
         type: contentType,
-        htmlContent: contentType === 'html' ? configData?.htmlContent : undefined,
+        htmlContent: resolvedHtmlContent,
         containerElement: container || undefined,
         tableData,
         tableTheme: configData?.tableSettings?.theme,
       });
     }
     return refs;
-  }, [visibleCharts, chartConfigs, processedChartConfigs]);
+  }, [visibleCharts, chartConfigs, processedChartConfigs, childCardConfigs]);
 
   const handleDownload = useCallback(async (format: string) => {
     if (isDownloading || visibleCharts.length === 0) return;

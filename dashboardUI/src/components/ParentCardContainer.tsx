@@ -118,7 +118,7 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
           backgroundColor: '#fafafa',
         }}
       >
-        No child cards configured. Open Viz Config to add cards.
+        No child cards configured. Open MultiCard Viz Config to add cards.
       </Box>
     );
   }

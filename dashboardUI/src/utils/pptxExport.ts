@@ -5,60 +5,37 @@ import { ChartRef, TableData, TableThemeForExport } from './downloadUtilities';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const getChartWithRetry = async (container: HTMLElement, maxRetries = 6): Promise<Highcharts.Chart | null> => {
+// 🔥 OPTIMIZED: Reduced retries and wait times
+const getChartWithRetry = async (container: HTMLElement, maxRetries = 3): Promise<Highcharts.Chart | null> => {
   for (let i = 0; i < maxRetries; i++) {
     const chart = Highcharts.charts.find((ch: any) => {
       const renderTo = ch?.renderTo as HTMLElement | undefined;
       return renderTo && container.contains(renderTo);
     }) as Highcharts.Chart | null;
     if (chart) return chart;
-    await sleep(200);
+    if (i < maxRetries - 1) await sleep(50);
   }
   return null;
 };
 
+// 🔥 OPTIMIZED: Faster element capture with reduced scale
 const captureElementAsPng = async (el: HTMLElement): Promise<string | null> => {
   try {
     const rect = el.getBoundingClientRect();
     
-    // Skip if element has no dimensions
     if (rect.width <= 0 || rect.height <= 0) {
       console.warn('[PPTX] captureElementAsPng: element has no dimensions');
       return null;
     }
     
-    // Scroll element into view to ensure it's rendered
-    el.scrollIntoView({ behavior: 'auto', block: 'center' });
-    await sleep(100);
-    
-    // Get fresh rect after scroll
-    const freshRect = el.getBoundingClientRect();
-    
     const canvas = await html2canvas(el, {
       backgroundColor: '#ffffff',
-      scale: 1.5,
+      scale: 1, // 🔥 Reduced from 1.5 for faster capture
       useCORS: true,
       allowTaint: true,
       logging: false,
-      scrollX: 0,
-      scrollY: 0,
-      width: freshRect.width,
-      height: freshRect.height,
-      windowWidth: document.documentElement.clientWidth,
-      windowHeight: document.documentElement.clientHeight,
-      onclone: (clonedDoc: Document, clonedEl: Element) => {
-        // Ensure the cloned element is visible
-        (clonedEl as HTMLElement).style.overflow = 'visible';
-        // Force visibility on any child elements
-        const children = clonedEl.querySelectorAll('*');
-        children.forEach(child => {
-          const htmlChild = child as HTMLElement;
-          if (htmlChild.style) {
-            htmlChild.style.visibility = 'visible';
-            htmlChild.style.opacity = '1';
-          }
-        });
-      },
+      scrollX: -window.scrollX,
+      scrollY: -window.scrollY,
     });
     return canvas.toDataURL('image/png');
   } catch (err) {

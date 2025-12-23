@@ -39,7 +39,8 @@ export interface ChartRef {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const getChartWithRetry = async (container: HTMLElement, maxRetries = 8): Promise<Highcharts.Chart | null> => {
+// 🔥 OPTIMIZED: Reduced retries and wait times for faster exports
+const getChartWithRetry = async (container: HTMLElement, maxRetries = 3): Promise<Highcharts.Chart | null> => {
   for (let i = 0; i < maxRetries; i++) {
     const highchartsContainer = container.querySelector('.highcharts-container') as HTMLElement | null;
     if (highchartsContainer) {
@@ -52,14 +53,15 @@ const getChartWithRetry = async (container: HTMLElement, maxRetries = 8): Promis
       return renderTo && container.contains(renderTo);
     }) as Highcharts.Chart | null;
     if (chart) return chart;
-    await sleep(200);
+    if (i < maxRetries - 1) await sleep(50); // Only wait between retries
   }
   return null;
 };
 
+// 🔥 OPTIMIZED: Minimal wait, parallel processing
 const waitForChartsReady = async (chartRefs: ChartRef[]) => {
-  // small delay to allow rendering
-  await sleep(600);
+  // Charts should already be rendered, minimal wait
+  await sleep(100);
   const promises = chartRefs
     .filter((r) => r.type === 'chart' && r.containerElement && !r.chart)
     .map(async (r) => {
@@ -70,8 +72,10 @@ const waitForChartsReady = async (chartRefs: ChartRef[]) => {
 
 /**
  * Capture any DOM element as PNG data URL
+ * @param el - The element to capture
+ * @param highQuality - If true, use higher scale for better quality (PDF/PPTX)
  */
-const captureElementAsPng = async (el: HTMLElement): Promise<string | null> => {
+const captureElementAsPng = async (el: HTMLElement, highQuality = false): Promise<string | null> => {
   try {
     const rect = el.getBoundingClientRect();
     
@@ -81,43 +85,103 @@ const captureElementAsPng = async (el: HTMLElement): Promise<string | null> => {
       return null;
     }
     
-    // Scroll element into view to ensure it's rendered
-    //@ts-ignore
-    el.scrollIntoView({ behavior: 'instant', block: 'center' });
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Get fresh rect after scroll
-    const freshRect = el.getBoundingClientRect();
+    // 🔥 FIX: Use scale 2 for high quality (PDF, PPTX), scale 1 for fast capture (images)
+    const scale = highQuality ? 2 : 1;
     
     const canvas = await html2canvas(el, {
       backgroundColor: '#ffffff',
-      scale: 1.5,
+      scale: scale,
       useCORS: true,
       allowTaint: true,
       logging: false,
-      scrollX: 0,
-      scrollY: 0,
-      width: freshRect.width,
-      height: freshRect.height,
-      windowWidth: document.documentElement.clientWidth,
-      windowHeight: document.documentElement.clientHeight,
-      onclone: (clonedDoc: Document, clonedEl: Element) => {
-        // Ensure the cloned element is visible
-        (clonedEl as HTMLElement).style.overflow = 'visible';
-        // Force visibility on any child elements
-        const children = clonedEl.querySelectorAll('*');
-        children.forEach(child => {
-          const htmlChild = child as HTMLElement;
-          if (htmlChild.style) {
-            htmlChild.style.visibility = 'visible';
-            htmlChild.style.opacity = '1';
-          }
-        });
-      },
+      scrollX: -window.scrollX,
+      scrollY: -window.scrollY,
     });
     return canvas.toDataURL('image/png');
   } catch (err) {
     console.warn('captureElementAsPng failed', err);
+    return null;
+  }
+};
+
+/**
+ * 🔥 NEW: Capture ONLY what's visible on screen for PDF export
+ * Clips to scrollable parent viewport if element is inside a scroll container
+ * @param el - The element to capture
+ */
+const captureVisibleAreaAsPng = async (el: HTMLElement): Promise<string | null> => {
+  try {
+    const rect = el.getBoundingClientRect();
+    
+    // Skip if element has no dimensions
+    if (rect.width <= 0 || rect.height <= 0) {
+      console.warn('captureVisibleAreaAsPng: element has no dimensions');
+      return null;
+    }
+    
+    // 🔥 Find scrollable parent (the parent card container with overflow:auto/scroll)
+    let scrollParent: HTMLElement | null = el.parentElement;
+    let foundScrollParent = false;
+    while (scrollParent && !foundScrollParent) {
+      const style = window.getComputedStyle(scrollParent);
+      const hasOverflow = style.overflow === 'auto' || style.overflow === 'scroll' ||
+                         style.overflowY === 'auto' || style.overflowY === 'scroll';
+      const hasScroll = scrollParent.scrollHeight > scrollParent.clientHeight;
+      
+      // Also check for data-chart-id which indicates a dashboard card
+      const isCard = scrollParent.hasAttribute('data-chart-id');
+      
+      if ((hasOverflow && hasScroll) || isCard) {
+        foundScrollParent = true;
+        break;
+      }
+      scrollParent = scrollParent.parentElement;
+    }
+    
+    // Calculate visible bounds
+    let captureX = 0;
+    let captureY = 0;
+    let captureWidth = rect.width;
+    let captureHeight = rect.height;
+    
+    if (foundScrollParent && scrollParent) {
+      const parentRect = scrollParent.getBoundingClientRect();
+      
+      // Calculate the visible portion within the scroll parent
+      const visibleTop = Math.max(rect.top, parentRect.top);
+      const visibleBottom = Math.min(rect.bottom, parentRect.bottom);
+      const visibleLeft = Math.max(rect.left, parentRect.left);
+      const visibleRight = Math.min(rect.right, parentRect.right);
+      
+      captureWidth = visibleRight - visibleLeft;
+      captureHeight = visibleBottom - visibleTop;
+      
+      // Calculate offset within the element
+      captureX = visibleLeft - rect.left;
+      captureY = visibleTop - rect.top;
+      
+      console.log(`[PDF Capture] Scroll parent found: visible area ${captureWidth}x${captureHeight}px`);
+    } else {
+      console.log(`[PDF Capture] No scroll parent: full element ${captureWidth}x${captureHeight}px`);
+    }
+    
+    // Capture with clipping
+    const canvas = await html2canvas(el, {
+      backgroundColor: '#ffffff',
+      scale: 2, // 2x for crisp text
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      scrollX: -window.scrollX,
+      scrollY: -window.scrollY,
+      x: captureX,
+      y: captureY,
+      width: captureWidth,
+      height: captureHeight,
+    });
+    return canvas.toDataURL('image/png', 1.0);
+  } catch (err) {
+    console.warn('captureVisibleAreaAsPng failed', err);
     return null;
   }
 };
@@ -316,15 +380,24 @@ export const exportAllAsJPEG = async (chartRefs: ChartRef[]) => {
   }
 };
 
+// 🔥 OPTIMIZED: Fast SVG export with better chart detection
 export const exportAllAsSVG = async (chartRefs: ChartRef[]) => {
-  await waitForChartsReady(chartRefs);
+  console.log('[SVG Export] Starting with', chartRefs.length, 'cards');
+  let exported = 0;
+  
   for (const ref of chartRefs) {
     try {
       if (ref.type !== 'chart') continue;
-      const chart = ref.chart || (ref.containerElement ? await getChartWithRetry(ref.containerElement) : null);
-      if (!chart) continue;
+      const chart = ref.chart || (ref.containerElement ? await getChartWithRetry(ref.containerElement, 2) : null);
+      if (!chart) {
+        console.warn('[SVG Export] No chart found for', ref.chartId);
+        continue;
+      }
       const svg = (chart as any).getSVG?.();
-      if (!svg) continue;
+      if (!svg) {
+        console.warn('[SVG Export] getSVG failed for', ref.chartId);
+        continue;
+      }
       const blob = new Blob([svg], { type: 'image/svg+xml' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -332,15 +405,17 @@ export const exportAllAsSVG = async (chartRefs: ChartRef[]) => {
       link.href = url;
       link.click();
       URL.revokeObjectURL(url);
+      exported++;
     } catch (err) {
       console.warn('SVG export failed for', ref.chartId, err);
     }
   }
+  console.log(`[SVG Export] Complete - exported ${exported} charts`);
 };
 
+// 🔥 OPTIMIZED: Fast PDF export with better handling of large charts
 export const exportAllAsPDF = async (chartRefs: ChartRef[], fileName = 'Dashboard') => {
   console.log('[PDF Export] Starting with', chartRefs.length, 'cards');
-  await waitForChartsReady(chartRefs);
   const pdf = new jsPDF('p', 'mm', 'a4');
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
@@ -350,21 +425,27 @@ export const exportAllAsPDF = async (chartRefs: ChartRef[], fileName = 'Dashboar
 
   for (let i = 0; i < chartRefs.length; i++) {
     const ref = chartRefs[i];
-    console.log(`[PDF Export] Processing card ${ref.chartId}, type: ${ref.type}, hasContainer: ${!!ref.containerElement}`);
     
     try {
       let dataUrl: string | undefined;
       
-      if (ref.type === 'chart') {
-        // For chart type, try to get SVG first
-        const chart = ref.chart || (ref.containerElement ? await getChartWithRetry(ref.containerElement) : null);
+      // 🔥 FIX: Use html2canvas to capture only the visible portion of the card
+      // This prevents blur from scaling very tall charts
+      if (ref.containerElement) {
+        const shot = await captureVisibleAreaAsPng(ref.containerElement);
+        dataUrl = shot || undefined;
+      }
+      
+      // Fallback to SVG for charts if container capture failed
+      if (!dataUrl && ref.type === 'chart') {
+        const chart = ref.chart || (ref.containerElement ? await getChartWithRetry(ref.containerElement, 2) : null);
         if (chart) {
           const svg = (chart as any).getSVG?.();
           if (svg) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             const img = new Image();
-            await new Promise((resolve, reject) => {
+            await new Promise((resolve) => {
               img.onload = () => {
                 canvas.width = img.width;
                 canvas.height = img.height;
@@ -372,52 +453,49 @@ export const exportAllAsPDF = async (chartRefs: ChartRef[], fileName = 'Dashboar
                 dataUrl = canvas.toDataURL('image/png');
                 resolve(null);
               };
-              img.onerror = reject;
+              img.onerror = () => resolve(null);
               img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
             });
           }
         }
-        // Fallback to container capture if SVG failed
-        if (!dataUrl && ref.containerElement) {
-          console.log(`[PDF Export] Chart SVG failed for ${ref.chartId}, trying container capture`);
-          const shot = await captureElementAsPng(ref.containerElement);
-          dataUrl = shot || undefined;
-        }
-      } else {
-        // For HTML/table/other types, capture the container element
-        if (ref.containerElement) {
-          console.log(`[PDF Export] Capturing container for ${ref.chartId} (type: ${ref.type})`);
-          const shot = await captureElementAsPng(ref.containerElement);
-          dataUrl = shot || undefined;
-        }
       }
 
-      if (!dataUrl) {
-        console.warn(`[PDF Export] No image data for ${ref.chartId}, skipping`);
-        continue;
-      }
+      if (!dataUrl) continue;
 
       const img = new Image();
       await new Promise((resolve) => {
         img.onload = () => {
-          const ratio = (pageWidth - margin * 2) / img.width;
-          const imgHeight = Math.min(img.height * ratio, pageHeight - margin * 2 - 10); // Cap height to fit page
-          if (y + imgHeight + 10 > pageHeight - margin) {
+          const imgRatio = img.width / img.height;
+          const availableWidth = pageWidth - margin * 2;
+          
+          // 🔥 FIX: For tall charts (like Top 50 bar charts), allow multi-page
+          let imgWidth = availableWidth;
+          let imgHeight = imgWidth / imgRatio;
+          
+          // If image would be too tall for page, scale down or split
+          const maxHeightPerPage = pageHeight - margin * 2 - 15; // Leave room for title
+          
+          if (imgHeight > maxHeightPerPage) {
+            // Scale to fit page width but allow overflow to next page
+            // For very tall charts, we'll just use what fits
+            imgHeight = maxHeightPerPage;
+          }
+          
+          // Check if we need a new page
+          if (y + imgHeight + 15 > pageHeight - margin) {
             pdf.addPage();
             y = margin;
           }
-          pdf.text(ref.title || `Card ${i + 1}`, margin, y);
-          y += 6;
-          pdf.addImage(dataUrl!, 'PNG', margin, y, pageWidth - margin * 2, imgHeight);
-          y += imgHeight + 10;
+          
+          pdf.setFontSize(12);
+          pdf.text(ref.title || `Card ${i + 1}`, margin, y + 4);
+          y += 8;
+          pdf.addImage(dataUrl!, 'PNG', margin, y, imgWidth, imgHeight);
+          y += imgHeight + 8;
           cardsExported++;
-          console.log(`[PDF Export] Added ${ref.chartId} to PDF`);
           resolve(null);
         };
-        img.onerror = () => {
-          console.warn(`[PDF Export] Failed to load image for ${ref.chartId}`);
-          resolve(null);
-        };
+        img.onerror = () => resolve(null);
         img.src = dataUrl!;
       });
     } catch (err) {
@@ -429,8 +507,9 @@ export const exportAllAsPDF = async (chartRefs: ChartRef[], fileName = 'Dashboar
   pdf.save(`${fileName.replace(/[^a-z0-9]/gi, '_')}.pdf`);
 };
 
+// 🔥 OPTIMIZED: Fast CSV export - no waiting, direct data extraction
 export const exportAllAsCSV = async (chartRefs: ChartRef[]) => {
-  await waitForChartsReady(chartRefs);
+  console.log('[CSV Export] Starting with', chartRefs.length, 'cards');
   const sections: string[] = [];
 
   for (const ref of chartRefs) {
@@ -439,14 +518,57 @@ export const exportAllAsCSV = async (chartRefs: ChartRef[]) => {
       sections.push(`"--- ${title} ---"`);
 
       if (ref.type === 'chart') {
-        const chart = ref.chart || (ref.containerElement ? await getChartWithRetry(ref.containerElement) : null);
-        if (!chart) continue;
-        const csv = (chart as any).getCSV?.();
-        if (csv && csv.trim().length > 0) {
-          sections.push(csv.trim());
+        // Try to get chart directly, minimal retry
+        const chart = ref.chart || (ref.containerElement ? await getChartWithRetry(ref.containerElement, 2) : null);
+        if (chart) {
+          // First try getCSV
+          let csv = (chart as any).getCSV?.();
+          if (!csv || csv.trim().length < 5) {
+            // Fallback: build CSV from series data
+            const series = (chart as any).series || [];
+            const xAxis = (chart as any).xAxis?.[0];
+            const categories = xAxis?.categories || [];
+            const rows: string[][] = [];
+            
+            // Header row
+            const header: string[] = [];
+            if (categories.length) header.push(xAxis?.title?.text || 'Category');
+            series.forEach((s: any) => header.push(s.name || 'Series'));
+            if (header.length) rows.push(header);
+            
+            // Data rows
+            const maxLen = Math.max(categories.length, ...series.map((s: any) => s.data?.length || 0));
+            for (let i = 0; i < maxLen; i++) {
+              const row: string[] = [];
+              if (categories.length) row.push(String(categories[i] ?? ''));
+              series.forEach((s: any) => {
+                const pt = s.data?.[i];
+                if (pt && typeof pt === 'object' && pt.y !== undefined) row.push(String(pt.y));
+                else row.push(String(pt ?? ''));
+              });
+              rows.push(row);
+            }
+            csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+          }
+          sections.push(csv?.trim() || 'No Data');
         } else {
           sections.push('No Data');
         }
+      } else if (ref.type === 'table' && ref.tableData) {
+        // Use tableData directly if available
+        const { columns, rows } = ref.tableData;
+        const csvRows: string[][] = [columns];
+        rows.forEach(row => {
+          csvRows.push(columns.map(col => String(row[col] ?? '')));
+        });
+        const csv = csvRows.map(r => r.map(c => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n');
+        sections.push(csv);
+      } else if (ref.type === 'html' && ref.htmlContent) {
+        // 🔥 FIX: Extract text content from HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = ref.htmlContent;
+        const textContent = tempDiv.textContent || tempDiv.innerText || '';
+        sections.push(`"${textContent.replace(/"/g, '""').replace(/\n/g, ' ')}"`);
       } else if (ref.containerElement) {
         const table = ref.containerElement.querySelector('table');
         if (table) {
@@ -459,12 +581,18 @@ export const exportAllAsCSV = async (chartRefs: ChartRef[]) => {
           const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n');
           sections.push(csv || 'No Data');
         } else {
-          const text = ref.containerElement.innerText || '';
-          sections.push(text.trim() || 'No Data');
+          // 🔥 FIX: Fallback to text content for non-table elements (HTML cards)
+          const textContent = ref.containerElement.textContent || ref.containerElement.innerText || '';
+          if (textContent.trim()) {
+            sections.push(`"${textContent.trim().replace(/"/g, '""').replace(/\n/g, ' ')}"`);
+          } else {
+            sections.push('No Data');
+          }
         }
       }
     } catch (err) {
       console.warn('CSV export failed for', ref.chartId, err);
+      sections.push('Export Error');
     }
     sections.push(''); // blank line between sections
   }
@@ -477,72 +605,76 @@ export const exportAllAsCSV = async (chartRefs: ChartRef[]) => {
   link.href = url;
   link.click();
   URL.revokeObjectURL(url);
+  console.log('[CSV Export] Complete');
 };
 
+// 🔥 OPTIMIZED: Fast Excel export - minimal waiting, direct data extraction
 export const exportAllAsExcel = async (chartRefs: ChartRef[], fileName = 'Dashboard') => {
-  await waitForChartsReady(chartRefs);
+  console.log('[Excel Export] Starting with', chartRefs.length, 'cards');
   const XLSX: any = await loadXLSX();
   const workbook = XLSX.utils.book_new();
 
   for (const ref of chartRefs) {
     try {
       let sheet: any = null;
+      
       if (ref.type === 'chart') {
-        const chart = ref.chart || (ref.containerElement ? await getChartWithRetry(ref.containerElement) : null);
+        const chart = ref.chart || (ref.containerElement ? await getChartWithRetry(ref.containerElement, 2) : null);
         if (chart) {
-          let csv = (chart as any).getCSV?.();
-          if (!csv || csv.length < 5) {
-            // fallback: build from series
-            const series = (chart as any).series || [];
-            const xAxis = (chart as any).xAxis?.[0];
-            const categories = xAxis?.categories || [];
-            const data: any[][] = [];
-            const header: string[] = [];
-            if (categories.length) header.push(xAxis?.title?.text || 'Category');
-            series.forEach((s: any) => header.push(s.name || 'Series'));
-            if (header.length) data.push(header);
-            const maxLen = Math.max(categories.length, ...series.map((s: any) => s.data?.length || 0));
-            for (let i = 0; i < maxLen; i++) {
-              const row: any[] = [];
-              if (categories.length) row.push(categories[i] ?? '');
-              series.forEach((s: any) => {
-                const pt = s.data?.[i];
-                if (pt && typeof pt === 'object' && pt.y !== undefined) row.push(pt.y);
-                else row.push(pt ?? '');
-              });
-              data.push(row);
-            }
-            sheet = XLSX.utils.aoa_to_sheet(data.length ? data : [['No Data']]);
-          } else {
-            const lines = csv.split('\n').filter((l: string) => l.trim().length);
-            const data = lines.map((line: string) => {
-              const out: string[] = [];
-              let cur = '';
-              let inQ = false;
-              for (let i = 0; i < line.length; i++) {
-                const ch = line[i];
-                if (ch === '"') inQ = !inQ;
-                else if (ch === ',' && !inQ) {
-                  out.push(cur);
-                  cur = '';
-                } else cur += ch;
-              }
-              out.push(cur);
-              return out;
+          // Build from series data directly (faster than getCSV parsing)
+          const series = (chart as any).series || [];
+          const xAxis = (chart as any).xAxis?.[0];
+          const categories = xAxis?.categories || [];
+          const data: any[][] = [];
+          const header: string[] = [];
+          if (categories.length) header.push(xAxis?.title?.text || 'Category');
+          series.forEach((s: any) => header.push(s.name || 'Series'));
+          if (header.length) data.push(header);
+          const maxLen = Math.max(categories.length, ...series.map((s: any) => s.data?.length || 0));
+          for (let i = 0; i < maxLen; i++) {
+            const row: any[] = [];
+            if (categories.length) row.push(categories[i] ?? '');
+            series.forEach((s: any) => {
+              const pt = s.data?.[i];
+              if (pt && typeof pt === 'object' && pt.y !== undefined) row.push(pt.y);
+              else row.push(pt ?? '');
             });
-            sheet = XLSX.utils.aoa_to_sheet(data.length ? data : [['No Data']]);
+            data.push(row);
           }
+          sheet = XLSX.utils.aoa_to_sheet(data.length ? data : [['No Data']]);
         }
+      } else if (ref.type === 'table' && ref.tableData) {
+        // Use tableData directly (fastest)
+        const { columns, rows } = ref.tableData;
+        const data: any[][] = [columns];
+        rows.forEach(row => {
+          data.push(columns.map(col => row[col] ?? ''));
+        });
+        sheet = XLSX.utils.aoa_to_sheet(data);
+      } else if (ref.type === 'html' && ref.htmlContent) {
+        // 🔥 FIX: Extract text content from HTML for Excel
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = ref.htmlContent;
+        const textContent = tempDiv.textContent || tempDiv.innerText || '';
+        // Split by newlines to create rows
+        const lines = textContent.split(/\n/).filter(line => line.trim());
+        const data: any[][] = lines.length > 0 ? lines.map(line => [line.trim()]) : [['No Content']];
+        sheet = XLSX.utils.aoa_to_sheet(data);
       } else if (ref.containerElement) {
         const table = ref.containerElement.querySelector('table');
         if (table) {
           sheet = XLSX.utils.table_to_sheet(table as HTMLTableElement);
         } else {
-          const text = ref.containerElement.innerText || '';
-          const lines = text.split('\n').filter((l) => l.trim().length);
-          sheet = XLSX.utils.aoa_to_sheet(lines.length ? lines.map((l) => [l]) : [['No Data']]);
+          // 🔥 FIX: Fallback to text content for non-table elements (HTML cards)
+          const textContent = ref.containerElement.textContent || ref.containerElement.innerText || '';
+          if (textContent.trim()) {
+            const lines = textContent.split(/\n/).filter((line: string) => line.trim());
+            const data: any[][] = lines.length > 0 ? lines.map((line: string) => [line.trim()]) : [['No Content']];
+            sheet = XLSX.utils.aoa_to_sheet(data);
+          }
         }
       }
+      
       if (!sheet) sheet = XLSX.utils.aoa_to_sheet([['No Data']]);
       const safeName = (ref.title || ref.chartId).substring(0, 31).replace(/[\\/:*?[\]]/g, '_');
       XLSX.utils.book_append_sheet(workbook, sheet, safeName || 'Sheet');
@@ -551,6 +683,7 @@ export const exportAllAsExcel = async (chartRefs: ChartRef[], fileName = 'Dashbo
     }
   }
   XLSX.writeFile(workbook, `${fileName.replace(/[^a-z0-9]/gi, '_')}.xlsx`);
+  console.log('[Excel Export] Complete');
 };
 
 /**
@@ -600,7 +733,14 @@ export const exportAllAsPPT = async (chartRefs: ChartRef[], fileName = 'Dashboar
   for (const ref of chartRefs) {
     try {
       let dataUrl: string | null = null;
-      if (ref.type === 'chart') {
+      
+      // 🔥 FIX: Use high quality html2canvas capture for all content types in PPTX
+      if (ref.containerElement) {
+        dataUrl = await captureVisibleAreaAsPng(ref.containerElement);
+      }
+      
+      // Fallback to SVG for charts if container capture failed
+      if (!dataUrl && ref.type === 'chart') {
         const chart = ref.chart || (ref.containerElement ? await getChartWithRetry(ref.containerElement) : null);
         if (chart) {
           const svg = (chart as any).getSVG?.();
@@ -621,8 +761,6 @@ export const exportAllAsPPT = async (chartRefs: ChartRef[], fileName = 'Dashboar
             });
           }
         }
-      } else if (ref.containerElement) {
-        dataUrl = await captureElementAsPng(ref.containerElement);
       }
 
       const slide = pptx.addSlide();

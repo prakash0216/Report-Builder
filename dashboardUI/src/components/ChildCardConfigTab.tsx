@@ -97,7 +97,7 @@ const layoutPresetOptions = [
   { key: 'custom', label: 'Custom', icon: '✎' },
 ];
 
-// Chart template presets (same as Viz Config) with icons
+// Chart template presets with icons
 const chartTemplatePresets = [
   {
     label: "Custom/Manual",
@@ -599,7 +599,7 @@ const CustomLayoutBuilder: React.FC<CustomLayoutBuilderProps> = ({
   );
 };
 
-// HTML template presets (same as Viz Config)
+// HTML template presets
 const htmlTemplatePresets = [
   { label: "Custom", value: "" },
   {
@@ -3253,7 +3253,7 @@ export default function ChildCardConfigTab() {
                         />
                       </Stack>
                     </Box>
-                    {/* 🔥 FULL-SIZE PREVIEW - occupies entire area like Viz Config */}
+                    {/* 🔥 FULL-SIZE PREVIEW - occupies entire area */}
                     <Box 
                       sx={{ 
                         flex: 1, 

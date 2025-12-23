@@ -2730,21 +2730,28 @@ app.delete('/api/tooltip-configs/:chartId', async (req, res) => {
 app.get('/api/child-card-configs', async (req, res) => {
   try {
     const configs = await dbClient.query('SELECT * FROM child_card_configs ORDER BY COALESCE(last_modified, created_at) DESC');
+    console.log('[child-card-configs] Raw DB rows:', JSON.stringify(configs, null, 2));
     const result = {};
     
     if (configs && Array.isArray(configs)) {
       configs.forEach(row => {
+        console.log(`[child-card-configs] Processing ${row.parent_card_id}: gap=${row.gap}, type=${typeof row.gap}`);
         result[row.parent_card_id] = {
           isContainer: row.is_container,
           containerLayout: row.container_layout || 'grid',
           childCards: row.child_cards_json ? JSON.parse(row.child_cards_json) : [],
           enableContainerScroll: row.enable_container_scroll === true,
-          cardMinHeight: row.card_min_height || 800,
-          gap: row.gap || 8,
+          // 🔥 FIX: Use explicit null/undefined check instead of || to handle 0 values
+          cardMinHeight: row.card_min_height != null ? row.card_min_height : 800,
+          gap: row.gap != null ? row.gap : 8,
+          // 🔥 Dynamic height settings
+          useDynamicHeight: row.use_dynamic_height === true,
+          heightDataSource: row.height_data_source || '',
         };
       });
     }
     
+    console.log('[child-card-configs] Returning result:', JSON.stringify(result, null, 2));
     res.json({ success: true, configs: result });
   } catch (err) {
     console.error('Error fetching child card configs:', err.message || err);
@@ -2760,6 +2767,13 @@ app.post('/api/child-card-configs', async (req, res) => {
   try {
     const { parentCardId, config } = req.body;
     
+    console.log(`[child-card-configs POST] Saving ${parentCardId}:`, JSON.stringify({
+      gap: config?.gap,
+      cardMinHeight: config?.cardMinHeight,
+      enableContainerScroll: config?.enableContainerScroll,
+      useDynamicHeight: config?.useDynamicHeight,
+    }));
+    
     if (!parentCardId || !config) {
       return res.status(400).json({ success: false, error: 'parentCardId and config are required' });
     }
@@ -2772,31 +2786,38 @@ app.post('/api/child-card-configs', async (req, res) => {
     
     if (existing.length > 0) {
       // Update existing
+      const escapedHeightDataSource = (config.heightDataSource || '').replace(/'/g, "''");
       await dbClient.run(`
         UPDATE child_card_configs SET
           is_container = ${config.isContainer ? 'true' : 'false'},
           container_layout = '${escapedContainerLayout}',
           child_cards_json = '${escapedChildCardsJson}',
           enable_container_scroll = ${config.enableContainerScroll === true ? 'true' : 'false'},
-          card_min_height = ${config.cardMinHeight || 800},
-          gap = ${config.gap || 8},
+          card_min_height = ${config.cardMinHeight != null ? config.cardMinHeight : 800},
+          gap = ${config.gap != null ? config.gap : 8},
+          use_dynamic_height = ${config.useDynamicHeight === true ? 'true' : 'false'},
+          height_data_source = '${escapedHeightDataSource}',
           last_modified = CURRENT_TIMESTAMP
         WHERE parent_card_id = '${escapedParentCardId}'
       `);
     } else {
       // Insert new
+      const escapedHeightDataSourceInsert = (config.heightDataSource || '').replace(/'/g, "''");
       await dbClient.run(`
         INSERT INTO child_card_configs (
           parent_card_id, is_container, container_layout, child_cards_json,
-          enable_container_scroll, card_min_height, gap, created_at, last_modified
+          enable_container_scroll, card_min_height, gap, use_dynamic_height, height_data_source,
+          created_at, last_modified
         ) VALUES (
           '${escapedParentCardId}',
           ${config.isContainer ? 'true' : 'false'},
           '${escapedContainerLayout}',
           '${escapedChildCardsJson}',
           ${config.enableContainerScroll === true ? 'true' : 'false'},
-          ${config.cardMinHeight || 800},
-          ${config.gap || 8},
+          ${config.cardMinHeight != null ? config.cardMinHeight : 800},
+          ${config.gap != null ? config.gap : 8},
+          ${config.useDynamicHeight === true ? 'true' : 'false'},
+          '${escapedHeightDataSourceInsert}',
           CURRENT_TIMESTAMP,
           CURRENT_TIMESTAMP
         )

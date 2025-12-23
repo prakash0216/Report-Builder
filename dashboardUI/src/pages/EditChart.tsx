@@ -32,7 +32,6 @@ import {
 } from '@mui/icons-material';
 import JsCompiler from "../components/JsCompiler";
 import AddDataSource from "../components/AddDataSource";
-import HighChartField from "../components/HighChartField";
 import Hooks from '../components/Hooks';
 import SnowflakeConnector from '../components/SnowflakeConnector';
 import Parameters from '../components/Parameters';
@@ -45,7 +44,7 @@ import ChildCardConfigTab from '../components/ChildCardConfigTab';
 import { ViewModule as ViewModuleIcon } from '@mui/icons-material';
 
 // Define the available tabs
-type TabKey = 'connectionManager' | 'parameters' | 'dataSource' | 'filters' | 'hooks' | 'highChart' | 'others' | 'tooltipConfig' | 'childCards';
+type TabKey = 'connectionManager' | 'parameters' | 'dataSource' | 'filters' | 'hooks' | 'others' | 'tooltipConfig' | 'childCards';
 
 // Tab configuration
 interface Tab {
@@ -189,10 +188,10 @@ const EditChart: React.FC = () => {
   // Tab configuration with colors
   const tabs: Tab[] = [
     {
-      key: 'highChart',
-      label: 'Viz Config',
-      icon: BarChartIcon,
-      component: HighChartField,
+      key: 'childCards',
+      label: 'MultiCard Viz Config',
+      icon: ViewModuleIcon,
+      component: ChildCardConfigTab,
       color: '#764ba2'
     },
     {
@@ -201,13 +200,6 @@ const EditChart: React.FC = () => {
       icon: TooltipIcon,
       component: TooltipConfigTab,
       color: '#f59e0b'
-    },
-    {
-      key: 'childCards',
-      label: 'Multi-Card',
-      icon: ViewModuleIcon,
-      component: ChildCardConfigTab,
-      color: '#10b981'
     },
     {
       key: 'hooks',

@@ -398,6 +398,7 @@ const ChildCard: React.FC<ChildCardProps> = ({
     return (
       <Box
         ref={containerRef}
+        data-child-id={config.id}
         sx={{
           width: '100%',
           height: '100%',
@@ -455,6 +456,7 @@ const ChildCard: React.FC<ChildCardProps> = ({
   return (
     <Box
       ref={containerRef}
+      data-child-id={config.id}
       sx={{
         position: 'absolute',
         left: dimensions.left,
