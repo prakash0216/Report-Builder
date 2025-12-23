@@ -1191,12 +1191,17 @@ export default function DropDragDashboard() {
     // Only show filter button for chart type cards and container cards
     const showFilterButton = contentType === 'chart' || isContainerCard;
 
+    // Check if this container has scroll enabled (scrollbar takes up ~15px)
+    const hasScroll = isContainerCard && containerConfig?.enableContainerScroll;
+    
     return (
       <>
         <div 
-          className="absolute top-7 flex flex-row flex-nowrap items-center gap-1.5" 
+          className={`absolute ${hasScroll ? 'top-7' : 'top-5'} flex flex-row flex-nowrap items-center gap-1.5`} 
           style={{ 
-            right: isEditMode ? '0.75rem' : '6rem',
+            // In edit mode: standard position
+            // In view mode: offset for Highcharts export button, plus extra for scrollbar if present
+            right: isEditMode ? '0.75rem' : hasScroll ? 'calc(5rem + 15px)' : '4rem',
             zIndex: 50, 
             pointerEvents: 'none' 
           }}
