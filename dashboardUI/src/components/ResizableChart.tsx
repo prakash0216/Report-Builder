@@ -7,7 +7,18 @@ const HighchartsExporting = require('highcharts/modules/exporting');
 const HighchartsExportData = require('highcharts/modules/export-data');
 const HighchartsOfflineExporting = require('highcharts/modules/offline-exporting');
 
+// 🔥 Import Stock module for scrollbar support
+const HighchartsStock = require('highcharts/modules/stock');
+
 // Initialize modules
+try {
+  if (typeof HighchartsStock === 'function') {
+    HighchartsStock(Highcharts);
+  }
+} catch (e) {
+  console.warn('Stock module initialization failed:', e);
+}
+
 try {
   if (typeof HighchartsExporting === 'function') {
     HighchartsExporting(Highcharts);

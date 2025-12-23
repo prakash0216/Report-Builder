@@ -1,0 +1,173 @@
+import { atom } from "recoil";
+import axios from "axios";
+import { 
+  shouldBlockSave, 
+  hasValueChanged, 
+  updateLastValue,
+} from "./initializationState";
+import { TableSettings } from "../types/tableTypes";
+
+const ATOM_KEY = 'childCardConfigState';
+
+// Layout configuration for a child card within the parent
+export interface ChildCardLayout {
+  id: string;           // Unique ID for the child card
+  x: number;            // X position (0-1 grid, 0=left, 1=right for 2-col)
+  y: number;            // Y position (0-1 grid, 0=top, 1=bottom for 2-row)
+  w: number;            // Width (1 = full, 0.5 = half)
+  h: number;            // Height (1 = full, 0.5 = half)
+}
+
+// Configuration for a single child card
+export interface ChildCardConfig {
+  id: string;
+  type: 'chart' | 'table' | 'html';
+  
+  // For chart type
+  template?: string;
+  
+  // For table type
+  tableDataSource?: string;
+  tableSettings?: TableSettings;
+  
+  // For HTML type
+  htmlContent?: string;
+  
+  // Display settings
+  title?: string;
+  showTitle?: boolean;
+  
+  // Layout within parent
+  layout: ChildCardLayout;
+}
+
+// Parent card container configuration
+export interface ParentCardConfig {
+  isContainer: boolean;           // Flag to identify this as a container card
+  containerLayout: 'grid' | 'vertical' | 'horizontal' | 'custom';
+  childCards: ChildCardConfig[];  // Array of child cards (max 4)
+  enableContainerScroll: boolean; // Enable container-level scrolling
+  cardMinHeight: number;          // Minimum height per card in pixels (used when scrolling enabled)
+  gap: number;                    // Gap between child cards in pixels
+  
+  // 🔥 Dynamic Height Settings - uses a pre-calculated height variable
+  useDynamicHeight?: boolean;     // Enable dynamic height from variable
+  heightDataSource?: string;      // Variable name containing the calculated height value (e.g., "chartHeight")
+}
+
+// Default child card layout presets
+export const LAYOUT_PRESETS = {
+  // Single card - full size
+  single: [
+    { id: 'child-1', x: 0, y: 0, w: 1, h: 1 }
+  ],
+  // Two cards - side by side
+  twoHorizontal: [
+    { id: 'child-1', x: 0, y: 0, w: 0.5, h: 1 },
+    { id: 'child-2', x: 0.5, y: 0, w: 0.5, h: 1 }
+  ],
+  // Two cards - stacked vertically
+  twoVertical: [
+    { id: 'child-1', x: 0, y: 0, w: 1, h: 0.5 },
+    { id: 'child-2', x: 0, y: 0.5, w: 1, h: 0.5 }
+  ],
+  // Three cards - 1 top, 2 bottom
+  threeTopOne: [
+    { id: 'child-1', x: 0, y: 0, w: 1, h: 0.5 },
+    { id: 'child-2', x: 0, y: 0.5, w: 0.5, h: 0.5 },
+    { id: 'child-3', x: 0.5, y: 0.5, w: 0.5, h: 0.5 }
+  ],
+  // Three cards - 2 top, 1 bottom
+  threeBottomOne: [
+    { id: 'child-1', x: 0, y: 0, w: 0.5, h: 0.5 },
+    { id: 'child-2', x: 0.5, y: 0, w: 0.5, h: 0.5 },
+    { id: 'child-3', x: 0, y: 0.5, w: 1, h: 0.5 }
+  ],
+  // Four cards - 2x2 grid
+  fourGrid: [
+    { id: 'child-1', x: 0, y: 0, w: 0.5, h: 0.5 },
+    { id: 'child-2', x: 0.5, y: 0, w: 0.5, h: 0.5 },
+    { id: 'child-3', x: 0, y: 0.5, w: 0.5, h: 0.5 },
+    { id: 'child-4', x: 0.5, y: 0.5, w: 0.5, h: 0.5 }
+  ],
+};
+
+// Default parent card configuration
+export const defaultParentCardConfig: ParentCardConfig = {
+  isContainer: false,
+  containerLayout: 'grid',
+  childCards: [],
+  enableContainerScroll: false,  // false = no scrolling (compress to fit), true = container scrolls
+  cardMinHeight: 800,            // Content height in pixels when scrolling (set higher than container)
+  gap: 8,
+  
+  // 🔥 Dynamic Height Defaults - user calculates height in their own logic
+  useDynamicHeight: false,
+  heightDataSource: '',          // Variable containing pre-calculated height value
+};
+
+// Default child card configuration
+// Note: title is left empty - the UI will display "Card N" based on the child number extracted from the ID
+export const createDefaultChildCard = (id: string, layout: ChildCardLayout): ChildCardConfig => ({
+  id,
+  type: 'chart',
+  template: '',
+  title: '', // Empty by default - display shows "Card N" based on ID (e.g., 17_child2 -> "Card 2")
+  showTitle: false,
+  layout,
+});
+
+// State to store parent card configurations
+// Key: parentCardId, Value: ParentCardConfig
+export const childCardConfigState = atom<{[parentCardId: string]: ParentCardConfig}>({
+  key: ATOM_KEY,
+  default: {},
+  effects: [
+    // 🔥 LOAD EFFECT: Load saved configs from backend on startup
+    ({ setSelf }) => {
+      const loadConfigs = async () => {
+        try {
+          const response = await axios.get('http://localhost:3002/api/child-card-configs');
+          if (response.data?.success && response.data.configs) {
+            // Backend returns { success: true, configs: { parentCardId: ParentCardConfig } }
+            setSelf(response.data.configs);
+            console.log(`✅ ChildCardConfig: Loaded ${Object.keys(response.data.configs).length} configs from backend`);
+          }
+        } catch (error) {
+          console.warn('⚠️ ChildCardConfig: Failed to load from backend, using defaults:', error);
+        }
+      };
+      loadConfigs();
+    },
+    // 🔥 SAVE EFFECT: Save configs to backend when they change
+    ({ onSet }) => {
+      let timeoutId: NodeJS.Timeout;
+      onSet((newValue, oldValue, isReset) => {
+        if (shouldBlockSave()) {
+          updateLastValue(ATOM_KEY, newValue);
+          return;
+        }
+        
+        if (!hasValueChanged(ATOM_KEY, newValue)) {
+          return;
+        }
+        
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(async () => {
+          try {
+            for (const [parentCardId, config] of Object.entries(newValue)) {
+              await axios.post('http://localhost:3002/api/child-card-configs', {
+                parentCardId,
+                config,
+              });
+            }
+            console.log(`✅ ChildCardConfig: Saved ${Object.keys(newValue).length} parent configs`);
+          } catch (error) {
+            console.error('❌ ChildCardConfig: Failed to save:', error);
+          }
+        }, 500);
+      });
+    },
+  ]
+});
+

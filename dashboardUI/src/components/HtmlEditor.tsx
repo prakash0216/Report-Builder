@@ -628,6 +628,8 @@ export function HtmlEditor({
             guides: { bracketPairs: true, indentation: true },
             padding: { top: 8, bottom: 8 },
             renderWhitespace: 'selection',
+            // Use normal overflow widgets so positioning follows the caret
+            fixedOverflowWidgets: false,
             scrollbar: {
               vertical: 'auto',
               horizontal: 'auto',

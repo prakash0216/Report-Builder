@@ -98,3 +98,17 @@ export const dataLoadedState = atom<boolean>({
   default: false,
 });
 
+// 🔥 Atom to trigger recalculation after filters are reset to defaults
+// Increment this when filters are reset to force useGlobalRecalculation to run
+export const filterResetTriggerState = atom<number>({
+  key: 'filterResetTriggerState',
+  default: 0,
+});
+
+// 🔥 Atom to track if this is the first visit to dashboard
+// On first visit, DataInitializer already set filters to defaults, so we don't need to reset again
+export const isFirstDashboardVisitState = atom<boolean>({
+  key: 'isFirstDashboardVisitState',
+  default: true,
+});
+

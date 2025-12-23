@@ -9,9 +9,13 @@ import { useRecoilState, useRecoilValue, useRecoilCallback, useSetRecoilState } 
 import { chartConfigState } from "../recoil/ChartConfig";
 import { layoutState } from "../recoil/LayoutState";
 import ResizableChart from "../components/ResizableChart";
+import ChartWithTooltip from "../components/ChartWithTooltip";
 import FilterPanel from "../components/FilterPanel";
 import CardFilterPanel from "../components/CardFilterPanel";
 import DashboardTable from "../components/DashboardTable";
+import { tooltipConfigState } from "../recoil/TooltipConfigState";
+import { childCardConfigState } from "../recoil/ChildCardState";
+import ParentCardContainer from "../components/ParentCardContainer";
 import { variableUpdateTriggerState, variableNamesState } from '../recoil/Variabletracker';
 import { variableAtomFamily } from '../recoil/VariableFamily';
 import { filterNamesState, filterConfigFamily } from '../recoil/FiltersFamily';
@@ -36,6 +40,7 @@ import {
   Paper,
 } from "@mui/material";
 import { dataLoadedState } from '../components/DataInitializer';
+import { filterResetTriggerState, isFirstDashboardVisitState } from '../recoil/initializationState';
 import Highcharts from 'highcharts';
 import {
   exportAllAsPDF,
@@ -146,6 +151,8 @@ export default function DropDragDashboard() {
   const idRef = useRef(1);
 
   const [chartConfigs, setChartConfigs] = useRecoilState<Record<string, ChartConfigData>>(chartConfigState);
+  const tooltipConfigs = useRecoilValue(tooltipConfigState);
+  const [childCardConfigs, setChildCardConfigs] = useRecoilState(childCardConfigState);
   const variableUpdateTrigger = useRecoilValue(variableUpdateTriggerState);
   const variableNames = useRecoilValue(variableNamesState);
   const filterNames = useRecoilValue(filterNamesState);
@@ -155,6 +162,8 @@ export default function DropDragDashboard() {
   const [showFilters, setShowFilters] = useState(false);
   const [openCardFilterId, setOpenCardFilterId] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useRecoilState<boolean>(IsEditModeState);
+  const setFilterResetTrigger = useSetRecoilState(filterResetTriggerState);
+  const [isFirstDashboardVisit, setIsFirstDashboardVisit] = useRecoilState(isFirstDashboardVisitState);
 
   // Track if we've already reset filters for this dashboard visit
   const hasResetForThisVisitRef = useRef<boolean>(false);
@@ -208,13 +217,29 @@ export default function DropDragDashboard() {
     // 1. We're on /dashboards
     // 2. Data is loaded
     // 3. We haven't reset for this visit yet
+    // 4. This is NOT the first visit (on first visit, DataInitializer already set defaults)
     if (isOnDashboards && dataLoaded && !hasResetForThisVisitRef.current) {
-      console.log('🔄 [Dashboard] Resetting filters to defaults (always reset on /dashboards)');
+      
+      // 🔥 FIX: On first visit, skip filter reset (DataInitializer already set defaults)
+      // Mount calculation will handle the initial calculation
+      if (isFirstDashboardVisit) {
+        console.log('🔄 [Dashboard] First visit - skipping filter reset (DataInitializer already set defaults)');
+        hasResetForThisVisitRef.current = true;
+        setIsFirstDashboardVisit(false); // Mark first visit as complete
+        return;
+      }
+      
+      console.log('🔄 [Dashboard] Returning to dashboard - resetting filters to defaults');
       
       // Reset filters and wait for it to complete
       resetFiltersToDefaults().then(() => {
         console.log('✅ [Dashboard] Filter reset completed');
         hasResetForThisVisitRef.current = true; // Mark as reset for this visit
+        
+        // 🔥 FIX: Trigger recalculation AFTER filters are reset
+        // This ensures the dashboard uses the new default filter values
+        console.log('🔄 [Dashboard] Triggering recalculation after filter reset...');
+        setFilterResetTrigger(prev => prev + 1);
       }).catch(err => {
         console.error('❌ [Dashboard] Filter reset failed:', err);
       });
@@ -225,7 +250,7 @@ export default function DropDragDashboard() {
       hasResetForThisVisitRef.current = false;
       console.log('📍 [Dashboard] Left /dashboards, reset flag cleared for next visit');
     }
-  }, [location.pathname, dataLoaded, resetFiltersToDefaults]);
+  }, [location.pathname, dataLoaded, resetFiltersToDefaults, setFilterResetTrigger, isFirstDashboardVisit, setIsFirstDashboardVisit]);
 
   const [availableVariables, setAvailableVariables] = useState<Record<string, any>>({});
   const [chartVisibility, setChartVisibility] = useState<Record<string, boolean>>({});
@@ -978,7 +1003,7 @@ export default function DropDragDashboard() {
   };
 
   const removeItem = useCallback(async (id: string) => {
-    // Delete from database first
+    // Delete chart from database first
     try {
       const response = await fetch(`http://localhost:3002/api/charts/${id}`, {
         method: 'DELETE',
@@ -994,6 +1019,17 @@ export default function DropDragDashboard() {
       console.error('Error deleting chart from database:', err);
       alert('Failed to delete chart. Please try again.');
       return;
+    }
+
+    // Also delete child card configs from database
+    try {
+      await fetch(`http://localhost:3002/api/child-card-configs/${id}`, {
+        method: 'DELETE',
+      });
+      console.log(`✅ Child card config for ${id} deleted from database`);
+    } catch (err) {
+      console.warn('Warning: Failed to delete child card config from database:', err);
+      // Don't return here, continue with frontend cleanup
     }
 
     // Update frontend state after successful database deletion
@@ -1017,10 +1053,17 @@ export default function DropDragDashboard() {
       return updated;
     });
 
+    // Also clean up child card configs
+    setChildCardConfigs(prev => {
+      const updated = { ...prev };
+      delete updated[id];
+      return updated;
+    });
+
     setTimeout(() => {
       isInternalUpdateRef.current = false;
     }, 100);
-  }, [setLayouts, setChartConfigs]);
+  }, [setLayouts, setChartConfigs, setChildCardConfigs]);
 
   const toggleEditMode = () => {
     setIsEditMode(prev => !prev);
@@ -1083,16 +1126,20 @@ export default function DropDragDashboard() {
     const configData = chartConfigs[item.i];
     const contentType = configData?.type || 'chart';
     const isFilterOpen = openCardFilterId === item.i;
+    
+    // Check if this card is a multi-card container
+    const containerConfig = childCardConfigs[item.i];
+    const isContainerCard = containerConfig?.isContainer && containerConfig.childCards?.length > 0;
 
-    // Only show filter button for chart type cards
-    const showFilterButton = contentType === 'chart';
+    // Only show filter button for chart type cards and container cards
+    const showFilterButton = contentType === 'chart' || isContainerCard;
 
     return (
       <>
         <div 
-          className="absolute top-5 flex flex-row flex-nowrap items-center gap-1.5" 
+          className="absolute top-7 flex flex-row flex-nowrap items-center gap-1.5" 
           style={{ 
-            right: isEditMode ? '0.75rem' : '4rem',
+            right: isEditMode ? '0.75rem' : '6rem',
             zIndex: 50, 
             pointerEvents: 'none' 
           }}
@@ -1200,8 +1247,19 @@ export default function DropDragDashboard() {
               <CardFilterPanel cardId={item.i} onClose={closeCardFilterPanel} />
             </div>
           )}
-          {/* Render Table when contentType is 'table' */}
-          {contentType === 'table' && configData?.tableDataSource ? (
+          {/* Render Multi-Card Container if configured */}
+          {isContainerCard ? (
+            <div style={{ flex: 1, minHeight: 0, maxHeight: '100%', overflow: 'hidden', position: 'relative' }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
+                <ParentCardContainer
+                  parentCardId={item.i}
+                  config={containerConfig}
+                  showExport={isEditMode ? false : true}
+                />
+              </div>
+            </div>
+          ) : contentType === 'table' && configData?.tableDataSource ? (
+            /* Render Table when contentType is 'table' */
             <div style={{ flex: 1, minHeight: 0, maxHeight: '100%', overflow: 'hidden', position: 'relative' }}>
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
                 <DashboardTable 
@@ -1211,7 +1269,12 @@ export default function DropDragDashboard() {
               </div>
             </div>
           ) : chartConfig ? (
-            <ResizableChart key={item.i} options={chartConfig} showExport={isEditMode ? false : true} />
+            // Use ChartWithTooltip if tooltip is enabled for this chart, otherwise use ResizableChart
+            tooltipConfigs[item.i]?.enabled ? (
+              <ChartWithTooltip key={item.i} chartId={item.i} options={chartConfig} showExport={isEditMode ? false : true} />
+            ) : (
+              <ResizableChart key={item.i} options={chartConfig} showExport={isEditMode ? false : true} />
+            )
           ) : (
             <div className="h-full flex items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 rounded-xl border-2 border-dashed border-slate-300">
               <div className="text-center px-6 py-8">

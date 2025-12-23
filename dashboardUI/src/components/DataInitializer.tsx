@@ -11,6 +11,8 @@ import { layoutState } from '../recoil/LayoutState';
 import { chartVisibilityVariableState } from '../recoil/DashboardVisibility';
 import { cardDimensionConditionsState } from '../recoil/Carddimensionstate ';
 import { filterPositionsState, activeFilterIdsState } from './FilterPanel';
+import { tooltipConfigState } from '../recoil/TooltipConfigState';
+import { childCardConfigState } from '../recoil/ChildCardState';
 import { 
   dataLoadedState,
   startDataInitialization, 
@@ -198,6 +200,34 @@ export const DataInitializer: React.FC = () => {
         }
       } catch (err) {
         console.warn('⚠️ [Data Initializer] Failed to load filter panel state:', err);
+      }
+
+      // 9. Load tooltip configs
+      console.log('📊 [Data Initializer] Loading tooltip configs...');
+      try {
+        const tooltipResponse = await axios.get(`${API_BASE_URL}/api/tooltip-configs`);
+        if (tooltipResponse.data.success && tooltipResponse.data.configs) {
+          const configs = tooltipResponse.data.configs;
+          set(tooltipConfigState, configs);
+          updateLastValue('tooltipConfigState', configs);
+          console.log(`✅ [Data Initializer] Loaded tooltip configs for ${Object.keys(configs).length} charts`);
+        }
+      } catch (err) {
+        console.warn('⚠️ [Data Initializer] Failed to load tooltip configs:', err);
+      }
+
+      // 10. Load child card configs (multi-card containers)
+      console.log('📊 [Data Initializer] Loading child card configs...');
+      try {
+        const childCardResponse = await axios.get(`${API_BASE_URL}/api/child-card-configs`);
+        if (childCardResponse.data.success && childCardResponse.data.configs) {
+          const configs = childCardResponse.data.configs;
+          set(childCardConfigState, configs);
+          updateLastValue('childCardConfigState', configs);
+          console.log(`✅ [Data Initializer] Loaded child card configs for ${Object.keys(configs).length} containers`);
+        }
+      } catch (err) {
+        console.warn('⚠️ [Data Initializer] Failed to load child card configs:', err);
       }
 
       // Signal that initialization is complete - allow saves

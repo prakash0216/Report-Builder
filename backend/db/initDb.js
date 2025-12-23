@@ -187,6 +187,7 @@ CREATE SEQUENCE IF NOT EXISTS chart_visibility_seq START 1;
 CREATE SEQUENCE IF NOT EXISTS card_dimension_conditions_seq START 1;
 CREATE SEQUENCE IF NOT EXISTS filter_panel_state_seq START 1;
 CREATE SEQUENCE IF NOT EXISTS card_filter_panel_state_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS tooltip_configs_seq START 1;
 `;
 
 const chartConfigsTable=`
@@ -283,6 +284,32 @@ CREATE TABLE IF NOT EXISTS card_filter_panel_state (
 );
 `;
 
+// Tooltip configs table - stores tooltip configuration for each chart
+const tooltipConfigsTable = `
+CREATE TABLE IF NOT EXISTS tooltip_configs (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('tooltip_configs_seq'),
+  chart_id TEXT UNIQUE NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT false,
+  type TEXT NOT NULL CHECK (type IN ('chart', 'table', 'html', 'card')),
+  card_id TEXT,
+  chart_template TEXT,
+  table_data_source TEXT,
+  table_settings_json TEXT,
+  html_template TEXT,
+  data_mapping_json TEXT,
+  width INTEGER DEFAULT 400,
+  height INTEGER DEFAULT 300,
+  offset_x INTEGER DEFAULT 10,
+  offset_y INTEGER DEFAULT 10,
+  show_on_hover BOOLEAN DEFAULT true,
+  hide_delay INTEGER DEFAULT 200,
+  show_header BOOLEAN DEFAULT true,
+  header_title TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_modified TIMESTAMP
+);
+`;
+
 async function initializeSequences() {
   try {
     // Run each sequence creation separately to handle any that might already exist
@@ -363,6 +390,52 @@ async function createCardFilterPanelStateTable() {
   }
 }
 
+async function createTooltipConfigsTable() {
+  try {
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS tooltip_configs_seq START 1;`);
+    await dbClient.run(tooltipConfigsTable);
+    console.log("✅ Table 'tooltip_configs' created successfully.");
+  } catch (err) {
+    console.error("❌ Error creating table 'tooltip_configs':", err.message);
+  }
+}
+
+// Child Card Configs table for multi-card containers
+const childCardConfigsTable = `
+CREATE TABLE IF NOT EXISTS child_card_configs (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('child_card_configs_seq'),
+  parent_card_id TEXT UNIQUE NOT NULL,
+  is_container BOOLEAN NOT NULL DEFAULT FALSE,
+  container_layout TEXT DEFAULT 'grid',
+  child_cards_json TEXT,
+  enable_container_scroll BOOLEAN DEFAULT FALSE,
+  card_min_height INTEGER DEFAULT 500,
+  gap INTEGER DEFAULT 8,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_modified TIMESTAMP
+);
+`
+
+async function createChildCardConfigsTable() {
+  try {
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS child_card_configs_seq START 1;`);
+    await dbClient.run(childCardConfigsTable);
+    console.log("✅ Table 'child_card_configs' created successfully.");
+    
+    // Migrate columns if they don't exist (for existing databases)
+    try {
+      await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS enable_container_scroll BOOLEAN DEFAULT FALSE`);
+      await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS card_min_height INTEGER DEFAULT 500`);
+      console.log("✅ Child card configs columns migrated successfully.");
+    } catch (migrationErr) {
+      // Columns might already exist, ignore
+      console.log("ℹ️ Child card configs columns already exist or migration skipped.");
+    }
+  } catch (err) {
+    console.error("❌ Error creating table 'child_card_configs':", err.message);
+  }
+}
+
 // Materialized views table definition
 const materializedViewsTable = `
 CREATE TABLE IF NOT EXISTS materialized_views (
@@ -424,6 +497,8 @@ const createTables = async () => {
   await createCardDimensionConditionsTable();
   await createFilterPanelStateTable();
   await createCardFilterPanelStateTable();
+  await createTooltipConfigsTable();
+  await createChildCardConfigsTable();
 }
 
 // createTables();
@@ -441,5 +516,7 @@ export {
   createCalculationsTable,
   createFiltersTable,
   createMaterializedViewsTable,
+  createTooltipConfigsTable,
+  createChildCardConfigsTable,
   migrateChartConfigsTable
 };

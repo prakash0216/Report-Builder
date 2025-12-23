@@ -519,6 +519,8 @@ export function JsonEditor({
             quickSuggestions: true,
             suggestOnTriggerCharacters: true,
             acceptSuggestionOnEnter: 'on',
+            // Use normal overflow widgets so positioning follows the caret
+            fixedOverflowWidgets: false,
             scrollbar: {
               vertical: 'auto',
               horizontal: 'auto',

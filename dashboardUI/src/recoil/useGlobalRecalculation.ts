@@ -15,6 +15,7 @@ import { parameterNamesState } from '../recoil/ParameterTracker';
 import { liveFilterFamily } from '../recoil/LiveFilterFamily';
 import { allFiltersSnapshotSelector } from '../recoil/AllFiltersSelector';
 import { dataLoadedState } from '../components/DataInitializer';
+import { filterResetTriggerState } from './initializationState';
 
 // Helper to safely parse stored strings into arrays/objects/values
 const safeParse = (value: string): any => {
@@ -42,6 +43,7 @@ export const useGlobalRecalculation = () => {
   const parameterNames = useRecoilValue(parameterNamesState);
   const filterNames = useRecoilValue(filterNamesState);
   const dataLoaded = useRecoilValue(dataLoadedState);
+  const filterResetTrigger = useRecoilValue(filterResetTriggerState);
   const setVariableNames = useSetRecoilState(variableNamesState);
   const setStoredLogics = useSetRecoilState(storedLogicsState);
   const setUpdateTrigger = useSetRecoilState(variableUpdateTriggerState);
@@ -436,13 +438,24 @@ export const useGlobalRecalculation = () => {
       return;
     }
 
-    console.log(`🎬 [Global Recalc] Mount effect triggered. Route: ${location.pathname}, Logics: ${storedLogics.length}`);
+    console.log(`🎬 [Global Recalc] Mount effect triggered. Route: ${location.pathname}, Logics: ${storedLogics.length}, hasCompletedCalc: ${hasCompletedDashboardCalcRef.current}`);
+    
+    // 🔥 FIX: If returning to dashboard (already completed a calculation before), skip mount calculation
+    // The filter reset trigger will handle recalculation with correct filter values
+    if (isDashboardRoute && hasCompletedDashboardCalcRef.current) {
+      console.log('⏭️ [Global Recalc] Returning to dashboard - skipping mount calculation (trigger will handle)');
+      // Mark as done so other effects can proceed, but don't run calculations
+      mountCalculationDoneRef.current = true;
+      initializedRef.current = false;
+      previousSnapshotRef.current = allFiltersSnapshot;
+      return;
+    }
     
     // Mark as running IMMEDIATELY (atomically) to prevent other effects from running
     mountSequenceRunningRef.current = true;
     mountCalculationDoneRef.current = true;
     
-    console.log('🎬 [Global Recalc] Running mount initialization sequence...');
+    console.log('🎬 [Global Recalc] Running mount initialization sequence (first time)...');
     
     const runMountSequence = async () => {
       try {
@@ -457,6 +470,9 @@ export const useGlobalRecalculation = () => {
         if (isDashboardRoute) {
           initializedRef.current = false;
           previousSnapshotRef.current = allFiltersSnapshot;
+          // 🔥 Mark that we've completed at least one calculation on dashboard
+          hasCompletedDashboardCalcRef.current = true;
+          console.log('✅ [Global Recalc] First calculation complete, future returns will use trigger');
         }
         mountSequenceRunningRef.current = false; // Clear running flag
       } catch (err) {
@@ -471,6 +487,9 @@ export const useGlobalRecalculation = () => {
   }, [storedLogics.length, dataLoaded, location.pathname, isDashboardRoute]); // Watch logics, dataLoaded, and route
 
   // Reset mount flag when leaving dashboard
+  // Track if we've EVER successfully calculated on dashboard (to distinguish first load from return)
+  const hasCompletedDashboardCalcRef = useRef(false);
+  
   useEffect(() => {
     if (!isDashboardRoute && mountCalculationDoneRef.current) {
       console.log('🔄 [Global Recalc] Left dashboard, resetting mount flag for next visit');
@@ -515,6 +534,68 @@ export const useGlobalRecalculation = () => {
       return () => clearTimeout(timer);
     }
   }, [allFiltersSnapshot, storedLogics.length, recalculateAllLogics, isDashboardRoute]);
+
+  // 🔥 FIX: Watch for filter reset trigger and force recalculation
+  // This ensures recalculation happens AFTER filters are reset to defaults
+  const filterResetTriggerRef = useRef<number | null>(null); // Use null to detect FIRST run
+  useEffect(() => {
+    // Skip the very first mount (when ref is null)
+    if (filterResetTriggerRef.current === null) {
+      console.log('🔄 [Global Recalc] Filter reset trigger: initializing to', filterResetTrigger);
+      filterResetTriggerRef.current = filterResetTrigger;
+      return;
+    }
+
+    // Only trigger if we're on dashboard route
+    if (!isDashboardRoute) {
+      filterResetTriggerRef.current = filterResetTrigger;
+      return;
+    }
+
+    // Check if trigger value actually changed
+    if (filterResetTrigger !== filterResetTriggerRef.current) {
+      console.log(`🔄 [Global Recalc] Filter reset trigger changed: ${filterResetTriggerRef.current} -> ${filterResetTrigger}, forcing recalculation...`);
+      filterResetTriggerRef.current = filterResetTrigger;
+      
+      // Update the previous snapshot to current state so filter watcher doesn't double-trigger
+      previousSnapshotRef.current = allFiltersSnapshot;
+      
+      // Force recalculation with retry logic if another calculation is in progress
+      const executeWithRetry = async (attempt = 1, maxAttempts = 5) => {
+        // Wait for any in-progress calculation to complete
+        const waitForCompletion = async () => {
+          let waited = 0;
+          const maxWait = 3000; // 3 seconds max wait
+          while (recalculationInProgressRef.current && waited < maxWait) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            waited += 100;
+          }
+          return !recalculationInProgressRef.current;
+        };
+
+        console.log(`🔄 [Global Recalc] Attempt ${attempt}: waiting for any in-progress calculation...`);
+        const ready = await waitForCompletion();
+        
+        if (ready) {
+          console.log('🔄 [Global Recalc] Executing triggered recalculation...');
+          await recalculateAllLogics();
+        } else if (attempt < maxAttempts) {
+          console.log(`⏳ [Global Recalc] Calculation still in progress, retrying... (attempt ${attempt + 1})`);
+          await new Promise(resolve => setTimeout(resolve, 200));
+          await executeWithRetry(attempt + 1, maxAttempts);
+        } else {
+          console.warn('⚠️ [Global Recalc] Max retry attempts reached, giving up');
+        }
+      };
+
+      // Start after a short delay to ensure filter state has propagated
+      const timer = setTimeout(() => {
+        executeWithRetry();
+      }, 200);
+
+      return () => clearTimeout(timer);
+    }
+  }, [filterResetTrigger, isDashboardRoute, allFiltersSnapshot, recalculateAllLogics]);
 
   // 🔥 PERFORMANCE: Get cached variables without re-reading atoms
   const getLastCalculatedVariables = useCallback(() => {

@@ -2517,7 +2517,7 @@ app.delete('/api/chart-configs/:chartId', async (req, res) => {
 /**
  * Delete a chart completely from all tables
  * DELETE /api/charts/:chartId
- * This deletes the chart from chart_configs, layouts, chart_visibility, and card_dimension_conditions
+ * This deletes the chart from chart_configs, layouts, chart_visibility, card_dimension_conditions, and tooltip_configs
  */
 app.delete('/api/charts/:chartId', async (req, res) => {
   try {
@@ -2529,11 +2529,299 @@ app.delete('/api/charts/:chartId', async (req, res) => {
     await dbClient.run(`DELETE FROM layouts WHERE chart_id='${escapedChartId}'`);
     await dbClient.run(`DELETE FROM chart_visibility WHERE chart_id='${escapedChartId}'`);
     await dbClient.run(`DELETE FROM card_dimension_conditions WHERE chart_id='${escapedChartId}'`);
+    await dbClient.run(`DELETE FROM tooltip_configs WHERE chart_id='${escapedChartId}'`);
     
     console.log(`✅ Chart ${chartId} deleted from all tables`);
     res.json({ success: true, message: 'Chart deleted successfully from all tables' });
   } catch (err) {
     console.error('Error deleting chart:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// TOOLTIP CONFIG ENDPOINTS
+// ============================================
+
+/**
+ * Get all tooltip configs
+ * GET /api/tooltip-configs
+ */
+app.get('/api/tooltip-configs', async (req, res) => {
+  try {
+    const configs = await dbClient.query('SELECT * FROM tooltip_configs ORDER BY COALESCE(last_modified, created_at) DESC');
+    const result = {};
+    if (configs && Array.isArray(configs)) {
+      configs.forEach(row => {
+        result[row.chart_id] = {
+          enabled: row.enabled,
+          type: row.type,
+          cardId: row.card_id || '',
+          chartTemplate: row.chart_template || '',
+          tableDataSource: row.table_data_source || '',
+          tableSettings: row.table_settings_json ? JSON.parse(row.table_settings_json) : null,
+          htmlTemplate: row.html_template || '',
+          dataMapping: row.data_mapping_json ? JSON.parse(row.data_mapping_json) : [],
+          width: row.width || 400,
+          height: row.height || 300,
+          offsetX: row.offset_x || 10,
+          offsetY: row.offset_y || 10,
+          showOnHover: row.show_on_hover !== false,
+          hideDelay: row.hide_delay || 200,
+          showHeader: row.show_header !== false,
+          headerTitle: row.header_title || 'Details',
+        };
+      });
+    }
+    res.json({ success: true, configs: result });
+  } catch (err) {
+    console.error('Error fetching tooltip configs:', err.message || err);
+    res.status(500).json({ success: false, error: err.message || 'Unknown error' });
+  }
+});
+
+/**
+ * Get tooltip config for a specific chart
+ * GET /api/tooltip-configs/:chartId
+ */
+app.get('/api/tooltip-configs/:chartId', async (req, res) => {
+  try {
+    const { chartId } = req.params;
+    const configs = await dbClient.query(`SELECT * FROM tooltip_configs WHERE chart_id='${chartId.replace(/'/g, "''")}'`);
+    if (configs.length === 0) {
+      return res.json({ success: true, config: null });
+    }
+    const row = configs[0];
+    res.json({
+      success: true,
+      config: {
+        enabled: row.enabled,
+        type: row.type,
+        cardId: row.card_id || '',
+        chartTemplate: row.chart_template || '',
+        tableDataSource: row.table_data_source || '',
+        tableSettings: row.table_settings_json ? JSON.parse(row.table_settings_json) : null,
+        htmlTemplate: row.html_template || '',
+        dataMapping: row.data_mapping_json ? JSON.parse(row.data_mapping_json) : [],
+        width: row.width || 400,
+        height: row.height || 300,
+        offsetX: row.offset_x || 10,
+        offsetY: row.offset_y || 10,
+        showOnHover: row.show_on_hover !== false,
+        hideDelay: row.hide_delay || 200,
+        showHeader: row.show_header !== false,
+        headerTitle: row.header_title || 'Details',
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching tooltip config:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Save tooltip config
+ * POST /api/tooltip-configs
+ */
+app.post('/api/tooltip-configs', async (req, res) => {
+  try {
+    const { chartId, config } = req.body;
+    if (!chartId || !config) {
+      return res.status(400).json({ success: false, error: 'chartId and config are required' });
+    }
+
+    const escapedChartId = chartId.replace(/'/g, "''");
+    const escapedCardId = (config.cardId || '').replace(/'/g, "''");
+    const escapedChartTemplate = (config.chartTemplate || '').replace(/'/g, "''");
+    const escapedTableDataSource = (config.tableDataSource || '').replace(/'/g, "''");
+    const escapedTableSettingsJson = config.tableSettings ? JSON.stringify(config.tableSettings).replace(/'/g, "''") : '';
+    const escapedHtmlTemplate = (config.htmlTemplate || '').replace(/'/g, "''");
+    const escapedDataMappingJson = config.dataMapping ? JSON.stringify(config.dataMapping).replace(/'/g, "''") : '[]';
+    const escapedHeaderTitle = (config.headerTitle || 'Details').replace(/'/g, "''");
+
+    const existing = await dbClient.query(`SELECT id FROM tooltip_configs WHERE chart_id='${escapedChartId}'`);
+    
+    if (existing.length > 0) {
+      // Update existing
+      await dbClient.run(`
+        UPDATE tooltip_configs SET
+          enabled = ${config.enabled ? 'true' : 'false'},
+          type = '${config.type || 'html'}',
+          card_id = '${escapedCardId}',
+          chart_template = '${escapedChartTemplate}',
+          table_data_source = '${escapedTableDataSource}',
+          table_settings_json = '${escapedTableSettingsJson}',
+          html_template = '${escapedHtmlTemplate}',
+          data_mapping_json = '${escapedDataMappingJson}',
+          width = ${config.width || 400},
+          height = ${config.height || 300},
+          offset_x = ${config.offsetX || 10},
+          offset_y = ${config.offsetY || 10},
+          show_on_hover = ${config.showOnHover !== false ? 'true' : 'false'},
+          hide_delay = ${config.hideDelay || 200},
+          show_header = ${config.showHeader !== false ? 'true' : 'false'},
+          header_title = '${escapedHeaderTitle}',
+          last_modified = CURRENT_TIMESTAMP
+        WHERE chart_id = '${escapedChartId}'
+      `);
+    } else {
+      // Insert new
+      await dbClient.run(`
+        INSERT INTO tooltip_configs (
+          chart_id, enabled, type, card_id, chart_template, table_data_source,
+          table_settings_json, html_template, data_mapping_json, width, height,
+          offset_x, offset_y, show_on_hover, hide_delay, show_header, header_title,
+          created_at, last_modified
+        ) VALUES (
+          '${escapedChartId}',
+          ${config.enabled ? 'true' : 'false'},
+          '${config.type || 'html'}',
+          '${escapedCardId}',
+          '${escapedChartTemplate}',
+          '${escapedTableDataSource}',
+          '${escapedTableSettingsJson}',
+          '${escapedHtmlTemplate}',
+          '${escapedDataMappingJson}',
+          ${config.width || 400},
+          ${config.height || 300},
+          ${config.offsetX || 10},
+          ${config.offsetY || 10},
+          ${config.showOnHover !== false ? 'true' : 'false'},
+          ${config.hideDelay || 200},
+          ${config.showHeader !== false ? 'true' : 'false'},
+          '${escapedHeaderTitle}',
+          CURRENT_TIMESTAMP,
+          CURRENT_TIMESTAMP
+        )
+      `);
+    }
+    
+    console.log(`✅ Tooltip config saved for chart: ${chartId}`);
+    res.json({ success: true, message: 'Tooltip config saved successfully' });
+  } catch (err) {
+    console.error('Error saving tooltip config:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Delete tooltip config
+ * DELETE /api/tooltip-configs/:chartId
+ */
+app.delete('/api/tooltip-configs/:chartId', async (req, res) => {
+  try {
+    const { chartId } = req.params;
+    await dbClient.run(`DELETE FROM tooltip_configs WHERE chart_id='${chartId.replace(/'/g, "''")}'`);
+    res.json({ success: true, message: 'Tooltip config deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting tooltip config:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// CHILD CARD CONFIG ENDPOINTS (Multi-Card Containers)
+// ============================================
+
+/**
+ * Get all child card configs
+ * GET /api/child-card-configs
+ */
+app.get('/api/child-card-configs', async (req, res) => {
+  try {
+    const configs = await dbClient.query('SELECT * FROM child_card_configs ORDER BY COALESCE(last_modified, created_at) DESC');
+    const result = {};
+    
+    if (configs && Array.isArray(configs)) {
+      configs.forEach(row => {
+        result[row.parent_card_id] = {
+          isContainer: row.is_container,
+          containerLayout: row.container_layout || 'grid',
+          childCards: row.child_cards_json ? JSON.parse(row.child_cards_json) : [],
+          enableContainerScroll: row.enable_container_scroll === true,
+          cardMinHeight: row.card_min_height || 800,
+          gap: row.gap || 8,
+        };
+      });
+    }
+    
+    res.json({ success: true, configs: result });
+  } catch (err) {
+    console.error('Error fetching child card configs:', err.message || err);
+    res.status(500).json({ success: false, error: err.message || 'Unknown error' });
+  }
+});
+
+/**
+ * Save or update child card config
+ * POST /api/child-card-configs
+ */
+app.post('/api/child-card-configs', async (req, res) => {
+  try {
+    const { parentCardId, config } = req.body;
+    
+    if (!parentCardId || !config) {
+      return res.status(400).json({ success: false, error: 'parentCardId and config are required' });
+    }
+
+    const escapedParentCardId = parentCardId.replace(/'/g, "''");
+    const escapedContainerLayout = (config.containerLayout || 'grid').replace(/'/g, "''");
+    const escapedChildCardsJson = config.childCards ? JSON.stringify(config.childCards).replace(/'/g, "''") : '[]';
+
+    const existing = await dbClient.query(`SELECT id FROM child_card_configs WHERE parent_card_id='${escapedParentCardId}'`);
+    
+    if (existing.length > 0) {
+      // Update existing
+      await dbClient.run(`
+        UPDATE child_card_configs SET
+          is_container = ${config.isContainer ? 'true' : 'false'},
+          container_layout = '${escapedContainerLayout}',
+          child_cards_json = '${escapedChildCardsJson}',
+          enable_container_scroll = ${config.enableContainerScroll === true ? 'true' : 'false'},
+          card_min_height = ${config.cardMinHeight || 800},
+          gap = ${config.gap || 8},
+          last_modified = CURRENT_TIMESTAMP
+        WHERE parent_card_id = '${escapedParentCardId}'
+      `);
+    } else {
+      // Insert new
+      await dbClient.run(`
+        INSERT INTO child_card_configs (
+          parent_card_id, is_container, container_layout, child_cards_json,
+          enable_container_scroll, card_min_height, gap, created_at, last_modified
+        ) VALUES (
+          '${escapedParentCardId}',
+          ${config.isContainer ? 'true' : 'false'},
+          '${escapedContainerLayout}',
+          '${escapedChildCardsJson}',
+          ${config.enableContainerScroll === true ? 'true' : 'false'},
+          ${config.cardMinHeight || 800},
+          ${config.gap || 8},
+          CURRENT_TIMESTAMP,
+          CURRENT_TIMESTAMP
+        )
+      `);
+    }
+    
+    console.log(`✅ Child card config saved for parent: ${parentCardId}`);
+    res.json({ success: true, message: 'Child card config saved successfully' });
+  } catch (err) {
+    console.error('Error saving child card config:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Delete child card config
+ * DELETE /api/child-card-configs/:parentCardId
+ */
+app.delete('/api/child-card-configs/:parentCardId', async (req, res) => {
+  try {
+    const { parentCardId } = req.params;
+    await dbClient.run(`DELETE FROM child_card_configs WHERE parent_card_id='${parentCardId.replace(/'/g, "''")}'`);
+    res.json({ success: true, message: 'Child card config deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting child card config:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -3311,7 +3599,9 @@ app.get('/api/data-sources/:dsName/schedule', async (req, res) => {
       createParametersTable,
       createCalculationsTable,
       createFiltersTable,
-      migrateChartConfigsTable
+      createTooltipConfigsTable,
+      migrateChartConfigsTable,
+      createChildCardConfigsTable
     } = await import('./db/initDb.js');
     
     // Create essential tables first (parameters, calculations, filters)
@@ -3329,6 +3619,8 @@ app.get('/api/data-sources/:dsName/schedule', async (req, res) => {
     await createCardDimensionConditionsTable();
     await createFilterPanelStateTable();
     await createCardFilterPanelStateTable();
+    await createTooltipConfigsTable();
+    await createChildCardConfigsTable();
     
     // Import materialized views table creation
     const { createMaterializedViewsTable } = await import('./db/initDb.js');

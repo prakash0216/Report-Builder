@@ -28,6 +28,7 @@ import {
   CloudQueue,
   Storage,
   Visibility,
+  Info as TooltipIcon,
 } from '@mui/icons-material';
 import JsCompiler from "../components/JsCompiler";
 import AddDataSource from "../components/AddDataSource";
@@ -39,9 +40,12 @@ import Filters from '../components/Filters';
 import {IsVisible} from "../components/IsVisible";
 import { CardArrangement } from '../components/CardArrangement';
 import Others from '../components/Others';
+import TooltipConfigTab from '../components/TooltipConfigTab';
+import ChildCardConfigTab from '../components/ChildCardConfigTab';
+import { ViewModule as ViewModuleIcon } from '@mui/icons-material';
 
 // Define the available tabs
-type TabKey = 'connectionManager' | 'parameters' | 'dataSource' | 'filters' | 'hooks' | 'highChart' | 'others';
+type TabKey = 'connectionManager' | 'parameters' | 'dataSource' | 'filters' | 'hooks' | 'highChart' | 'others' | 'tooltipConfig' | 'childCards';
 
 // Tab configuration
 interface Tab {
@@ -190,6 +194,20 @@ const EditChart: React.FC = () => {
       icon: BarChartIcon,
       component: HighChartField,
       color: '#764ba2'
+    },
+    {
+      key: 'tooltipConfig',
+      label: 'Tooltip Config',
+      icon: TooltipIcon,
+      component: TooltipConfigTab,
+      color: '#f59e0b'
+    },
+    {
+      key: 'childCards',
+      label: 'Multi-Card',
+      icon: ViewModuleIcon,
+      component: ChildCardConfigTab,
+      color: '#10b981'
     },
     {
       key: 'hooks',
