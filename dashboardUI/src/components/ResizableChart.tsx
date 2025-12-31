@@ -71,6 +71,33 @@ const ResizableChartInner: React.FC<ResizableChartProps> = ({ options, showExpor
       return options;
     }
 
+    // 🔥 FIX: Validate and fix series data to prevent "t.forEach is not a function" error
+    let validatedOptions = { ...options };
+    if (validatedOptions.series && Array.isArray(validatedOptions.series)) {
+      validatedOptions.series = validatedOptions.series.map((series: any) => {
+        if (series && series.data !== undefined && !Array.isArray(series.data)) {
+          console.warn('⚠️ [ResizableChart] Series data is not an array, converting:', typeof series.data, series.data);
+          // If it's null/undefined, use empty array; if it's an object, try to convert
+          if (series.data === null || series.data === undefined) {
+            return { ...series, data: [] };
+          }
+          // If it's a string that looks like JSON array, try to parse
+          if (typeof series.data === 'string') {
+            try {
+              const parsed = JSON.parse(series.data);
+              if (Array.isArray(parsed)) {
+                return { ...series, data: parsed };
+              }
+            } catch {
+              // Not valid JSON, use empty array
+            }
+          }
+          return { ...series, data: [] };
+        }
+        return series;
+      });
+    }
+
     // Otherwise, enhance for Highcharts
     const userExporting = options.exporting || {};
     const userContext = userExporting.buttons?.contextButton || {};
@@ -121,9 +148,9 @@ const ResizableChartInner: React.FC<ResizableChartProps> = ({ options, showExpor
       : { enabled: false };
 
     return {
-      ...options,
+      ...validatedOptions,
       chart: {
-        ...options.chart,
+        ...validatedOptions.chart,
         animation: false,
         reflow: true,
         backgroundColor: '#FFFFFF',
@@ -133,7 +160,7 @@ const ResizableChartInner: React.FC<ResizableChartProps> = ({ options, showExpor
       },
       credits: {
         enabled: false,
-        ...options.credits,
+        ...validatedOptions.credits,
       },
       exporting: mergedExporting,
       responsive: {

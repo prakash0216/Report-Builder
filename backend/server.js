@@ -2848,6 +2848,164 @@ app.delete('/api/child-card-configs/:parentCardId', async (req, res) => {
 });
 
 // ============================================
+// CHILD CARD TOOLTIP CONFIG ENDPOINTS
+// ============================================
+
+/**
+ * Get all child card tooltip configs
+ * GET /api/child-card-tooltip-configs
+ */
+app.get('/api/child-card-tooltip-configs', async (req, res) => {
+  try {
+    const configs = await dbClient.query('SELECT * FROM child_card_tooltip_configs');
+    const result = {};
+    
+    if (configs && Array.isArray(configs)) {
+      configs.forEach(row => {
+        result[row.child_card_key] = {
+          enabled: row.enabled === true,
+          type: row.tooltip_type || 'html',
+          dataExtractions: row.data_extractions_json ? JSON.parse(row.data_extractions_json) : [],
+          calculationBindings: row.calculation_bindings_json ? JSON.parse(row.calculation_bindings_json) : [],
+          chartTemplate: row.chart_template || '',
+          tableDataSource: row.table_data_source || '',
+          tableSettings: row.table_settings_json ? JSON.parse(row.table_settings_json) : undefined,
+          htmlTemplate: row.html_template || '',
+          width: row.width || 400,
+          height: row.height || 300,
+          offsetX: row.offset_x || 15,
+          offsetY: row.offset_y || 15,
+          hideDelay: row.hide_delay || 200,
+          showHeader: row.show_header !== false,
+          headerTitle: row.header_title || 'Details',
+          triggerOn: row.trigger_on || 'hover',
+        };
+      });
+    }
+    
+    res.json({ success: true, configs: result });
+  } catch (err) {
+    console.error('Error fetching child card tooltip configs:', err.message || err);
+    res.status(500).json({ success: false, error: err.message || 'Unknown error' });
+  }
+});
+
+/**
+ * Save child card tooltip configs (bulk save)
+ * POST /api/child-card-tooltip-configs
+ */
+app.post('/api/child-card-tooltip-configs', async (req, res) => {
+  try {
+    const { configs } = req.body;
+    
+    if (!configs || typeof configs !== 'object') {
+      return res.status(400).json({ success: false, error: 'configs object is required' });
+    }
+
+    // Process each config
+    for (const [childCardKey, config] of Object.entries(configs)) {
+      // Check if exists
+      const existing = await dbClient.query(`SELECT child_card_key FROM child_card_tooltip_configs WHERE child_card_key='${childCardKey.replace(/'/g, "''")}'`);
+      const now = new Date().toISOString();
+      
+      const data = {
+        enabled: config.enabled ? 1 : 0,
+        tooltipType: config.type || 'html',
+        dataExtractionsJson: JSON.stringify(config.dataExtractions || []),
+        calculationBindingsJson: JSON.stringify(config.calculationBindings || []),
+        chartTemplate: config.chartTemplate || '',
+        tableDataSource: config.tableDataSource || '',
+        tableSettingsJson: config.tableSettings ? JSON.stringify(config.tableSettings) : null,
+        htmlTemplate: config.htmlTemplate || '',
+        width: config.width || 400,
+        height: config.height || 300,
+        offsetX: config.offsetX || 15,
+        offsetY: config.offsetY || 15,
+        hideDelay: config.hideDelay || 200,
+        showHeader: config.showHeader !== false ? 1 : 0,
+        headerTitle: config.headerTitle || 'Details',
+        triggerOn: config.triggerOn || 'hover',
+      };
+
+      if (existing && existing.length > 0) {
+        // Update
+        await dbClient.run(`
+          UPDATE child_card_tooltip_configs SET
+            enabled = ${data.enabled},
+            tooltip_type = '${data.tooltipType.replace(/'/g, "''")}',
+            data_extractions_json = '${data.dataExtractionsJson.replace(/'/g, "''")}',
+            calculation_bindings_json = '${data.calculationBindingsJson.replace(/'/g, "''")}',
+            chart_template = '${data.chartTemplate.replace(/'/g, "''")}',
+            table_data_source = '${data.tableDataSource.replace(/'/g, "''")}',
+            table_settings_json = ${data.tableSettingsJson ? `'${data.tableSettingsJson.replace(/'/g, "''")}'` : 'NULL'},
+            html_template = '${data.htmlTemplate.replace(/'/g, "''")}',
+            width = ${data.width},
+            height = ${data.height},
+            offset_x = ${data.offsetX},
+            offset_y = ${data.offsetY},
+            hide_delay = ${data.hideDelay},
+            show_header = ${data.showHeader},
+            header_title = '${data.headerTitle.replace(/'/g, "''")}',
+            trigger_on = '${data.triggerOn.replace(/'/g, "''")}',
+            last_modified = '${now}'
+          WHERE child_card_key = '${childCardKey.replace(/'/g, "''")}'
+        `);
+      } else {
+        // Insert
+        await dbClient.run(`
+          INSERT INTO child_card_tooltip_configs (
+            child_card_key, enabled, tooltip_type, data_extractions_json, calculation_bindings_json,
+            chart_template, table_data_source, table_settings_json, html_template,
+            width, height, offset_x, offset_y, hide_delay, show_header, header_title, trigger_on,
+            created_at, last_modified
+          ) VALUES (
+            '${childCardKey.replace(/'/g, "''")}',
+            ${data.enabled},
+            '${data.tooltipType.replace(/'/g, "''")}',
+            '${data.dataExtractionsJson.replace(/'/g, "''")}',
+            '${data.calculationBindingsJson.replace(/'/g, "''")}',
+            '${data.chartTemplate.replace(/'/g, "''")}',
+            '${data.tableDataSource.replace(/'/g, "''")}',
+            ${data.tableSettingsJson ? `'${data.tableSettingsJson.replace(/'/g, "''")}'` : 'NULL'},
+            '${data.htmlTemplate.replace(/'/g, "''")}',
+            ${data.width},
+            ${data.height},
+            ${data.offsetX},
+            ${data.offsetY},
+            ${data.hideDelay},
+            ${data.showHeader},
+            '${data.headerTitle.replace(/'/g, "''")}',
+            '${data.triggerOn.replace(/'/g, "''")}',
+            '${now}',
+            '${now}'
+          )
+        `);
+      }
+    }
+
+    res.json({ success: true, message: 'Child card tooltip configs saved successfully' });
+  } catch (err) {
+    console.error('Error saving child card tooltip configs:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Delete a child card tooltip config
+ * DELETE /api/child-card-tooltip-configs/:childCardKey
+ */
+app.delete('/api/child-card-tooltip-configs/:childCardKey', async (req, res) => {
+  try {
+    const { childCardKey } = req.params;
+    await dbClient.run(`DELETE FROM child_card_tooltip_configs WHERE child_card_key='${childCardKey.replace(/'/g, "''")}'`);
+    res.json({ success: true, message: 'Child card tooltip config deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting child card tooltip config:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
 // LAYOUT ENDPOINTS
 // ============================================
 
@@ -3622,7 +3780,8 @@ app.get('/api/data-sources/:dsName/schedule', async (req, res) => {
       createFiltersTable,
       createTooltipConfigsTable,
       migrateChartConfigsTable,
-      createChildCardConfigsTable
+      createChildCardConfigsTable,
+      createChildCardTooltipConfigsTable
     } = await import('./db/initDb.js');
     
     // Create essential tables first (parameters, calculations, filters)
@@ -3642,6 +3801,7 @@ app.get('/api/data-sources/:dsName/schedule', async (req, res) => {
     await createCardFilterPanelStateTable();
     await createTooltipConfigsTable();
     await createChildCardConfigsTable();
+    await createChildCardTooltipConfigsTable();
     
     // Import materialized views table creation
     const { createMaterializedViewsTable } = await import('./db/initDb.js');

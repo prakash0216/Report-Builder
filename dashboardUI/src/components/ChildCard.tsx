@@ -1,19 +1,22 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { Box, Typography } from '@mui/material';
 import { useRecoilValue, useRecoilCallback } from 'recoil';
 import { ChildCardConfig } from '../recoil/ChildCardState';
 import { variableAtomFamily } from '../recoil/VariableFamily';
 import { variableNamesState, variableUpdateTriggerState } from '../recoil/Variabletracker';
+import { childCardTooltipConfigState } from '../recoil/ChildCardTooltipState';
 import ResizableChart from './ResizableChart';
 import DashboardTable from './DashboardTable';
+import ChildCardTooltip, { ChildCardTooltipRef } from './ChildCardTooltip';
 
 interface ChildCardProps {
   config: ChildCardConfig;
+  parentCardId?: string;         // Parent card ID for tooltip key construction
   parentWidth?: number;
   parentHeight?: number;
   gap?: number;
   showExport?: boolean;
-  isFullSizePreview?: boolean; // 🔥 When true, render at 100% size without layout positioning
+  isFullSizePreview?: boolean;   // 🔥 When true, render at 100% size without layout positioning
 }
 
 // 🔥 FIXED: Match the replaceVariableReferences from DragDropDashboard.tsx exactly
@@ -132,6 +135,7 @@ function useAllVariables(): Record<string, any> {
 
 const ChildCard: React.FC<ChildCardProps> = ({
   config,
+  parentCardId,
   parentWidth = 400,
   parentHeight = 300,
   gap = 8,
@@ -139,9 +143,16 @@ const ChildCard: React.FC<ChildCardProps> = ({
   isFullSizePreview = false, // 🔥 NEW: Full-size preview mode
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<ChildCardTooltipRef>(null);
   
   // Get all variables for template replacement
   const variables = useAllVariables();
+  
+  // 🔥 Tooltip configuration
+  const childCardKey = parentCardId ? `${parentCardId}_${config.id}` : '';
+  const tooltipConfigs = useRecoilValue(childCardTooltipConfigState);
+  const tooltipConfig = childCardKey ? tooltipConfigs[childCardKey] : undefined;
+  const isTooltipEnabled = tooltipConfig?.enabled ?? false;
   
   // Calculate dimensions based on layout (only used when not in full-size preview mode)
   const dimensions = useMemo(() => {
@@ -258,6 +269,99 @@ const ChildCard: React.FC<ChildCardProps> = ({
     }
   }, [config.type, config.template, variables]);
 
+  // 🔥 Tooltip handlers
+  const handleShowTooltip = useCallback((event: MouseEvent | { clientX: number; clientY: number }, point: any) => {
+    if (!isTooltipEnabled || !tooltipRef.current) return;
+    
+    // 🔥 DEBUG: Log what Highcharts gives us
+    console.log('🔍 [Tooltip] Raw point from Highcharts:', point);
+    console.log('🔍 [Tooltip] point.category:', point?.category);
+    console.log('🔍 [Tooltip] point.name:', point?.name);
+    console.log('🔍 [Tooltip] point.options:', point?.options);
+    
+    // 🔥 FIX: Get category from multiple possible sources
+    // In bar charts with xAxis categories, the category might be in different places
+    const category = point?.category 
+      || point?.name 
+      || point?.options?.name
+      || (point?.series?.xAxis?.categories ? point.series.xAxis.categories[point.index] : undefined);
+    
+    const pointData = {
+      x: point?.x,
+      y: point?.y,
+      name: point?.name,
+      category: category,  // 🔥 Use our resolved category
+      color: point?.color,
+      percentage: point?.percentage,
+      total: point?.total,
+      index: point?.index,
+      series: {
+        name: point?.series?.name,
+        index: point?.series?.index,
+        type: point?.series?.type,
+      },
+      options: point?.options,
+    };
+    
+    tooltipRef.current.show(
+      { x: event.clientX, y: event.clientY },
+      pointData
+    );
+  }, [isTooltipEnabled]);
+
+  const handleHideTooltip = useCallback(() => {
+    if (tooltipRef.current) {
+      tooltipRef.current.hide();
+    }
+  }, []);
+
+  // 🔥 Enhanced chart options with tooltip events
+  const enhancedChartOptions = useMemo(() => {
+    if (!chartOptions || !isTooltipEnabled) return chartOptions;
+    
+    // Add point events for tooltip
+    return {
+      ...chartOptions,
+      tooltip: { enabled: false }, // Disable default tooltip
+      plotOptions: {
+        ...chartOptions.plotOptions,
+        series: {
+          ...chartOptions.plotOptions?.series,
+          point: {
+            ...chartOptions.plotOptions?.series?.point,
+            events: {
+              ...chartOptions.plotOptions?.series?.point?.events,
+              mouseOver: function(this: any, e: any) {
+                let clientX = 0;
+                let clientY = 0;
+                
+                if (e.browserEvent) {
+                  clientX = e.browserEvent.clientX;
+                  clientY = e.browserEvent.clientY;
+                } else if ((window as any).event) {
+                  clientX = (window as any).event.clientX;
+                  clientY = (window as any).event.clientY;
+                } else if (e.chartX !== undefined && e.chartY !== undefined) {
+                  const chart = this.series?.chart;
+                  if (chart && chart.container) {
+                    const rect = chart.container.getBoundingClientRect();
+                    clientX = rect.left + e.chartX;
+                    clientY = rect.top + e.chartY;
+                  }
+                }
+                
+                handleShowTooltip({ clientX, clientY }, this);
+              },
+              mouseOut: function(this: any) {
+                handleHideTooltip();
+              },
+            },
+          },
+        },
+      },
+    };
+  }, [chartOptions, isTooltipEnabled, handleShowTooltip, handleHideTooltip]);
+
   // Render HTML content
   const htmlContent = useMemo(() => {
     if (config.type !== 'html' || !config.htmlContent) return null;
@@ -327,12 +431,21 @@ const ChildCard: React.FC<ChildCardProps> = ({
           );
         }
         
-        // 🔥 Render the chart only when we have valid options
+        // 🔥 Render the chart with optional tooltip
         return (
-          <ResizableChart
-            options={chartOptions}
-            showExport={showExport}
-          />
+          <>
+            <ResizableChart
+              options={isTooltipEnabled ? enhancedChartOptions : chartOptions}
+              showExport={showExport}
+            />
+            {isTooltipEnabled && childCardKey && (
+              <ChildCardTooltip
+                ref={tooltipRef}
+                childCardKey={childCardKey}
+                chartConfig={chartOptions}
+              />
+            )}
+          </>
         );
 
       case 'table':

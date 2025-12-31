@@ -15,6 +15,7 @@ import CardFilterPanel from "../components/CardFilterPanel";
 import DashboardTable from "../components/DashboardTable";
 import { tooltipConfigState } from "../recoil/TooltipConfigState";
 import { childCardConfigState } from "../recoil/ChildCardState";
+import { childCardTooltipConfigState } from "../recoil/ChildCardTooltipState";
 import ParentCardContainer from "../components/ParentCardContainer";
 import { variableUpdateTriggerState, variableNamesState } from '../recoil/Variabletracker';
 import { variableAtomFamily } from '../recoil/VariableFamily';
@@ -153,6 +154,7 @@ export default function DropDragDashboard() {
   const [chartConfigs, setChartConfigs] = useRecoilState<Record<string, ChartConfigData>>(chartConfigState);
   const tooltipConfigs = useRecoilValue(tooltipConfigState);
   const [childCardConfigs, setChildCardConfigs] = useRecoilState(childCardConfigState);
+  const [tooltipConfigsForChildCards, setTooltipConfigsForChildCards] = useRecoilState(childCardTooltipConfigState);
   const variableUpdateTrigger = useRecoilValue(variableUpdateTriggerState);
   const variableNames = useRecoilValue(variableNamesState);
   const filterNames = useRecoilValue(filterNamesState);
@@ -1089,6 +1091,22 @@ export default function DropDragDashboard() {
       // Don't return here, continue with frontend cleanup
     }
 
+    // 🔥 Delete tooltip configs for all child cards of this parent
+    const parentConfig = childCardConfigs[id];
+    if (parentConfig?.childCards) {
+      for (const childCard of parentConfig.childCards) {
+        const childCardKey = `${id}_${childCard.id}`;
+        try {
+          await fetch(`http://localhost:3002/api/child-card-tooltip-configs/${encodeURIComponent(childCardKey)}`, {
+            method: 'DELETE',
+          });
+          console.log(`✅ Tooltip config for ${childCardKey} deleted from database`);
+        } catch (err) {
+          console.warn(`Warning: Failed to delete tooltip config for ${childCardKey}:`, err);
+        }
+      }
+    }
+
     // Update frontend state after successful database deletion
     delete trueOriginalPositionsRef.current[id];
 
@@ -1117,10 +1135,22 @@ export default function DropDragDashboard() {
       return updated;
     });
 
+    // 🔥 Clean up tooltip configs for all child cards of this parent
+    setTooltipConfigsForChildCards(prev => {
+      const updated = { ...prev };
+      // Remove all keys that start with "{parentId}_"
+      Object.keys(updated).forEach(key => {
+        if (key.startsWith(`${id}_`)) {
+          delete updated[key];
+        }
+      });
+      return updated;
+    });
+
     setTimeout(() => {
       isInternalUpdateRef.current = false;
     }, 100);
-  }, [setLayouts, setChartConfigs, setChildCardConfigs]);
+  }, [setLayouts, setChartConfigs, setChildCardConfigs, setTooltipConfigsForChildCards, childCardConfigs]);
 
   const toggleEditMode = () => {
     setIsEditMode(prev => !prev);

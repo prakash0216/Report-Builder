@@ -171,6 +171,7 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
             >
               <ChildCard
                 config={childConfig}
+                parentCardId={parentCardId}
                 parentWidth={dimensions.width * childConfig.layout.w}
                 parentHeight={contentHeight - (config.gap * 2)} // Account for padding
                 gap={0}
@@ -207,6 +208,7 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
           <ChildCard
             key={childConfig.id}
             config={childConfig}
+            parentCardId={parentCardId}
             parentWidth={dimensions.width}
             parentHeight={dimensions.height}
             gap={config.gap}

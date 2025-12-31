@@ -5,6 +5,15 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { RecoilRoot } from 'recoil';
 
+// 🔥 Suppress ResizeObserver loop errors (harmless, caused by chart resize callbacks)
+const resizeObserverError = (e: ErrorEvent) => {
+  if (e.message === 'ResizeObserver loop completed with undelivered notifications.') {
+    e.stopImmediatePropagation();
+    return;
+  }
+};
+window.addEventListener('error', resizeObserverError);
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );

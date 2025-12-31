@@ -26,6 +26,7 @@ import { InsertChart as InsertChartIcon } from '@mui/icons-material';
 interface DashboardTableProps {
   dataSource: string;
   settings?: TableSettings;
+  directData?: any[];  // Optional: directly pass data instead of using dataSource variable
 }
 
 const safeParse = (value: string): any => {
@@ -57,7 +58,7 @@ const getFontSize = (size: 'small' | 'medium' | 'large'): string => {
 // Lazy load batch size
 const LAZY_LOAD_BATCH_SIZE = 50;
 
-export default function DashboardTable({ dataSource, settings }: DashboardTableProps) {
+export default function DashboardTable({ dataSource, settings, directData }: DashboardTableProps) {
   const tableSettings: TableSettings = settings || defaultTableSettings;
   const theme = tableSettings.theme || defaultTableTheme;
   
@@ -78,8 +79,11 @@ export default function DashboardTable({ dataSource, settings }: DashboardTableP
     }
   }, [tableSettings.rowsPerPage]);
 
-  // Get the variable data
-  const rawData = useRecoilValue(variableAtomFamily(dataSource));
+  // Get the variable data (skip if directData is provided)
+  const rawDataFromVariable = useRecoilValue(variableAtomFamily(dataSource || ''));
+  
+  // Use directData if provided, otherwise use data from variable
+  const rawData = directData !== undefined ? directData : rawDataFromVariable;
   
   // Parse and validate data
   const tableData = useMemo(() => {

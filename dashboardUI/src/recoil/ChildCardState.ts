@@ -39,6 +39,10 @@ export interface ChildCardConfig {
   
   // Layout within parent
   layout: ChildCardLayout;
+  
+  // Tooltip configuration - if enabled, tooltip config is stored separately
+  // in childCardTooltipConfigState with key "{parentCardId}_{childCardId}"
+  tooltipEnabled?: boolean;
 }
 
 // Parent card container configuration
