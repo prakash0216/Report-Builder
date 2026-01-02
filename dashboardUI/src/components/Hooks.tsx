@@ -98,6 +98,211 @@ function TabPanel(props: TabPanelProps) {
     );
 }
 
+// Variable Chip with Tooltip - shows value on hover
+function VariableChipWithTooltip({ 
+    name, 
+    type,
+    bgColor,
+    textColor,
+    borderColor,
+}: { 
+    name: string; 
+    type: 'variable' | 'parameter' | 'filter';
+    bgColor: string;
+    textColor: string;
+    borderColor: string;
+}) {
+    // Use different atoms based on type
+    const variableValue = useRecoilValue(variableAtomFamily(name));
+    const parameterValue = useRecoilValue(parameterAtomFamily(name));
+    const filterConfig = useRecoilValue(filterConfigFamily(name));
+    const liveFilterValue = useRecoilValue(liveFilterFamily(name));
+    
+    // Get the appropriate value based on type
+    const getRawValue = () => {
+        if (type === 'variable') return variableValue;
+        if (type === 'parameter') return parameterValue;
+        if (type === 'filter') return liveFilterValue ?? filterConfig?.defaultValues;
+        return null;
+    };
+    
+    const rawValue = getRawValue();
+    const parsedValue = safeParse(rawValue);
+    
+    const getDisplayValue = () => {
+        if (parsedValue === undefined || parsedValue === null || parsedValue === '') {
+            return '(empty)';
+        }
+        if (Array.isArray(parsedValue)) {
+            const preview = parsedValue.slice(0, 5);
+            return JSON.stringify(preview, null, 2) + (parsedValue.length > 5 ? `\n... +${parsedValue.length - 5} more` : '');
+        }
+        if (typeof parsedValue === 'object') {
+            const str = JSON.stringify(parsedValue, null, 2);
+            return str.length > 300 ? str.substring(0, 300) + '\n...' : str;
+        }
+        return String(parsedValue);
+    };
+
+    const getTypeLabel = () => {
+        if (parsedValue === undefined || parsedValue === null) return 'empty';
+        if (Array.isArray(parsedValue)) return `Array[${parsedValue.length}]`;
+        if (typeof parsedValue === 'object') return 'Object';
+        if (typeof parsedValue === 'number') return 'Number';
+        if (typeof parsedValue === 'string') return 'String';
+        if (typeof parsedValue === 'boolean') return 'Boolean';
+        return typeof parsedValue;
+    };
+
+    const getTypeIcon = () => {
+        if (type === 'variable') return '📊';
+        if (type === 'parameter') return '⚙️';
+        if (type === 'filter') return '🔽';
+        return '📦';
+    };
+
+    const getTypeColor = () => {
+        if (type === 'variable') return '#06b6d4';
+        if (type === 'parameter') return '#f59e0b';
+        if (type === 'filter') return '#ec4899';
+        return '#64748b';
+    };
+
+    return (
+        <Tooltip
+            title={
+                <Box sx={{ width: 280 }}>
+                    {/* Header */}
+                    <Box sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 1, 
+                        pb: 1, 
+                        mb: 1, 
+                        borderBottom: '1px solid rgba(255,255,255,0.15)' 
+                    }}>
+                        <Box sx={{ 
+                            fontSize: '0.9rem',
+                            width: 24,
+                            height: 24,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '4px',
+                            bgcolor: 'rgba(255,255,255,0.1)',
+                            flexShrink: 0,
+                        }}>
+                            {getTypeIcon()}
+                        </Box>
+                        <Box sx={{ overflow: 'hidden', flex: 1 }}>
+                            <Typography 
+                                variant="subtitle2" 
+                                fontWeight={700} 
+                                sx={{ 
+                                    color: getTypeColor(),
+                                    fontFamily: 'monospace',
+                                    fontSize: '0.8rem',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                {name}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.65rem' }}>
+                                {type.charAt(0).toUpperCase() + type.slice(1)} • {getTypeLabel()}
+                            </Typography>
+                        </Box>
+                    </Box>
+                    
+                    {/* Value Preview */}
+                    <Box
+                        component="pre"
+                        sx={{
+                            fontSize: '0.7rem',
+                            fontFamily: '"Consolas", "Monaco", monospace',
+                            bgcolor: 'rgba(0,0,0,0.5)',
+                            p: 1,
+                            borderRadius: 1,
+                            maxHeight: 150,
+                            overflow: 'auto',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-all',
+                            m: 0,
+                            color: '#e2e8f0',
+                            lineHeight: 1.4,
+                        }}
+                    >
+                        {getDisplayValue()}
+                    </Box>
+                    
+                    {/* Footer */}
+                    <Box sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between',
+                        mt: 1, 
+                        pt: 0.75, 
+                        borderTop: '1px solid rgba(255,255,255,0.1)' 
+                    }}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.6rem' }}>
+                            📋 Click to copy
+                        </Typography>
+                        {Array.isArray(parsedValue) && (
+                            <Typography variant="caption" sx={{ color: getTypeColor(), fontSize: '0.6rem', fontWeight: 600 }}>
+                                {parsedValue.length} items
+                            </Typography>
+                        )}
+                    </Box>
+                </Box>
+            }
+            arrow
+            placement="top"
+            slotProps={{
+                tooltip: {
+                    sx: {
+                        bgcolor: '#1e293b',
+                        border: '1px solid rgba(102, 126, 234, 0.25)',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                        borderRadius: 1.5,
+                        p: 1.5,
+                        maxWidth: 'none',
+                        '& .MuiTooltip-arrow': {
+                            color: '#1e293b',
+                            '&::before': {
+                                border: '1px solid rgba(102, 126, 234, 0.25)',
+                            },
+                        },
+                    },
+                },
+            }}
+        >
+            <Chip
+                label={name}
+                size="small"
+                onClick={() => {
+                    navigator.clipboard.writeText(name);
+                }}
+                sx={{
+                    height: 24,
+                    fontSize: '0.75rem',
+                    fontFamily: 'monospace',
+                    bgcolor: bgColor,
+                    color: textColor,
+                    border: `1px solid ${borderColor}`,
+                    cursor: 'pointer',
+                    '&:hover': {
+                        bgcolor: bgColor.replace('0.12', '0.25'),
+                        transform: 'translateY(-1px)',
+                        boxShadow: `0 4px 12px ${borderColor}`,
+                    },
+                    transition: 'all 0.2s ease',
+                }}
+            />
+        </Tooltip>
+    );
+}
+
 // Variable Display Component
 function VariableDisplay({ name }: { name: string }) {
     const rawValue = useRecoilValue(variableAtomFamily(name));
@@ -1262,25 +1467,13 @@ export default function Hooks() {
                                     </Typography>
                                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                                         {variableNames.size > 0 ? Array.from(variableNames).map((name) => (
-                                            <Chip
+                                            <VariableChipWithTooltip
                                                 key={name}
-                                                label={name}
-                                                size="small"
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(name);
-                                                }}
-                                                sx={{
-                                                    height: 24,
-                                                    fontSize: '0.75rem',
-                                                    fontFamily: 'monospace',
-                                                    bgcolor: 'rgba(6, 182, 212, 0.12)',
-                                                    color: '#06b6d4',
-                                                    border: '1px solid rgba(6, 182, 212, 0.25)',
-                                                    cursor: 'pointer',
-                                                    '&:hover': {
-                                                        bgcolor: 'rgba(6, 182, 212, 0.2)',
-                                                    },
-                                                }}
+                                                name={name}
+                                                type="variable"
+                                                bgColor="rgba(6, 182, 212, 0.12)"
+                                                textColor="#06b6d4"
+                                                borderColor="rgba(6, 182, 212, 0.25)"
                                             />
                                         )) : (
                                             <Typography variant="caption" color="#94a3b8" fontStyle="italic">
@@ -1297,25 +1490,13 @@ export default function Hooks() {
                                     </Typography>
                                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                                         {parameterNames.length > 0 ? Array.from(parameterNames).map((name) => (
-                                            <Chip
-                                                key={name}
-                                                label={name}
-                                                size="small"
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(name as string);
-                                                }}
-                                                sx={{
-                                                    height: 24,
-                                                    fontSize: '0.75rem',
-                                                    fontFamily: 'monospace',
-                                                    bgcolor: 'rgba(245, 158, 11, 0.12)',
-                                                    color: '#f59e0b',
-                                                    border: '1px solid rgba(245, 158, 11, 0.25)',
-                                                    cursor: 'pointer',
-                                                    '&:hover': {
-                                                        bgcolor: 'rgba(245, 158, 11, 0.2)',
-                                                    },
-                                                }}
+                                            <VariableChipWithTooltip
+                                                key={name as string}
+                                                name={name as string}
+                                                type="parameter"
+                                                bgColor="rgba(245, 158, 11, 0.12)"
+                                                textColor="#f59e0b"
+                                                borderColor="rgba(245, 158, 11, 0.25)"
                                             />
                                         )) : (
                                             <Typography variant="caption" color="#94a3b8" fontStyle="italic">
@@ -1332,25 +1513,13 @@ export default function Hooks() {
                                     </Typography>
                                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                                         {filterNames.length > 0 ? Array.from(filterNames).map((name) => (
-                                            <Chip
+                                            <VariableChipWithTooltip
                                                 key={name}
-                                                label={name}
-                                                size="small"
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(name);
-                                                }}
-                                                sx={{
-                                                    height: 24,
-                                                    fontSize: '0.75rem',
-                                                    fontFamily: 'monospace',
-                                                    bgcolor: 'rgba(236, 72, 153, 0.12)',
-                                                    color: '#ec4899',
-                                                    border: '1px solid rgba(236, 72, 153, 0.25)',
-                                                    cursor: 'pointer',
-                                                    '&:hover': {
-                                                        bgcolor: 'rgba(236, 72, 153, 0.2)',
-                                                    },
-                                                }}
+                                                name={name}
+                                                type="filter"
+                                                bgColor="rgba(236, 72, 153, 0.12)"
+                                                textColor="#ec4899"
+                                                borderColor="rgba(236, 72, 153, 0.25)"
                                             />
                                         )) : (
                                             <Typography variant="caption" color="#94a3b8" fontStyle="italic">
@@ -1362,7 +1531,7 @@ export default function Hooks() {
 
                                 {/* Hint */}
                                 <Typography variant="caption" color="#64748b" sx={{ pt: 1, borderTop: '1px solid rgba(102, 126, 234, 0.1)' }}>
-                                    💡 Click any variable to copy its name. Use these variables directly in your calculation logic.
+                                    💡 Hover to see value, click to copy. Use these variables in your calculation logic.
                                 </Typography>
                             </Stack>
                         </AccordionDetails>
