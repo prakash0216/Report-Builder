@@ -1255,63 +1255,115 @@ export default function Hooks() {
                         </AccordionSummary>
                         <AccordionDetails sx={{ pt: 2 }}>
                             <Stack spacing={2}>
+                                {/* Variables (Calculated) */}
                                 <Box>
-                                    <Typography variant="body2" fontWeight="700" color="#1e293b" gutterBottom>
-                                        Variables (Calculated):
+                                    <Typography variant="caption" fontWeight={600} color="#06b6d4" sx={{ display: 'block', mb: 0.5 }}>
+                                        📊 Variables (Calculated):
                                     </Typography>
-                                    <Typography
-                                        variant="body2"
-                                        component="div"
-                                        sx={{
-                                            fontFamily: 'monospace',
-                                            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
-                                            p: 1.5,
-                                            borderRadius: 1.5,
-                                            color: '#667eea',
-                                            fontWeight: 600,
-                                        }}
-                                    >
-                                        {variableNames.size > 0 ? Array.from(variableNames).join(', ') : 'None'}
-                                    </Typography>
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                        {variableNames.size > 0 ? Array.from(variableNames).map((name) => (
+                                            <Chip
+                                                key={name}
+                                                label={name}
+                                                size="small"
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(name);
+                                                }}
+                                                sx={{
+                                                    height: 24,
+                                                    fontSize: '0.75rem',
+                                                    fontFamily: 'monospace',
+                                                    bgcolor: 'rgba(6, 182, 212, 0.12)',
+                                                    color: '#06b6d4',
+                                                    border: '1px solid rgba(6, 182, 212, 0.25)',
+                                                    cursor: 'pointer',
+                                                    '&:hover': {
+                                                        bgcolor: 'rgba(6, 182, 212, 0.2)',
+                                                    },
+                                                }}
+                                            />
+                                        )) : (
+                                            <Typography variant="caption" color="#94a3b8" fontStyle="italic">
+                                                No calculated variables yet
+                                            </Typography>
+                                        )}
+                                    </Box>
                                 </Box>
+
+                                {/* Parameters (Static) */}
                                 <Box>
-                                    <Typography variant="body2" fontWeight="700" color="#1e293b" gutterBottom>
-                                        Parameters (Static):
+                                    <Typography variant="caption" fontWeight={600} color="#f59e0b" sx={{ display: 'block', mb: 0.5 }}>
+                                        ⚙️ Parameters (Static):
                                     </Typography>
-                                    <Typography
-                                        variant="body2"
-                                        component="div"
-                                        sx={{
-                                            fontFamily: 'monospace',
-                                            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
-                                            p: 1.5,
-                                            borderRadius: 1.5,
-                                            color: '#667eea',
-                                            fontWeight: 600,
-                                        }}
-                                    >
-                                        {parameterNames.length > 0 ? Array.from(parameterNames).join(', ') : 'None'}
-                                    </Typography>
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                        {parameterNames.length > 0 ? Array.from(parameterNames).map((name) => (
+                                            <Chip
+                                                key={name}
+                                                label={name}
+                                                size="small"
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(name as string);
+                                                }}
+                                                sx={{
+                                                    height: 24,
+                                                    fontSize: '0.75rem',
+                                                    fontFamily: 'monospace',
+                                                    bgcolor: 'rgba(245, 158, 11, 0.12)',
+                                                    color: '#f59e0b',
+                                                    border: '1px solid rgba(245, 158, 11, 0.25)',
+                                                    cursor: 'pointer',
+                                                    '&:hover': {
+                                                        bgcolor: 'rgba(245, 158, 11, 0.2)',
+                                                    },
+                                                }}
+                                            />
+                                        )) : (
+                                            <Typography variant="caption" color="#94a3b8" fontStyle="italic">
+                                                No parameters defined
+                                            </Typography>
+                                        )}
+                                    </Box>
                                 </Box>
+
+                                {/* Filters (Interactive) */}
                                 <Box>
-                                    <Typography variant="body2" fontWeight="700" color="#1e293b" gutterBottom>
-                                        Filters (Interactive):
+                                    <Typography variant="caption" fontWeight={600} color="#ec4899" sx={{ display: 'block', mb: 0.5 }}>
+                                        🔽 Filters (Interactive):
                                     </Typography>
-                                    <Typography
-                                        variant="body2"
-                                        component="div"
-                                        sx={{
-                                            fontFamily: 'monospace',
-                                            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
-                                            p: 1.5,
-                                            borderRadius: 1.5,
-                                            color: '#667eea',
-                                            fontWeight: 600,
-                                        }}
-                                    >
-                                        {filterNames.length > 0 ? Array.from(filterNames).join(', ') : 'None'}
-                                    </Typography>
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                        {filterNames.length > 0 ? Array.from(filterNames).map((name) => (
+                                            <Chip
+                                                key={name}
+                                                label={name}
+                                                size="small"
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(name);
+                                                }}
+                                                sx={{
+                                                    height: 24,
+                                                    fontSize: '0.75rem',
+                                                    fontFamily: 'monospace',
+                                                    bgcolor: 'rgba(236, 72, 153, 0.12)',
+                                                    color: '#ec4899',
+                                                    border: '1px solid rgba(236, 72, 153, 0.25)',
+                                                    cursor: 'pointer',
+                                                    '&:hover': {
+                                                        bgcolor: 'rgba(236, 72, 153, 0.2)',
+                                                    },
+                                                }}
+                                            />
+                                        )) : (
+                                            <Typography variant="caption" color="#94a3b8" fontStyle="italic">
+                                                No filters defined
+                                            </Typography>
+                                        )}
+                                    </Box>
                                 </Box>
+
+                                {/* Hint */}
+                                <Typography variant="caption" color="#64748b" sx={{ pt: 1, borderTop: '1px solid rgba(102, 126, 234, 0.1)' }}>
+                                    💡 Click any variable to copy its name. Use these variables directly in your calculation logic.
+                                </Typography>
                             </Stack>
                         </AccordionDetails>
                     </Accordion>

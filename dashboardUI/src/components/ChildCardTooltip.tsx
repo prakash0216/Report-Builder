@@ -47,38 +47,45 @@ const getNestedValue = (obj: any, path: string): any => {
 };
 
 // Helper function to replace variable references in template strings
-const replaceVariableReferences = (template: string, variables: Record<string, any>): string => {
+const replaceVariableReferences = (template: string, variables: Record<string, any>, isHtml: boolean = false): string => {
   let result = template;
   
   Object.entries(variables).forEach(([name, value]) => {
-    // Check if the raw stored value is a formatted number (before parsing)
-    const isFormattedNumber = typeof value === 'string' && /^[\d,]+$/.test(value);
-    
-    let replacement: string;
-    
-    if (isFormattedNumber) {
-      replacement = value;
+    if (isHtml) {
+      // 🔥 HTML: ${varName} replaces with raw value (no quotes)
+      result = result.replace(new RegExp(`\\$\\{${name}\\}`, 'g'), () => {
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'string') return value; // No quotes for HTML
+        if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+        return JSON.stringify(value);
+      });
     } else {
-      replacement = JSON.stringify(value);
+      // 🔥 JSON: ${varName} with smart quoting
+      
+      // Pattern 1: "${varName}" (with surrounding quotes) - replace entirely
+      result = result.replace(new RegExp(`"\\$\\{${name}\\}"`, 'g'), () => {
+        if (value === null || value === undefined) return '""';
+        if (typeof value === 'string') return JSON.stringify(value);
+        return JSON.stringify(value);
+      });
+      
+      // Pattern 2: ${varName} (without quotes) - auto-add quotes for strings
+      result = result.replace(new RegExp(`\\$\\{${name}\\}`, 'g'), () => {
+        if (value === null || value === undefined) return 'null';
+        if (typeof value === 'string') return JSON.stringify(value); // Auto-adds quotes
+        if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+        return JSON.stringify(value);
+      });
     }
-    
-    // Replace "${variableName}" pattern
-    result = result.replace(new RegExp(`"\\$\\{${name}\\}"`, 'g'), replacement);
-    
-    // Replace ${variableName} pattern  
-    result = result.replace(new RegExp(`\\$\\{${name}\\}`, 'g'), 
-      typeof value === 'string' ? value : JSON.stringify(value));
-    
-    // Replace {{variableName}} pattern (for HTML templates)
-    result = result.replace(new RegExp(`\\{\\{${name}\\}\\}`, 'g'), 
-      typeof value === 'string' ? value : JSON.stringify(value));
   });
   
-  // Replace any remaining placeholders with safe defaults
-  // Handle "${varName}" (with surrounding quotes) - replace entire thing with []
-  result = result.replace(/"?\$\{[^}]+\}"?/g, '[]');
-  // Handle {{varName}} - replace with empty string
-  result = result.replace(/\{\{[^}]+\}\}/g, '""');
+  // Replace any remaining unreplaced variables with safe defaults
+  if (isHtml) {
+    result = result.replace(/\$\{[^}]+\}/g, ''); // Remove unreplaced vars
+  } else {
+    result = result.replace(/"\\$\\{[^}]+\\}"/g, '""'); // "${var}" -> ""
+    result = result.replace(/\$\{[^}]+\}/g, '[]');      // ${var} -> []
+  }
   
   return result;
 };
@@ -563,7 +570,8 @@ const ChildCardTooltip = forwardRef<ChildCardTooltipRef, ChildCardTooltipProps>(
           
           const processedHtml = replaceVariableReferences(
             tooltipConfig.htmlTemplate,
-            templateVariables
+            templateVariables,
+            true  // isHtml = true
           );
           return (
             <div 

@@ -28,7 +28,6 @@ import {
   CloudQueue,
   Storage,
   Visibility,
-  Info as TooltipIcon,
 } from '@mui/icons-material';
 import JsCompiler from "../components/JsCompiler";
 import AddDataSource from "../components/AddDataSource";
@@ -39,7 +38,7 @@ import Filters from '../components/Filters';
 import {IsVisible} from "../components/IsVisible";
 import { CardArrangement } from '../components/CardArrangement';
 import Others from '../components/Others';
-import TooltipConfigTab from '../components/TooltipConfigTab';
+// TooltipConfigTab removed - tooltip is now configured per child card in MultiCard Viz Config
 import ChildCardConfigTab from '../components/ChildCardConfigTab';
 import { ViewModule as ViewModuleIcon } from '@mui/icons-material';
 
@@ -193,13 +192,6 @@ const EditChart: React.FC = () => {
       icon: ViewModuleIcon,
       component: ChildCardConfigTab,
       color: '#764ba2'
-    },
-    {
-      key: 'tooltipConfig',
-      label: 'Tooltip Config',
-      icon: TooltipIcon,
-      component: TooltipConfigTab,
-      color: '#f59e0b'
     },
     {
       key: 'hooks',

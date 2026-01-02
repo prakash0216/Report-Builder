@@ -207,13 +207,28 @@ export default function TooltipConfigPanel({
     
     // Add extracted variables (with test values or placeholders)
     config.dataExtractions.forEach(ext => {
-      vars[ext.targetVariable] = testValues[ext.targetVariable] ?? `<${ext.targetVariable}>`;
+      // Use test value if provided, otherwise use a meaningful placeholder
+      const testVal = testValues[ext.targetVariable];
+      if (testVal !== undefined && testVal !== '') {
+        vars[ext.targetVariable] = testVal;
+      } else {
+        // Use a placeholder that indicates the variable needs a test value
+        // For preview, use a descriptive string that's valid in JSON
+        vars[ext.targetVariable] = `(${ext.targetVariable})`;
+      }
     });
     
     // Add calculation output variables
     config.calculationBindings.forEach(binding => {
       if (binding.outputVariable) {
-        vars[binding.outputVariable] = previewResult?.[binding.outputVariable] ?? `<${binding.outputVariable}>`;
+        // Use calculation result if available, otherwise use placeholder array for data variables
+        const calcResult = previewResult?.[binding.outputVariable];
+        if (calcResult !== undefined) {
+          vars[binding.outputVariable] = calcResult;
+        } else {
+          // For calculation outputs, default to empty array (likely used for chart data)
+          vars[binding.outputVariable] = [];
+        }
       }
     });
     
@@ -517,42 +532,61 @@ export default function TooltipConfigPanel({
       });
     }
 
-    // Replace variables in template
-    const replaceVariables = (template: string): string => {
+    // Replace variables in template - ONLY ${varName} syntax
+    // Smart replacement: automatically handles JSON context
+    const replaceVariables = (template: string, isHtml: boolean = false): string => {
       let result = template;
       
-      console.log('🔍 [TooltipConfigPanel] Original template (last 200 chars):', template.slice(-200));
-      
-      // First, replace known variables
+      // Replace all ${varName} occurrences
       Object.entries(allVars).forEach(([name, value]) => {
-        const replacement = JSON.stringify(value);
-        // Match "${varName}" (with quotes)
-        result = result.replace(new RegExp(`"\\$\\{${name}\\}"`, 'g'), replacement);
-        // Match ${varName} (without quotes)
-        result = result.replace(new RegExp(`\\$\\{${name}\\}`, 'g'), 
-          typeof value === 'string' ? value : JSON.stringify(value));
-        // Match {{varName}}
-        result = result.replace(new RegExp(`\\{\\{${name}\\}\\}`, 'g'),
-          typeof value === 'string' ? value : JSON.stringify(value));
+        if (isHtml) {
+          // For HTML: simple string replacement
+          const replacement = value === null || value === undefined 
+            ? '' 
+            : typeof value === 'object' 
+              ? JSON.stringify(value) 
+              : String(value);
+          
+          result = result.replace(new RegExp(`\\$\\{${name}\\}`, 'g'), replacement);
+          result = result.replace(new RegExp(`\\{\\{${name}\\}\\}`, 'g'), replacement);
+        } else {
+          // For JSON: context-aware replacement
+          
+          // Pattern 1: "${varName}" (quoted) - replace with quoted string or the value
+          result = result.replace(new RegExp(`"\\$\\{${name}\\}"`, 'g'), () => {
+            if (value === null || value === undefined) return '""';
+            if (typeof value === 'string') return JSON.stringify(value); // Adds quotes
+            return JSON.stringify(value); // For objects/arrays/numbers
+          });
+          
+          // Pattern 2: ${varName} (unquoted) - smart replacement based on type
+          result = result.replace(new RegExp(`\\$\\{${name}\\}`, 'g'), () => {
+            if (value === null || value === undefined) return 'null';
+            if (typeof value === 'string') return JSON.stringify(value); // 🔥 Add quotes for strings!
+            if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+            return JSON.stringify(value); // Arrays/objects
+          });
+          
+          // Also support {{varName}}
+          result = result.replace(new RegExp(`\\{\\{${name}\\}\\}`, 'g'), () => {
+            if (value === null || value === undefined) return 'null';
+            if (typeof value === 'string') return JSON.stringify(value);
+            if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+            return JSON.stringify(value);
+          });
+        }
       });
       
-      // 🔥 Replace any remaining unreplaced variables with safe defaults
-      // Multiple patterns to catch any format
-      
-      // Pattern 1: "${varName}" with quotes
-      result = result.replace(/"?\$\{[^}]+\}"?/g, '[]');
-      
-      // Pattern 2: $varName or ${varName} any remaining
-      result = result.replace(/\$\{[^}]*\}/g, '[]');
-      result = result.replace(/\$[a-zA-Z_][a-zA-Z0-9_]*/g, '[]');
-      
-      // Pattern 3: {{varName}}
-      result = result.replace(/\{\{[^}]+\}\}/g, '""');
-      
-      // Pattern 4: <varName> or <$varName> (in case of HTML encoding issues)
-      result = result.replace(/<\$?[a-zA-Z_][a-zA-Z0-9_]*>/g, '[]');
-      
-      console.log('🔍 [TooltipConfigPanel] Processed template (last 200 chars):', result.slice(-200));
+      // Replace any remaining unreplaced variables
+      if (isHtml) {
+        result = result.replace(/\$\{[^}]+\}/g, '');
+        result = result.replace(/\{\{[^}]+\}\}/g, '');
+      } else {
+        // For JSON: "${var}" -> "", ${var} -> []
+        result = result.replace(/"\\$\\{[^}]+\\}"/g, '""');
+        result = result.replace(/\$\{[^}]+\}/g, '[]');
+        result = result.replace(/\{\{[^}]+\}\}/g, '""');
+      }
       
       return result;
     };
@@ -659,7 +693,7 @@ export default function TooltipConfigPanel({
             </Box>
           );
         }
-        const processedHtml = replaceVariables(config.htmlTemplate);
+        const processedHtml = replaceVariables(config.htmlTemplate, true); // isHtml = true
         return (
           <Box 
             dangerouslySetInnerHTML={{ __html: processedHtml }}
@@ -945,7 +979,7 @@ export default function TooltipConfigPanel({
                     <CodeIcon sx={{ color: '#22c55e', fontSize: 20 }} />
                     <Typography variant="subtitle2" fontWeight={700}>Available Variables</Typography>
                     <Chip 
-                      label={Object.keys(allVariables).length + config.dataExtractions.length} 
+                      label={Object.keys(allVariables).length + config.dataExtractions.length + config.calculationBindings.filter(b => b.outputVariable).length} 
                       size="small" 
                       sx={{ 
                         height: 20, 
@@ -990,16 +1024,43 @@ export default function TooltipConfigPanel({
                     </Box>
                   )}
 
-                  {/* Calculation Variables */}
-                  {groupedVariables.calculation.length > 0 && (
+                  {/* Calculation Variables - Show both from calculation tab AND inline calculations */}
+                  {(groupedVariables.calculation.length > 0 || config.calculationBindings.filter(b => b.outputVariable).length > 0) && (
                     <Box sx={{ mb: 1.5 }}>
                       <Typography variant="caption" fontWeight={600} color="#06b6d4" sx={{ display: 'block', mb: 0.5 }}>
                         📊 Calculated:
                       </Typography>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {/* Global calculation variables */}
                         {groupedVariables.calculation.map(v => 
                           renderVariableChip(v.name, v.type, v.value, 'calculation')
                         )}
+                        {/* Inline calculation outputs */}
+                        {config.calculationBindings
+                          .filter(b => b.outputVariable && !groupedVariables.calculation.some(v => v.name === b.outputVariable))
+                          .map(binding => {
+                            const hasResult = previewResult?.[binding.outputVariable] !== undefined;
+                            return (
+                              <Chip
+                                key={`inline-${binding.id}`}
+                                label={binding.outputVariable}
+                                size="small"
+                                onClick={() => handleVariableClick(binding.outputVariable)}
+                                sx={{
+                                  height: 22,
+                                  fontSize: '0.7rem',
+                                  fontFamily: 'monospace',
+                                  bgcolor: hasResult ? 'rgba(6, 182, 212, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                                  color: hasResult ? '#06b6d4' : '#f59e0b',
+                                  border: `1px solid ${hasResult ? 'rgba(6, 182, 212, 0.2)' : 'rgba(245, 158, 11, 0.2)'}`,
+                                  cursor: 'pointer',
+                                  '&:hover': {
+                                    bgcolor: hasResult ? 'rgba(6, 182, 212, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                                  },
+                                }}
+                              />
+                            );
+                          })}
                       </Box>
                     </Box>
                   )}
@@ -1069,6 +1130,58 @@ export default function TooltipConfigPanel({
                       all existing data to compute tooltip content.
                     </Typography>
                   </Alert>
+
+                  {/* Show calculation output variables as chips */}
+                  {config.calculationBindings.filter(b => b.outputVariable).length > 0 && (
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 1.5,
+                        mb: 1.5,
+                        border: '1px solid rgba(6, 182, 212, 0.2)',
+                        borderRadius: 1,
+                        bgcolor: 'rgba(6, 182, 212, 0.02)',
+                      }}
+                    >
+                      <Typography variant="caption" fontWeight={600} color="#06b6d4" sx={{ display: 'block', mb: 1 }}>
+                        📊 Output Variables (use these in your template):
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {config.calculationBindings.filter(b => b.outputVariable).map((binding) => {
+                          const hasResult = previewResult?.[binding.outputVariable] !== undefined;
+                          return (
+                            <Chip
+                              key={binding.id}
+                              label={`\${${binding.outputVariable}}`}
+                              size="small"
+                              onClick={() => handleVariableClick(binding.outputVariable)}
+                              sx={{
+                                height: 24,
+                                fontSize: '0.75rem',
+                                fontFamily: 'monospace',
+                                bgcolor: hasResult ? 'rgba(6, 182, 212, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                                color: hasResult ? '#06b6d4' : '#f59e0b',
+                                border: `1px solid ${hasResult ? 'rgba(6, 182, 212, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                                cursor: 'pointer',
+                                '&:hover': {
+                                  bgcolor: hasResult ? 'rgba(6, 182, 212, 0.25)' : 'rgba(245, 158, 11, 0.25)',
+                                },
+                              }}
+                              icon={hasResult ? 
+                                <Box component="span" sx={{ color: '#22c55e', fontSize: '10px', ml: 0.5 }}>✓</Box> : 
+                                <Box component="span" sx={{ color: '#f59e0b', fontSize: '10px', ml: 0.5 }}>⏳</Box>
+                              }
+                            />
+                          );
+                        })}
+                      </Box>
+                      {!previewResult && config.calculationBindings.filter(b => b.outputVariable).length > 0 && (
+                        <Typography variant="caption" color="#94a3b8" sx={{ display: 'block', mt: 1, fontStyle: 'italic' }}>
+                          💡 Click "Run Preview" to see calculated values
+                        </Typography>
+                      )}
+                    </Paper>
+                  )}
 
                   {config.calculationBindings.map((binding, index) => (
                     <Paper
