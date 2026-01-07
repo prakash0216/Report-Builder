@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { useRecoilValue, useRecoilCallback, useSetRecoilState } from 'recoil';
 import { 
   childCardTooltipConfigState, 
-  ChildCardTooltipConfig, 
+  ChildCardTooltipConfig,
+  TooltipCardConfig,
   activeChildCardTooltipState 
 } from '../recoil/ChildCardTooltipState';
 import { storedLogicsState } from '../recoil/StoredLogic';
@@ -428,6 +429,166 @@ const ChildCardTooltip = forwardRef<ChildCardTooltipRef, ChildCardTooltipProps>(
     const width = tooltipConfig.width || 400;
     const height = tooltipConfig.height || 300;
 
+    // Render a single tooltip card (used for both single-card mode and multi-card mode)
+    const renderSingleCard = (cardConfig: TooltipCardConfig | { type: string; chartTemplate?: string; tableDataSource?: string; htmlTemplate?: string; tableSettings?: any }, vars: Record<string, any>) => {
+      switch (cardConfig.type) {
+        case 'chart': {
+          if (!cardConfig.chartTemplate) {
+            return (
+              <Box sx={{ p: 2, textAlign: 'center', color: '#64748b', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="caption">No chart template</Typography>
+              </Box>
+            );
+          }
+          
+          try {
+            const processedTemplate = replaceVariableReferences(cardConfig.chartTemplate, vars);
+            const chartOptions = JSON.parse(processedTemplate);
+            
+            // Validate series data
+            if (chartOptions.series) {
+              chartOptions.series = chartOptions.series.map((s: any) => ({
+                ...s,
+                data: Array.isArray(s.data) ? s.data : [],
+              }));
+            }
+            
+            return (
+              <Box sx={{ width: '100%', height: '100%', minHeight: 150 }}>
+                <ResizableChart options={chartOptions} />
+              </Box>
+            );
+          } catch (error) {
+            console.error('❌ [Tooltip Card] Chart parse error:', error);
+            return (
+              <Box sx={{ p: 1, textAlign: 'center', color: '#ef4444', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+                <Typography variant="caption">Chart Error</Typography>
+                <Typography variant="caption" sx={{ opacity: 0.7, fontSize: '0.6rem' }}>{String(error).substring(0, 50)}</Typography>
+              </Box>
+            );
+          }
+        }
+        
+        case 'table': {
+          if (!cardConfig.tableDataSource) {
+            return (
+              <Box sx={{ p: 2, textAlign: 'center', color: '#64748b', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="caption">No data source</Typography>
+              </Box>
+            );
+          }
+          
+          const tableData = vars[cardConfig.tableDataSource];
+          if (tableData && Array.isArray(tableData)) {
+            return (
+              <DashboardTable
+                dataSource=""
+                settings={cardConfig.tableSettings}
+                directData={tableData}
+              />
+            );
+          }
+          
+          return (
+            <DashboardTable
+              dataSource={cardConfig.tableDataSource}
+              settings={cardConfig.tableSettings}
+            />
+          );
+        }
+        
+        case 'html': {
+          if (!cardConfig.htmlTemplate) {
+            return (
+              <Box sx={{ p: 2, textAlign: 'center', color: '#64748b', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="caption">No HTML template</Typography>
+              </Box>
+            );
+          }
+          
+          const processedHtml = replaceVariableReferences(cardConfig.htmlTemplate, vars, true);
+          return (
+            <div 
+              dangerouslySetInnerHTML={{ __html: processedHtml }}
+              style={{ width: '100%', height: '100%', overflow: 'auto' }}
+            />
+          );
+        }
+        
+        default:
+          return null;
+      }
+    };
+
+    // Render multi-card layout
+    const renderMultiCardContent = () => {
+      if (!tooltipConfig.tooltipCards || tooltipConfig.tooltipCards.length === 0) {
+        return (
+          <Box sx={{ p: 2, textAlign: 'center', color: '#64748b' }}>
+            <Typography variant="body2">No tooltip cards configured</Typography>
+          </Box>
+        );
+      }
+
+      const gap = tooltipConfig.gap || 4;
+      const contentHeight = tooltipConfig.showHeader ? 'calc(100% - 44px)' : '100%';
+
+      return (
+        <Box
+          sx={{
+            position: 'relative',
+            width: '100%',
+            height: contentHeight,
+            p: `${gap / 2}px`,
+          }}
+        >
+          {tooltipConfig.tooltipCards.map((card, index) => {
+            const { x, y, w, h } = card.layout;
+            
+            return (
+              <Box
+                key={card.id}
+                sx={{
+                  position: 'absolute',
+                  left: `calc(${x * 100}% + ${gap / 2}px)`,
+                  top: `calc(${y * 100}% + ${gap / 2}px)`,
+                  width: `calc(${w * 100}% - ${gap}px)`,
+                  height: `calc(${h * 100}% - ${gap}px)`,
+                  bgcolor: card.backgroundColor || 'transparent',
+                  borderRadius: 1,
+                  overflow: 'hidden',
+                  border: '1px solid rgba(102, 126, 234, 0.1)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                {/* Card Title */}
+                {card.showTitle && card.title && (
+                  <Box
+                    sx={{
+                      px: 1,
+                      py: 0.5,
+                      borderBottom: '1px solid rgba(102, 126, 234, 0.1)',
+                      bgcolor: 'rgba(102, 126, 234, 0.03)',
+                    }}
+                  >
+                    <Typography variant="caption" fontWeight={600} color="#667eea">
+                      {card.title}
+                    </Typography>
+                  </Box>
+                )}
+                
+                {/* Card Content */}
+                <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+                  {renderSingleCard(card, templateVariables)}
+                </Box>
+              </Box>
+            );
+          })}
+        </Box>
+      );
+    };
+
     // Render content based on tooltip type
     const renderContent = () => {
       if (isCalculating) {
@@ -445,6 +606,12 @@ const ChildCardTooltip = forwardRef<ChildCardTooltipRef, ChildCardTooltipProps>(
         );
       }
 
+      // 🔥 NEW: Check if multi-card mode is enabled
+      if (tooltipConfig.useMultiCard && tooltipConfig.tooltipCards && tooltipConfig.tooltipCards.length > 0) {
+        return renderMultiCardContent();
+      }
+
+      // Legacy single-card mode
       switch (tooltipConfig.type) {
         case 'chart': {
           if (!tooltipConfig.chartTemplate) {
@@ -497,7 +664,11 @@ const ChildCardTooltip = forwardRef<ChildCardTooltipRef, ChildCardTooltipProps>(
               });
             }
             
-            return <ResizableChart options={chartOptions} />;
+            return (
+              <Box sx={{ width: '100%', height: '100%', minHeight: 150 }}>
+                <ResizableChart options={chartOptions} />
+              </Box>
+            );
           } catch (error) {
             console.error('❌ [Tooltip] Chart parse error:', error);
             return (
@@ -662,7 +833,11 @@ const ChildCardTooltip = forwardRef<ChildCardTooltipRef, ChildCardTooltipProps>(
           sx={{
             width: '100%',
             height: tooltipConfig.showHeader ? 'calc(100% - 44px)' : '100%',
-            overflow: 'hidden',
+            overflow: 'auto',
+            '& > *': {
+              height: '100%',
+              minHeight: '100%',
+            },
           }}
         >
           {renderContent()}

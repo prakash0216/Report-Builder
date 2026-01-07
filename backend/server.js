@@ -2879,6 +2879,11 @@ app.get('/api/child-card-tooltip-configs', async (req, res) => {
           showHeader: row.show_header !== false,
           headerTitle: row.header_title || 'Details',
           triggerOn: row.trigger_on || 'hover',
+          // 🔥 NEW: Multi-card fields
+          useMultiCard: row.use_multi_card === true,
+          tooltipCards: row.tooltip_cards_json ? JSON.parse(row.tooltip_cards_json) : [],
+          containerLayout: row.container_layout || 'grid',
+          gap: typeof row.gap === 'number' ? row.gap : 4,
         };
       });
     }
@@ -2925,6 +2930,11 @@ app.post('/api/child-card-tooltip-configs', async (req, res) => {
         showHeader: config.showHeader !== false ? 1 : 0,
         headerTitle: config.headerTitle || 'Details',
         triggerOn: config.triggerOn || 'hover',
+        // 🔥 NEW: Multi-card fields
+        useMultiCard: config.useMultiCard ? 1 : 0,
+        tooltipCardsJson: JSON.stringify(config.tooltipCards || []),
+        containerLayout: config.containerLayout || 'grid',
+        gap: typeof config.gap === 'number' ? config.gap : 4,
       };
 
       if (existing && existing.length > 0) {
@@ -2947,6 +2957,10 @@ app.post('/api/child-card-tooltip-configs', async (req, res) => {
             show_header = ${data.showHeader},
             header_title = '${data.headerTitle.replace(/'/g, "''")}',
             trigger_on = '${data.triggerOn.replace(/'/g, "''")}',
+            use_multi_card = ${data.useMultiCard},
+            tooltip_cards_json = '${data.tooltipCardsJson.replace(/'/g, "''")}',
+            container_layout = '${data.containerLayout.replace(/'/g, "''")}',
+            gap = ${data.gap},
             last_modified = '${now}'
           WHERE child_card_key = '${childCardKey.replace(/'/g, "''")}'
         `);
@@ -2957,6 +2971,7 @@ app.post('/api/child-card-tooltip-configs', async (req, res) => {
             child_card_key, enabled, tooltip_type, data_extractions_json, calculation_bindings_json,
             chart_template, table_data_source, table_settings_json, html_template,
             width, height, offset_x, offset_y, hide_delay, show_header, header_title, trigger_on,
+            use_multi_card, tooltip_cards_json, container_layout, gap,
             created_at, last_modified
           ) VALUES (
             '${childCardKey.replace(/'/g, "''")}',
@@ -2976,6 +2991,10 @@ app.post('/api/child-card-tooltip-configs', async (req, res) => {
             ${data.showHeader},
             '${data.headerTitle.replace(/'/g, "''")}',
             '${data.triggerOn.replace(/'/g, "''")}',
+            ${data.useMultiCard},
+            '${data.tooltipCardsJson.replace(/'/g, "''")}',
+            '${data.containerLayout.replace(/'/g, "''")}',
+            ${data.gap},
             '${now}',
             '${now}'
           )

@@ -33,30 +33,118 @@ export interface TooltipCalculationBinding {
 }
 
 /**
+ * Layout configuration for a tooltip card within the tooltip container
+ */
+export interface TooltipCardLayout {
+  id: string;           // Unique ID for the tooltip card
+  x: number;            // X position (0-1 grid, 0=left, 1=right for 2-col)
+  y: number;            // Y position (0-1 grid, 0=top, 1=bottom for 2-row)
+  w: number;            // Width (1 = full, 0.5 = half)
+  h: number;            // Height (1 = full, 0.5 = half)
+}
+
+/**
+ * Configuration for a single card within the tooltip
+ */
+export interface TooltipCardConfig {
+  id: string;
+  type: 'chart' | 'table' | 'html';
+  
+  // For chart type
+  chartTemplate?: string;
+  
+  // For table type
+  tableDataSource?: string;
+  tableSettings?: TableSettings;
+  
+  // For HTML type
+  htmlTemplate?: string;
+  
+  // Display settings
+  title?: string;
+  showTitle?: boolean;
+  backgroundColor?: string;
+  
+  // Layout within tooltip container
+  layout: TooltipCardLayout;
+}
+
+/**
+ * Layout presets for tooltip cards (max 4 cards)
+ */
+export const TOOLTIP_LAYOUT_PRESETS = {
+  // Single card - full size
+  single: [
+    { id: 'tooltip-card-1', x: 0, y: 0, w: 1, h: 1 }
+  ],
+  // Two cards - side by side
+  twoHorizontal: [
+    { id: 'tooltip-card-1', x: 0, y: 0, w: 0.5, h: 1 },
+    { id: 'tooltip-card-2', x: 0.5, y: 0, w: 0.5, h: 1 }
+  ],
+  // Two cards - stacked vertically
+  twoVertical: [
+    { id: 'tooltip-card-1', x: 0, y: 0, w: 1, h: 0.5 },
+    { id: 'tooltip-card-2', x: 0, y: 0.5, w: 1, h: 0.5 }
+  ],
+  // Three cards - 1 top, 2 bottom
+  threeTopOne: [
+    { id: 'tooltip-card-1', x: 0, y: 0, w: 1, h: 0.5 },
+    { id: 'tooltip-card-2', x: 0, y: 0.5, w: 0.5, h: 0.5 },
+    { id: 'tooltip-card-3', x: 0.5, y: 0.5, w: 0.5, h: 0.5 }
+  ],
+  // Three cards - 2 top, 1 bottom
+  threeBottomOne: [
+    { id: 'tooltip-card-1', x: 0, y: 0, w: 0.5, h: 0.5 },
+    { id: 'tooltip-card-2', x: 0.5, y: 0, w: 0.5, h: 0.5 },
+    { id: 'tooltip-card-3', x: 0, y: 0.5, w: 1, h: 0.5 }
+  ],
+  // Four cards - 2x2 grid
+  fourGrid: [
+    { id: 'tooltip-card-1', x: 0, y: 0, w: 0.5, h: 0.5 },
+    { id: 'tooltip-card-2', x: 0.5, y: 0, w: 0.5, h: 0.5 },
+    { id: 'tooltip-card-3', x: 0, y: 0.5, w: 0.5, h: 0.5 },
+    { id: 'tooltip-card-4', x: 0.5, y: 0.5, w: 0.5, h: 0.5 }
+  ],
+};
+
+/**
+ * Create a default tooltip card configuration
+ */
+export const createDefaultTooltipCard = (id: string, layout: TooltipCardLayout): TooltipCardConfig => ({
+  id,
+  type: 'html',
+  htmlTemplate: '<div style="padding: 16px; text-align: center; color: #64748b;">Configure this card</div>',
+  title: '',
+  showTitle: false,
+  layout,
+});
+
+/**
  * Complete Tooltip Configuration for a Child Card
+ * Now supports multiple cards within the tooltip (max 4)
  */
 export interface ChildCardTooltipConfig {
   enabled: boolean;
   
-  // Content type
+  // 🔥 NEW: Multi-card support
+  useMultiCard: boolean;              // If true, use tooltipCards array; if false, use legacy single card
+  tooltipCards: TooltipCardConfig[];  // Array of tooltip cards (max 4)
+  containerLayout: 'grid' | 'vertical' | 'horizontal' | 'custom';
+  gap: number;                        // Gap between tooltip cards in pixels
+  
+  // Legacy single-card fields (kept for backward compatibility)
   type: 'chart' | 'table' | 'html';
-  
-  // Data extraction from parent chart
-  dataExtractions: TooltipDataExtraction[];
-  
-  // Calculation bindings (optional) - run calculations with extracted data
-  calculationBindings: TooltipCalculationBinding[];
-  
-  // Content templates (use extracted variables and calculation results)
-  // For 'chart' type
   chartTemplate?: string;
-  
-  // For 'table' type  
   tableDataSource?: string;
   tableSettings?: TableSettings;
-  
-  // For 'html' type
   htmlTemplate?: string;
+  
+  // Data extraction from parent chart (shared across all tooltip cards)
+  dataExtractions: TooltipDataExtraction[];
+  
+  // Calculation bindings (shared across all tooltip cards)
+  calculationBindings: TooltipCalculationBinding[];
   
   // Appearance
   width: number;
@@ -70,7 +158,7 @@ export interface ChildCardTooltipConfig {
   headerTitle?: string;
   
   // Trigger settings
-  triggerOn: 'hover' | 'click';         // How to trigger tooltip
+  triggerOn: 'hover' | 'click';
 }
 
 /**
@@ -78,6 +166,14 @@ export interface ChildCardTooltipConfig {
  */
 export const defaultChildCardTooltipConfig: ChildCardTooltipConfig = {
   enabled: false,
+  
+  // Multi-card defaults
+  useMultiCard: false,
+  tooltipCards: [],
+  containerLayout: 'grid',
+  gap: 4,
+  
+  // Legacy single-card defaults
   type: 'html',
   dataExtractions: [],
   calculationBindings: [],
@@ -132,6 +228,15 @@ export const childCardTooltipConfigState = atom<{[childCardKey: string]: ChildCa
                 // Ensure all required fields exist with proper types
                 sanitizedConfigs[key] = {
                   enabled: typeof config?.enabled === 'boolean' ? config.enabled : false,
+                  
+                  // 🔥 NEW: Multi-card fields
+                  useMultiCard: typeof config?.useMultiCard === 'boolean' ? config.useMultiCard : false,
+                  tooltipCards: Array.isArray(config?.tooltipCards) ? config.tooltipCards : [],
+                  containerLayout: ['grid', 'vertical', 'horizontal', 'custom'].includes(config?.containerLayout) 
+                    ? config.containerLayout : 'grid',
+                  gap: typeof config?.gap === 'number' ? config.gap : 4,
+                  
+                  // Legacy single-card fields
                   type: ['chart', 'table', 'html'].includes(config?.type) ? config.type : 'html',
                   dataExtractions: Array.isArray(config?.dataExtractions) ? config.dataExtractions : [],
                   calculationBindings: Array.isArray(config?.calculationBindings) ? config.calculationBindings : [],

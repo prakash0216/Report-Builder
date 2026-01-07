@@ -464,6 +464,10 @@ CREATE TABLE IF NOT EXISTS child_card_tooltip_configs (
   show_header BOOLEAN DEFAULT TRUE,
   header_title TEXT DEFAULT 'Details',
   trigger_on TEXT DEFAULT 'hover',
+  use_multi_card BOOLEAN DEFAULT FALSE,
+  tooltip_cards_json TEXT,
+  container_layout TEXT DEFAULT 'grid',
+  gap INTEGER DEFAULT 4,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   last_modified TIMESTAMP
 );
@@ -474,6 +478,18 @@ async function createChildCardTooltipConfigsTable() {
     await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS child_card_tooltip_configs_seq START 1;`);
     await dbClient.run(childCardTooltipConfigsTable);
     console.log("✅ Table 'child_card_tooltip_configs' created successfully.");
+    
+    // 🔥 Migration: Add new multi-card columns if they don't exist
+    try {
+      await dbClient.run(`ALTER TABLE child_card_tooltip_configs ADD COLUMN IF NOT EXISTS use_multi_card BOOLEAN DEFAULT FALSE;`);
+      await dbClient.run(`ALTER TABLE child_card_tooltip_configs ADD COLUMN IF NOT EXISTS tooltip_cards_json TEXT;`);
+      await dbClient.run(`ALTER TABLE child_card_tooltip_configs ADD COLUMN IF NOT EXISTS container_layout TEXT DEFAULT 'grid';`);
+      await dbClient.run(`ALTER TABLE child_card_tooltip_configs ADD COLUMN IF NOT EXISTS gap INTEGER DEFAULT 4;`);
+      console.log("✅ Migration: Added multi-card columns to 'child_card_tooltip_configs'");
+    } catch (migrationErr) {
+      // Columns may already exist, that's okay
+      console.log("ℹ️ Multi-card columns migration skipped (may already exist)");
+    }
   } catch (err) {
     console.error("❌ Error creating table 'child_card_tooltip_configs':", err.message);
   }

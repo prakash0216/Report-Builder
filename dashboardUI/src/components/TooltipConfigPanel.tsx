@@ -708,38 +708,66 @@ export default function TooltipConfigPanel({
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Header with Enable Toggle */}
+      {/* Header - Redirect to Separate Tab */}
       <Box sx={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between',
-        p: 1.5,
+        p: 2,
         borderBottom: '1px solid rgba(102, 126, 234, 0.1)',
         bgcolor: 'rgba(102, 126, 234, 0.02)',
       }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
           <TouchAppIcon sx={{ color: '#667eea', fontSize: 24 }} />
           <Typography variant="subtitle1" fontWeight={700} color="#1e293b">
             Tooltip Configuration
           </Typography>
-        </Box>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={config.enabled}
-              onChange={(e) => onChange({ enabled: e.target.checked })}
+          {config.enabled && (
+            <Chip
+              label={config.useMultiCard ? `Multi-Card (${config.tooltipCards?.length || 0})` : 'Quick Config'}
+              size="small"
               sx={{
-                '& .MuiSwitch-switchBase.Mui-checked': { color: '#667eea' },
-                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: '#667eea' },
+                bgcolor: config.enabled ? 'rgba(34, 197, 94, 0.15)' : 'rgba(102, 126, 234, 0.15)',
+                color: config.enabled ? '#22c55e' : '#667eea',
+                fontWeight: 600,
+                fontSize: '0.7rem',
               }}
             />
-          }
-          label={
-            <Typography variant="body2" fontWeight={600} color={config.enabled ? '#667eea' : '#64748b'}>
-              {config.enabled ? 'Enabled' : 'Disabled'}
-            </Typography>
-          }
-        />
+          )}
+        </Box>
+        <Alert 
+          severity="info" 
+          sx={{ 
+            py: 0.5, 
+            bgcolor: 'rgba(102, 126, 234, 0.05)',
+            border: '1px solid rgba(102, 126, 234, 0.2)',
+            '& .MuiAlert-icon': { color: '#667eea' },
+          }}
+        >
+          <Typography variant="caption">
+            <strong>Tip:</strong> For advanced multi-card tooltip layouts (up to 4 cards with charts, tables, or HTML), 
+            use the <strong>"MultiCard Tooltip Config"</strong> tab in the main navigation.
+          </Typography>
+        </Alert>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1.5 }}>
+          <Typography variant="body2" color="#64748b">
+            Quick single-card tooltip:
+          </Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={config.enabled}
+                onChange={(e) => onChange({ enabled: e.target.checked })}
+                sx={{
+                  '& .MuiSwitch-switchBase.Mui-checked': { color: '#667eea' },
+                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: '#667eea' },
+                }}
+              />
+            }
+            label={
+              <Typography variant="body2" fontWeight={600} color={config.enabled ? '#667eea' : '#64748b'}>
+                {config.enabled ? 'Enabled' : 'Disabled'}
+              </Typography>
+            }
+          />
+        </Box>
       </Box>
 
       {/* Main Content - Side by Side Layout */}
@@ -753,6 +781,7 @@ export default function TooltipConfigPanel({
           p: 2,
           minHeight: 500,
         }}>
+          {/* SINGLE-CARD MODE */}
           {/* LEFT PANEL - Configuration */}
           <Box sx={{ 
             flex: '0 0 55%', 
@@ -1607,9 +1636,9 @@ export default function TooltipConfigPanel({
               </Paper>
             </Box>
             {/* END RIGHT PANEL */}
-          </Box>
-        </Collapse>
-      </Box>
-    );
+        </Box>
+      </Collapse>
+    </Box>
+  );
 }
 

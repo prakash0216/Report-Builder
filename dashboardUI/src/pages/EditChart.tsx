@@ -38,9 +38,9 @@ import Filters from '../components/Filters';
 import {IsVisible} from "../components/IsVisible";
 import { CardArrangement } from '../components/CardArrangement';
 import Others from '../components/Others';
-// TooltipConfigTab removed - tooltip is now configured per child card in MultiCard Viz Config
 import ChildCardConfigTab from '../components/ChildCardConfigTab';
-import { ViewModule as ViewModuleIcon } from '@mui/icons-material';
+import MultiCardTooltipConfigTab from '../components/MultiCardTooltipConfigTab';
+import { ViewModule as ViewModuleIcon, TouchApp as TouchAppIcon } from '@mui/icons-material';
 
 // Define the available tabs
 type TabKey = 'connectionManager' | 'parameters' | 'dataSource' | 'filters' | 'hooks' | 'others' | 'tooltipConfig' | 'childCards';
@@ -192,6 +192,13 @@ const EditChart: React.FC = () => {
       icon: ViewModuleIcon,
       component: ChildCardConfigTab,
       color: '#764ba2'
+    },
+    {
+      key: 'tooltipConfig',
+      label: 'MultiCard Tooltip Config',
+      icon: TouchAppIcon,
+      component: MultiCardTooltipConfigTab,
+      color: '#f59e0b'
     },
     {
       key: 'hooks',
