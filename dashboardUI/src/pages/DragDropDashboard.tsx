@@ -21,7 +21,7 @@ import { variableUpdateTriggerState, variableNamesState } from '../recoil/Variab
 import { variableAtomFamily } from '../recoil/VariableFamily';
 import { filterNamesState, filterConfigFamily } from '../recoil/FiltersFamily';
 import { liveFilterFamily } from '../recoil/LiveFilterFamily';
-import { isChartVisibleSelector, chartDynamicDimensionsSelector } from '../recoil/DashboardVisibility';
+import { isChartVisibleSelector, chartDynamicDimensionsSelector, chartVisibilityVariableState } from '../recoil/DashboardVisibility';
 import { IsEditModeState } from "../recoil/IsEditeMode";
 import { dahboardNameMain } from "../recoil/DashboardName";
 import { 
@@ -159,6 +159,11 @@ export default function DropDragDashboard() {
   const variableNames = useRecoilValue(variableNamesState);
   const filterNames = useRecoilValue(filterNamesState);
   const dataLoaded = useRecoilValue(dataLoadedState);
+  // 🔥 Subscribe to visibility variable mappings to trigger re-render when rules change
+  const visibilityVariableMap = useRecoilValue(chartVisibilityVariableState);
+  
+  // 🔥 Track visibility variable values to detect changes
+  const [visibilityVarValues, setVisibilityVarValues] = useState<Record<string, any>>({});
 
   const [layouts, setLayouts] = useRecoilState(layoutState);
   const [showFilters, setShowFilters] = useState(false);
@@ -439,19 +444,121 @@ export default function DropDragDashboard() {
 
   const getChartVisibility = useRecoilCallback(({ snapshot }) => async (): Promise<Record<string, boolean>> => {
     const visibilityMap: Record<string, boolean> = {};
-    const chartIds = Object.keys(chartConfigs);
+    
+    // 🔥 Get ALL chart IDs from both chartConfigs AND childCardConfigs (for multi-card containers)
+    const chartIdsFromConfigs = Object.keys(chartConfigs);
+    const chartIdsFromContainers = Object.keys(childCardConfigs);
+    const allChartIds = Array.from(new Set([...chartIdsFromConfigs, ...chartIdsFromContainers]));
+    
+    console.log(`👁️ [Visibility] Checking ${allChartIds.length} charts (${chartIdsFromConfigs.length} from chartConfigs, ${chartIdsFromContainers.length} from childCardConfigs)`);
+    
+    // 🔥 Get the current visibility variable mappings from the "Is Visible" tab
+    const visibilityVariables = snapshot.getLoadable(chartVisibilityVariableState);
+    const visibilityVarMap = visibilityVariables.state === 'hasValue' ? visibilityVariables.contents : {};
 
-    for (const chartId of chartIds) {
+    for (const chartId of allChartIds) {
       try {
-        const isVisible = await snapshot.getPromise(isChartVisibleSelector(chartId));
-        visibilityMap[chartId] = isVisible;
+        // 🔥 First check: "Is Visible" tab (chartVisibilityVariableState) - for ALL cards
+        const visibilityVarName = visibilityVarMap[chartId];
+        let isVisibleFromTab = true; // Default: visible if no rule set
+        
+        if (visibilityVarName) {
+          try {
+            const rawValue = await snapshot.getPromise(variableAtomFamily(visibilityVarName));
+            let parsedValue: any = rawValue;
+            if (typeof rawValue === 'string') {
+              try {
+                parsedValue = JSON.parse(rawValue);
+              } catch {
+                // Keep as string
+              }
+            }
+            // If variable is true = SHOW, if false = HIDE
+            isVisibleFromTab = parsedValue === true;
+            console.log(`👁️ [Visibility] Chart ${chartId}: variable "${visibilityVarName}" = ${parsedValue} → visible: ${isVisibleFromTab}`);
+          } catch (e) {
+            console.warn(`Could not get visibility variable "${visibilityVarName}" for chart ${chartId}:`, e);
+            isVisibleFromTab = true;
+          }
+        }
+        
+        // If already hidden by "Is Visible" tab, no need to check further
+        if (!isVisibleFromTab) {
+          visibilityMap[chartId] = false;
+          continue;
+        }
+        
+        // 🔥 Second check: MultiCard Viz Config's parent visibility variable
+        const parentConfig = childCardConfigs[chartId];
+        if (parentConfig?.visibilityVariable) {
+          try {
+            const rawValue = await snapshot.getPromise(variableAtomFamily(parentConfig.visibilityVariable));
+            let parsedValue: any = rawValue;
+            if (typeof rawValue === 'string') {
+              try {
+                parsedValue = JSON.parse(rawValue);
+              } catch {
+                // Keep as string
+              }
+            }
+            
+            // If parent visibility variable is false, hide the entire container
+            if (parsedValue === false) {
+              visibilityMap[chartId] = false;
+              console.log(`👁️ [Visibility] Chart ${chartId}: MultiCard visibility variable = false → hidden`);
+              continue;
+            }
+          } catch (e) {
+            // Variable not available, use tab visibility
+          }
+        }
+        
+        visibilityMap[chartId] = isVisibleFromTab;
       } catch (e) {
         console.warn(`Could not get visibility for chart ${chartId}:`, e);
         visibilityMap[chartId] = true;
       }
     }
     return visibilityMap;
-  }, [chartConfigs]);
+  }, [chartConfigs, childCardConfigs]);
+
+  // 🔥 Get current values of all visibility variables
+  const getVisibilityVariableValues = useRecoilCallback(({ snapshot }) => async (): Promise<Record<string, any>> => {
+    const values: Record<string, any> = {};
+    
+    // Get all unique visibility variable names
+    const varNames = new Set<string>();
+    Object.values(visibilityVariableMap).forEach(name => {
+      if (name) varNames.add(name);
+    });
+    
+    // Also check child card configs for container visibility variables
+    Object.values(childCardConfigs).forEach(config => {
+      if (config?.visibilityVariable) {
+        varNames.add(config.visibilityVariable);
+      }
+    });
+    
+    // Get current value of each variable
+    for (const varName of Array.from(varNames)) {
+      try {
+        const rawValue = await snapshot.getPromise(variableAtomFamily(varName));
+        let parsedValue: any = rawValue;
+        if (typeof rawValue === 'string') {
+          try {
+            parsedValue = JSON.parse(rawValue);
+          } catch {
+            // Keep as string
+          }
+        }
+        values[varName] = parsedValue;
+      } catch (e) {
+        values[varName] = undefined;
+      }
+    }
+    
+    return values;
+  }, [visibilityVariableMap, childCardConfigs]);
 
   const getChartDimensions = useRecoilCallback(({ snapshot }) => async (): Promise<Record<string, { width: number; height: number } | null>> => {
     const dimensionMap: Record<string, { width: number; height: number } | null> = {};
@@ -477,9 +584,26 @@ export default function DropDragDashboard() {
     setAvailableVariables(vars);
   }, [getAllVariables, variableUpdateTrigger]);
 
+  // 🔥 Track visibility variable values to detect changes
+  useEffect(() => {
+    if (!dataLoaded) return;
+    
+    getVisibilityVariableValues().then((values) => {
+      const valuesStr = JSON.stringify(values);
+      const prevValuesStr = JSON.stringify(visibilityVarValues);
+      
+      if (valuesStr !== prevValuesStr) {
+        console.log(`👁️ [Visibility] Variable values changed:`, values);
+        setVisibilityVarValues(values);
+      }
+    });
+  }, [dataLoaded, getVisibilityVariableValues, variableUpdateTrigger, visibilityVariableMap]);
+
   // 🔥 KEY FIX: When visibility changes, restore ALL items to their TRUE original positions
   useEffect(() => {
     if (!dataLoaded) return; // Wait for data to load
+    
+    console.log(`🔄 [Visibility Effect] Triggered - variableUpdateTrigger: ${variableUpdateTrigger}, visibilityVarMap:`, visibilityVariableMap, 'varValues:', visibilityVarValues);
     
     getChartVisibility().then((newVisibility) => {
       // Ensure all charts in configs have visibility set (default to true if not set)
@@ -552,7 +676,7 @@ export default function DropDragDashboard() {
       previousVisibilityRef.current = { ...newVisibility };
       setChartVisibility(newVisibility);
     });
-  }, [dataLoaded, getChartVisibility, filterNames, variableUpdateTrigger, setLayouts, chartConfigs]);
+  }, [dataLoaded, getChartVisibility, filterNames, variableUpdateTrigger, setLayouts, chartConfigs, visibilityVariableMap, visibilityVarValues]);
 
   useEffect(() => {
     getChartDimensions().then(setChartDimensions);
@@ -692,7 +816,8 @@ export default function DropDragDashboard() {
     for (const item of visibleCharts) {
       const configData = chartConfigs[item.i];
       const containerConfig = childCardConfigs[item.i];
-      const isContainerCard = containerConfig?.isContainer && containerConfig.childCards?.length > 0;
+      // 🔥 All cards are now containers - check if they have child cards
+      const isContainerCard = containerConfig?.childCards?.length > 0;
       const container = document.querySelector(`[data-chart-id="${item.i}"]`) as HTMLElement | null;
 
       // 🔥 Handle Multi-Card Containers - collect child cards
@@ -1214,9 +1339,9 @@ export default function DropDragDashboard() {
     const contentType = configData?.type || 'chart';
     const isFilterOpen = openCardFilterId === item.i;
     
-    // Check if this card is a multi-card container
+    // Check if this card is a multi-card container (all cards are containers now)
     const containerConfig = childCardConfigs[item.i];
-    const isContainerCard = containerConfig?.isContainer && containerConfig.childCards?.length > 0;
+    const isContainerCard = containerConfig?.childCards?.length > 0;
 
     // Only show filter button for chart type cards and container cards
     const showFilterButton = contentType === 'chart' || isContainerCard;

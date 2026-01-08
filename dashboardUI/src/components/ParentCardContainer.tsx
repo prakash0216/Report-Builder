@@ -236,7 +236,80 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
   // Parent title height (approximate)
   const parentTitleHeight = config.showParentTitle ? 44 : 0;
 
-  // Empty state
+  // 🔥 Filter and sort child cards based on visibility and arrangement variables
+  const visibleChildCards = useMemo(() => {
+    if (!config.childCards || config.childCards.length === 0) {
+      return [];
+    }
+    
+    // If mode is 'all', show all cards; otherwise filter by individual visibility
+    let filteredCards = config.childCards;
+    
+    if (config.childVisibilityMode === 'individual') {
+      filteredCards = config.childCards.filter(child => {
+        // If no visibility variable is set, card is always visible
+        if (!child.visibilityVariable) {
+          return true;
+        }
+        
+        // Check the visibility variable value
+        const visValue = variables[child.visibilityVariable];
+        const parsedValue = typeof visValue === 'string' ? safeParse(visValue) : visValue;
+        
+        // Only show if variable is exactly true
+        return parsedValue === true;
+      });
+    }
+    
+    // Sort by arrangement variable (lower numbers first)
+    const sortedCards = [...filteredCards].sort((a, b) => {
+      // Get arrangement values (default to Infinity if no variable set)
+      const aArrangement = a.arrangementVariable && variables[a.arrangementVariable] !== undefined
+        ? Number(safeParse(variables[a.arrangementVariable])) || Infinity
+        : Infinity;
+      const bArrangement = b.arrangementVariable && variables[b.arrangementVariable] !== undefined
+        ? Number(safeParse(variables[b.arrangementVariable])) || Infinity
+        : Infinity;
+      
+      // If both have same arrangement (or both undefined), maintain original order
+      if (aArrangement === bArrangement) {
+        return 0;
+      }
+      
+      return aArrangement - bArrangement;
+    });
+    
+    return sortedCards;
+  }, [config.childCards, config.childVisibilityMode, variables]);
+
+  // 🔥 Get dynamic dimensions for a child card based on its dimension conditions
+  const getChildDynamicDimensions = useCallback((childConfig: typeof config.childCards[0]): { width: number; height: number } | null => {
+    const conditions = childConfig.dimensionConditions;
+    if (!conditions || conditions.length === 0) {
+      return null; // No conditions = use default layout dimensions
+    }
+    
+    // Sort by priority (lower number = higher priority)
+    const sortedConditions = [...conditions].sort((a, b) => a.priority - b.priority);
+    
+    // Check each condition in order - first match wins
+    for (const condition of sortedConditions) {
+      const varValue = variables[condition.variableName];
+      const parsedValue = typeof varValue === 'string' ? safeParse(varValue) : varValue;
+      
+      if (typeof parsedValue === 'boolean' && parsedValue === condition.expectedValue) {
+        // First match wins!
+        return {
+          width: condition.width,
+          height: condition.height,
+        };
+      }
+    }
+    
+    return null; // No conditions matched
+  }, [variables]);
+
+  // Empty state - no cards configured
   if (!config.childCards || config.childCards.length === 0) {
     return (
       <Box
@@ -253,6 +326,37 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
         }}
       >
         No child cards configured. Open MultiCard Viz Config to add cards.
+      </Box>
+    );
+  }
+  
+  // Empty state - all cards hidden by visibility rules
+  if (visibleChildCards.length === 0) {
+    return (
+      <Box
+        ref={containerRef}
+        sx={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#9ca3af',
+          fontSize: '0.875rem',
+          backgroundColor: '#fafafa',
+          gap: 1,
+        }}
+      >
+        {renderParentTitle()}
+        <Box sx={{ textAlign: 'center', p: 2 }}>
+          <Typography variant="body2" color="#9ca3af">
+            All child cards are currently hidden by visibility rules.
+          </Typography>
+          <Typography variant="caption" color="#cbd5e1">
+            Adjust filter values to show cards.
+          </Typography>
+        </Box>
       </Box>
     );
   }
@@ -302,30 +406,38 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
               width: '100%',
             }}
           >
-            {config.childCards.map((childConfig) => (
-              <Box
-                key={childConfig.id}
-                sx={{
-                  width: `calc(${childConfig.layout.w * 100}% - ${config.gap}px)`,
-                  flex: `0 0 calc(${childConfig.layout.w * 100}% - ${config.gap}px)`,
-                  height: '100%', // Fill the row height
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  border: '1px solid rgba(0, 0, 0, 0.06)',
-                }}
-              >
-                <ChildCard
-                  config={childConfig}
-                  parentCardId={parentCardId}
-                  parentWidth={dimensions.width * childConfig.layout.w}
-                  parentHeight={contentHeight - (config.gap * 2)} // Account for padding
-                  gap={0}
-                  showExport={showExport}
-                  isFullSizePreview={true}
-                />
-              </Box>
-            ))}
+            {/* 🔥 Use visibleChildCards (filtered & sorted) with dynamic dimensions */}
+            {visibleChildCards.map((childConfig) => {
+              // Get dynamic dimensions if conditions match
+              const dynamicDims = getChildDynamicDimensions(childConfig);
+              const effectiveWidth = dynamicDims?.width ?? childConfig.layout.w;
+              const effectiveHeight = dynamicDims?.height ?? 1; // 1 = 100% height for scroll mode
+              
+              return (
+                <Box
+                  key={childConfig.id}
+                  sx={{
+                    width: `calc(${effectiveWidth * 100}% - ${config.gap}px)`,
+                    flex: `0 0 calc(${effectiveWidth * 100}% - ${config.gap}px)`,
+                    height: `${effectiveHeight * 100}%`, // Use dynamic height percentage
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    border: '1px solid rgba(0, 0, 0, 0.06)',
+                  }}
+                >
+                  <ChildCard
+                    config={childConfig}
+                    parentCardId={parentCardId}
+                    parentWidth={dimensions.width * effectiveWidth}
+                    parentHeight={(contentHeight - (config.gap * 2)) * effectiveHeight}
+                    gap={0}
+                    showExport={showExport}
+                    isFullSizePreview={true}
+                  />
+                </Box>
+              );
+            })}
           </Box>
         </Box>
       </Box>
@@ -349,7 +461,7 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
       {/* 🔥 Parent Card Title */}
       {renderParentTitle()}
       
-      {/* Child cards area */}
+      {/* Child cards area - 🔥 Use visibleChildCards (filtered & sorted) with dynamic dimensions */}
       <Box
         sx={{
           flex: 1,
@@ -357,17 +469,32 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
           width: '100%',
         }}
       >
-        {config.childCards.map((childConfig) => (
-          <ChildCard
-            key={childConfig.id}
-            config={childConfig}
-            parentCardId={parentCardId}
-            parentWidth={dimensions.width}
-            parentHeight={dimensions.height - parentTitleHeight}
-            gap={config.gap}
-            showExport={showExport}
-          />
-        ))}
+        {visibleChildCards.map((childConfig) => {
+          // Get dynamic dimensions if conditions match
+          const dynamicDims = getChildDynamicDimensions(childConfig);
+          
+          // Create modified config with effective dimensions
+          const effectiveConfig = dynamicDims ? {
+            ...childConfig,
+            layout: {
+              ...childConfig.layout,
+              w: dynamicDims.width,
+              h: dynamicDims.height,
+            }
+          } : childConfig;
+          
+          return (
+            <ChildCard
+              key={childConfig.id}
+              config={effectiveConfig}
+              parentCardId={parentCardId}
+              parentWidth={dimensions.width}
+              parentHeight={dimensions.height - parentTitleHeight}
+              gap={config.gap}
+              showExport={showExport}
+            />
+          );
+        })}
       </Box>
     </Box>
   );

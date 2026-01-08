@@ -722,6 +722,52 @@ const InteractiveLayoutEditor: React.FC<InteractiveLayoutEditorProps> = ({
     });
   };
 
+  // 🔥 Check if any collision exists in a card array
+  const hasAnyCollision = (cards: ChildCardConfig[]): boolean => {
+    for (let i = 0; i < cards.length; i++) {
+      // bounds
+      const l = cards[i].layout;
+      if (l.x < 0 || l.y < 0 || l.x + l.w > 1 || l.y + l.h > 1) return true;
+      for (let j = i + 1; j < cards.length; j++) {
+        if (cardsOverlap(cards[i].layout, cards[j].layout)) return true;
+      }
+    }
+    return false;
+  };
+
+  // 🔥 Auto-layout helper within the editor (fallback when space is blocked)
+  const applyAutoLayoutLocal = (cards: ChildCardConfig[]): ChildCardConfig[] => {
+    const count = cards.length;
+    if (count === 1) {
+      return cards.map(c => ({ ...c, layout: { ...c.layout, x: 0, y: 0, w: 1, h: 1, id: c.layout.id } }));
+    }
+    if (count === 2) {
+      const layouts = [
+        { x: 0, y: 0, w: 0.5, h: 1 },
+        { x: 0.5, y: 0, w: 0.5, h: 1 },
+      ];
+      return cards.map((c, idx) => ({ ...c, layout: { ...c.layout, ...layouts[idx], id: c.layout.id } }));
+    }
+    if (count === 3) {
+      const layouts = [
+        { x: 0, y: 0, w: 0.5, h: 0.5 },
+        { x: 0.5, y: 0, w: 0.5, h: 0.5 },
+        { x: 0, y: 0.5, w: 1, h: 0.5 },
+      ];
+      return cards.map((c, idx) => ({ ...c, layout: { ...c.layout, ...layouts[idx], id: c.layout.id } }));
+    }
+    if (count >= 4) {
+      const layouts = [
+        { x: 0, y: 0, w: 0.5, h: 0.5 },
+        { x: 0.5, y: 0, w: 0.5, h: 0.5 },
+        { x: 0, y: 0.5, w: 0.5, h: 0.5 },
+        { x: 0.5, y: 0.5, w: 0.5, h: 0.5 },
+      ];
+      return cards.map((c, idx) => ({ ...c, layout: { ...c.layout, ...layouts[Math.min(idx, 3)], id: c.layout.id } }));
+    }
+    return cards;
+  };
+
   // 🔥 Snap value to grid
   const snapToGrid = (value: number): number => {
     return Math.round(value * GRID_COLS) / GRID_COLS;
@@ -730,6 +776,146 @@ const InteractiveLayoutEditor: React.FC<InteractiveLayoutEditorProps> = ({
   // 🔥 Clamp value between min and max
   const clamp = (value: number, min: number, max: number): number => {
     return Math.max(min, Math.min(max, value));
+  };
+
+  // 🔥 Fix any overlaps in the current layout by repositioning cards
+  const fixOverlaps = (cards: ChildCardConfig[]): ChildCardConfig[] => {
+    if (cards.length <= 1) return cards;
+    
+    const result = cards.map(card => ({ ...card, layout: { ...card.layout } }));
+    
+    // Process cards one by one
+    for (let i = 1; i < result.length; i++) {
+      const currentCard = result[i];
+      let currentLayout = currentCard.layout;
+      
+      // Check if this card overlaps with any previous card
+      const hasOverlapWithPrevious = () => {
+        for (let j = 0; j < i; j++) {
+          if (cardsOverlap(currentLayout, result[j].layout)) {
+            return true;
+          }
+        }
+        return false;
+      };
+      
+      if (hasOverlapWithPrevious()) {
+        // Try to find a valid position
+        const gridStep = 1 / GRID_COLS;
+        let found = false;
+        
+        // Try positions in a grid pattern
+        for (let y = 0; y < GRID_ROWS && !found; y++) {
+          for (let x = 0; x < GRID_COLS && !found; x++) {
+            const testX = snapToGrid(x / GRID_COLS);
+            const testY = snapToGrid(y / GRID_ROWS);
+            
+            // Skip if would go out of bounds
+            if (testX + currentLayout.w > 1 || testY + currentLayout.h > 1) continue;
+            
+            const testLayout = { ...currentLayout, x: testX, y: testY };
+            
+            // Check against all previous cards
+            let valid = true;
+            for (let j = 0; j < i; j++) {
+              if (cardsOverlap(testLayout, result[j].layout)) {
+                valid = false;
+                break;
+              }
+            }
+            
+            if (valid) {
+              currentLayout = testLayout;
+              found = true;
+            }
+          }
+        }
+        
+        // If still not found, shrink the card and try again
+        if (!found) {
+          const smallerLayout = {
+            ...currentLayout,
+            w: Math.max(MIN_SIZE * 2, currentLayout.w / 2),
+            h: Math.max(MIN_SIZE * 2, currentLayout.h / 2),
+          };
+          
+          for (let y = 0; y < GRID_ROWS && !found; y++) {
+            for (let x = 0; x < GRID_COLS && !found; x++) {
+              const testX = snapToGrid(x / GRID_COLS);
+              const testY = snapToGrid(y / GRID_ROWS);
+              
+              if (testX + smallerLayout.w > 1 || testY + smallerLayout.h > 1) continue;
+              
+              const testLayout = { ...smallerLayout, x: testX, y: testY };
+              
+              let valid = true;
+              for (let j = 0; j < i; j++) {
+                if (cardsOverlap(testLayout, result[j].layout)) {
+                  valid = false;
+                  break;
+                }
+              }
+              
+              if (valid) {
+                currentLayout = testLayout;
+                found = true;
+              }
+            }
+          }
+        }
+        
+        result[i] = { ...currentCard, layout: currentLayout };
+      }
+    }
+    
+    return result;
+  };
+
+  // 🔥 Find the nearest valid position that doesn't overlap with any other card
+  const findNearestValidPosition = (
+    movingCardIndex: number,
+    targetLayout: ChildCardLayout,
+    cards: ChildCardConfig[]
+  ): ChildCardLayout | null => {
+    // First check if target position is already valid
+    if (!hasCollision(targetLayout, movingCardIndex, cards)) {
+      return targetLayout;
+    }
+    
+    // Try to find a valid position by adjusting slightly
+    const gridStep = 1 / GRID_COLS;
+    const maxSteps = 6; // Search up to 6 grid steps in each direction
+    
+    for (let step = 1; step <= maxSteps; step++) {
+      const offset = step * gridStep;
+      
+      // Try different directions: right, left, down, up, diagonals
+      const directions = [
+        { dx: offset, dy: 0 },      // right
+        { dx: -offset, dy: 0 },     // left
+        { dx: 0, dy: offset },      // down
+        { dx: 0, dy: -offset },     // up
+        { dx: offset, dy: offset }, // down-right
+        { dx: -offset, dy: offset },// down-left
+        { dx: offset, dy: -offset },// up-right
+        { dx: -offset, dy: -offset }// up-left
+      ];
+      
+      for (const { dx, dy } of directions) {
+        const testLayout = {
+          ...targetLayout,
+          x: snapToGrid(clamp(targetLayout.x + dx, 0, 1 - targetLayout.w)),
+          y: snapToGrid(clamp(targetLayout.y + dy, 0, 1 - targetLayout.h)),
+        };
+        
+        if (!hasCollision(testLayout, movingCardIndex, cards)) {
+          return testLayout;
+        }
+      }
+    }
+    
+    // No valid position found
+    return null;
   };
 
   // Handle mouse move for resize - with ALL edges support
@@ -790,14 +976,25 @@ const InteractiveLayoutEditor: React.FC<InteractiveLayoutEditorProps> = ({
           break;
       }
 
-      // Check for collision
+      // 🔥 Check for collision and find nearest valid position
       const wouldCollide = hasCollision(newLayout, resizing.cardIndex, newCards);
-      setHasOverlap(wouldCollide);
       
-      // Only apply if no collision
-      if (!wouldCollide) {
+      if (wouldCollide) {
+        // Try to find a valid nearby position
+        const validPosition = findNearestValidPosition(resizing.cardIndex, newLayout, newCards);
+        if (validPosition) {
+          newCards[resizing.cardIndex] = { ...card, layout: validPosition };
+          onLayoutChange(newCards);
+          setHasOverlap(false);
+        } else {
+          // No valid position - show overlap indicator and don't apply
+          setHasOverlap(true);
+        }
+      } else {
+        // No collision - apply directly
         newCards[resizing.cardIndex] = { ...card, layout: newLayout };
         onLayoutChange(newCards);
+        setHasOverlap(false);
       }
     };
 
@@ -831,14 +1028,25 @@ const InteractiveLayoutEditor: React.FC<InteractiveLayoutEditorProps> = ({
 
       const newLayout = { ...card.layout, x: newX, y: newY };
       
-      // Check for collision
+      // 🔥 Check for collision - block if overlapping
       const wouldCollide = hasCollision(newLayout, dragging.cardIndex, newCards);
-      setHasOverlap(wouldCollide);
       
-      // Only apply if no collision
-      if (!wouldCollide) {
+      if (wouldCollide) {
+        // Try to find a valid nearby position
+        const validPosition = findNearestValidPosition(dragging.cardIndex, newLayout, newCards);
+        if (validPosition) {
+          newCards[dragging.cardIndex] = { ...card, layout: validPosition };
+          onLayoutChange(newCards);
+          setHasOverlap(false);
+        } else {
+          // No valid position - show overlap indicator and don't apply
+          setHasOverlap(true);
+        }
+      } else {
+        // No collision - apply directly
         newCards[dragging.cardIndex] = { ...card, layout: newLayout };
         onLayoutChange(newCards);
+        setHasOverlap(false);
       }
     };
 
@@ -862,11 +1070,11 @@ const InteractiveLayoutEditor: React.FC<InteractiveLayoutEditorProps> = ({
   };
 
   // 🔥 Find non-overlapping position for new card
-  // Default size is 3/12 grid (25%) as requested
+  // Will try to find free space, or shrink/rearrange existing cards if needed
   const findAvailablePosition = (): { x: number; y: number; w: number; h: number } => {
     const defaultSize = { w: 3 / GRID_COLS, h: 3 / GRID_ROWS }; // 3/12 = 0.25 (25%)
     
-    // Try grid positions to find a free spot
+    // Strategy 1: Try grid positions to find a free spot
     for (let y = 0; y < GRID_ROWS; y++) {
       for (let x = 0; x < GRID_COLS; x++) {
         const testLayout = {
@@ -889,8 +1097,79 @@ const InteractiveLayoutEditor: React.FC<InteractiveLayoutEditorProps> = ({
       }
     }
     
-    // Fallback: smaller size at origin
-    return { x: 0, y: 0, w: 3 / GRID_COLS, h: 3 / GRID_ROWS };
+    // Strategy 2: Try smaller sizes
+    const smallerSizes = [
+      { w: 2 / GRID_COLS, h: 2 / GRID_ROWS },
+      { w: 2 / GRID_COLS, h: 3 / GRID_ROWS },
+      { w: 3 / GRID_COLS, h: 2 / GRID_ROWS },
+    ];
+    
+    for (const size of smallerSizes) {
+      for (let y = 0; y <= GRID_ROWS - (size.h * GRID_ROWS); y++) {
+        for (let x = 0; x <= GRID_COLS - (size.w * GRID_COLS); x++) {
+          const testLayout = {
+            id: 'test',
+            x: x / GRID_COLS,
+            y: y / GRID_ROWS,
+            w: size.w,
+            h: size.h,
+          };
+          
+          const hasAnyCollision = pendingCards.some(card => cardsOverlap(testLayout, card.layout));
+          if (!hasAnyCollision) {
+            return { x: testLayout.x, y: testLayout.y, ...size };
+          }
+        }
+      }
+    }
+    
+    // Strategy 3: Find the first row with space at the bottom
+    const cardBottoms = pendingCards.map(c => c.layout.y + c.layout.h);
+    const lowestBottom = Math.max(...cardBottoms, 0);
+    
+    if (lowestBottom + defaultSize.h <= 1) {
+      return { x: 0, y: snapToGrid(lowestBottom), ...defaultSize };
+    }
+    
+    // Strategy 4: Place next to existing cards
+    for (const card of pendingCards) {
+      // Try right of each card
+      const rightX = card.layout.x + card.layout.w;
+      if (rightX + defaultSize.w <= 1) {
+        const testLayout = { id: 'test', x: rightX, y: card.layout.y, ...defaultSize };
+        const hasAnyCollision = pendingCards.some(c => cardsOverlap(testLayout, c.layout));
+        if (!hasAnyCollision) {
+          return { x: snapToGrid(rightX), y: snapToGrid(card.layout.y), ...defaultSize };
+        }
+      }
+      
+      // Try below each card
+      const belowY = card.layout.y + card.layout.h;
+      if (belowY + defaultSize.h <= 1) {
+        const testLayout = { id: 'test', x: card.layout.x, y: belowY, ...defaultSize };
+        const hasAnyCollision = pendingCards.some(c => cardsOverlap(testLayout, c.layout));
+        if (!hasAnyCollision) {
+          return { x: snapToGrid(card.layout.x), y: snapToGrid(belowY), ...defaultSize };
+        }
+      }
+    }
+    
+    // Strategy 5: Compact all cards and place at the end
+    // This creates space by using a simpler layout
+    const numCards = pendingCards.length;
+    if (numCards === 1) {
+      // Put new card to the right
+      return { x: 0.5, y: 0, w: 0.5, h: 0.5 };
+    } else if (numCards === 2) {
+      // Put in bottom left
+      return { x: 0, y: 0.5, w: 0.5, h: 0.5 };
+    } else if (numCards === 3) {
+      // Put in bottom right
+      return { x: 0.5, y: 0.5, w: 0.5, h: 0.5 };
+    }
+    
+    // Final fallback: place at origin with minimum size
+    return { x: 0, y: 0, w: MIN_SIZE * 3, h: MIN_SIZE * 3 };
   };
 
   // 🔥 Add a new card to the layout
@@ -907,7 +1186,12 @@ const InteractiveLayoutEditor: React.FC<InteractiveLayoutEditorProps> = ({
     };
     
     const newCard = createDefaultChildCard(childId, newLayout);
-    onLayoutChange([...pendingCards, newCard]);
+    // Ensure no overlap; if overlap exists, auto-layout to create space
+    let newCards = [...pendingCards, newCard];
+    if (newCards.length > 1 && hasAnyCollision(newCards)) {
+      newCards = applyAutoLayoutLocal(newCards);
+    }
+    onLayoutChange(newCards);
   };
 
   // 🔥 Remove a card from the layout
@@ -1300,6 +1584,177 @@ export default function ChildCardConfigTab() {
     setJsonError(null); // Clear any JSON errors when switching cards
   }, [selectedChildIndex]);
 
+  // 🔥 Helper function to check if two card layouts overlap
+  const cardsOverlapCheck = (a: ChildCardLayout, b: ChildCardLayout): boolean => {
+    const tolerance = 0.001;
+    return !(a.x + a.w <= b.x + tolerance || b.x + b.w <= a.x + tolerance || 
+             a.y + a.h <= b.y + tolerance || b.y + b.h <= a.y + tolerance);
+  };
+
+  // 🔥 Helper function to snap value to grid
+  const snapToGridValue = (value: number): number => {
+    const GRID_COLS = 12;
+    return Math.round(value * GRID_COLS) / GRID_COLS;
+  };
+
+  // 🔥 Fix any overlaps in the card layout by repositioning cards
+  const fixOverlapsForCards = (cards: ChildCardConfig[]): ChildCardConfig[] => {
+    if (cards.length <= 1) return cards;
+    
+    const result = cards.map(card => ({ ...card, layout: { ...card.layout } }));
+    const GRID_COLS = 12;
+    const GRID_ROWS = 12;
+    const MIN_SIZE = 1 / GRID_COLS;
+    
+    // Process cards one by one
+    for (let i = 1; i < result.length; i++) {
+      const currentCard = result[i];
+      let currentLayout = currentCard.layout;
+      
+      // Check if this card overlaps with any previous card
+      const hasOverlapWithPrevious = () => {
+        for (let j = 0; j < i; j++) {
+          if (cardsOverlapCheck(currentLayout, result[j].layout)) {
+            return true;
+          }
+        }
+        return false;
+      };
+      
+      if (hasOverlapWithPrevious()) {
+        // Try to find a valid position
+        let found = false;
+        
+        // Try positions in a grid pattern
+        for (let y = 0; y < GRID_ROWS && !found; y++) {
+          for (let x = 0; x < GRID_COLS && !found; x++) {
+            const testX = snapToGridValue(x / GRID_COLS);
+            const testY = snapToGridValue(y / GRID_ROWS);
+            
+            // Skip if would go out of bounds
+            if (testX + currentLayout.w > 1 || testY + currentLayout.h > 1) continue;
+            
+            const testLayout = { ...currentLayout, x: testX, y: testY };
+            
+            // Check against all previous cards
+            let valid = true;
+            for (let j = 0; j < i; j++) {
+              if (cardsOverlapCheck(testLayout, result[j].layout)) {
+                valid = false;
+                break;
+              }
+            }
+            
+            if (valid) {
+              currentLayout = testLayout;
+              found = true;
+            }
+          }
+        }
+        
+        // If still not found, shrink the card and try again
+        if (!found) {
+          const smallerLayout = {
+            ...currentLayout,
+            w: Math.max(MIN_SIZE * 2, currentLayout.w / 2),
+            h: Math.max(MIN_SIZE * 2, currentLayout.h / 2),
+          };
+          
+          for (let y = 0; y < GRID_ROWS && !found; y++) {
+            for (let x = 0; x < GRID_COLS && !found; x++) {
+              const testX = snapToGridValue(x / GRID_COLS);
+              const testY = snapToGridValue(y / GRID_ROWS);
+              
+              if (testX + smallerLayout.w > 1 || testY + smallerLayout.h > 1) continue;
+              
+              const testLayout = { ...smallerLayout, x: testX, y: testY };
+              
+              let valid = true;
+              for (let j = 0; j < i; j++) {
+                if (cardsOverlapCheck(testLayout, result[j].layout)) {
+                  valid = false;
+                  break;
+                }
+              }
+              
+              if (valid) {
+                currentLayout = testLayout;
+                found = true;
+              }
+            }
+          }
+        }
+        
+        result[i] = { ...currentCard, layout: currentLayout };
+      }
+    }
+    
+    return result;
+  };
+
+  // 🔥 Helper: check if any overlap exists in a card array
+  const hasAnyOverlap = (cards: ChildCardConfig[]): boolean => {
+    for (let i = 0; i < cards.length; i++) {
+      for (let j = i + 1; j < cards.length; j++) {
+        if (cardsOverlapCheck(cards[i].layout, cards[j].layout)) return true;
+      }
+      const layout = cards[i].layout;
+      if (layout.x < 0 || layout.y < 0 || layout.x + layout.w > 1 || layout.y + layout.h > 1) return true;
+    }
+    return false;
+  };
+
+  // 🔥 Helper: auto-layout cards when adding (prevents full-width card from blocking space)
+  const applyAutoLayout = (cards: ChildCardConfig[]): ChildCardConfig[] => {
+    const count = cards.length;
+    if (count === 1) {
+      return cards.map((c, idx) => ({
+        ...c,
+        layout: { ...c.layout, x: 0, y: 0, w: 1, h: 1, id: c.layout.id },
+      }));
+    }
+    if (count === 2) {
+      const layouts = [
+        { x: 0, y: 0, w: 0.5, h: 1 },
+        { x: 0.5, y: 0, w: 0.5, h: 1 },
+      ];
+      return cards.map((c, idx) => ({
+        ...c,
+        layout: { ...c.layout, ...layouts[idx], id: c.layout.id },
+      }));
+    }
+    if (count === 3) {
+      const layouts = [
+        { x: 0, y: 0, w: 0.5, h: 0.5 },
+        { x: 0.5, y: 0, w: 0.5, h: 0.5 },
+        { x: 0, y: 0.5, w: 1, h: 0.5 },
+      ];
+      return cards.map((c, idx) => ({
+        ...c,
+        layout: { ...c.layout, ...layouts[idx], id: c.layout.id },
+      }));
+    }
+    if (count >= 4) {
+      const layouts = [
+        { x: 0, y: 0, w: 0.5, h: 0.5 },
+        { x: 0.5, y: 0, w: 0.5, h: 0.5 },
+        { x: 0, y: 0.5, w: 0.5, h: 0.5 },
+        { x: 0.5, y: 0.5, w: 0.5, h: 0.5 },
+      ];
+      return cards.map((c, idx) => ({
+        ...c,
+        layout: { ...c.layout, ...layouts[Math.min(idx, 3)], id: c.layout.id },
+      }));
+    }
+    return cards;
+  };
+
+  // 🔥 Helper: ensure a layout has no overlaps, otherwise auto-layout
+  const ensureNoOverlap = (cards: ChildCardConfig[]): ChildCardConfig[] => {
+    if (!hasAnyOverlap(cards)) return cards;
+    return applyAutoLayout(cards);
+  };
+
   // 🔥 IMPROVED: Helper function to detect layout preset from child cards
   // Returns 'custom' if layout doesn't match any standard preset
   const detectLayoutPreset = (childCards: ChildCardConfig[]): string => {
@@ -1363,13 +1818,38 @@ export default function ChildCardConfigTab() {
         return safeIndex;
       });
     } else {
-      setParentConfig({ ...defaultParentCardConfig, isContainer: false });
+      // 🔥 NEW: Auto-create a default container with one child card
+      // Every card is now a multi-card container by default
+      const childId = `${id}_child1`;
+      const defaultLayout: ChildCardLayout = { 
+        id: childId, 
+        x: 0, 
+        y: 0, 
+        w: 1, // Full width (100%)
+        h: 1, // Full height (100%)
+      };
+      const newConfig: ParentCardConfig = {
+        ...defaultParentCardConfig,
+        isContainer: true,
+        containerLayout: 'custom',
+        childCards: [createDefaultChildCard(childId, defaultLayout)],
+      };
+      setParentConfig(newConfig);
       setSelectedLayoutPreset('single');
+      
+      // Save to state immediately
+      if (id) {
+        setChildCardConfigs(prev => ({
+          ...prev,
+          [id]: newConfig,
+        }));
+      }
+      
       if (!hasInitializedRef.current) {
         setSelectedChildIndex(0);
       }
     }
-  }, [id, childCardConfigs]);
+  }, [id, childCardConfigs, setChildCardConfigs]);
 
   // Save config whenever it changes
   const saveConfig = useCallback((config: ParentCardConfig) => {
@@ -1396,41 +1876,7 @@ export default function ChildCardConfigTab() {
     return match ? parseInt(match[1], 10) : fallbackIndex + 1;
   };
 
-  // Handle enabling container mode
-  const handleEnableContainer = (enabled: boolean) => {
-    if (enabled) {
-      // Generate unique ID based on parent card ID: parentId_child1
-      const childId = `${id}_child1`;
-      // Default card size: 3/12 grid (25%)
-      const defaultLayout: ChildCardLayout = { 
-        id: childId, 
-        x: 0, 
-        y: 0, 
-        w: 3 / 12, // 25% width
-        h: 3 / 12, // 25% height
-      };
-      const newConfig = {
-        ...parentConfig,
-        isContainer: true,
-        containerLayout: 'custom' as const,
-        childCards: parentConfig.childCards.length === 0 
-          ? [createDefaultChildCard(childId, defaultLayout)]
-          : parentConfig.childCards,
-      };
-      setParentConfig(newConfig);
-      saveConfig(newConfig);
-      // Set to custom preset and open layout accordion
-      setSelectedLayoutPreset('custom');
-      setExpandedAccordion('layout');
-    } else {
-      const newConfig = {
-        ...parentConfig,
-        isContainer: false,
-      };
-      setParentConfig(newConfig);
-      saveConfig(newConfig);
-    }
-  };
+  // 🔥 handleEnableContainer removed - all cards are now containers by default
 
   // 🔥 Generate pending cards for a preset (for preview)
   const generatePendingCardsForPreset = (presetKey: string): ChildCardConfig[] => {
@@ -1447,14 +1893,15 @@ export default function ChildCardConfigTab() {
         };
         return [createDefaultChildCard(childId, newLayout)];
       }
-      return [...parentConfig.childCards];
+      // Fix any overlaps in existing custom layout
+      return fixOverlapsForCards([...parentConfig.childCards]);
     }
     
     const preset = LAYOUT_PRESETS[presetKey as keyof typeof LAYOUT_PRESETS];
-    if (!preset) return [...parentConfig.childCards];
+    if (!preset) return fixOverlapsForCards([...parentConfig.childCards]);
 
     // Create child cards based on preset
-    return preset.map((layout, index) => {
+    const cards = preset.map((layout, index) => {
       // Preserve existing child card data if it exists
       const existingChild = parentConfig.childCards[index];
       if (existingChild) {
@@ -1466,6 +1913,9 @@ export default function ChildCardConfigTab() {
         return createDefaultChildCard(childId, { ...layout, id: childId });
       }
     });
+    
+    // Fix any overlaps that might have occurred
+    return fixOverlapsForCards(cards);
   };
 
   // 🔥 Handle layout preset selection - NOW WITH PREVIEW MODE
@@ -1745,49 +2195,8 @@ export default function ChildCardConfigTab() {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Enable Container Toggle */}
-      <Paper
-        elevation={0}
-        sx={{
-          p: 2,
-          mb: 2,
-          borderRadius: 2,
-          border: '1px solid rgba(102, 126, 234, 0.2)',
-          background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)',
-        }}
-      >
-        <FormControlLabel
-          control={
-            <Switch
-              checked={parentConfig.isContainer}
-              onChange={(e) => handleEnableContainer(e.target.checked)}
-              sx={{
-                '& .MuiSwitch-switchBase.Mui-checked': {
-                  color: '#667eea',
-                  '&:hover': { backgroundColor: 'rgba(102, 126, 234, 0.08)' },
-                },
-                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                  backgroundColor: '#667eea',
-                },
-              }}
-            />
-          }
-          label={
-            <Box>
-              <Typography variant="subtitle1" fontWeight={600} color="#374151">
-                Enable Multi-Card Container
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Turn this card into a container that holds up to 4 child cards (charts, tables, or HTML)
-              </Typography>
-            </Box>
-          }
-        />
-      </Paper>
-
-      {/* Container Configuration (only shown when enabled) */}
-      {parentConfig.isContainer && (
-        <Box sx={{ display: 'flex', flex: 1, gap: 2, minHeight: 0 }}>
+      {/* Multi-Card Container Configuration - Always enabled */}
+      <Box sx={{ display: 'flex', flex: 1, gap: 2, minHeight: 0 }}>
           {/* Left Panel - Configuration */}
           <Box sx={{ width: '55%', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
             {/* Scrollable config area */}
@@ -2162,6 +2571,468 @@ export default function ChildCardConfigTab() {
                     </Box>
                   </Stack>
                 </Box>
+              </AccordionDetails>
+            </Accordion>
+
+            {/* 🔥 NEW: Visibility & Arrangement Section */}
+            <Accordion
+              expanded={expandedAccordion === 'visibility'}
+              onChange={(_, isExpanded) => setExpandedAccordion(isExpanded ? 'visibility' : false)}
+              sx={{
+                mb: 1,
+                '&:before': { display: 'none' },
+                borderRadius: '8px !important',
+                overflow: 'hidden',
+                border: '1px solid rgba(139, 92, 246, 0.2)',
+                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.02) 0%, rgba(167, 139, 250, 0.02) 100%)',
+              }}
+            >
+              <AccordionSummary 
+                expandIcon={<ExpandMoreIcon />}
+                sx={{
+                  '&:hover': {
+                    background: 'rgba(139, 92, 246, 0.05)',
+                  },
+                }}
+              >
+                <Typography fontWeight={700} sx={{ color: '#8b5cf6', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  👁️ Visibility & Arrangement
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Stack spacing={2.5}>
+                  {/* Parent Card Visibility */}
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      border: '1px solid rgba(139, 92, 246, 0.2)',
+                      borderRadius: 2,
+                      bgcolor: 'rgba(139, 92, 246, 0.02)',
+                    }}
+                  >
+                    <Typography variant="subtitle2" fontWeight={700} color="#8b5cf6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      🏠 Parent Container Visibility
+                    </Typography>
+                    <Typography variant="caption" color="#64748b" sx={{ display: 'block', mb: 2 }}>
+                      Control when this entire multi-card container is visible on the dashboard
+                    </Typography>
+                    
+                    <Stack spacing={2}>
+                      {/* Parent Visibility Variable */}
+                      <FormControl size="small" fullWidth>
+                        <InputLabel sx={{ fontSize: '0.75rem' }}>Visibility Variable (Boolean)</InputLabel>
+                        <Select
+                          value={parentConfig.visibilityVariable || ''}
+                          onChange={(e) => handleParentConfigChange({ visibilityVariable: e.target.value })}
+                          label="Visibility Variable (Boolean)"
+                          sx={{ bgcolor: 'white', borderRadius: 1.5 }}
+                        >
+                          <MenuItem value="">
+                            <em>Always Visible (No Variable)</em>
+                          </MenuItem>
+                          {variableNamesList.map((varName) => (
+                            <MenuItem key={varName} value={varName}>
+                              {varName}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, fontSize: '0.6rem' }}>
+                          When variable is <code style={{ background: '#dcfce7', padding: '1px 4px', borderRadius: 2 }}>true</code> → Container is <strong>visible</strong>
+                        </Typography>
+                      </FormControl>
+                      
+                      {/* Parent Arrangement Variable */}
+                      <FormControl size="small" fullWidth>
+                        <InputLabel sx={{ fontSize: '0.75rem' }}>Arrangement Variable (Number)</InputLabel>
+                        <Select
+                          value={parentConfig.arrangementVariable || ''}
+                          onChange={(e) => handleParentConfigChange({ arrangementVariable: e.target.value })}
+                          label="Arrangement Variable (Number)"
+                          sx={{ bgcolor: 'white', borderRadius: 1.5 }}
+                        >
+                          <MenuItem value="">
+                            <em>Default Order (No Variable)</em>
+                          </MenuItem>
+                          {variableNamesList.map((varName) => (
+                            <MenuItem key={varName} value={varName}>
+                              {varName}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, fontSize: '0.6rem' }}>
+                          Lower number = appears first on dashboard (e.g., 1 before 2)
+                        </Typography>
+                      </FormControl>
+                    </Stack>
+                  </Paper>
+                  
+                  {/* Child Cards Visibility Mode */}
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      border: '1px solid rgba(16, 185, 129, 0.2)',
+                      borderRadius: 2,
+                      bgcolor: 'rgba(16, 185, 129, 0.02)',
+                    }}
+                  >
+                    <Typography variant="subtitle2" fontWeight={700} color="#10b981" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      🧩 Child Cards Visibility Mode
+                    </Typography>
+                    <Typography variant="caption" color="#64748b" sx={{ display: 'block', mb: 2 }}>
+                      Choose how child cards within this container are displayed
+                    </Typography>
+                    
+                    <ToggleButtonGroup
+                      value={parentConfig.childVisibilityMode || 'all'}
+                      exclusive
+                      onChange={(_, mode) => mode && handleParentConfigChange({ childVisibilityMode: mode })}
+                      fullWidth
+                      size="small"
+                    >
+                      <ToggleButton value="all" sx={{ textTransform: 'none', fontWeight: 600 }}>
+                        <Box sx={{ textAlign: 'center' }}>
+                          <Typography variant="body2" fontWeight={600}>All Visible</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
+                            All child cards always shown
+                          </Typography>
+                        </Box>
+                      </ToggleButton>
+                      <ToggleButton value="individual" sx={{ textTransform: 'none', fontWeight: 600 }}>
+                        <Box sx={{ textAlign: 'center' }}>
+                          <Typography variant="body2" fontWeight={600}>Individual Control</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
+                            Each card has own visibility rule
+                          </Typography>
+                        </Box>
+                      </ToggleButton>
+                    </ToggleButtonGroup>
+                  </Paper>
+                  
+                  {/* Individual Child Card Visibility (shown when mode is 'individual') */}
+                  {parentConfig.childVisibilityMode === 'individual' && parentConfig.childCards.length > 0 && (
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 2,
+                        border: '1px solid rgba(245, 158, 11, 0.2)',
+                        borderRadius: 2,
+                        bgcolor: 'rgba(245, 158, 11, 0.02)',
+                      }}
+                    >
+                      <Typography variant="subtitle2" fontWeight={700} color="#f59e0b" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        📊 Individual Child Card Settings
+                      </Typography>
+                      <Typography variant="caption" color="#64748b" sx={{ display: 'block', mb: 2 }}>
+                        Configure visibility for each child card. Set dimension conditions below.
+                      </Typography>
+                      
+                      <Stack spacing={2}>
+                        {parentConfig.childCards.map((child, index) => (
+                          <Paper
+                            key={child.id}
+                            elevation={0}
+                            sx={{
+                              p: 1.5,
+                              border: '1px solid rgba(0,0,0,0.08)',
+                              borderRadius: 1.5,
+                              bgcolor: 'white',
+                            }}
+                          >
+                            <Typography variant="body2" fontWeight={700} color="#4b5563" gutterBottom>
+                              Card {index + 1}: {child.title || `Child ${index + 1}`}
+                              <Chip
+                                size="small"
+                                label={child.type}
+                                sx={{ ml: 1, height: 18, fontSize: '0.6rem', textTransform: 'uppercase' }}
+                              />
+                            </Typography>
+                            
+                            <Box sx={{ display: 'flex', gap: 1.5, mt: 1 }}>
+                              {/* Child Visibility Variable */}
+                              <FormControl size="small" fullWidth>
+                                <InputLabel sx={{ fontSize: '0.7rem' }}>Visibility Variable</InputLabel>
+                                <Select
+                                  value={child.visibilityVariable || ''}
+                                  onChange={(e) => handleChildCardChange(index, { visibilityVariable: e.target.value })}
+                                  label="Visibility Variable"
+                                  sx={{ bgcolor: 'white', fontSize: '0.75rem' }}
+                                >
+                                  <MenuItem value="" sx={{ fontSize: '0.75rem' }}>
+                                    <em>Always Visible</em>
+                                  </MenuItem>
+                                  {variableNamesList.map((varName) => (
+                                    <MenuItem key={varName} value={varName} sx={{ fontSize: '0.75rem' }}>
+                                      {varName}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                              
+                              {/* Child Arrangement Variable */}
+                              <FormControl size="small" fullWidth>
+                                <InputLabel sx={{ fontSize: '0.7rem' }}>Order Variable</InputLabel>
+                                <Select
+                                  value={child.arrangementVariable || ''}
+                                  onChange={(e) => handleChildCardChange(index, { arrangementVariable: e.target.value })}
+                                  label="Order Variable"
+                                  sx={{ bgcolor: 'white', fontSize: '0.75rem' }}
+                                >
+                                  <MenuItem value="" sx={{ fontSize: '0.75rem' }}>
+                                    <em>Default Order</em>
+                                  </MenuItem>
+                                  {variableNamesList.map((varName) => (
+                                    <MenuItem key={varName} value={varName} sx={{ fontSize: '0.75rem' }}>
+                                      {varName}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            </Box>
+                          </Paper>
+                        ))}
+                      </Stack>
+                    </Paper>
+                  )}
+                  
+                  {/* 🔥 Child Card Dimension Conditions (like CardArrangement for child cards) */}
+                  {parentConfig.childCards.length > 0 && (
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 2,
+                        border: '1px solid rgba(16, 185, 129, 0.2)',
+                        borderRadius: 2,
+                        bgcolor: 'rgba(16, 185, 129, 0.02)',
+                      }}
+                    >
+                      <Typography variant="subtitle2" fontWeight={700} color="#10b981" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        📐 Child Card Dimension Conditions
+                      </Typography>
+                      <Typography variant="caption" color="#64748b" sx={{ display: 'block', mb: 2 }}>
+                        Set width/height for child cards based on boolean conditions (similar to Card Arrangement)
+                      </Typography>
+                      
+                      <Stack spacing={2}>
+                        {parentConfig.childCards.map((child, childIndex) => (
+                          <Accordion
+                            key={child.id}
+                            sx={{
+                              '&:before': { display: 'none' },
+                              border: '1px solid rgba(16, 185, 129, 0.15)',
+                              borderRadius: '8px !important',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                                <Typography variant="body2" fontWeight={600} color="#10b981">
+                                  Card {childIndex + 1}: {child.title || `Child ${childIndex + 1}`}
+                                </Typography>
+                                <Chip
+                                  size="small"
+                                  label={`${child.dimensionConditions?.length || 0} conditions`}
+                                  sx={{ 
+                                    ml: 'auto', 
+                                    height: 20, 
+                                    fontSize: '0.65rem',
+                                    bgcolor: (child.dimensionConditions?.length || 0) > 0 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(0,0,0,0.05)',
+                                    color: (child.dimensionConditions?.length || 0) > 0 ? '#10b981' : '#64748b',
+                                  }}
+                                />
+                              </Box>
+                            </AccordionSummary>
+                            <AccordionDetails>
+                              <Stack spacing={1.5}>
+                                {/* Add New Condition Form */}
+                                <Box sx={{ p: 1.5, bgcolor: 'rgba(16, 185, 129, 0.05)', borderRadius: 1.5, border: '1px dashed rgba(16, 185, 129, 0.3)' }}>
+                                  <Typography variant="caption" fontWeight={600} color="#10b981" sx={{ display: 'block', mb: 1 }}>
+                                    + Add Dimension Condition
+                                  </Typography>
+                                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                                    <FormControl size="small" sx={{ minWidth: 120, flex: 1 }}>
+                                      <InputLabel sx={{ fontSize: '0.7rem' }}>Variable</InputLabel>
+                                      <Select
+                                        value=""
+                                        label="Variable"
+                                        onChange={(e) => {
+                                          if (e.target.value) {
+                                            const newCondition = {
+                                              id: Date.now().toString(),
+                                              variableName: e.target.value as string,
+                                              expectedValue: true,
+                                              width: 0.5, // 50%
+                                              height: 0.5, // 50%
+                                              priority: (child.dimensionConditions?.length || 0) + 1,
+                                            };
+                                            handleChildCardChange(childIndex, {
+                                              dimensionConditions: [...(child.dimensionConditions || []), newCondition]
+                                            });
+                                          }
+                                        }}
+                                        sx={{ bgcolor: 'white', fontSize: '0.75rem' }}
+                                      >
+                                        <MenuItem value="" sx={{ fontSize: '0.75rem' }}>
+                                          <em>Select variable...</em>
+                                        </MenuItem>
+                                        {variableNamesList.map((varName) => (
+                                          <MenuItem key={varName} value={varName} sx={{ fontSize: '0.75rem' }}>
+                                            {varName}
+                                          </MenuItem>
+                                        ))}
+                                      </Select>
+                                    </FormControl>
+                                  </Box>
+                                </Box>
+                                
+                                {/* Existing Conditions */}
+                                {(child.dimensionConditions || []).map((condition, condIndex) => (
+                                  <Paper
+                                    key={condition.id}
+                                    elevation={0}
+                                    sx={{
+                                      p: 1.5,
+                                      border: '1px solid rgba(16, 185, 129, 0.2)',
+                                      borderRadius: 1.5,
+                                      bgcolor: 'white',
+                                    }}
+                                  >
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                      <Chip
+                                        size="small"
+                                        label={`P${condition.priority}`}
+                                        sx={{ 
+                                          height: 20, 
+                                          fontSize: '0.65rem', 
+                                          fontWeight: 700,
+                                          bgcolor: '#10b981',
+                                          color: 'white',
+                                        }}
+                                      />
+                                      <Typography variant="caption" fontWeight={600}>
+                                        When <code style={{ background: '#e0f2fe', padding: '1px 4px', borderRadius: 2 }}>{condition.variableName}</code> = 
+                                      </Typography>
+                                      <Select
+                                        size="small"
+                                        value={condition.expectedValue ? 'true' : 'false'}
+                                        onChange={(e) => {
+                                          const updated = [...(child.dimensionConditions || [])];
+                                          updated[condIndex] = { ...condition, expectedValue: e.target.value === 'true' };
+                                          handleChildCardChange(childIndex, { dimensionConditions: updated });
+                                        }}
+                                        sx={{ height: 24, fontSize: '0.7rem', minWidth: 70 }}
+                                      >
+                                        <MenuItem value="true" sx={{ fontSize: '0.75rem' }}>true</MenuItem>
+                                        <MenuItem value="false" sx={{ fontSize: '0.75rem' }}>false</MenuItem>
+                                      </Select>
+                                      <Box sx={{ ml: 'auto', display: 'flex', gap: 0.5 }}>
+                                        <IconButton
+                                          size="small"
+                                          disabled={condIndex === 0}
+                                          onClick={() => {
+                                            const updated = [...(child.dimensionConditions || [])];
+                                            [updated[condIndex - 1], updated[condIndex]] = [updated[condIndex], updated[condIndex - 1]];
+                                            updated.forEach((c, i) => c.priority = i + 1);
+                                            handleChildCardChange(childIndex, { dimensionConditions: updated });
+                                          }}
+                                          sx={{ p: 0.25 }}
+                                        >
+                                          <ArrowUpwardIcon sx={{ fontSize: 16 }} />
+                                        </IconButton>
+                                        <IconButton
+                                          size="small"
+                                          disabled={condIndex === (child.dimensionConditions?.length || 0) - 1}
+                                          onClick={() => {
+                                            const updated = [...(child.dimensionConditions || [])];
+                                            [updated[condIndex], updated[condIndex + 1]] = [updated[condIndex + 1], updated[condIndex]];
+                                            updated.forEach((c, i) => c.priority = i + 1);
+                                            handleChildCardChange(childIndex, { dimensionConditions: updated });
+                                          }}
+                                          sx={{ p: 0.25 }}
+                                        >
+                                          <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+                                        </IconButton>
+                                        <IconButton
+                                          size="small"
+                                          onClick={() => {
+                                            const updated = (child.dimensionConditions || []).filter((_, i) => i !== condIndex);
+                                            updated.forEach((c, i) => c.priority = i + 1);
+                                            handleChildCardChange(childIndex, { dimensionConditions: updated });
+                                          }}
+                                          sx={{ p: 0.25, color: '#ef4444' }}
+                                        >
+                                          <DeleteIcon sx={{ fontSize: 16 }} />
+                                        </IconButton>
+                                      </Box>
+                                    </Box>
+                                    <Box sx={{ display: 'flex', gap: 1.5 }}>
+                                      <TextField
+                                        size="small"
+                                        type="number"
+                                        label="Width %"
+                                        value={Math.round(condition.width * 100)}
+                                        onChange={(e) => {
+                                          const updated = [...(child.dimensionConditions || [])];
+                                          updated[condIndex] = { ...condition, width: Math.min(100, Math.max(10, parseInt(e.target.value) || 50)) / 100 };
+                                          handleChildCardChange(childIndex, { dimensionConditions: updated });
+                                        }}
+                                        inputProps={{ min: 10, max: 100 }}
+                                        sx={{ flex: 1, '& input': { fontSize: '0.75rem' } }}
+                                        helperText="10-100%"
+                                      />
+                                      <TextField
+                                        size="small"
+                                        type="number"
+                                        label="Height %"
+                                        value={Math.round(condition.height * 100)}
+                                        onChange={(e) => {
+                                          const updated = [...(child.dimensionConditions || [])];
+                                          updated[condIndex] = { ...condition, height: Math.min(100, Math.max(10, parseInt(e.target.value) || 50)) / 100 };
+                                          handleChildCardChange(childIndex, { dimensionConditions: updated });
+                                        }}
+                                        inputProps={{ min: 10, max: 100 }}
+                                        sx={{ flex: 1, '& input': { fontSize: '0.75rem' } }}
+                                        helperText="10-100%"
+                                      />
+                                    </Box>
+                                  </Paper>
+                                ))}
+                                
+                                {/* Empty state */}
+                                {(!child.dimensionConditions || child.dimensionConditions.length === 0) && (
+                                  <Typography variant="caption" color="#94a3b8" sx={{ textAlign: 'center', py: 1 }}>
+                                    No dimension conditions. Card uses default layout size.
+                                  </Typography>
+                                )}
+                              </Stack>
+                            </AccordionDetails>
+                          </Accordion>
+                        ))}
+                      </Stack>
+                    </Paper>
+                  )}
+                  
+                  {/* Help Alert */}
+                  <Alert 
+                    severity="info" 
+                    sx={{ 
+                      borderRadius: 2,
+                      border: '1px solid rgba(59, 130, 246, 0.2)',
+                      bgcolor: 'rgba(59, 130, 246, 0.05)',
+                      '& .MuiAlert-icon': { color: '#3b82f6' },
+                    }}
+                  >
+                    <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>
+                      💡 How it works:
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" component="div">
+                      • <strong>Visibility</strong>: Use a boolean variable. When <code>true</code> = visible, <code>false</code> = hidden<br/>
+                      • <strong>Arrangement</strong>: Use a numeric variable. Lower numbers appear first (e.g., 1 before 2)<br/>
+                      • Create variables in the <strong>Calculation</strong> tab (e.g., <code>showChart = filter_category === "Sales"</code>)
+                    </Typography>
+                  </Alert>
+                </Stack>
               </AccordionDetails>
             </Accordion>
 
@@ -4189,7 +5060,6 @@ export default function ChildCardConfigTab() {
             </Zoom>
           </Box>
         </Box>
-      )}
 
       {/* 🔥 Fullscreen Preview Dialog with animation */}
       <Dialog
@@ -4278,32 +5148,6 @@ export default function ChildCardConfigTab() {
         </Fade>
       </Dialog>
 
-      {/* Empty state when container is disabled */}
-      {!parentConfig.isContainer && (
-        <Paper
-          elevation={0}
-          sx={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: 'column',
-            gap: 2,
-            borderRadius: 2,
-            border: '2px dashed rgba(102, 126, 234, 0.3)',
-            bgcolor: 'rgba(102, 126, 234, 0.02)',
-          }}
-        >
-          <GridIcon sx={{ fontSize: 48, color: '#9ca3af' }} />
-          <Typography color="text.secondary" textAlign="center">
-            Enable Multi-Card Container above to configure child cards
-          </Typography>
-          <Typography variant="caption" color="text.secondary" textAlign="center" maxWidth={400}>
-            A container card can hold up to 4 child visualizations (charts, tables, or HTML) 
-            that share the same local filters and can scroll together.
-          </Typography>
-        </Paper>
-      )}
 
       {/* 🔥 Confirmation Dialog for destructive layout changes */}
       <LayoutChangeDialog

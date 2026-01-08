@@ -47,6 +47,23 @@ export interface ChildCardConfig {
   // Tooltip configuration - if enabled, tooltip config is stored separately
   // in childCardTooltipConfigState with key "{parentCardId}_{childCardId}"
   tooltipEnabled?: boolean;
+  
+  // 🔥 NEW: Child Card Visibility & Arrangement Control
+  visibilityVariable?: string;              // Boolean variable name - if true, card is visible
+  arrangementVariable?: string;             // Number variable name - controls display order (lower = first)
+  
+  // 🔥 NEW: Child Card Dimension Conditions (similar to parent CardArrangement)
+  dimensionConditions?: ChildCardDimensionCondition[];
+}
+
+// Dimension condition for child card (similar to parent's DimensionCondition)
+export interface ChildCardDimensionCondition {
+  id: string;
+  variableName: string;           // Boolean variable to check
+  expectedValue: boolean;         // When variable equals this value
+  width: number;                  // Width as percentage (0.25 = 25%, 0.5 = 50%, 1 = 100%)
+  height: number;                 // Height as percentage (0.25 = 25%, 0.5 = 50%, 1 = 100%)
+  priority: number;               // Lower number = higher priority (first match wins)
 }
 
 // Parent card container configuration
@@ -67,6 +84,13 @@ export interface ParentCardConfig {
   parentTitleMode?: 'simple' | 'html';      // 'simple' = plain text, 'html' = full HTML template
   parentTitle?: string;                     // Simple title text (legacy)
   parentTitleTemplate?: string;             // HTML template with ${variable} support
+  
+  // 🔥 NEW: Parent Card Visibility & Arrangement Control (controls the entire container)
+  visibilityVariable?: string;              // Boolean variable name - if true, entire container is visible
+  arrangementVariable?: string;             // Number variable name - controls display order in dashboard
+  
+  // 🔥 NEW: Child Cards Visibility Mode
+  childVisibilityMode?: 'all' | 'individual';  // 'all' = all children visible, 'individual' = each child has own rule
 }
 
 // Default child card layout presets
@@ -107,10 +131,11 @@ export const LAYOUT_PRESETS = {
 };
 
 // Default parent card configuration
+// 🔥 Every card is now a multi-card container by default (with 1-4 child cards)
 export const defaultParentCardConfig: ParentCardConfig = {
-  isContainer: false,
-  containerLayout: 'grid',
-  childCards: [],
+  isContainer: true,  // Always true - every card is a container
+  containerLayout: 'custom',
+  childCards: [],  // Will be initialized with one child card when created
   enableContainerScroll: false,  // false = no scrolling (compress to fit), true = container scrolls
   cardMinHeight: 800,            // Content height in pixels when scrolling (set higher than container)
   gap: 8,
@@ -124,6 +149,11 @@ export const defaultParentCardConfig: ParentCardConfig = {
   parentTitleMode: 'simple',
   parentTitle: '',
   parentTitleTemplate: '',
+  
+  // 🔥 Visibility & Arrangement Defaults
+  visibilityVariable: '',        // Empty = always visible
+  arrangementVariable: '',       // Empty = use default layout order
+  childVisibilityMode: 'all',    // Default: all children visible
 };
 
 // Default child card configuration
@@ -137,6 +167,10 @@ export const createDefaultChildCard = (id: string, layout: ChildCardLayout): Chi
   titleTemplate: '',
   showTitle: false,
   layout,
+  // Visibility & Arrangement Defaults
+  visibilityVariable: '',   // Empty = always visible
+  arrangementVariable: '',  // Empty = use default layout order
+  dimensionConditions: [],  // Empty = use default layout dimensions
 });
 
 // State to store parent card configurations

@@ -417,6 +417,9 @@ CREATE TABLE IF NOT EXISTS child_card_configs (
   parent_title_mode TEXT DEFAULT 'simple',
   parent_title TEXT DEFAULT '',
   parent_title_template TEXT DEFAULT '',
+  visibility_variable TEXT DEFAULT '',
+  arrangement_variable TEXT DEFAULT '',
+  child_visibility_mode TEXT DEFAULT 'all',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   last_modified TIMESTAMP
 );
@@ -442,6 +445,10 @@ async function createChildCardConfigsTable() {
       await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS parent_title_mode TEXT DEFAULT 'simple'`);
       await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS parent_title TEXT DEFAULT ''`);
       await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS parent_title_template TEXT DEFAULT ''`);
+      // 🔥 Visibility & Arrangement columns
+      await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS visibility_variable TEXT DEFAULT ''`);
+      await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS arrangement_variable TEXT DEFAULT ''`);
+      await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS child_visibility_mode TEXT DEFAULT 'all'`);
       console.log("✅ Child card configs columns migrated successfully.");
     } catch (migrationErr) {
       // Columns might already exist, ignore

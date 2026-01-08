@@ -597,6 +597,196 @@ const InteractiveTooltipLayoutEditor: React.FC<InteractiveTooltipLayoutEditorPro
   const snapToGrid = (value: number): number => Math.round(value * GRID_COLS) / GRID_COLS;
   const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
+  // 🔥 Fix any overlaps in the current layout by repositioning cards
+  const fixOverlaps = (cards: TooltipCardConfig[]): TooltipCardConfig[] => {
+    if (cards.length <= 1) return cards;
+    
+    const result = cards.map(card => ({ ...card, layout: { ...card.layout } }));
+    
+    // Process cards one by one
+    for (let i = 1; i < result.length; i++) {
+      const currentCard = result[i];
+      let currentLayout = currentCard.layout;
+      
+      // Check if this card overlaps with any previous card
+      const hasOverlapWithPrevious = () => {
+        for (let j = 0; j < i; j++) {
+          if (cardsOverlap(currentLayout, result[j].layout)) {
+            return true;
+          }
+        }
+        return false;
+      };
+      
+      if (hasOverlapWithPrevious()) {
+        // Try to find a valid position
+        let found = false;
+        
+        // Try positions in a grid pattern
+        for (let y = 0; y < GRID_ROWS && !found; y++) {
+          for (let x = 0; x < GRID_COLS && !found; x++) {
+            const testX = snapToGrid(x / GRID_COLS);
+            const testY = snapToGrid(y / GRID_ROWS);
+            
+            // Skip if would go out of bounds
+            if (testX + currentLayout.w > 1 || testY + currentLayout.h > 1) continue;
+            
+            const testLayout = { ...currentLayout, x: testX, y: testY };
+            
+            // Check against all previous cards
+            let valid = true;
+            for (let j = 0; j < i; j++) {
+              if (cardsOverlap(testLayout, result[j].layout)) {
+                valid = false;
+                break;
+              }
+            }
+            
+            if (valid) {
+              currentLayout = testLayout;
+              found = true;
+            }
+          }
+        }
+        
+        // If still not found, shrink the card and try again
+        if (!found) {
+          const smallerLayout = {
+            ...currentLayout,
+            w: Math.max(MIN_SIZE * 2, currentLayout.w / 2),
+            h: Math.max(MIN_SIZE * 2, currentLayout.h / 2),
+          };
+          
+          for (let y = 0; y < GRID_ROWS && !found; y++) {
+            for (let x = 0; x < GRID_COLS && !found; x++) {
+              const testX = snapToGrid(x / GRID_COLS);
+              const testY = snapToGrid(y / GRID_ROWS);
+              
+              if (testX + smallerLayout.w > 1 || testY + smallerLayout.h > 1) continue;
+              
+              const testLayout = { ...smallerLayout, x: testX, y: testY };
+              
+              let valid = true;
+              for (let j = 0; j < i; j++) {
+                if (cardsOverlap(testLayout, result[j].layout)) {
+                  valid = false;
+                  break;
+                }
+              }
+              
+              if (valid) {
+                currentLayout = testLayout;
+                found = true;
+              }
+            }
+          }
+        }
+        
+        result[i] = { ...currentCard, layout: currentLayout };
+      }
+    }
+    
+    return result;
+  };
+
+  // 🔥 Helper: check if any overlap exists
+  const hasAnyOverlapTooltip = (cards: TooltipCardConfig[]): boolean => {
+    for (let i = 0; i < cards.length; i++) {
+      const layout = cards[i].layout;
+      if (layout.x < 0 || layout.y < 0 || layout.x + layout.w > 1 || layout.y + layout.h > 1) return true;
+      for (let j = i + 1; j < cards.length; j++) {
+        if (cardsOverlap(layout, cards[j].layout)) return true;
+      }
+    }
+    return false;
+  };
+
+  // 🔥 Auto-layout helper for tooltip cards
+  const applyAutoLayoutTooltip = (cards: TooltipCardConfig[]): TooltipCardConfig[] => {
+    const count = cards.length;
+    if (count === 1) {
+      return cards.map(c => ({ ...c, layout: { ...c.layout, x: 0, y: 0, w: 1, h: 1 } }));
+    }
+    if (count === 2) {
+      const layouts = [
+        { x: 0, y: 0, w: 0.5, h: 1 },
+        { x: 0.5, y: 0, w: 0.5, h: 1 },
+      ];
+      return cards.map((c, idx) => ({ ...c, layout: { ...c.layout, ...layouts[idx] } }));
+    }
+    if (count === 3) {
+      const layouts = [
+        { x: 0, y: 0, w: 0.5, h: 0.5 },
+        { x: 0.5, y: 0, w: 0.5, h: 0.5 },
+        { x: 0, y: 0.5, w: 1, h: 0.5 },
+      ];
+      return cards.map((c, idx) => ({ ...c, layout: { ...c.layout, ...layouts[idx] } }));
+    }
+    if (count >= 4) {
+      const layouts = [
+        { x: 0, y: 0, w: 0.5, h: 0.5 },
+        { x: 0.5, y: 0, w: 0.5, h: 0.5 },
+        { x: 0, y: 0.5, w: 0.5, h: 0.5 },
+        { x: 0.5, y: 0.5, w: 0.5, h: 0.5 },
+      ];
+      return cards.map((c, idx) => ({ ...c, layout: { ...c.layout, ...layouts[Math.min(idx, 3)] } }));
+    }
+    return cards;
+  };
+
+  // 🔥 Ensure no overlap; if overlap exists, auto-layout
+  const ensureNoOverlapTooltip = (cards: TooltipCardConfig[]): TooltipCardConfig[] => {
+    if (!hasAnyOverlapTooltip(cards)) return cards;
+    return applyAutoLayoutTooltip(cards);
+  };
+
+  // 🔥 Find the nearest valid position that doesn't overlap with any other card
+  const findNearestValidPosition = (
+    movingCardIndex: number,
+    targetLayout: TooltipCardLayout,
+    cards: TooltipCardConfig[]
+  ): TooltipCardLayout | null => {
+    // First check if target position is already valid
+    if (!hasCollision(targetLayout, movingCardIndex, cards)) {
+      return targetLayout;
+    }
+    
+    // Try to find a valid position by adjusting slightly
+    const gridStep = 1 / GRID_COLS;
+    const maxSteps = 6; // Search up to 6 grid steps in each direction
+    
+    for (let step = 1; step <= maxSteps; step++) {
+      const offset = step * gridStep;
+      
+      // Try different directions: right, left, down, up, diagonals
+      const directions = [
+        { dx: offset, dy: 0 },      // right
+        { dx: -offset, dy: 0 },     // left
+        { dx: 0, dy: offset },      // down
+        { dx: 0, dy: -offset },     // up
+        { dx: offset, dy: offset }, // down-right
+        { dx: -offset, dy: offset },// down-left
+        { dx: offset, dy: -offset },// up-right
+        { dx: -offset, dy: -offset }// up-left
+      ];
+      
+      for (const { dx, dy } of directions) {
+        const testLayout = {
+          ...targetLayout,
+          x: snapToGrid(clamp(targetLayout.x + dx, 0, 1 - targetLayout.w)),
+          y: snapToGrid(clamp(targetLayout.y + dy, 0, 1 - targetLayout.h)),
+        };
+        
+        if (!hasCollision(testLayout, movingCardIndex, cards)) {
+          return testLayout;
+        }
+      }
+    }
+    
+    // No valid position found
+    return null;
+  };
+
   // Handle resize
   useEffect(() => {
     if (!resizing) return;
@@ -650,12 +840,25 @@ const InteractiveTooltipLayoutEditor: React.FC<InteractiveTooltipLayoutEditorPro
           break;
       }
 
+      // 🔥 Check for collision and find nearest valid position
       const wouldCollide = hasCollision(newLayout, resizing.cardIndex, newCards);
-      setHasOverlap(wouldCollide);
       
-      if (!wouldCollide) {
+      if (wouldCollide) {
+        // Try to find a valid nearby position
+        const validPosition = findNearestValidPosition(resizing.cardIndex, newLayout, newCards);
+        if (validPosition) {
+          newCards[resizing.cardIndex] = { ...card, layout: validPosition };
+          onLayoutChange(newCards);
+          setHasOverlap(false);
+        } else {
+          // No valid position - show overlap indicator and don't apply
+          setHasOverlap(true);
+        }
+      } else {
+        // No collision - apply directly
         newCards[resizing.cardIndex] = { ...card, layout: newLayout };
         onLayoutChange(newCards);
+        setHasOverlap(false);
       }
     };
 
@@ -688,12 +891,26 @@ const InteractiveTooltipLayoutEditor: React.FC<InteractiveTooltipLayoutEditorPro
       let newY = snapToGrid(clamp(dragging.startLayout.y + deltaY, 0, 1 - card.layout.h));
 
       const newLayout = { ...card.layout, x: newX, y: newY };
-      const wouldCollide = hasCollision(newLayout, dragging.cardIndex, newCards);
-      setHasOverlap(wouldCollide);
       
-      if (!wouldCollide) {
+      // 🔥 Check for collision - block if overlapping
+      const wouldCollide = hasCollision(newLayout, dragging.cardIndex, newCards);
+      
+      if (wouldCollide) {
+        // Try to find a valid nearby position
+        const validPosition = findNearestValidPosition(dragging.cardIndex, newLayout, newCards);
+        if (validPosition) {
+          newCards[dragging.cardIndex] = { ...card, layout: validPosition };
+          onLayoutChange(newCards);
+          setHasOverlap(false);
+        } else {
+          // No valid position - show overlap indicator and don't apply
+          setHasOverlap(true);
+        }
+      } else {
+        // No collision - apply directly
         newCards[dragging.cardIndex] = { ...card, layout: newLayout };
         onLayoutChange(newCards);
+        setHasOverlap(false);
       }
     };
 
@@ -713,6 +930,7 @@ const InteractiveTooltipLayoutEditor: React.FC<InteractiveTooltipLayoutEditorPro
   const findAvailablePosition = (): { x: number; y: number; w: number; h: number } => {
     const defaultSize = { w: 3 / GRID_COLS, h: 3 / GRID_ROWS };
     
+    // Strategy 1: Try grid positions to find a free spot
     for (let y = 0; y < GRID_ROWS; y++) {
       for (let x = 0; x < GRID_COLS; x++) {
         const testLayout = { id: 'test', x: x / GRID_COLS, y: y / GRID_ROWS, w: defaultSize.w, h: defaultSize.h };
@@ -721,14 +939,72 @@ const InteractiveTooltipLayoutEditor: React.FC<InteractiveTooltipLayoutEditorPro
         if (!hasAnyCollision) return { x: testLayout.x, y: testLayout.y, ...defaultSize };
       }
     }
-    return { x: 0, y: 0, w: 3 / GRID_COLS, h: 3 / GRID_ROWS };
+    
+    // Strategy 2: Try smaller sizes
+    const smallerSizes = [
+      { w: 2 / GRID_COLS, h: 2 / GRID_ROWS },
+      { w: 2 / GRID_COLS, h: 3 / GRID_ROWS },
+      { w: 3 / GRID_COLS, h: 2 / GRID_ROWS },
+    ];
+    
+    for (const size of smallerSizes) {
+      for (let y = 0; y <= GRID_ROWS - (size.h * GRID_ROWS); y++) {
+        for (let x = 0; x <= GRID_COLS - (size.w * GRID_COLS); x++) {
+          const testLayout = { id: 'test', x: x / GRID_COLS, y: y / GRID_ROWS, w: size.w, h: size.h };
+          const hasAnyCollision = tooltipCards.some(card => cardsOverlap(testLayout, card.layout));
+          if (!hasAnyCollision) return { x: testLayout.x, y: testLayout.y, ...size };
+        }
+      }
+    }
+    
+    // Strategy 3: Find the first row with space at the bottom
+    const cardBottoms = tooltipCards.map(c => c.layout.y + c.layout.h);
+    const lowestBottom = Math.max(...cardBottoms, 0);
+    
+    if (lowestBottom + defaultSize.h <= 1) {
+      return { x: 0, y: snapToGrid(lowestBottom), ...defaultSize };
+    }
+    
+    // Strategy 4: Place next to existing cards
+    for (const card of tooltipCards) {
+      // Try right of each card
+      const rightX = card.layout.x + card.layout.w;
+      if (rightX + defaultSize.w <= 1) {
+        const testLayout = { id: 'test', x: rightX, y: card.layout.y, ...defaultSize };
+        const hasAnyCollision = tooltipCards.some(c => cardsOverlap(testLayout, c.layout));
+        if (!hasAnyCollision) return { x: snapToGrid(rightX), y: snapToGrid(card.layout.y), ...defaultSize };
+      }
+      
+      // Try below each card
+      const belowY = card.layout.y + card.layout.h;
+      if (belowY + defaultSize.h <= 1) {
+        const testLayout = { id: 'test', x: card.layout.x, y: belowY, ...defaultSize };
+        const hasAnyCollision = tooltipCards.some(c => cardsOverlap(testLayout, c.layout));
+        if (!hasAnyCollision) return { x: snapToGrid(card.layout.x), y: snapToGrid(belowY), ...defaultSize };
+      }
+    }
+    
+    // Strategy 5: Use a grid-based layout
+    const numCards = tooltipCards.length;
+    if (numCards === 1) {
+      return { x: 0.5, y: 0, w: 0.5, h: 0.5 };
+    } else if (numCards === 2) {
+      return { x: 0, y: 0.5, w: 0.5, h: 0.5 };
+    } else if (numCards === 3) {
+      return { x: 0.5, y: 0.5, w: 0.5, h: 0.5 };
+    }
+    
+    // Final fallback
+    return { x: 0, y: 0, w: MIN_SIZE * 3, h: MIN_SIZE * 3 };
   };
 
   const handleAddCard = () => {
     if (tooltipCards.length >= 4) return;
     const position = findAvailablePosition();
     const newCard = createDefaultTooltipCard(`tooltip-card-${tooltipCards.length + 1}`, { id: `tooltip-card-${tooltipCards.length + 1}`, ...position });
-    onLayoutChange([...tooltipCards, newCard]);
+    // Apply fixOverlaps to ensure no overlap occurs; if still overlap, auto-layout
+    const newCards = ensureNoOverlapTooltip([...tooltipCards, newCard]);
+    onLayoutChange(newCards);
   };
 
   const handleRemoveCard = (index: number) => {

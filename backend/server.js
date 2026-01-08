@@ -2752,6 +2752,10 @@ app.get('/api/child-card-configs', async (req, res) => {
           parentTitleMode: row.parent_title_mode || 'simple',
           parentTitle: row.parent_title || '',
           parentTitleTemplate: row.parent_title_template || '',
+          // 🔥 Visibility & Arrangement settings
+          visibilityVariable: row.visibility_variable || '',
+          arrangementVariable: row.arrangement_variable || '',
+          childVisibilityMode: row.child_visibility_mode || 'all',
         };
       });
     }
@@ -2794,6 +2798,8 @@ app.post('/api/child-card-configs', async (req, res) => {
       const escapedHeightDataSource = (config.heightDataSource || '').replace(/'/g, "''");
       const escapedParentTitle = (config.parentTitle || '').replace(/'/g, "''");
       const escapedParentTitleTemplate = (config.parentTitleTemplate || '').replace(/'/g, "''");
+      const escapedVisibilityVariable = (config.visibilityVariable || '').replace(/'/g, "''");
+      const escapedArrangementVariable = (config.arrangementVariable || '').replace(/'/g, "''");
       await dbClient.run(`
         UPDATE child_card_configs SET
           is_container = ${config.isContainer ? 'true' : 'false'},
@@ -2808,6 +2814,9 @@ app.post('/api/child-card-configs', async (req, res) => {
           parent_title_mode = '${(config.parentTitleMode || 'simple').replace(/'/g, "''")}',
           parent_title = '${escapedParentTitle}',
           parent_title_template = '${escapedParentTitleTemplate}',
+          visibility_variable = '${escapedVisibilityVariable}',
+          arrangement_variable = '${escapedArrangementVariable}',
+          child_visibility_mode = '${(config.childVisibilityMode || 'all').replace(/'/g, "''")}',
           last_modified = CURRENT_TIMESTAMP
         WHERE parent_card_id = '${escapedParentCardId}'
       `);
@@ -2816,11 +2825,14 @@ app.post('/api/child-card-configs', async (req, res) => {
       const escapedHeightDataSourceInsert = (config.heightDataSource || '').replace(/'/g, "''");
       const escapedParentTitleInsert = (config.parentTitle || '').replace(/'/g, "''");
       const escapedParentTitleTemplateInsert = (config.parentTitleTemplate || '').replace(/'/g, "''");
+      const escapedVisibilityVariableInsert = (config.visibilityVariable || '').replace(/'/g, "''");
+      const escapedArrangementVariableInsert = (config.arrangementVariable || '').replace(/'/g, "''");
       await dbClient.run(`
         INSERT INTO child_card_configs (
           parent_card_id, is_container, container_layout, child_cards_json,
           enable_container_scroll, card_min_height, gap, use_dynamic_height, height_data_source,
           show_parent_title, parent_title_mode, parent_title, parent_title_template,
+          visibility_variable, arrangement_variable, child_visibility_mode,
           created_at, last_modified
         ) VALUES (
           '${escapedParentCardId}',
@@ -2836,6 +2848,9 @@ app.post('/api/child-card-configs', async (req, res) => {
           '${(config.parentTitleMode || 'simple').replace(/'/g, "''")}',
           '${escapedParentTitleInsert}',
           '${escapedParentTitleTemplateInsert}',
+          '${escapedVisibilityVariableInsert}',
+          '${escapedArrangementVariableInsert}',
+          '${(config.childVisibilityMode || 'all').replace(/'/g, "''")}',
           CURRENT_TIMESTAMP,
           CURRENT_TIMESTAMP
         )
