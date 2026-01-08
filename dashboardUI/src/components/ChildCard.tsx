@@ -58,6 +58,37 @@ const replaceVariables = (template: string, variables: Record<string, any>): str
   return result;
 };
 
+// 🔥 HTML variable replacement - for HTML templates (no JSON.stringify for strings)
+const replaceHtmlVariables = (template: string, variables: Record<string, any>): string => {
+  if (!template) return template;
+  
+  let result = template;
+  
+  Object.entries(variables).forEach(([name, value]) => {
+    // For HTML, always convert to string representation
+    let replacement: string;
+    if (value === null || value === undefined) {
+      replacement = '';
+    } else if (typeof value === 'object') {
+      replacement = JSON.stringify(value);
+    } else {
+      replacement = String(value);
+    }
+    
+    // Replace ${variableName}
+    result = result.replace(new RegExp(`\\$\\{${name}\\}`, 'g'), replacement);
+    
+    // Replace {{variableName}} pattern
+    result = result.replace(new RegExp(`\\{\\{${name}\\}\\}`, 'g'), replacement);
+  });
+  
+  // Replace any remaining unreplaced patterns
+  result = result.replace(/\$\{[^}]+\}/g, '');
+  result = result.replace(/\{\{[^}]+\}\}/g, '');
+  
+  return result;
+};
+
 // 🔥 Safe parse function matching DragDropDashboard.tsx
 const safeParse = (value: any): any => {
   if (typeof value !== 'string') return value;
@@ -504,7 +535,77 @@ const ChildCard: React.FC<ChildCardProps> = ({
     }
   };
 
-  const titleHeight = config.showTitle ? 32 : 0;
+  // 🔥 Dynamic Title Height - increases for HTML mode
+  const titleHeight = config.showTitle ? (config.titleMode === 'html' ? 'auto' : 32) : 0;
+
+  // 🔥 Render dynamic title - supports both simple text and HTML templates
+  const renderTitle = (fontSize: string = '0.85rem') => {
+    if (!config.showTitle) return null;
+    
+    // HTML Mode - render HTML template with variables
+    if (config.titleMode === 'html' && config.titleTemplate) {
+      const processedHtml = replaceHtmlVariables(config.titleTemplate, variables);
+      return (
+        <Box
+          sx={{
+            minHeight: 32,
+            maxHeight: 80,
+            px: 1.5,
+            py: 0.75,
+            display: 'flex',
+            alignItems: 'center',
+            borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
+            backgroundColor: 'rgba(102, 126, 234, 0.03)',
+            flexShrink: 0,
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            dangerouslySetInnerHTML={{ __html: processedHtml }}
+            style={{
+              width: '100%',
+              fontSize,
+              lineHeight: 1.3,
+            }}
+          />
+        </Box>
+      );
+    }
+    
+    // Simple Mode - render plain text with variable replacement
+    const titleText = config.title || '';
+    const processedTitle = replaceHtmlVariables(titleText, variables);
+    
+    if (!processedTitle) return null;
+    
+    return (
+      <Box
+        sx={{
+          height: 32,
+          px: 1.5,
+          display: 'flex',
+          alignItems: 'center',
+          borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
+          backgroundColor: 'rgba(102, 126, 234, 0.03)',
+          flexShrink: 0,
+        }}
+      >
+        <Typography
+          variant="subtitle2"
+          sx={{
+            fontSize,
+            fontWeight: 600,
+            color: '#4b5563',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {processedTitle}
+        </Typography>
+      </Box>
+    );
+  };
 
   // 🔥 FULL-SIZE PREVIEW MODE: Render at 100% size without layout positioning
   if (isFullSizePreview) {
@@ -522,34 +623,8 @@ const ChildCard: React.FC<ChildCardProps> = ({
           flexDirection: 'column',
         }}
       >
-        {/* Optional title bar */}
-        {config.showTitle && config.title && (
-          <Box
-            sx={{
-              height: titleHeight,
-              px: 1.5,
-              display: 'flex',
-              alignItems: 'center',
-              borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
-              backgroundColor: 'rgba(102, 126, 234, 0.03)',
-              flexShrink: 0,
-            }}
-          >
-            <Typography
-              variant="subtitle2"
-              sx={{
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                color: '#4b5563',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {config.title}
-            </Typography>
-          </Box>
-        )}
+        {/* 🔥 Dynamic title bar - supports HTML templates */}
+        {renderTitle('0.85rem')}
         
         {/* Content area - FULL SIZE */}
         <Box
@@ -585,34 +660,8 @@ const ChildCard: React.FC<ChildCardProps> = ({
         border: '1px solid rgba(0, 0, 0, 0.06)',
       }}
     >
-      {/* Optional title bar */}
-      {config.showTitle && config.title && (
-        <Box
-          sx={{
-            height: titleHeight,
-            px: 1.5,
-            display: 'flex',
-            alignItems: 'center',
-            borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
-            backgroundColor: 'rgba(102, 126, 234, 0.03)',
-            flexShrink: 0,
-          }}
-        >
-          <Typography
-            variant="subtitle2"
-            sx={{
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              color: '#4b5563',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {config.title}
-          </Typography>
-        </Box>
-      )}
+      {/* 🔥 Dynamic title bar - supports HTML templates */}
+      {renderTitle('0.75rem')}
       
       {/* Content area */}
       <Box

@@ -33,9 +33,13 @@ export interface ChildCardConfig {
   // For HTML type
   htmlContent?: string;
   
-  // Display settings
+  // Display settings - legacy simple title
   title?: string;
   showTitle?: boolean;
+  
+  // 🔥 NEW: Dynamic HTML Title Support
+  titleMode?: 'simple' | 'html';           // 'simple' = plain text, 'html' = full HTML template
+  titleTemplate?: string;                   // HTML template with ${variable} support
   
   // Layout within parent
   layout: ChildCardLayout;
@@ -57,6 +61,12 @@ export interface ParentCardConfig {
   // 🔥 Dynamic Height Settings - uses a pre-calculated height variable
   useDynamicHeight?: boolean;     // Enable dynamic height from variable
   heightDataSource?: string;      // Variable name containing the calculated height value (e.g., "chartHeight")
+  
+  // 🔥 NEW: Dynamic HTML Title Support for Parent Card
+  showParentTitle?: boolean;                // Show parent card title
+  parentTitleMode?: 'simple' | 'html';      // 'simple' = plain text, 'html' = full HTML template
+  parentTitle?: string;                     // Simple title text (legacy)
+  parentTitleTemplate?: string;             // HTML template with ${variable} support
 }
 
 // Default child card layout presets
@@ -108,6 +118,12 @@ export const defaultParentCardConfig: ParentCardConfig = {
   // 🔥 Dynamic Height Defaults - user calculates height in their own logic
   useDynamicHeight: false,
   heightDataSource: '',          // Variable containing pre-calculated height value
+  
+  // 🔥 Dynamic Title Defaults
+  showParentTitle: false,
+  parentTitleMode: 'simple',
+  parentTitle: '',
+  parentTitleTemplate: '',
 };
 
 // Default child card configuration
@@ -117,6 +133,8 @@ export const createDefaultChildCard = (id: string, layout: ChildCardLayout): Chi
   type: 'chart',
   template: '',
   title: '', // Empty by default - display shows "Card N" based on ID (e.g., 17_child2 -> "Card 2")
+  titleMode: 'simple',
+  titleTemplate: '',
   showTitle: false,
   layout,
 });

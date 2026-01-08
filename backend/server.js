@@ -2747,6 +2747,11 @@ app.get('/api/child-card-configs', async (req, res) => {
           // 🔥 Dynamic height settings
           useDynamicHeight: row.use_dynamic_height === true,
           heightDataSource: row.height_data_source || '',
+          // 🔥 Dynamic parent title settings
+          showParentTitle: row.show_parent_title === true,
+          parentTitleMode: row.parent_title_mode || 'simple',
+          parentTitle: row.parent_title || '',
+          parentTitleTemplate: row.parent_title_template || '',
         };
       });
     }
@@ -2787,6 +2792,8 @@ app.post('/api/child-card-configs', async (req, res) => {
     if (existing.length > 0) {
       // Update existing
       const escapedHeightDataSource = (config.heightDataSource || '').replace(/'/g, "''");
+      const escapedParentTitle = (config.parentTitle || '').replace(/'/g, "''");
+      const escapedParentTitleTemplate = (config.parentTitleTemplate || '').replace(/'/g, "''");
       await dbClient.run(`
         UPDATE child_card_configs SET
           is_container = ${config.isContainer ? 'true' : 'false'},
@@ -2797,16 +2804,23 @@ app.post('/api/child-card-configs', async (req, res) => {
           gap = ${config.gap != null ? config.gap : 8},
           use_dynamic_height = ${config.useDynamicHeight === true ? 'true' : 'false'},
           height_data_source = '${escapedHeightDataSource}',
+          show_parent_title = ${config.showParentTitle === true ? 'true' : 'false'},
+          parent_title_mode = '${(config.parentTitleMode || 'simple').replace(/'/g, "''")}',
+          parent_title = '${escapedParentTitle}',
+          parent_title_template = '${escapedParentTitleTemplate}',
           last_modified = CURRENT_TIMESTAMP
         WHERE parent_card_id = '${escapedParentCardId}'
       `);
     } else {
       // Insert new
       const escapedHeightDataSourceInsert = (config.heightDataSource || '').replace(/'/g, "''");
+      const escapedParentTitleInsert = (config.parentTitle || '').replace(/'/g, "''");
+      const escapedParentTitleTemplateInsert = (config.parentTitleTemplate || '').replace(/'/g, "''");
       await dbClient.run(`
         INSERT INTO child_card_configs (
           parent_card_id, is_container, container_layout, child_cards_json,
           enable_container_scroll, card_min_height, gap, use_dynamic_height, height_data_source,
+          show_parent_title, parent_title_mode, parent_title, parent_title_template,
           created_at, last_modified
         ) VALUES (
           '${escapedParentCardId}',
@@ -2818,6 +2832,10 @@ app.post('/api/child-card-configs', async (req, res) => {
           ${config.gap != null ? config.gap : 8},
           ${config.useDynamicHeight === true ? 'true' : 'false'},
           '${escapedHeightDataSourceInsert}',
+          ${config.showParentTitle === true ? 'true' : 'false'},
+          '${(config.parentTitleMode || 'simple').replace(/'/g, "''")}',
+          '${escapedParentTitleInsert}',
+          '${escapedParentTitleTemplateInsert}',
           CURRENT_TIMESTAMP,
           CURRENT_TIMESTAMP
         )

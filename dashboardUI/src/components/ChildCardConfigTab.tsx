@@ -1895,6 +1895,132 @@ export default function ChildCardConfigTab() {
 
                 {/* Interactive Layout Editor moved to right panel for better UX */}
 
+                {/* 🔥 Parent Card Title Configuration */}
+                <Paper
+                  elevation={0}
+                  sx={{
+                    mt: 2,
+                    p: 2,
+                    border: '1px solid rgba(118, 75, 162, 0.2)',
+                    borderRadius: 2,
+                    bgcolor: 'rgba(118, 75, 162, 0.02)',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                    <Typography variant="subtitle2" fontWeight={700} color="#764ba2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      🏷️ Parent Card Title
+                    </Typography>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={parentConfig.showParentTitle || false}
+                          onChange={(e) => handleParentConfigChange({ showParentTitle: e.target.checked })}
+                          size="small"
+                          sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#764ba2' } }}
+                        />
+                      }
+                      label={<Typography variant="caption" fontWeight={600}>Show Title</Typography>}
+                      sx={{ m: 0 }}
+                    />
+                  </Box>
+                  
+                  {parentConfig.showParentTitle && (
+                    <Stack spacing={1.5}>
+                      {/* Title Mode Toggle */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" color="#64748b" fontWeight={600}>Mode:</Typography>
+                        <ToggleButtonGroup
+                          value={parentConfig.parentTitleMode || 'simple'}
+                          exclusive
+                          onChange={(_, mode) => mode && handleParentConfigChange({ parentTitleMode: mode })}
+                          size="small"
+                        >
+                          <ToggleButton value="simple" sx={{ px: 1.5, py: 0.25, fontSize: '0.7rem' }}>
+                            Simple Text
+                          </ToggleButton>
+                          <ToggleButton value="html" sx={{ px: 1.5, py: 0.25, fontSize: '0.7rem' }}>
+                            HTML Template
+                          </ToggleButton>
+                        </ToggleButtonGroup>
+                      </Box>
+                      
+                      {/* Simple Mode */}
+                      {(parentConfig.parentTitleMode || 'simple') === 'simple' && (
+                        <TextField
+                          label="Title Text"
+                          value={parentConfig.parentTitle || ''}
+                          onChange={(e) => handleParentConfigChange({ parentTitle: e.target.value })}
+                          placeholder="Dashboard Title"
+                          size="small"
+                          fullWidth
+                          helperText="Use ${variableName} for dynamic values (e.g., ${selectedPayer} Dashboard)"
+                        />
+                      )}
+                      
+                      {/* HTML Mode */}
+                      {parentConfig.parentTitleMode === 'html' && (
+                        <Box>
+                          <Typography variant="caption" color="#64748b" sx={{ mb: 0.5, display: 'block' }}>
+                            HTML Template (use <code>${'{variableName}'}</code> for dynamic values)
+                          </Typography>
+                          <Box sx={{ border: '1px solid rgba(118, 75, 162, 0.2)', borderRadius: 1, overflow: 'hidden' }}>
+                            <HtmlEditor
+                              value={parentConfig.parentTitleTemplate || ''}
+                              onChange={(value) => handleParentConfigChange({ parentTitleTemplate: value })}
+                              height={120}
+                              placeholder="<div style='display:flex;align-items:center;gap:12px;'><span style='font-size:18px;font-weight:700;'>${selectedPayer}</span><span style='color:#64748b;'>|</span><span>${filterYear}</span></div>"
+                              availableVariables={availableVariables}
+                            />
+                          </Box>
+                          {/* Quick Templates */}
+                          <Box sx={{ display: 'flex', gap: 0.5, mt: 1, flexWrap: 'wrap' }}>
+                            <Chip
+                              label="Centered"
+                              size="small"
+                              onClick={() => handleParentConfigChange({ 
+                                parentTitleTemplate: '<div style="text-align:center;width:100%;font-size:16px;font-weight:700;color:#1e293b;">${category} Dashboard</div>' 
+                              })}
+                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#764ba210', color: '#764ba2' }}
+                            />
+                            <Chip
+                              label="Left Aligned"
+                              size="small"
+                              onClick={() => handleParentConfigChange({ 
+                                parentTitleTemplate: '<span style="font-size:16px;font-weight:700;color:#1e293b;">${category} Dashboard</span>' 
+                              })}
+                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#764ba210', color: '#764ba2' }}
+                            />
+                            <Chip
+                              label="Centered Subtitle"
+                              size="small"
+                              onClick={() => handleParentConfigChange({ 
+                                parentTitleTemplate: '<div style="display:flex;flex-direction:column;align-items:center;width:100%;"><span style="font-size:16px;font-weight:700;color:#1e293b;">${category}</span><span style="font-size:11px;color:#64748b;">${filterYear} Data</span></div>' 
+                              })}
+                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#764ba210', color: '#764ba2' }}
+                            />
+                            <Chip
+                              label="Badge Centered"
+                              size="small"
+                              onClick={() => handleParentConfigChange({ 
+                                parentTitleTemplate: '<div style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;"><span style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:4px 12px;border-radius:6px;font-weight:600;font-size:14px;">${category}</span><span style="color:#64748b;font-size:12px;">Analysis Dashboard</span></div>' 
+                              })}
+                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#764ba210', color: '#764ba2' }}
+                            />
+                            <Chip
+                              label="Metrics Header"
+                              size="small"
+                              onClick={() => handleParentConfigChange({ 
+                                parentTitleTemplate: '<div style="display:flex;align-items:center;justify-content:space-between;width:100%;"><span style="font-weight:700;font-size:16px;">${category}</span><div style="display:flex;gap:12px;"><span style="font-size:12px;color:#64748b;">Total: <b style="color:#667eea;">${totalValue}</b></span><span style="font-size:12px;color:#64748b;">Count: <b style="color:#22c55e;">${itemCount}</b></span></div></div>' 
+                              })}
+                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#764ba210', color: '#764ba2' }}
+                            />
+                          </Box>
+                        </Box>
+                      )}
+                    </Stack>
+                  )}
+                </Paper>
+
                 {/* Container Settings */}
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="subtitle2" fontWeight={600} gutterBottom color="#4b5563">
@@ -2211,26 +2337,114 @@ export default function ChildCardConfigTab() {
                 </AccordionSummary>
                 <AccordionDetails>
                   <Stack spacing={2}>
-                    {/* Title */}
-                    <TextField
-                      label="Card Title"
-                      value={selectedChild.title || ''}
-                      onChange={(e) => handleChildCardChange(selectedChildIndex, { title: e.target.value })}
-                      placeholder={`Card ${getChildDisplayNumber(selectedChild.id, selectedChildIndex)}`}
-                      size="small"
-                      fullWidth
-                    />
-                    
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={selectedChild.showTitle || false}
-                          onChange={(e) => handleChildCardChange(selectedChildIndex, { showTitle: e.target.checked })}
-                          size="small"
+                    {/* 🔥 Enhanced Title Configuration */}
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 2,
+                        border: '1px solid rgba(102, 126, 234, 0.2)',
+                        borderRadius: 2,
+                        bgcolor: 'rgba(102, 126, 234, 0.02)',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                        <Typography variant="subtitle2" fontWeight={700} color="#667eea" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          📝 Card Title
+                        </Typography>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={selectedChild.showTitle || false}
+                              onChange={(e) => handleChildCardChange(selectedChildIndex, { showTitle: e.target.checked })}
+                              size="small"
+                              sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#667eea' } }}
+                            />
+                          }
+                          label={<Typography variant="caption" fontWeight={600}>Show Title</Typography>}
+                          sx={{ m: 0 }}
                         />
-                      }
-                      label="Show Title Bar"
-                    />
+                      </Box>
+                      
+                      {selectedChild.showTitle && (
+                        <Stack spacing={1.5}>
+                          {/* Title Mode Toggle */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="caption" color="#64748b" fontWeight={600}>Mode:</Typography>
+                            <ToggleButtonGroup
+                              value={selectedChild.titleMode || 'simple'}
+                              exclusive
+                              onChange={(_, mode) => mode && handleChildCardChange(selectedChildIndex, { titleMode: mode })}
+                              size="small"
+                            >
+                              <ToggleButton value="simple" sx={{ px: 1.5, py: 0.25, fontSize: '0.7rem' }}>
+                                Simple Text
+                              </ToggleButton>
+                              <ToggleButton value="html" sx={{ px: 1.5, py: 0.25, fontSize: '0.7rem' }}>
+                                HTML Template
+                              </ToggleButton>
+                            </ToggleButtonGroup>
+                          </Box>
+                          
+                          {/* Simple Mode */}
+                          {(selectedChild.titleMode || 'simple') === 'simple' && (
+                            <TextField
+                              label="Title Text"
+                              value={selectedChild.title || ''}
+                              onChange={(e) => handleChildCardChange(selectedChildIndex, { title: e.target.value })}
+                              placeholder={`Card ${getChildDisplayNumber(selectedChild.id, selectedChildIndex)}`}
+                              size="small"
+                              fullWidth
+                              helperText="Use ${variableName} for dynamic values"
+                            />
+                          )}
+                          
+                          {/* HTML Mode */}
+                          {selectedChild.titleMode === 'html' && (
+                            <Box>
+                              <Typography variant="caption" color="#64748b" sx={{ mb: 0.5, display: 'block' }}>
+                                HTML Template (use <code>${'{variableName}'}</code> for dynamic values)
+                              </Typography>
+                              <Box sx={{ border: '1px solid rgba(102, 126, 234, 0.2)', borderRadius: 1, overflow: 'hidden' }}>
+                                <HtmlEditor
+                                  value={selectedChild.titleTemplate || ''}
+                                  onChange={(value) => handleChildCardChange(selectedChildIndex, { titleTemplate: value })}
+                                  height={100}
+                                  placeholder="<div style='display:flex;align-items:center;gap:8px;'><b>${category}</b> - Analysis</div>"
+                                  availableVariables={availableVariables}
+                                />
+                              </Box>
+                              {/* Quick Templates */}
+                              <Box sx={{ display: 'flex', gap: 0.5, mt: 1, flexWrap: 'wrap' }}>
+                                <Chip
+                                  label="Simple"
+                                  size="small"
+                                  onClick={() => handleChildCardChange(selectedChildIndex, { 
+                                    titleTemplate: '<span style="font-weight:700;color:#1e293b;">${category}</span>' 
+                                  })}
+                                  sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#667eea10', color: '#667eea' }}
+                                />
+                                <Chip
+                                  label="With Badge"
+                                  size="small"
+                                  onClick={() => handleChildCardChange(selectedChildIndex, { 
+                                    titleTemplate: '<div style="display:flex;align-items:center;gap:8px;"><span style="background:#667eea;color:white;padding:2px 8px;border-radius:4px;font-size:11px;">${filterValue}</span><b>${category}</b></div>' 
+                                  })}
+                                  sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#667eea10', color: '#667eea' }}
+                                />
+                                <Chip
+                                  label="Icon + Text"
+                                  size="small"
+                                  onClick={() => handleChildCardChange(selectedChildIndex, { 
+                                    titleTemplate: '<div style="display:flex;align-items:center;gap:6px;"><span style="color:#667eea;">📊</span><span style="font-weight:600;">${category} Analysis</span></div>' 
+                                  })}
+                                  sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#667eea10', color: '#667eea' }}
+                                />
+                              </Box>
+                            </Box>
+                          )}
+                        </Stack>
+                      )}
+                    </Paper>
 
                     {/* Type Selection */}
                     <Box>

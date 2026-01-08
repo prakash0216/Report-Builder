@@ -1,10 +1,47 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { Box } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { useRecoilCallback, useRecoilValue } from 'recoil';
 import { ParentCardConfig } from '../recoil/ChildCardState';
 import ChildCard from './ChildCard';
 import { variableAtomFamily } from '../recoil/VariableFamily';
-import { variableUpdateTriggerState } from '../recoil/Variabletracker';
+import { variableUpdateTriggerState, variableNamesState } from '../recoil/Variabletracker';
+
+// 🔥 HTML variable replacement for parent titles
+const replaceHtmlVariables = (template: string, variables: Record<string, any>): string => {
+  if (!template) return template;
+  
+  let result = template;
+  
+  Object.entries(variables).forEach(([name, value]) => {
+    let replacement: string;
+    if (value === null || value === undefined) {
+      replacement = '';
+    } else if (typeof value === 'object') {
+      replacement = JSON.stringify(value);
+    } else {
+      replacement = String(value);
+    }
+    
+    result = result.replace(new RegExp(`\\$\\{${name}\\}`, 'g'), replacement);
+    result = result.replace(new RegExp(`\\{\\{${name}\\}\\}`, 'g'), replacement);
+  });
+  
+  result = result.replace(/\$\{[^}]+\}/g, '');
+  result = result.replace(/\{\{[^}]+\}\}/g, '');
+  
+  return result;
+};
+
+// 🔥 Safe parse function
+const safeParse = (value: any): any => {
+  if (typeof value !== 'string') return value;
+  if (/^[\d,]+$/.test(value)) return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
 
 interface ParentCardContainerProps {
   parentCardId: string;
@@ -20,6 +57,37 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [heightFromVariable, setHeightFromVariable] = useState<number>(0);
+  
+  // 🔥 Get all variables for parent title rendering
+  const variableNames = useRecoilValue(variableNamesState);
+  const variableUpdateTrigger = useRecoilValue(variableUpdateTriggerState);
+  const [variables, setVariables] = useState<Record<string, any>>({});
+  
+  const getAllVariables = useRecoilCallback(({ snapshot }) => (): Record<string, any> => {
+    const vars: Record<string, any> = {};
+    const varNameArray: string[] = Array.from(variableNames);
+    
+    for (const varName of varNameArray) {
+      try {
+        const loadable = snapshot.getLoadable(variableAtomFamily(varName));
+        if (loadable.state === 'hasValue') {
+          const varValue = loadable.contents;
+          if (varValue !== undefined && varValue !== null) {
+            vars[varName] = typeof varValue === 'string' ? safeParse(varValue) : varValue;
+          }
+        }
+      } catch (e) {
+        // Variable not available
+      }
+    }
+    return vars;
+  }, [variableNames]);
+  
+  // Update variables when trigger changes
+  useEffect(() => {
+    const vars = getAllVariables();
+    setVariables(vars);
+  }, [getAllVariables, variableNames, variableUpdateTrigger]);
 
   // Handle container resize
   const updateDimensions = useCallback(() => {
@@ -65,9 +133,6 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
     }
   }, [config.useDynamicHeight, config.heightDataSource]);
 
-  // 🔥 Subscribe to variable updates to recalculate height when data changes
-  const variableUpdateTrigger = useRecoilValue(variableUpdateTriggerState);
-
   // 🔥 Update height when config changes OR when variables are recalculated
   useEffect(() => {
     if (config.useDynamicHeight && config.heightDataSource) {
@@ -101,6 +166,75 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
       resizeObserver.disconnect();
     };
   }, [updateDimensions]);
+
+  // 🔥 Render parent card title
+  const renderParentTitle = () => {
+    if (!config.showParentTitle) return null;
+    
+    // HTML Mode - render HTML template with variables
+    if (config.parentTitleMode === 'html' && config.parentTitleTemplate) {
+      const processedHtml = replaceHtmlVariables(config.parentTitleTemplate, variables);
+      return (
+        <Box
+          sx={{
+            minHeight: 40,
+            px: 2,
+            py: 1,
+            display: 'flex',
+            alignItems: 'center',
+            borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
+            backgroundColor: 'white',
+            flexShrink: 0,
+          }}
+        >
+          <div
+            dangerouslySetInnerHTML={{ __html: processedHtml }}
+            style={{
+              width: '100%',
+              lineHeight: 1.4,
+            }}
+          />
+        </Box>
+      );
+    }
+    
+    // Simple Mode - render plain text with variable replacement
+    const titleText = config.parentTitle || '';
+    const processedTitle = replaceHtmlVariables(titleText, variables);
+    
+    if (!processedTitle) return null;
+    
+    return (
+      <Box
+        sx={{
+          height: 44,
+          px: 2,
+          display: 'flex',
+          alignItems: 'center',
+          borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
+          backgroundColor: 'white',
+          flexShrink: 0,
+        }}
+      >
+        <Typography
+          variant="subtitle1"
+          sx={{
+            fontSize: '1rem',
+            fontWeight: 600,
+            color: '#1e293b',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {processedTitle}
+        </Typography>
+      </Box>
+    );
+  };
+  
+  // Parent title height (approximate)
+  const parentTitleHeight = config.showParentTitle ? 44 : 0;
 
   // Empty state
   if (!config.childCards || config.childCards.length === 0) {
@@ -136,50 +270,63 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
         sx={{
           width: '100%',
           height: '100%', // Fixed to parent size
-          overflow: 'auto', // 🔥 Enable scrolling
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
           position: 'relative',
           backgroundColor: '#f8fafc',
         }}
       >
-        {/* 
-          🔥 KEY: This inner wrapper has EXPLICIT height = contentHeight
-          If contentHeight > container height, scrollbar appears
-        */}
+        {/* 🔥 Parent Card Title */}
+        {renderParentTitle()}
+        
+        {/* Scrollable content area */}
         <Box
           sx={{
-            display: 'flex',
-            flexWrap: 'nowrap',
-            gap: `${config.gap}px`,
-            p: `${config.gap}px`,
-            // 🔥 EXPLICIT height - uses dynamic calculation when enabled
-            height: contentHeight,
-            width: '100%',
+            flex: 1,
+            overflow: 'auto', // 🔥 Enable scrolling
           }}
         >
-          {config.childCards.map((childConfig) => (
-            <Box
-              key={childConfig.id}
-              sx={{
-                width: `calc(${childConfig.layout.w * 100}% - ${config.gap}px)`,
-                flex: `0 0 calc(${childConfig.layout.w * 100}% - ${config.gap}px)`,
-                height: '100%', // Fill the row height
-                backgroundColor: 'white',
-                borderRadius: '8px',
-                overflow: 'hidden',
-                border: '1px solid rgba(0, 0, 0, 0.06)',
-              }}
-            >
-              <ChildCard
-                config={childConfig}
-                parentCardId={parentCardId}
-                parentWidth={dimensions.width * childConfig.layout.w}
-                parentHeight={contentHeight - (config.gap * 2)} // Account for padding
-                gap={0}
-                showExport={showExport}
-                isFullSizePreview={true}
-              />
-            </Box>
-          ))}
+          {/* 
+            🔥 KEY: This inner wrapper has EXPLICIT height = contentHeight
+            If contentHeight > container height, scrollbar appears
+          */}
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'nowrap',
+              gap: `${config.gap}px`,
+              p: `${config.gap}px`,
+              // 🔥 EXPLICIT height - uses dynamic calculation when enabled
+              height: contentHeight,
+              width: '100%',
+            }}
+          >
+            {config.childCards.map((childConfig) => (
+              <Box
+                key={childConfig.id}
+                sx={{
+                  width: `calc(${childConfig.layout.w * 100}% - ${config.gap}px)`,
+                  flex: `0 0 calc(${childConfig.layout.w * 100}% - ${config.gap}px)`,
+                  height: '100%', // Fill the row height
+                  backgroundColor: 'white',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  border: '1px solid rgba(0, 0, 0, 0.06)',
+                }}
+              >
+                <ChildCard
+                  config={childConfig}
+                  parentCardId={parentCardId}
+                  parentWidth={dimensions.width * childConfig.layout.w}
+                  parentHeight={contentHeight - (config.gap * 2)} // Account for padding
+                  gap={0}
+                  showExport={showExport}
+                  isFullSizePreview={true}
+                />
+              </Box>
+            ))}
+          </Box>
         </Box>
       </Box>
     );
@@ -194,14 +341,20 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
         height: '100%',
         overflow: 'hidden',
         position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
         backgroundColor: '#f8fafc',
       }}
     >
+      {/* 🔥 Parent Card Title */}
+      {renderParentTitle()}
+      
+      {/* Child cards area */}
       <Box
         sx={{
+          flex: 1,
           position: 'relative',
           width: '100%',
-          height: '100%',
         }}
       >
         {config.childCards.map((childConfig) => (
@@ -210,7 +363,7 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
             config={childConfig}
             parentCardId={parentCardId}
             parentWidth={dimensions.width}
-            parentHeight={dimensions.height}
+            parentHeight={dimensions.height - parentTitleHeight}
             gap={config.gap}
             showExport={showExport}
           />

@@ -413,6 +413,10 @@ CREATE TABLE IF NOT EXISTS child_card_configs (
   gap INTEGER DEFAULT 8,
   use_dynamic_height BOOLEAN DEFAULT FALSE,
   height_data_source TEXT DEFAULT '',
+  show_parent_title BOOLEAN DEFAULT FALSE,
+  parent_title_mode TEXT DEFAULT 'simple',
+  parent_title TEXT DEFAULT '',
+  parent_title_template TEXT DEFAULT '',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   last_modified TIMESTAMP
 );
@@ -433,6 +437,11 @@ async function createChildCardConfigsTable() {
       // 🔥 Dynamic height columns
       await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS use_dynamic_height BOOLEAN DEFAULT FALSE`);
       await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS height_data_source TEXT DEFAULT ''`);
+      // 🔥 Dynamic parent title columns
+      await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS show_parent_title BOOLEAN DEFAULT FALSE`);
+      await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS parent_title_mode TEXT DEFAULT 'simple'`);
+      await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS parent_title TEXT DEFAULT ''`);
+      await dbClient.run(`ALTER TABLE child_card_configs ADD COLUMN IF NOT EXISTS parent_title_template TEXT DEFAULT ''`);
       console.log("✅ Child card configs columns migrated successfully.");
     } catch (migrationErr) {
       // Columns might already exist, ignore
