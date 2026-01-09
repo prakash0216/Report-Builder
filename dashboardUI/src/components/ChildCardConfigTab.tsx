@@ -70,6 +70,9 @@ import {
   Link as LinkIcon,
   TouchApp as TouchAppIcon,
   Info as InfoIcon,
+  ViewModule as ViewModuleIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon,
 } from '@mui/icons-material';
 import { AreaChartIcon, Columns3Icon, DonutIcon, ScatterChartIcon } from "lucide-react";
 import {
@@ -1474,6 +1477,459 @@ const LayoutChangeDialog: React.FC<LayoutChangeDialogProps> = ({
   );
 };
 
+// 🔥 Child Card Dimension Condition Form - Extracted to avoid hooks in map
+interface DimensionConditionFormProps {
+  child: ChildCardConfig;
+  childIndex: number;
+  booleanVariablesList: string[];
+  availableVariables: Record<string, any>;
+  onAddCondition: (childIndex: number, condition: any) => void;
+  onUpdateCondition: (childIndex: number, conditions: any[]) => void;
+}
+
+const ChildCardDimensionConditionForm: React.FC<DimensionConditionFormProps> = ({
+  child,
+  childIndex,
+  booleanVariablesList,
+  availableVariables,
+  onAddCondition,
+  onUpdateCondition,
+}) => {
+  const [newCondVarName, setNewCondVarName] = useState<string>('');
+  const [newCondExpectedValue, setNewCondExpectedValue] = useState<boolean>(true);
+  // Grid-based dimensions (1-12)
+  const [newCondWidth, setNewCondWidth] = useState<number>(12);   // default 12 columns (full width)
+  const [newCondHeight, setNewCondHeight] = useState<number>(12); // default 12 rows (full height)
+  
+  const handleAddCondition = () => {
+    if (!newCondVarName) return;
+    
+    const newCondition = {
+      id: Date.now().toString(),
+      variableName: newCondVarName,
+      expectedValue: newCondExpectedValue,
+      // convert grid units to fractional for layout engine (1-12 grid → 0-1 fraction)
+      width: Math.min(12, Math.max(1, newCondWidth)) / 12,
+      height: Math.min(12, Math.max(1, newCondHeight)) / 12,
+      priority: (child.dimensionConditions?.length || 0) + 1,
+    };
+    
+    onAddCondition(childIndex, newCondition);
+    
+    // Reset form
+    setNewCondVarName('');
+    setNewCondExpectedValue(true);
+    setNewCondWidth(12);
+    setNewCondHeight(12);
+  };
+  
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        p: 2.5,
+        mb: 2,
+        border: '1px solid rgba(102, 126, 234, 0.2)',
+        borderRadius: 2,
+        background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(118, 75, 162, 0.02) 100%)',
+      }}
+    >
+      {/* Card Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        <Box
+          sx={{
+            width: 36,
+            height: 36,
+            borderRadius: 1.5,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            mr: 1.5,
+          }}
+        >
+          <ViewModuleIcon sx={{ color: 'white', fontSize: 20 }} />
+        </Box>
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="subtitle2" fontWeight={700} color="#374151">
+            Card {childIndex + 1}: {child.title || `Child ${childIndex + 1}`}
+          </Typography>
+          <Typography variant="caption" color="#64748b">
+            Dimension Conditions ({child.dimensionConditions?.length || 0})
+          </Typography>
+        </Box>
+        <Chip
+          size="small"
+          label={child.type.toUpperCase()}
+          sx={{ height: 20, fontSize: '0.6rem', fontWeight: 600 }}
+        />
+      </Box>
+      
+      <Divider sx={{ mb: 2 }} />
+      
+      {/* How it works info */}
+      <Alert severity="info" sx={{ mb: 2, borderRadius: 1.5, '& .MuiAlert-message': { fontSize: '0.75rem' } }}>
+        <Typography variant="caption" fontWeight={600} display="block" gutterBottom>
+          📐 How it works:
+        </Typography>
+        <Typography variant="caption" color="text.secondary" component="div">
+          • Add conditions with boolean variables to dynamically resize cards<br/>
+          • When variable matches → Card resizes to specified Width × Height<br/>
+          • Position is auto-calculated based on visible cards (flow layout)<br/>
+          • If only 1 card visible, it automatically fills the entire container
+        </Typography>
+      </Alert>
+      
+      {/* Add New Condition Form */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2,
+          mb: 2,
+          borderRadius: 2,
+          border: '2px solid rgba(102, 126, 234, 0.2)',
+          background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)',
+        }}
+      >
+        <Typography 
+          variant="subtitle2" 
+          fontWeight={700} 
+          gutterBottom
+          sx={{ color: '#667eea', mb: 2 }}
+        >
+          Add New Dimension Condition
+        </Typography>
+        
+        {booleanVariablesList.length === 0 ? (
+          <Alert severity="warning" sx={{ borderRadius: 1.5 }}>
+            <Typography variant="body2" fontWeight={500}>
+              No boolean variables found
+            </Typography>
+            <Typography variant="caption">
+              Create variables that return true/false in the Calculation tab
+            </Typography>
+          </Alert>
+        ) : (
+          <Stack spacing={2}>
+            {/* Boolean Variable Selection */}
+            <FormControl fullWidth size="small">
+              <InputLabel>Boolean Variable</InputLabel>
+              <Select
+                value={newCondVarName}
+                label="Boolean Variable"
+                onChange={(e) => setNewCondVarName(e.target.value)}
+                sx={{ bgcolor: 'white', borderRadius: 1.5 }}
+              >
+                <MenuItem value="">
+                  <em>Select a variable...</em>
+                </MenuItem>
+                {booleanVariablesList.map((varName) => {
+                  const value = availableVariables[varName];
+                  const isBoolTrue = value === true || value === 'true';
+                  return (
+                    <MenuItem key={varName} value={varName}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                        <Typography sx={{ flex: 1, fontWeight: 500 }}>{varName}</Typography>
+                        <Chip
+                          size="small"
+                          label={isBoolTrue ? 'true' : 'false'}
+                          sx={{ 
+                            height: 20,
+                            bgcolor: isBoolTrue ? '#10b981' : '#94a3b8',
+                            color: 'white',
+                            fontWeight: 600,
+                          }}
+                        />
+                      </Box>
+                    </MenuItem>
+                  );
+                })}
+              </Select>
+            </FormControl>
+            
+            {/* When Variable Equals */}
+            <FormControl fullWidth size="small">
+              <InputLabel>When Variable Equals</InputLabel>
+              <Select
+                value={newCondExpectedValue ? 'true' : 'false'}
+                label="When Variable Equals"
+                onChange={(e) => setNewCondExpectedValue(e.target.value === 'true')}
+                sx={{ bgcolor: 'white', borderRadius: 1.5 }}
+              >
+                <MenuItem value="true">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CheckCircleIcon sx={{ color: '#10b981', fontSize: 18 }} />
+                    <Typography fontWeight={500}>True</Typography>
+                  </Box>
+                </MenuItem>
+                <MenuItem value="false">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CancelIcon sx={{ color: '#94a3b8', fontSize: 18 }} />
+                    <Typography fontWeight={500}>False</Typography>
+                  </Box>
+                </MenuItem>
+              </Select>
+            </FormControl>
+            
+            {/* Width & Height (Grid units) */}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="Width (Grid Columns)"
+                value={newCondWidth}
+                onChange={(e) => setNewCondWidth(Math.min(12, Math.max(1, parseInt(e.target.value) || 12)))}
+                inputProps={{ min: 1, max: 12 }}
+                sx={{ bgcolor: 'white' }}
+                helperText="1-12 columns"
+              />
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="Height (Grid Rows)"
+                value={newCondHeight}
+                onChange={(e) => setNewCondHeight(Math.min(12, Math.max(1, parseInt(e.target.value) || 12)))}
+                inputProps={{ min: 1, max: 12 }}
+                sx={{ bgcolor: 'white' }}
+                helperText="1-12 rows"
+              />
+            </Box>
+            
+            {/* Add Condition Button */}
+            <Button
+              variant="contained"
+              fullWidth
+              startIcon={<AddIcon />}
+              onClick={handleAddCondition}
+              disabled={!newCondVarName}
+              sx={{
+                py: 1.25,
+                borderRadius: 1.5,
+                background: newCondVarName 
+                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                  : 'rgba(0,0,0,0.1)',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: 1,
+              }}
+            >
+              Add Condition
+            </Button>
+          </Stack>
+        )}
+      </Paper>
+      
+      {/* Existing Conditions List */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2,
+          borderRadius: 2,
+          border: '1px solid rgba(102, 126, 234, 0.15)',
+          bgcolor: 'rgba(102, 126, 234, 0.02)',
+        }}
+      >
+        <Typography variant="subtitle2" fontWeight={700} color="#667eea" gutterBottom>
+          Dimension Conditions ({child.dimensionConditions?.length || 0})
+        </Typography>
+        <Typography variant="caption" color="#64748b" sx={{ display: 'block', mb: 2 }}>
+          Higher priority conditions are checked first. First match wins.
+        </Typography>
+        
+        {(!child.dimensionConditions || child.dimensionConditions.length === 0) ? (
+          <Box sx={{ textAlign: 'center', py: 3 }}>
+            <ViewModuleIcon sx={{ fontSize: 40, color: '#d1d5db', mb: 1 }} />
+            <Typography variant="body2" color="#9ca3af">
+              No dimension conditions defined. Card will use default layout size.
+            </Typography>
+          </Box>
+        ) : (
+          <Stack spacing={1.5}>
+            {(child.dimensionConditions || []).map((condition, condIndex) => {
+              const currentValue = availableVariables[condition.variableName];
+              const isMatching = (currentValue === true || currentValue === 'true') === condition.expectedValue;
+              
+              return (
+                <Paper
+                  key={condition.id}
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    border: `2px solid ${isMatching ? 'rgba(16, 185, 129, 0.4)' : 'rgba(0,0,0,0.08)'}`,
+                    borderRadius: 1.5,
+                    bgcolor: isMatching ? 'rgba(16, 185, 129, 0.05)' : 'white',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                    <Chip
+                      size="small"
+                      label={`Priority ${condition.priority}`}
+                      sx={{ 
+                        height: 22, 
+                        fontSize: '0.7rem', 
+                        fontWeight: 700,
+                        bgcolor: '#667eea',
+                        color: 'white',
+                      }}
+                    />
+                    {isMatching && (
+                      <Chip
+                        size="small"
+                        label="ACTIVE"
+                        sx={{ 
+                          height: 20, 
+                          fontSize: '0.6rem', 
+                          fontWeight: 700,
+                          bgcolor: '#10b981',
+                          color: 'white',
+                        }}
+                      />
+                    )}
+                    <Box sx={{ ml: 'auto', display: 'flex', gap: 0.5 }}>
+                      <Tooltip title="Move Up">
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={condIndex === 0}
+                            onClick={() => {
+                              const updated = [...(child.dimensionConditions || [])];
+                              [updated[condIndex - 1], updated[condIndex]] = [updated[condIndex], updated[condIndex - 1]];
+                              updated.forEach((c, i) => c.priority = i + 1);
+                              onUpdateCondition(childIndex, updated);
+                            }}
+                          >
+                            <ArrowUpwardIcon sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="Move Down">
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={condIndex === (child.dimensionConditions?.length || 0) - 1}
+                            onClick={() => {
+                              const updated = [...(child.dimensionConditions || [])];
+                              [updated[condIndex], updated[condIndex + 1]] = [updated[condIndex + 1], updated[condIndex]];
+                              updated.forEach((c, i) => c.priority = i + 1);
+                              onUpdateCondition(childIndex, updated);
+                            }}
+                          >
+                            <ArrowDownwardIcon sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="Delete">
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            const updated = (child.dimensionConditions || []).filter((_, i) => i !== condIndex);
+                            updated.forEach((c, i) => c.priority = i + 1);
+                            onUpdateCondition(childIndex, updated);
+                          }}
+                          sx={{ color: '#ef4444' }}
+                        >
+                          <DeleteIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </Box>
+                  
+                  {/* Condition Details */}
+                  <Box sx={{ 
+                    p: 1.5, 
+                    borderRadius: 1, 
+                    bgcolor: 'rgba(102, 126, 234, 0.05)',
+                    border: '1px solid rgba(102, 126, 234, 0.1)',
+                    mb: 1.5,
+                  }}>
+                    <Typography variant="body2" fontWeight={500}>
+                      When <code style={{ background: '#e0f2fe', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>{condition.variableName}</code>
+                      {' = '}
+                      <Chip
+                        size="small"
+                        label={condition.expectedValue ? 'true' : 'false'}
+                        sx={{ 
+                          height: 20,
+                          fontSize: '0.7rem',
+                          fontWeight: 600,
+                          bgcolor: condition.expectedValue ? '#10b981' : '#94a3b8',
+                          color: 'white',
+                          mx: 0.5,
+                        }}
+                      />
+                      → Set size to:
+                    </Typography>
+                  </Box>
+                  
+                  {/* Editable Dimensions */}
+                  <Box sx={{ display: 'flex', gap: 2 }}>
+                    <TextField
+                      size="small"
+                      type="number"
+                      label="Width (Columns)"
+                      value={Math.max(1, Math.min(12, Math.round(condition.width * 12) || 1))}
+                      onChange={(e) => {
+                        const colValue = Math.min(12, Math.max(1, parseInt(e.target.value) || 1));
+                        const updated = [...(child.dimensionConditions || [])];
+                        updated[condIndex] = { ...condition, width: colValue / 12 };
+                        onUpdateCondition(childIndex, updated);
+                      }}
+                      inputProps={{ min: 1, max: 12 }}
+                      sx={{ flex: 1, bgcolor: 'white' }}
+                      helperText="1-12"
+                    />
+                    <TextField
+                      size="small"
+                      type="number"
+                      label="Height (Rows)"
+                      value={Math.max(1, Math.min(12, Math.round(condition.height * 12) || 1))}
+                      onChange={(e) => {
+                        const rowValue = Math.min(12, Math.max(1, parseInt(e.target.value) || 1));
+                        const updated = [...(child.dimensionConditions || [])];
+                        updated[condIndex] = { ...condition, height: rowValue / 12 };
+                        onUpdateCondition(childIndex, updated);
+                      }}
+                      inputProps={{ min: 1, max: 12 }}
+                      sx={{ flex: 1, bgcolor: 'white' }}
+                      helperText="1-12"
+                    />
+                  </Box>
+                  
+                  {/* Current Status */}
+                  <Box sx={{ 
+                    mt: 1.5,
+                    p: 1, 
+                    borderRadius: 1, 
+                    bgcolor: isMatching ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.05)',
+                    border: `1px dashed ${isMatching ? '#10b981' : '#d1d5db'}`,
+                  }}>
+                    <Typography variant="caption" fontWeight={500}>
+                      📊 Current: <code style={{ fontWeight: 600 }}>{condition.variableName}</code> = 
+                      <span style={{ 
+                        marginLeft: 4,
+                        fontWeight: 700, 
+                        color: (currentValue === true || currentValue === 'true') ? '#10b981' : '#ef4444' 
+                      }}>
+                        {String(currentValue ?? 'undefined')}
+                      </span>
+                      {' → '}
+                      <strong style={{ color: isMatching ? '#10b981' : '#6b7280' }}>
+                        {isMatching ? 'CONDITION ACTIVE' : 'Not matching'}
+                      </strong>
+                    </Typography>
+                  </Box>
+                </Paper>
+              );
+            })}
+          </Stack>
+        )}
+      </Paper>
+    </Paper>
+  );
+};
+
 export default function ChildCardConfigTab() {
   const { id } = useParams<{ id: string }>();
   const [childCardConfigs, setChildCardConfigs] = useRecoilState(childCardConfigState);
@@ -1502,6 +1958,15 @@ export default function ChildCardConfigTab() {
   const [showPreview, setShowPreview] = useState<boolean>(true);
   const [tableColumns, setTableColumns] = useState<string[]>([]);
   const [availableVariables, setAvailableVariables] = useState<Record<string, any>>({});
+  
+  // 🔥 Filter to get only boolean variables (for visibility controls)
+  const booleanVariablesList = useMemo(() => {
+    return variableNamesList.filter(varName => {
+      const value = availableVariables[varName];
+      return value === true || value === false || value === 'true' || value === 'false';
+    });
+  }, [variableNamesList, availableVariables]);
+  
   const [selectedTemplate, setSelectedTemplate] = useState<string>('Custom/Manual');
   const [selectedHtmlTemplate, setSelectedHtmlTemplate] = useState<string>('Custom');
   const [selectedLayoutPreset, setSelectedLayoutPreset] = useState<string>('single');
@@ -1801,7 +2266,8 @@ export default function ChildCardConfigTab() {
   useEffect(() => {
     if (id && childCardConfigs[id]) {
       const config = childCardConfigs[id];
-      setParentConfig(config);
+      // Force individual visibility mode (requirement: only individual card visibility)
+      setParentConfig({ ...config, childVisibilityMode: 'individual' });
       
       // Detect and set the layout preset
       if (config.childCards && config.childCards.length > 0) {
@@ -2601,117 +3067,8 @@ export default function ChildCardConfigTab() {
               </AccordionSummary>
               <AccordionDetails>
                 <Stack spacing={2.5}>
-                  {/* Parent Card Visibility */}
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 2,
-                      border: '1px solid rgba(139, 92, 246, 0.2)',
-                      borderRadius: 2,
-                      bgcolor: 'rgba(139, 92, 246, 0.02)',
-                    }}
-                  >
-                    <Typography variant="subtitle2" fontWeight={700} color="#8b5cf6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      🏠 Parent Container Visibility
-                    </Typography>
-                    <Typography variant="caption" color="#64748b" sx={{ display: 'block', mb: 2 }}>
-                      Control when this entire multi-card container is visible on the dashboard
-                    </Typography>
-                    
-                    <Stack spacing={2}>
-                      {/* Parent Visibility Variable */}
-                      <FormControl size="small" fullWidth>
-                        <InputLabel sx={{ fontSize: '0.75rem' }}>Visibility Variable (Boolean)</InputLabel>
-                        <Select
-                          value={parentConfig.visibilityVariable || ''}
-                          onChange={(e) => handleParentConfigChange({ visibilityVariable: e.target.value })}
-                          label="Visibility Variable (Boolean)"
-                          sx={{ bgcolor: 'white', borderRadius: 1.5 }}
-                        >
-                          <MenuItem value="">
-                            <em>Always Visible (No Variable)</em>
-                          </MenuItem>
-                          {variableNamesList.map((varName) => (
-                            <MenuItem key={varName} value={varName}>
-                              {varName}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, fontSize: '0.6rem' }}>
-                          When variable is <code style={{ background: '#dcfce7', padding: '1px 4px', borderRadius: 2 }}>true</code> → Container is <strong>visible</strong>
-                        </Typography>
-                      </FormControl>
-                      
-                      {/* Parent Arrangement Variable */}
-                      <FormControl size="small" fullWidth>
-                        <InputLabel sx={{ fontSize: '0.75rem' }}>Arrangement Variable (Number)</InputLabel>
-                        <Select
-                          value={parentConfig.arrangementVariable || ''}
-                          onChange={(e) => handleParentConfigChange({ arrangementVariable: e.target.value })}
-                          label="Arrangement Variable (Number)"
-                          sx={{ bgcolor: 'white', borderRadius: 1.5 }}
-                        >
-                          <MenuItem value="">
-                            <em>Default Order (No Variable)</em>
-                          </MenuItem>
-                          {variableNamesList.map((varName) => (
-                            <MenuItem key={varName} value={varName}>
-                              {varName}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, fontSize: '0.6rem' }}>
-                          Lower number = appears first on dashboard (e.g., 1 before 2)
-                        </Typography>
-                      </FormControl>
-                    </Stack>
-                  </Paper>
-                  
-                  {/* Child Cards Visibility Mode */}
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 2,
-                      border: '1px solid rgba(16, 185, 129, 0.2)',
-                      borderRadius: 2,
-                      bgcolor: 'rgba(16, 185, 129, 0.02)',
-                    }}
-                  >
-                    <Typography variant="subtitle2" fontWeight={700} color="#10b981" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      🧩 Child Cards Visibility Mode
-                    </Typography>
-                    <Typography variant="caption" color="#64748b" sx={{ display: 'block', mb: 2 }}>
-                      Choose how child cards within this container are displayed
-                    </Typography>
-                    
-                    <ToggleButtonGroup
-                      value={parentConfig.childVisibilityMode || 'all'}
-                      exclusive
-                      onChange={(_, mode) => mode && handleParentConfigChange({ childVisibilityMode: mode })}
-                      fullWidth
-                      size="small"
-                    >
-                      <ToggleButton value="all" sx={{ textTransform: 'none', fontWeight: 600 }}>
-                        <Box sx={{ textAlign: 'center' }}>
-                          <Typography variant="body2" fontWeight={600}>All Visible</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
-                            All child cards always shown
-                          </Typography>
-                        </Box>
-                      </ToggleButton>
-                      <ToggleButton value="individual" sx={{ textTransform: 'none', fontWeight: 600 }}>
-                        <Box sx={{ textAlign: 'center' }}>
-                          <Typography variant="body2" fontWeight={600}>Individual Control</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
-                            Each card has own visibility rule
-                          </Typography>
-                        </Box>
-                      </ToggleButton>
-                    </ToggleButtonGroup>
-                  </Paper>
-                  
-                  {/* Individual Child Card Visibility (shown when mode is 'individual') */}
-                  {parentConfig.childVisibilityMode === 'individual' && parentConfig.childCards.length > 0 && (
+                  {/* Individual Child Card Visibility */}
+                  {parentConfig.childCards.length > 0 && (
                     <Paper
                       elevation={0}
                       sx={{
@@ -2729,289 +3086,151 @@ export default function ChildCardConfigTab() {
                       </Typography>
                       
                       <Stack spacing={2}>
-                        {parentConfig.childCards.map((child, index) => (
-                          <Paper
-                            key={child.id}
-                            elevation={0}
-                            sx={{
-                              p: 1.5,
-                              border: '1px solid rgba(0,0,0,0.08)',
-                              borderRadius: 1.5,
-                              bgcolor: 'white',
-                            }}
-                          >
-                            <Typography variant="body2" fontWeight={700} color="#4b5563" gutterBottom>
-                              Card {index + 1}: {child.title || `Child ${index + 1}`}
-                              <Chip
-                                size="small"
-                                label={child.type}
-                                sx={{ ml: 1, height: 18, fontSize: '0.6rem', textTransform: 'uppercase' }}
-                              />
+                        {booleanVariablesList.length === 0 && (
+                          <Alert severity="warning" sx={{ borderRadius: 1.5 }}>
+                            <Typography variant="body2" fontWeight={500}>
+                              No boolean variables found
                             </Typography>
-                            
-                            <Box sx={{ display: 'flex', gap: 1.5, mt: 1 }}>
-                              {/* Child Visibility Variable */}
-                              <FormControl size="small" fullWidth>
-                                <InputLabel sx={{ fontSize: '0.7rem' }}>Visibility Variable</InputLabel>
+                            <Typography variant="caption">
+                              Create variables that return <code style={{ background: 'rgba(245, 158, 11, 0.2)', padding: '1px 4px', borderRadius: 2 }}>true</code> or <code style={{ background: 'rgba(245, 158, 11, 0.2)', padding: '1px 4px', borderRadius: 2 }}>false</code> in the Hooks tab
+                            </Typography>
+                          </Alert>
+                        )}
+                        
+                        {parentConfig.childCards.map((child, index) => {
+                          // Get current value of visibility variable
+                          const visibilityValue = child.visibilityVariable 
+                            ? availableVariables[child.visibilityVariable] 
+                            : null;
+                          const isCurrentlyVisible = visibilityValue === true || visibilityValue === 'true' || !child.visibilityVariable;
+                          
+                          return (
+                            <Paper
+                              key={child.id}
+                              elevation={0}
+                              sx={{
+                                p: 2,
+                                border: `1px solid ${isCurrentlyVisible ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                                borderRadius: 2,
+                                bgcolor: isCurrentlyVisible ? 'rgba(16, 185, 129, 0.02)' : 'rgba(239, 68, 68, 0.02)',
+                              }}
+                            >
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                                <Typography variant="body2" fontWeight={700} color="#4b5563">
+                                  Card {index + 1}: {child.title || `Child ${index + 1}`}
+                                </Typography>
+                                <Chip
+                                  size="small"
+                                  label={child.type}
+                                  sx={{ height: 18, fontSize: '0.6rem', textTransform: 'uppercase' }}
+                                />
+                                <Box sx={{ ml: 'auto' }}>
+                                  <Chip
+                                    size="small"
+                                    label={isCurrentlyVisible ? 'VISIBLE' : 'HIDDEN'}
+                                    sx={{ 
+                                      height: 20, 
+                                      fontSize: '0.6rem', 
+                                      fontWeight: 700,
+                                      bgcolor: isCurrentlyVisible ? '#10b981' : '#ef4444',
+                                      color: 'white',
+                                    }}
+                                  />
+                                </Box>
+                              </Box>
+                              
+                              {/* Visibility Variable Selection */}
+                              <FormControl size="small" fullWidth sx={{ mb: 1.5 }}>
+                                <InputLabel sx={{ fontSize: '0.75rem' }}>Visibility Variable (Boolean)</InputLabel>
                                 <Select
                                   value={child.visibilityVariable || ''}
                                   onChange={(e) => handleChildCardChange(index, { visibilityVariable: e.target.value })}
-                                  label="Visibility Variable"
-                                  sx={{ bgcolor: 'white', fontSize: '0.75rem' }}
+                                  label="Visibility Variable (Boolean)"
+                                  sx={{ bgcolor: 'white', fontSize: '0.8rem' }}
                                 >
-                                  <MenuItem value="" sx={{ fontSize: '0.75rem' }}>
-                                    <em>Always Visible</em>
+                                  <MenuItem value="" sx={{ fontSize: '0.8rem' }}>
+                                    <em>Always Visible (No Variable)</em>
                                   </MenuItem>
-                                  {variableNamesList.map((varName) => (
-                                    <MenuItem key={varName} value={varName} sx={{ fontSize: '0.75rem' }}>
-                                      {varName}
-                                    </MenuItem>
-                                  ))}
+                                  {booleanVariablesList.map((varName) => {
+                                    const value = availableVariables[varName];
+                                    const isBoolTrue = value === true || value === 'true';
+                                    return (
+                                      <MenuItem key={varName} value={varName} sx={{ fontSize: '0.8rem' }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                                          <Typography sx={{ flex: 1, fontWeight: 500 }}>{varName}</Typography>
+                                          <Chip
+                                            size="small"
+                                            label={isBoolTrue ? 'true' : 'false'}
+                                            sx={{ 
+                                              ml: 1, 
+                                              height: 18,
+                                              fontSize: '0.6rem',
+                                              fontWeight: 600,
+                                              bgcolor: isBoolTrue ? '#10b981' : '#94a3b8',
+                                              color: 'white',
+                                            }}
+                                          />
+                                        </Box>
+                                      </MenuItem>
+                                    );
+                                  })}
                                 </Select>
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, fontSize: '0.65rem' }}>
+                                  When <code style={{ background: '#dcfce7', padding: '1px 4px', borderRadius: 2 }}>true</code> → Card is <strong>visible</strong> | 
+                                  When <code style={{ background: '#fee2e2', padding: '1px 4px', borderRadius: 2 }}>false</code> → Card is <strong>hidden</strong>
+                                </Typography>
                               </FormControl>
                               
-                              {/* Child Arrangement Variable */}
-                              <FormControl size="small" fullWidth>
-                                <InputLabel sx={{ fontSize: '0.7rem' }}>Order Variable</InputLabel>
-                                <Select
-                                  value={child.arrangementVariable || ''}
-                                  onChange={(e) => handleChildCardChange(index, { arrangementVariable: e.target.value })}
-                                  label="Order Variable"
-                                  sx={{ bgcolor: 'white', fontSize: '0.75rem' }}
-                                >
-                                  <MenuItem value="" sx={{ fontSize: '0.75rem' }}>
-                                    <em>Default Order</em>
-                                  </MenuItem>
-                                  {variableNamesList.map((varName) => (
-                                    <MenuItem key={varName} value={varName} sx={{ fontSize: '0.75rem' }}>
-                                      {varName}
-                                    </MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
-                            </Box>
-                          </Paper>
-                        ))}
+                              {/* Current Status */}
+                              {child.visibilityVariable && (
+                                <Box sx={{ 
+                                  p: 1, 
+                                  borderRadius: 1, 
+                                  bgcolor: isCurrentlyVisible ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                  border: `1px dashed ${isCurrentlyVisible ? '#10b981' : '#ef4444'}`,
+                                }}>
+                                  <Typography variant="caption" fontWeight={500}>
+                                    📊 Current: <code style={{ fontWeight: 600 }}>{child.visibilityVariable}</code> = 
+                                    <span style={{ 
+                                      marginLeft: 4,
+                                      fontWeight: 700, 
+                                      color: isCurrentlyVisible ? '#10b981' : '#ef4444' 
+                                    }}>
+                                      {String(visibilityValue)}
+                                    </span>
+                                    → Card is <strong>{isCurrentlyVisible ? 'VISIBLE' : 'HIDDEN'}</strong>
+                                  </Typography>
+                                </Box>
+                              )}
+                            </Paper>
+                          );
+                        })}
+                        
+                        <Typography variant="caption" color="#64748b" sx={{ display: 'block', mt: 1, fontStyle: 'italic' }}>
+                          💡 Showing only boolean variables ({booleanVariablesList.length} found)
+                        </Typography>
                       </Stack>
                     </Paper>
                   )}
                   
-                  {/* 🔥 Child Card Dimension Conditions (like CardArrangement for child cards) */}
-                  {parentConfig.childCards.length > 0 && (
-                    <Paper
-                      elevation={0}
-                      sx={{
-                        p: 2,
-                        border: '1px solid rgba(16, 185, 129, 0.2)',
-                        borderRadius: 2,
-                        bgcolor: 'rgba(16, 185, 129, 0.02)',
+                  {/* 🔥 Child Card Dimension Conditions (matches Card Arrangement pattern) */}
+                  {parentConfig.childCards.length > 0 && parentConfig.childCards.map((child, childIndex) => (
+                    <ChildCardDimensionConditionForm
+                      key={child.id}
+                      child={child}
+                      childIndex={childIndex}
+                      booleanVariablesList={booleanVariablesList}
+                      availableVariables={availableVariables}
+                      onAddCondition={(idx, condition) => {
+                        handleChildCardChange(idx, {
+                          dimensionConditions: [...(parentConfig.childCards[idx].dimensionConditions || []), condition]
+                        });
                       }}
-                    >
-                      <Typography variant="subtitle2" fontWeight={700} color="#10b981" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        📐 Child Card Dimension Conditions
-                      </Typography>
-                      <Typography variant="caption" color="#64748b" sx={{ display: 'block', mb: 2 }}>
-                        Set width/height for child cards based on boolean conditions (similar to Card Arrangement)
-                      </Typography>
-                      
-                      <Stack spacing={2}>
-                        {parentConfig.childCards.map((child, childIndex) => (
-                          <Accordion
-                            key={child.id}
-                            sx={{
-                              '&:before': { display: 'none' },
-                              border: '1px solid rgba(16, 185, 129, 0.15)',
-                              borderRadius: '8px !important',
-                              overflow: 'hidden',
-                            }}
-                          >
-                            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                                <Typography variant="body2" fontWeight={600} color="#10b981">
-                                  Card {childIndex + 1}: {child.title || `Child ${childIndex + 1}`}
-                                </Typography>
-                                <Chip
-                                  size="small"
-                                  label={`${child.dimensionConditions?.length || 0} conditions`}
-                                  sx={{ 
-                                    ml: 'auto', 
-                                    height: 20, 
-                                    fontSize: '0.65rem',
-                                    bgcolor: (child.dimensionConditions?.length || 0) > 0 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(0,0,0,0.05)',
-                                    color: (child.dimensionConditions?.length || 0) > 0 ? '#10b981' : '#64748b',
-                                  }}
-                                />
-                              </Box>
-                            </AccordionSummary>
-                            <AccordionDetails>
-                              <Stack spacing={1.5}>
-                                {/* Add New Condition Form */}
-                                <Box sx={{ p: 1.5, bgcolor: 'rgba(16, 185, 129, 0.05)', borderRadius: 1.5, border: '1px dashed rgba(16, 185, 129, 0.3)' }}>
-                                  <Typography variant="caption" fontWeight={600} color="#10b981" sx={{ display: 'block', mb: 1 }}>
-                                    + Add Dimension Condition
-                                  </Typography>
-                                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                                    <FormControl size="small" sx={{ minWidth: 120, flex: 1 }}>
-                                      <InputLabel sx={{ fontSize: '0.7rem' }}>Variable</InputLabel>
-                                      <Select
-                                        value=""
-                                        label="Variable"
-                                        onChange={(e) => {
-                                          if (e.target.value) {
-                                            const newCondition = {
-                                              id: Date.now().toString(),
-                                              variableName: e.target.value as string,
-                                              expectedValue: true,
-                                              width: 0.5, // 50%
-                                              height: 0.5, // 50%
-                                              priority: (child.dimensionConditions?.length || 0) + 1,
-                                            };
-                                            handleChildCardChange(childIndex, {
-                                              dimensionConditions: [...(child.dimensionConditions || []), newCondition]
-                                            });
-                                          }
-                                        }}
-                                        sx={{ bgcolor: 'white', fontSize: '0.75rem' }}
-                                      >
-                                        <MenuItem value="" sx={{ fontSize: '0.75rem' }}>
-                                          <em>Select variable...</em>
-                                        </MenuItem>
-                                        {variableNamesList.map((varName) => (
-                                          <MenuItem key={varName} value={varName} sx={{ fontSize: '0.75rem' }}>
-                                            {varName}
-                                          </MenuItem>
-                                        ))}
-                                      </Select>
-                                    </FormControl>
-                                  </Box>
-                                </Box>
-                                
-                                {/* Existing Conditions */}
-                                {(child.dimensionConditions || []).map((condition, condIndex) => (
-                                  <Paper
-                                    key={condition.id}
-                                    elevation={0}
-                                    sx={{
-                                      p: 1.5,
-                                      border: '1px solid rgba(16, 185, 129, 0.2)',
-                                      borderRadius: 1.5,
-                                      bgcolor: 'white',
-                                    }}
-                                  >
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                      <Chip
-                                        size="small"
-                                        label={`P${condition.priority}`}
-                                        sx={{ 
-                                          height: 20, 
-                                          fontSize: '0.65rem', 
-                                          fontWeight: 700,
-                                          bgcolor: '#10b981',
-                                          color: 'white',
-                                        }}
-                                      />
-                                      <Typography variant="caption" fontWeight={600}>
-                                        When <code style={{ background: '#e0f2fe', padding: '1px 4px', borderRadius: 2 }}>{condition.variableName}</code> = 
-                                      </Typography>
-                                      <Select
-                                        size="small"
-                                        value={condition.expectedValue ? 'true' : 'false'}
-                                        onChange={(e) => {
-                                          const updated = [...(child.dimensionConditions || [])];
-                                          updated[condIndex] = { ...condition, expectedValue: e.target.value === 'true' };
-                                          handleChildCardChange(childIndex, { dimensionConditions: updated });
-                                        }}
-                                        sx={{ height: 24, fontSize: '0.7rem', minWidth: 70 }}
-                                      >
-                                        <MenuItem value="true" sx={{ fontSize: '0.75rem' }}>true</MenuItem>
-                                        <MenuItem value="false" sx={{ fontSize: '0.75rem' }}>false</MenuItem>
-                                      </Select>
-                                      <Box sx={{ ml: 'auto', display: 'flex', gap: 0.5 }}>
-                                        <IconButton
-                                          size="small"
-                                          disabled={condIndex === 0}
-                                          onClick={() => {
-                                            const updated = [...(child.dimensionConditions || [])];
-                                            [updated[condIndex - 1], updated[condIndex]] = [updated[condIndex], updated[condIndex - 1]];
-                                            updated.forEach((c, i) => c.priority = i + 1);
-                                            handleChildCardChange(childIndex, { dimensionConditions: updated });
-                                          }}
-                                          sx={{ p: 0.25 }}
-                                        >
-                                          <ArrowUpwardIcon sx={{ fontSize: 16 }} />
-                                        </IconButton>
-                                        <IconButton
-                                          size="small"
-                                          disabled={condIndex === (child.dimensionConditions?.length || 0) - 1}
-                                          onClick={() => {
-                                            const updated = [...(child.dimensionConditions || [])];
-                                            [updated[condIndex], updated[condIndex + 1]] = [updated[condIndex + 1], updated[condIndex]];
-                                            updated.forEach((c, i) => c.priority = i + 1);
-                                            handleChildCardChange(childIndex, { dimensionConditions: updated });
-                                          }}
-                                          sx={{ p: 0.25 }}
-                                        >
-                                          <ArrowDownwardIcon sx={{ fontSize: 16 }} />
-                                        </IconButton>
-                                        <IconButton
-                                          size="small"
-                                          onClick={() => {
-                                            const updated = (child.dimensionConditions || []).filter((_, i) => i !== condIndex);
-                                            updated.forEach((c, i) => c.priority = i + 1);
-                                            handleChildCardChange(childIndex, { dimensionConditions: updated });
-                                          }}
-                                          sx={{ p: 0.25, color: '#ef4444' }}
-                                        >
-                                          <DeleteIcon sx={{ fontSize: 16 }} />
-                                        </IconButton>
-                                      </Box>
-                                    </Box>
-                                    <Box sx={{ display: 'flex', gap: 1.5 }}>
-                                      <TextField
-                                        size="small"
-                                        type="number"
-                                        label="Width %"
-                                        value={Math.round(condition.width * 100)}
-                                        onChange={(e) => {
-                                          const updated = [...(child.dimensionConditions || [])];
-                                          updated[condIndex] = { ...condition, width: Math.min(100, Math.max(10, parseInt(e.target.value) || 50)) / 100 };
-                                          handleChildCardChange(childIndex, { dimensionConditions: updated });
-                                        }}
-                                        inputProps={{ min: 10, max: 100 }}
-                                        sx={{ flex: 1, '& input': { fontSize: '0.75rem' } }}
-                                        helperText="10-100%"
-                                      />
-                                      <TextField
-                                        size="small"
-                                        type="number"
-                                        label="Height %"
-                                        value={Math.round(condition.height * 100)}
-                                        onChange={(e) => {
-                                          const updated = [...(child.dimensionConditions || [])];
-                                          updated[condIndex] = { ...condition, height: Math.min(100, Math.max(10, parseInt(e.target.value) || 50)) / 100 };
-                                          handleChildCardChange(childIndex, { dimensionConditions: updated });
-                                        }}
-                                        inputProps={{ min: 10, max: 100 }}
-                                        sx={{ flex: 1, '& input': { fontSize: '0.75rem' } }}
-                                        helperText="10-100%"
-                                      />
-                                    </Box>
-                                  </Paper>
-                                ))}
-                                
-                                {/* Empty state */}
-                                {(!child.dimensionConditions || child.dimensionConditions.length === 0) && (
-                                  <Typography variant="caption" color="#94a3b8" sx={{ textAlign: 'center', py: 1 }}>
-                                    No dimension conditions. Card uses default layout size.
-                                  </Typography>
-                                )}
-                              </Stack>
-                            </AccordionDetails>
-                          </Accordion>
-                        ))}
-                      </Stack>
-                    </Paper>
-                  )}
+                      onUpdateCondition={(idx, conditions) => {
+                        handleChildCardChange(idx, { dimensionConditions: conditions });
+                      }}
+                    />
+                  ))}
                   
                   {/* Help Alert */}
                   <Alert 

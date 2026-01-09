@@ -242,24 +242,23 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
       return [];
     }
     
-    // If mode is 'all', show all cards; otherwise filter by individual visibility
-    let filteredCards = config.childCards;
-    
-    if (config.childVisibilityMode === 'individual') {
-      filteredCards = config.childCards.filter(child => {
-        // If no visibility variable is set, card is always visible
-        if (!child.visibilityVariable) {
-          return true;
-        }
-        
-        // Check the visibility variable value
-        const visValue = variables[child.visibilityVariable];
-        const parsedValue = typeof visValue === 'string' ? safeParse(visValue) : visValue;
-        
-        // Only show if variable is exactly true
-        return parsedValue === true;
-      });
-    }
+    // 🔥 Always use individual visibility mode (no longer respecting 'all' mode)
+    const filteredCards = config.childCards.filter(child => {
+      // If no visibility variable is set, card is always visible
+      if (!child.visibilityVariable) {
+        console.log(`[Visibility] Card ${child.id}: No visibility variable → VISIBLE`);
+        return true;
+      }
+      
+      // Check the visibility variable value
+      const visValue = variables[child.visibilityVariable];
+      const parsedValue = typeof visValue === 'string' ? safeParse(visValue) : visValue;
+      
+      console.log(`[Visibility] Card ${child.id}: Variable "${child.visibilityVariable}" = ${JSON.stringify(visValue)} → parsed = ${JSON.stringify(parsedValue)} → ${parsedValue === true ? 'VISIBLE' : 'HIDDEN'}`);
+      
+      // Only show if variable is exactly true
+      return parsedValue === true;
+    });
     
     // Sort by arrangement variable (lower numbers first)
     const sortedCards = [...filteredCards].sort((a, b) => {
@@ -286,7 +285,7 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
   const getChildDynamicDimensions = useCallback((childConfig: typeof config.childCards[0]): { width: number; height: number } | null => {
     const conditions = childConfig.dimensionConditions;
     if (!conditions || conditions.length === 0) {
-      return null; // No conditions = use default layout dimensions
+      return null; // No conditions = use default layout
     }
     
     // Sort by priority (lower number = higher priority)
@@ -300,8 +299,8 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
       if (typeof parsedValue === 'boolean' && parsedValue === condition.expectedValue) {
         // First match wins!
         return {
-          width: condition.width,
-          height: condition.height,
+          width: Math.min(1, Math.max(0, condition.width)),
+          height: Math.min(1, Math.max(0, condition.height)),
         };
       }
     }
@@ -410,8 +409,15 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
             {visibleChildCards.map((childConfig) => {
               // Get dynamic dimensions if conditions match
               const dynamicDims = getChildDynamicDimensions(childConfig);
-              const effectiveWidth = dynamicDims?.width ?? childConfig.layout.w;
+              
+              // 🔥 For scroll mode with single visible card, use full width
+              let effectiveWidth = dynamicDims?.width ?? childConfig.layout.w;
               const effectiveHeight = dynamicDims?.height ?? 1; // 1 = 100% height for scroll mode
+              
+              // If only one card visible, give it full width
+              if (visibleChildCards.length === 1) {
+                effectiveWidth = 1;
+              }
               
               return (
                 <Box
@@ -469,19 +475,62 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
           width: '100%',
         }}
       >
-        {visibleChildCards.map((childConfig) => {
+        {visibleChildCards.map((childConfig, cardIndex) => {
           // Get dynamic dimensions if conditions match
           const dynamicDims = getChildDynamicDimensions(childConfig);
           
-          // Create modified config with effective dimensions
-          const effectiveConfig = dynamicDims ? {
-            ...childConfig,
-            layout: {
-              ...childConfig.layout,
-              w: dynamicDims.width,
-              h: dynamicDims.height,
+          // 🔥 Calculate effective layout based on visible cards and dynamic dimensions
+          let effectiveConfig = childConfig;
+          
+          if (visibleChildCards.length === 1) {
+            // 🔥 Only one card visible - give it full size at position 0,0
+            effectiveConfig = {
+              ...childConfig,
+              layout: {
+                ...childConfig.layout,
+                x: 0,
+                y: 0,
+                w: dynamicDims?.width ?? 1,
+                h: dynamicDims?.height ?? 1,
+              }
+            };
+          } else if (dynamicDims) {
+            // 🔥 Multiple visible cards with dimension conditions
+            // Auto-calculate position based on card index and dimensions
+            // Simple flow layout: stack horizontally, wrap to next row when full
+            let accumulatedX = 0;
+            let accumulatedY = 0;
+            let rowHeight = 0;
+            
+            for (let i = 0; i < cardIndex; i++) {
+              const prevCard = visibleChildCards[i];
+              const prevDims = getChildDynamicDimensions(prevCard);
+              const prevWidth = prevDims?.width ?? prevCard.layout.w;
+              const prevHeight = prevDims?.height ?? prevCard.layout.h;
+              
+              accumulatedX += prevWidth;
+              rowHeight = Math.max(rowHeight, prevHeight);
+              
+              // If next card would overflow, wrap to next row
+              if (accumulatedX >= 1 - 0.01) {
+                accumulatedX = 0;
+                accumulatedY += rowHeight;
+                rowHeight = 0;
+              }
             }
-          } : childConfig;
+            
+            effectiveConfig = {
+              ...childConfig,
+              layout: {
+                ...childConfig.layout,
+                x: accumulatedX,
+                y: accumulatedY,
+                w: dynamicDims.width,
+                h: dynamicDims.height,
+              }
+            };
+          }
+          // If no dynamic dims and multiple cards, use original layout
           
           return (
             <ChildCard

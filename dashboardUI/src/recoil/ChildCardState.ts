@@ -61,8 +61,8 @@ export interface ChildCardDimensionCondition {
   id: string;
   variableName: string;           // Boolean variable to check
   expectedValue: boolean;         // When variable equals this value
-  width: number;                  // Width as percentage (0.25 = 25%, 0.5 = 50%, 1 = 100%)
-  height: number;                 // Height as percentage (0.25 = 25%, 0.5 = 50%, 1 = 100%)
+  width: number;                  // Width as grid columns / 12 (e.g., 0.5 = 6 columns, 1 = 12 columns)
+  height: number;                 // Height as grid rows / 12 (e.g., 0.5 = 6 rows, 1 = 12 rows)
   priority: number;               // Lower number = higher priority (first match wins)
 }
 
@@ -153,7 +153,7 @@ export const defaultParentCardConfig: ParentCardConfig = {
   // 🔥 Visibility & Arrangement Defaults
   visibilityVariable: '',        // Empty = always visible
   arrangementVariable: '',       // Empty = use default layout order
-  childVisibilityMode: 'all',    // Default: all children visible
+  childVisibilityMode: 'individual',    // Default: each child has its own visibility
 };
 
 // Default child card configuration
