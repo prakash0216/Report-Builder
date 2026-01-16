@@ -1,8 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
-  Container,
   Paper,
   Typography,
   TextField,
@@ -10,7 +9,6 @@ import {
   IconButton,
   Card,
   CardContent,
-  CardActionArea,
   Grid,
   AppBar,
   Toolbar,
@@ -23,6 +21,20 @@ import {
   Chip,
   Tooltip,
   alpha,
+  Zoom,
+  Fade,
+  Avatar,
+  Divider,
+  Menu,
+  MenuItem,
+  ToggleButtonGroup,
+  ToggleButton,
+  InputAdornment,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -37,6 +49,19 @@ import {
   AutoAwesome as AutoAwesomeIcon,
   Layers as LayersIcon,
   TrendingUp as TrendingUpIcon,
+  Search as SearchIcon,
+  GridView as GridViewIcon,
+  ViewList as ViewListIcon,
+  MoreVert as MoreVertIcon,
+  AccessTime as AccessTimeIcon,
+  CalendarToday as CalendarTodayIcon,
+  Star as StarIcon,
+  StarBorder as StarBorderIcon,
+  OpenInNew as OpenInNewIcon,
+  Analytics as AnalyticsIcon,
+  History as HistoryIcon,
+  Help as HelpIcon,
+  Dashboard as DashboardIcon,
 } from '@mui/icons-material';
 
 interface View {
@@ -50,16 +75,31 @@ interface View {
 
 const DashboardViews: React.FC = () => {
   const navigate = useNavigate();
-  const { dashboardId } = useParams<{ dashboardId: string }>();
+  const { dashboardName: dashboardSlug } = useParams<{ dashboardName: string }>();
   
-  // Mock dashboard name - in real app, fetch from Recoil
-  const [dashboardName] = useState<string>('MSL Dashboard');
+  // Convert slug back to display name (capitalize first letter of each word)
+  const dashboardName = dashboardSlug
+    ? dashboardSlug
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ')
+    : 'Dashboard';
+
+  // Convert name to URL-friendly slug
+  const toSlug = (name: string) => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
+      .replace(/\s+/g, '-') // Replace spaces with dashes
+      .replace(/-+/g, '-') // Replace multiple dashes with single
+      .trim();
+  };
   
   const [views, setViews] = useState<View[]>([
     {
       id: '1',
       name: 'Patient View',
-      description: 'Patient-focused metrics and analytics',
+      description: 'Patient-focused metrics and analytics with comprehensive health indicators',
       createdAt: Date.now() - 86400000 * 5,
       updatedAt: Date.now() - 86400000,
       chartsCount: 8,
@@ -67,7 +107,7 @@ const DashboardViews: React.FC = () => {
     {
       id: '2',
       name: 'Provider View',
-      description: 'Provider performance and engagement metrics',
+      description: 'Provider performance and engagement metrics for healthcare professionals',
       createdAt: Date.now() - 86400000 * 3,
       updatedAt: Date.now(),
       chartsCount: 6,
@@ -80,7 +120,59 @@ const DashboardViews: React.FC = () => {
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [deletingView, setDeletingView] = useState<View | null>(null);
   const [editingView, setEditingView] = useState<View | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sortBy, setSortBy] = useState<'name' | 'updated' | 'created'>('updated');
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [selectedView, setSelectedView] = useState<View | null>(null);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [menuView, setMenuView] = useState<View | null>(null);
+  const [activeNav, setActiveNav] = useState<'all' | 'favorites' | 'recent'>('all');
   const viewIdRef = useRef(3);
+
+  // Filter and sort views
+  const filteredViews = useMemo(() => {
+    let result = [...views];
+    
+    // Nav filter
+    if (activeNav === 'favorites') {
+      result = result.filter(v => favorites.has(v.id));
+    } else if (activeNav === 'recent') {
+      result = result.filter(v => Date.now() - v.updatedAt < 7 * 24 * 60 * 60 * 1000);
+    }
+    
+    if (searchQuery) {
+      result = result.filter(v => 
+        v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (v.description && v.description.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+    }
+    
+    result.sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      if (sortBy === 'updated') return b.updatedAt - a.updatedAt;
+      return b.createdAt - a.createdAt;
+    });
+    
+    // Favorites first (only in 'all' view)
+    if (activeNav === 'all') {
+      result.sort((a, b) => {
+        const aFav = favorites.has(a.id) ? 1 : 0;
+        const bFav = favorites.has(b.id) ? 1 : 0;
+        return bFav - aFav;
+      });
+    }
+    
+    return result;
+  }, [views, searchQuery, sortBy, favorites, activeNav]);
+
+  // Stats
+  const stats = useMemo(() => ({
+    total: views.length,
+    totalCharts: views.reduce((acc, v) => acc + (v.chartsCount || 0), 0),
+    recentlyUpdated: views.filter(v => Date.now() - v.updatedAt < 7 * 24 * 60 * 60 * 1000).length,
+    favorites: favorites.size,
+  }), [views, favorites]);
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString('en-US', {
@@ -88,6 +180,18 @@ const DashboardViews: React.FC = () => {
       day: 'numeric',
       year: 'numeric',
     });
+  };
+
+  const getTimeAgo = (timestamp: number) => {
+    const diff = Date.now() - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return formatDate(timestamp);
   };
 
   const handleCreateView = () => {
@@ -109,21 +213,323 @@ const DashboardViews: React.FC = () => {
     setOpenCreateDialog(false);
   };
 
+  const handleEditStart = (view: View) => {
+    setEditingView(view);
+    setNewViewName(view.name);
+    setNewViewDesc(view.description);
+    setOpenCreateDialog(true);
+    setAnchorEl(null);
+  };
+
+  const handleEditSave = () => {
+    if (!newViewName.trim() || !editingView) return;
+
+    setViews(
+      views.map((v) =>
+        v.id === editingView.id
+          ? { ...v, name: newViewName, description: newViewDesc, updatedAt: Date.now() }
+          : v
+      )
+    );
+
+    if (selectedView?.id === editingView.id) {
+      setSelectedView({ ...editingView, name: newViewName, description: newViewDesc });
+    }
+
+    setEditingView(null);
+    setNewViewName('');
+    setNewViewDesc('');
+    setOpenCreateDialog(false);
+  };
+
   const handleDeleteClick = (view: View) => {
     setDeletingView(view);
     setOpenDeleteDialog(true);
+    setAnchorEl(null);
   };
 
   const handleDeleteConfirm = () => {
     if (deletingView) {
       setViews(views.filter((v) => v.id !== deletingView.id));
+      if (selectedView?.id === deletingView.id) {
+        setSelectedView(null);
+      }
+      favorites.delete(deletingView.id);
+      setFavorites(new Set(favorites));
     }
     setOpenDeleteDialog(false);
     setDeletingView(null);
   };
 
   const handleViewClick = (view: View) => {
-    navigate(`/dashboard/${dashboardId}/view/${view.id}`);
+    const viewSlug = toSlug(view.name);
+    navigate(`/${dashboardSlug}/${viewSlug}`);
+  };
+
+  const toggleFavorite = (id: string) => {
+    const newFavorites = new Set(favorites);
+    if (newFavorites.has(id)) {
+      newFavorites.delete(id);
+    } else {
+      newFavorites.add(id);
+    }
+    setFavorites(newFavorites);
+  };
+
+  const StatCard = ({ icon, label, value, color, gradient }: { icon: React.ReactNode; label: string; value: number; color: string; gradient: string }) => (
+    <Paper
+      elevation={0}
+      sx={{
+        p: 2.5,
+        borderRadius: 3,
+        background: `linear-gradient(135deg, ${alpha(color, 0.08)} 0%, ${alpha(color, 0.03)} 100%)`,
+        border: `1px solid ${alpha(color, 0.15)}`,
+        transition: 'all 0.3s ease',
+        cursor: 'default',
+        '&:hover': {
+          transform: 'translateY(-2px)',
+          boxShadow: `0 8px 24px ${alpha(color, 0.15)}`,
+          border: `1px solid ${alpha(color, 0.3)}`,
+        },
+      }}
+    >
+      <Box display="flex" alignItems="center" gap={2}>
+        <Box
+          sx={{
+            width: 48,
+            height: 48,
+            borderRadius: 2.5,
+            background: gradient,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: `0 4px 12px ${alpha(color, 0.3)}`,
+          }}
+        >
+          {icon}
+        </Box>
+        <Box>
+          <Typography variant="h4" fontWeight={700} sx={{ color, lineHeight: 1.2 }}>
+            {value}
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+            {label}
+          </Typography>
+        </Box>
+      </Box>
+    </Paper>
+  );
+
+  const ViewCard = ({ view, index }: { view: View; index: number }) => {
+    const iconColors = ['#667eea', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+    const iconColor = iconColors[index % iconColors.length];
+    
+    return (
+      <Zoom in={true} style={{ transitionDelay: `${index * 50}ms` }}>
+        <Card
+          sx={{
+            height: '100%',
+            borderRadius: 3,
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.92) 100%)',
+            border: `1px solid ${alpha('#667eea', selectedView?.id === view.id ? 0.4 : 0.12)}`,
+            boxShadow: selectedView?.id === view.id 
+              ? `0 8px 32px ${alpha('#667eea', 0.2)}`
+              : '0 2px 12px rgba(0,0,0,0.04)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            overflow: 'hidden',
+            position: 'relative',
+            cursor: 'pointer',
+            '&:hover': {
+              transform: 'translateY(-4px)',
+              boxShadow: `0 12px 40px ${alpha('#667eea', 0.18)}`,
+              border: `1px solid ${alpha('#667eea', 0.3)}`,
+              '& .card-actions': {
+                opacity: 1,
+              },
+              '& .card-icon': {
+                transform: 'scale(1.1) rotate(5deg)',
+              },
+            },
+          }}
+          onClick={() => setSelectedView(view)}
+          onDoubleClick={() => handleViewClick(view)}
+        >
+          {/* Top gradient bar */}
+          <Box
+            sx={{
+              height: 4,
+              background: favorites.has(view.id)
+                ? 'linear-gradient(90deg, #f59e0b 0%, #ef4444 100%)'
+                : `linear-gradient(90deg, ${iconColor} 0%, ${alpha(iconColor, 0.7)} 100%)`,
+            }}
+          />
+
+          {/* Icon Section */}
+          <Box
+            sx={{
+              height: 120,
+              background: `linear-gradient(135deg, ${alpha(iconColor, 0.08)} 0%, ${alpha(iconColor, 0.03)} 100%)`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            <ViewModuleIcon 
+              className="card-icon"
+              sx={{ 
+                fontSize: 56, 
+                color: iconColor, 
+                opacity: 0.6,
+                transition: 'all 0.4s ease',
+              }} 
+            />
+            
+            {/* Action buttons */}
+            <Box
+              className="card-actions"
+              sx={{
+                position: 'absolute',
+                top: 12,
+                right: 12,
+                opacity: 0,
+                transition: 'opacity 0.2s ease',
+                display: 'flex',
+                gap: 0.5,
+              }}
+            >
+              <Tooltip title={favorites.has(view.id) ? "Remove from favorites" : "Add to favorites"}>
+                <IconButton
+                  size="small"
+                  onClick={(e) => { e.stopPropagation(); toggleFavorite(view.id); }}
+                  sx={{ 
+                    bgcolor: 'rgba(255,255,255,0.9)',
+                    color: favorites.has(view.id) ? '#f59e0b' : alpha('#667eea', 0.5),
+                    '&:hover': { bgcolor: 'white' },
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  }}
+                >
+                  {favorites.has(view.id) ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="More options">
+                <IconButton
+                  size="small"
+                  onClick={(e) => { e.stopPropagation(); setMenuView(view); setAnchorEl(e.currentTarget); }}
+                  sx={{ 
+                    bgcolor: 'rgba(255,255,255,0.9)',
+                    color: alpha('#667eea', 0.6),
+                    '&:hover': { bgcolor: 'white' },
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  }}
+                >
+                  <MoreVertIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+
+            {/* Open badge on hover */}
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 12,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                bgcolor: 'white',
+                borderRadius: 2,
+                px: 2,
+                py: 0.75,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                border: `1px solid ${alpha('#667eea', 0.15)}`,
+                opacity: 0,
+                transition: 'opacity 0.2s ease',
+                '.MuiCard-root:hover &': {
+                  opacity: 1,
+                },
+              }}
+            >
+              <Typography variant="caption" fontWeight={700} sx={{ color: '#667eea' }}>
+                Double-click to open
+              </Typography>
+              <ChevronRightIcon sx={{ fontSize: 14, color: '#667eea' }} />
+            </Box>
+          </Box>
+
+          <CardContent sx={{ p: 2.5, pb: '16px !important' }}>
+            <Box display="flex" alignItems="start" justifyContent="space-between" mb={1}>
+              <Typography 
+                variant="subtitle1" 
+                fontWeight={700} 
+                sx={{ 
+                  color: '#1e293b',
+                  lineHeight: 1.3,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                }}
+              >
+                {view.name}
+                {favorites.has(view.id) && (
+                  <StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
+                )}
+              </Typography>
+            </Box>
+
+            {view.description && (
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  color: 'text.secondary',
+                  mb: 2,
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  lineHeight: 1.5,
+                  minHeight: 42,
+                }}
+              >
+                {view.description}
+              </Typography>
+            )}
+
+            <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+              <Chip
+                size="small"
+                icon={<BarChartIcon sx={{ fontSize: 14 }} />}
+                label={`${view.chartsCount} charts`}
+                sx={{
+                  height: 24,
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  bgcolor: alpha('#667eea', 0.08),
+                  color: '#667eea',
+                  border: `1px solid ${alpha('#667eea', 0.15)}`,
+                  '& .MuiChip-icon': { color: '#667eea' },
+                }}
+              />
+              <Chip
+                size="small"
+                icon={<AccessTimeIcon sx={{ fontSize: 12 }} />}
+                label={getTimeAgo(view.updatedAt)}
+                sx={{
+                  height: 24,
+                  fontSize: '0.7rem',
+                  fontWeight: 500,
+                  bgcolor: alpha('#64748b', 0.06),
+                  color: '#64748b',
+                  '& .MuiChip-icon': { color: '#94a3b8' },
+                }}
+              />
+            </Box>
+          </CardContent>
+        </Card>
+      </Zoom>
+    );
   };
 
   return (
@@ -132,33 +538,58 @@ const DashboardViews: React.FC = () => {
         display: 'flex', 
         flexDirection: 'column', 
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+        background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
         position: 'relative',
         overflow: 'hidden',
       }}
     >
-      {/* Top Navigation Bar - Matching drag-drop dashboard */}
+      {/* Decorative background elements */}
+      <Box
+        sx={{
+          position: 'absolute',
+          width: 500,
+          height: 500,
+          borderRadius: '50%',
+          background: `radial-gradient(circle, ${alpha('#667eea', 0.08)} 0%, transparent 70%)`,
+          top: -150,
+          right: -150,
+          pointerEvents: 'none',
+        }}
+      />
+      <Box
+        sx={{
+          position: 'absolute',
+          width: 400,
+          height: 400,
+          borderRadius: '50%',
+          background: `radial-gradient(circle, ${alpha('#764ba2', 0.06)} 0%, transparent 70%)`,
+          bottom: -100,
+          left: -100,
+          pointerEvents: 'none',
+        }}
+      />
+
+      {/* Top Navigation Bar */}
       <AppBar 
         position="static" 
         elevation={0}
         sx={{ 
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          boxShadow: '0 4px 20px 0 rgba(102, 126, 234, 0.3)',
+          boxShadow: '0 4px 20px 0 rgba(102, 126, 234, 0.25)',
         }}
       >
-        <Toolbar sx={{ py: 1 }}>
+        <Toolbar sx={{ py: 1.5, px: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
             <Tooltip title="Back to Dashboards" arrow>
               <IconButton 
                 onClick={() => navigate('/dashboards')} 
                 sx={{ 
                   color: 'white',
-                  bgcolor: 'rgba(255, 255, 255, 0.1)',
+                  bgcolor: 'rgba(255, 255, 255, 0.15)',
+                  backdropFilter: 'blur(10px)',
                   '&:hover': {
-                    bgcolor: 'rgba(255, 255, 255, 0.2)',
-                    transform: 'scale(1.05)',
+                    bgcolor: 'rgba(255, 255, 255, 0.25)',
                   },
-                  transition: 'all 0.3s ease',
                 }}
               >
                 <ArrowBackIcon />
@@ -167,48 +598,41 @@ const DashboardViews: React.FC = () => {
             
             <Box
               sx={{
-                background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                background: 'rgba(255,255,255,0.2)',
                 borderRadius: 2.5,
-                p: 1.2,
+                p: 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 4px 15px rgba(245, 87, 108, 0.3)',
+                backdropFilter: 'blur(10px)',
               }}
             >
-              <BarChartIcon sx={{ color: 'white', fontSize: 28 }} />
+              <LayersIcon sx={{ color: 'white', fontSize: 24 }} />
             </Box>
             
             <Box>
               <Breadcrumbs 
-                separator={<ChevronRightIcon sx={{ fontSize: 16, color: 'rgba(255,255,255,0.7)' }} />}
-                sx={{ color: 'white' }}
+                separator={<ChevronRightIcon sx={{ fontSize: 16, color: 'rgba(255,255,255,0.6)' }} />}
               >
                 <Link
                   underline="hover"
-                  color="inherit"
                   onClick={() => navigate('/dashboards')}
                   sx={{ 
                     cursor: 'pointer', 
                     fontWeight: 600,
-                    color: 'rgba(255,255,255,0.9)',
-                    transition: 'color 0.3s ease',
-                    '&:hover': {
-                      color: 'white',
-                    },
+                    color: 'rgba(255,255,255,0.8)',
+                    fontSize: '0.875rem',
+                    '&:hover': { color: 'white' },
                   }}
                 >
-                  Report Builder Intelligence
+                  Dashboards
                 </Link>
-                <Typography 
-                  fontWeight={700} 
-                  sx={{ color: 'white' }}
-                >
+                <Typography fontWeight={700} sx={{ color: 'white', fontSize: '0.875rem' }}>
                   {dashboardName}
                 </Typography>
               </Breadcrumbs>
-              <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: 500 }}>
-                Manage views
+              <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.8)', fontWeight: 500 }}>
+                Manage views and analytics
               </Typography>
             </Box>
           </Box>
@@ -216,20 +640,20 @@ const DashboardViews: React.FC = () => {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => setOpenCreateDialog(true)}
+            onClick={() => { setEditingView(null); setNewViewName(''); setNewViewDesc(''); setOpenCreateDialog(true); }}
             sx={{
-              background: 'white',
+              background: 'rgba(255,255,255,0.95)',
               color: '#667eea',
               textTransform: 'none',
-              fontWeight: 600,
+              fontWeight: 700,
               px: 3,
               py: 1,
-              borderRadius: 2,
-              boxShadow: '0 4px 16px rgba(255, 255, 255, 0.3)',
+              borderRadius: 2.5,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
               '&:hover': {
-                background: 'rgba(255, 255, 255, 0.95)',
-                boxShadow: '0 6px 20px rgba(255, 255, 255, 0.4)',
+                background: 'white',
                 transform: 'translateY(-2px)',
+                boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
               },
               transition: 'all 0.3s ease',
             }}
@@ -239,370 +663,678 @@ const DashboardViews: React.FC = () => {
         </Toolbar>
       </AppBar>
 
-      {/* Main Content */}
-      <Container maxWidth={false} sx={{ py: 4, flex: 1, position: 'relative', zIndex: 1 }}>
-        {/* Header */}
+      {/* Main Content with Sidebar */}
+      <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', position: 'relative', zIndex: 1 }}>
+        {/* Left Navigation Sidebar */}
         <Paper
           elevation={0}
           sx={{
-            p: 4,
-            mb: 4,
-            borderRadius: 3,
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
-            backdropFilter: 'blur(20px) saturate(180%)',
-            border: `1px solid ${alpha('#667eea', 0.2)}`,
-            boxShadow: '0 8px 32px rgba(102, 126, 234, 0.15)',
+            width: 240,
+            flexShrink: 0,
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.92) 100%)',
+            borderRight: `1px solid ${alpha('#667eea', 0.1)}`,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-            <Box
-              sx={{
-                width: 56,
-                height: 56,
-                borderRadius: 2.5,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 20px rgba(102, 126, 234, 0.3)',
-              }}
-            >
-              <LayersIcon sx={{ color: 'white', fontSize: 32 }} />
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <Typography 
-                variant="h4" 
-                fontWeight={700} 
-                sx={{ 
-                  color: '#667eea',
-                  mb: 0.5,
+          {/* Nav Header */}
+          <Box sx={{ p: 2.5, borderBottom: `1px solid ${alpha('#667eea', 0.08)}` }}>
+            <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: 1 }}>
+              Navigation
+            </Typography>
+          </Box>
+
+          {/* Nav Items */}
+          <List sx={{ flex: 1, p: 1.5 }}>
+            {/* Back to Dashboards */}
+            <ListItem disablePadding sx={{ mb: 1.5 }}>
+              <ListItemButton
+                onClick={() => navigate('/dashboards')}
+                sx={{
+                  borderRadius: 2,
+                  py: 1.25,
+                  bgcolor: alpha('#64748b', 0.05),
+                  '&:hover': { bgcolor: alpha('#64748b', 0.1) },
                 }}
               >
-                Dashboard Views
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                Select a view to access its drag-and-drop chart editor
-              </Typography>
-            </Box>
-            <Chip
-              icon={<ViewModuleIcon />}
-              label={`${views.length} ${views.length === 1 ? 'View' : 'Views'}`}
-              sx={{
-                background: `linear-gradient(135deg, ${alpha('#667eea', 0.15)} 0%, ${alpha('#764ba2', 0.15)} 100%)`,
-                color: '#667eea',
-                fontWeight: 600,
-                border: `1px solid ${alpha('#667eea', 0.3)}`,
-                py: 2.5,
-              }}
-            />
-          </Box>
-        </Paper>
+                <ListItemIcon sx={{ minWidth: 40 }}>
+                  <ArrowBackIcon sx={{ fontSize: 20, color: '#64748b' }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="All Dashboards" 
+                  primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b' }}
+                />
+              </ListItemButton>
+            </ListItem>
 
-        {/* Views Grid */}
-        {views.length > 0 ? (
-          <Grid container spacing={3}>
-            {views.map((view) => (
-              <Grid size={{xs:12,sm:6,md:4}} key={view.id}>
-                <Card
-                  sx={{
-                    height: '100%',
-                    borderRadius: 3,
-                    background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
-                    backdropFilter: 'blur(20px) saturate(180%)',
-                    border: `1px solid ${alpha('#667eea', 0.2)}`,
-                    boxShadow: '0 4px 16px rgba(102, 126, 234, 0.15)',
-                    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                    overflow: 'hidden',
-                    '&:hover': {
-                      transform: 'translateY(-8px)',
-                      boxShadow: '0 20px 48px rgba(102, 126, 234, 0.25)',
-                      border: `1px solid ${alpha('#667eea', 0.4)}`,
-                      '& .view-icon': {
-                        transform: 'scale(1.1) rotate(5deg)',
-                      },
-                      '& .open-badge': {
-                        transform: 'scale(1.05)',
-                        boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
-                      },
-                    },
-                  }}
-                >
-                  <CardActionArea 
-                    onClick={() => handleViewClick(view)}
-                    sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}
-                  >
-                    <Box
-                      sx={{
-                        height: 180,
-                        background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.12) 100%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        '&::before': {
-                          content: '""',
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          background: `
-                            radial-gradient(circle at 30% 30%, ${alpha('#667eea', 0.15)} 0%, transparent 50%),
-                            radial-gradient(circle at 70% 70%, ${alpha('#764ba2', 0.15)} 0%, transparent 50%)
-                          `,
-                        },
-                      }}
-                    >
-                      <ViewModuleIcon 
-                        className="view-icon"
-                        sx={{ 
-                          fontSize: 72, 
-                          color: '#667eea', 
-                          opacity: 0.6,
-                          transition: 'all 0.4s ease',
-                          position: 'relative',
-                          zIndex: 1,
-                        }} 
-                      />
-                      <Box
-                        className="open-badge"
-                        sx={{
-                          position: 'absolute',
-                          top: 16,
-                          right: 16,
-                          bgcolor: 'white',
-                          borderRadius: 2,
-                          px: 2,
-                          py: 0.8,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 0.5,
-                          boxShadow: '0 2px 8px rgba(102, 126, 234, 0.2)',
-                          border: `1px solid ${alpha('#667eea', 0.2)}`,
-                          transition: 'all 0.3s ease',
-                        }}
-                      >
-                        <Typography variant="caption" fontWeight={700} sx={{ color: '#667eea' }}>
-                          Open
-                        </Typography>
-                        <ChevronRightIcon sx={{ fontSize: 16, color: '#667eea' }} />
-                      </Box>
-                    </Box>
+            <Divider sx={{ my: 1.5 }} />
 
-                    <CardContent sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column' }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 1.5 }}>
-                        <Typography 
-                          variant="h6" 
-                          fontWeight={700} 
-                          sx={{ 
-                            color: '#667eea',
-                            flex: 1,
-                          }}
-                        >
-                          {view.name}
-                        </Typography>
-                        <Box sx={{ display: 'flex', gap: 0.5 }}>
-                          <Tooltip title="Edit View" arrow>
-                            <IconButton
-                              size="small"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingView(view);
-                                setNewViewName(view.name);
-                                setNewViewDesc(view.description);
-                                setOpenCreateDialog(true);
-                              }}
-                              sx={{ 
-                                color: '#667eea',
-                                bgcolor: alpha('#667eea', 0.1),
-                                '&:hover': {
-                                  bgcolor: alpha('#667eea', 0.2),
-                                },
-                              }}
-                            >
-                              <EditIcon sx={{ fontSize: 18 }} />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Delete View" arrow>
-                            <IconButton
-                              size="small"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteClick(view);
-                              }}
-                              sx={{ 
-                                color: '#f44336',
-                                bgcolor: alpha('#f44336', 0.1),
-                                '&:hover': {
-                                  bgcolor: alpha('#f44336', 0.2),
-                                },
-                              }}
-                            >
-                              <DeleteIcon sx={{ fontSize: 18 }} />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </Box>
+            <ListItem disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                selected={activeNav === 'all'}
+                onClick={() => setActiveNav('all')}
+                sx={{
+                  borderRadius: 2,
+                  py: 1.25,
+                  '&.Mui-selected': {
+                    bgcolor: alpha('#667eea', 0.1),
+                    '& .MuiListItemIcon-root': { color: '#667eea' },
+                    '& .MuiListItemText-primary': { color: '#667eea', fontWeight: 700 },
+                    '&:hover': { bgcolor: alpha('#667eea', 0.15) },
+                  },
+                  '&:hover': { bgcolor: alpha('#667eea', 0.05) },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 40 }}>
+                  <ViewModuleIcon sx={{ fontSize: 20 }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="All Views" 
+                  primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 600 }}
+                />
+                <Chip 
+                  label={views.length} 
+                  size="small" 
+                  sx={{ 
+                    height: 20, 
+                    fontSize: '0.7rem', 
+                    fontWeight: 700,
+                    bgcolor: activeNav === 'all' ? alpha('#667eea', 0.15) : alpha('#64748b', 0.1),
+                    color: activeNav === 'all' ? '#667eea' : '#64748b',
+                  }} 
+                />
+              </ListItemButton>
+            </ListItem>
 
-                      {view.description ? (
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{
-                            mb: 2,
-                            flex: 1,
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                            minHeight: '2.5em',
-                            lineHeight: 1.6,
-                          }}
-                        >
-                          {view.description}
-                        </Typography>
-                      ) : (
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            mb: 2,
-                            flex: 1,
-                            color: 'text.disabled',
-                            fontStyle: 'italic',
-                            minHeight: '2.5em',
-                          }}
-                        >
-                          No description provided
-                        </Typography>
-                      )}
+            <ListItem disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                selected={activeNav === 'favorites'}
+                onClick={() => setActiveNav('favorites')}
+                sx={{
+                  borderRadius: 2,
+                  py: 1.25,
+                  '&.Mui-selected': {
+                    bgcolor: alpha('#f59e0b', 0.1),
+                    '& .MuiListItemIcon-root': { color: '#f59e0b' },
+                    '& .MuiListItemText-primary': { color: '#f59e0b', fontWeight: 700 },
+                    '&:hover': { bgcolor: alpha('#f59e0b', 0.15) },
+                  },
+                  '&:hover': { bgcolor: alpha('#f59e0b', 0.05) },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 40 }}>
+                  <StarIcon sx={{ fontSize: 20 }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="Favorites" 
+                  primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 600 }}
+                />
+                <Chip 
+                  label={favorites.size} 
+                  size="small" 
+                  sx={{ 
+                    height: 20, 
+                    fontSize: '0.7rem', 
+                    fontWeight: 700,
+                    bgcolor: activeNav === 'favorites' ? alpha('#f59e0b', 0.15) : alpha('#64748b', 0.1),
+                    color: activeNav === 'favorites' ? '#f59e0b' : '#64748b',
+                  }} 
+                />
+              </ListItemButton>
+            </ListItem>
 
-                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                        <Chip
-                          icon={<TableChartIcon sx={{ fontSize: 16 }} />}
-                          label={`${view.chartsCount} ${view.chartsCount === 1 ? 'chart' : 'charts'}`}
-                          size="small"
-                          sx={{
-                            background: `linear-gradient(135deg, ${alpha('#667eea', 0.12)} 0%, ${alpha('#764ba2', 0.12)} 100%)`,
-                            color: '#667eea',
-                            fontWeight: 600,
-                            border: `1px solid ${alpha('#667eea', 0.25)}`,
-                          }}
-                        />
-                        <Chip
-                          label={formatDate(view.updatedAt)}
-                          size="small"
-                          sx={{ 
-                            bgcolor: alpha('#667eea', 0.08),
-                            color: 'text.secondary',
-                            fontWeight: 500,
-                            border: `1px solid ${alpha('#667eea', 0.15)}`,
-                          }}
-                        />
-                      </Box>
-                    </CardContent>
-                  </CardActionArea>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-        ) : (
-          // Empty State
-          <Paper
-            elevation={0}
-            sx={{
-              textAlign: 'center',
-              py: 10,
-              borderRadius: 4,
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.6) 100%)',
-              backdropFilter: 'blur(20px) saturate(180%)',
-              border: `2px dashed ${alpha('#667eea', 0.3)}`,
-              boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
-            }}
-          >
-            <Box
-              sx={{
-                width: 120,
-                height: 120,
-                margin: '0 auto 24px',
-                borderRadius: '50%',
-                background: `linear-gradient(135deg, ${alpha('#667eea', 0.1)} 0%, ${alpha('#764ba2', 0.1)} 100%)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: `2px solid ${alpha('#667eea', 0.2)}`,
-              }}
-            >
-              <ViewModuleIcon sx={{ fontSize: 64, color: '#667eea' }} />
-            </Box>
-            <Typography 
-              variant="h5" 
-              fontWeight={700} 
-              gutterBottom 
-              sx={{ 
-                color: '#667eea',
-              }}
-            >
-              No Views Yet
-            </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 4, lineHeight: 1.8 }}>
-              Create your first view to start building charts and visualizations
+            <ListItem disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                selected={activeNav === 'recent'}
+                onClick={() => setActiveNav('recent')}
+                sx={{
+                  borderRadius: 2,
+                  py: 1.25,
+                  '&.Mui-selected': {
+                    bgcolor: alpha('#10b981', 0.1),
+                    '& .MuiListItemIcon-root': { color: '#10b981' },
+                    '& .MuiListItemText-primary': { color: '#10b981', fontWeight: 700 },
+                    '&:hover': { bgcolor: alpha('#10b981', 0.15) },
+                  },
+                  '&:hover': { bgcolor: alpha('#10b981', 0.05) },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 40 }}>
+                  <HistoryIcon sx={{ fontSize: 20 }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="Recent" 
+                  primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 600 }}
+                />
+                <Chip 
+                  label={stats.recentlyUpdated} 
+                  size="small" 
+                  sx={{ 
+                    height: 20, 
+                    fontSize: '0.7rem', 
+                    fontWeight: 700,
+                    bgcolor: activeNav === 'recent' ? alpha('#10b981', 0.15) : alpha('#64748b', 0.1),
+                    color: activeNav === 'recent' ? '#10b981' : '#64748b',
+                  }} 
+                />
+              </ListItemButton>
+            </ListItem>
+          </List>
+
+          <Divider sx={{ mx: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ p: 2 }}>
+            <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: 1, mb: 1, display: 'block' }}>
+              Quick Actions
             </Typography>
             <Button
+              fullWidth
               variant="contained"
               startIcon={<AddIcon />}
-              onClick={() => setOpenCreateDialog(true)}
+              onClick={() => { setEditingView(null); setNewViewName(''); setNewViewDesc(''); setOpenCreateDialog(true); }}
               sx={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 textTransform: 'none',
                 fontWeight: 600,
-                px: 5,
-                py: 1.5,
-                borderRadius: 2.5,
-                fontSize: '1rem',
-                boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
+                py: 1.25,
+                borderRadius: 2,
+                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.25)',
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
-                  boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)',
-                  transform: 'translateY(-2px)',
+                  boxShadow: '0 6px 16px rgba(102, 126, 234, 0.35)',
                 },
-                transition: 'all 0.3s ease',
               }}
             >
-              Create First View
+              New View
             </Button>
-          </Paper>
-        )}
-      </Container>
+          </Box>
 
-      {/* Create/Edit View Dialog */}
+          {/* Help Section */}
+          <Box sx={{ p: 2, borderTop: `1px solid ${alpha('#667eea', 0.08)}`, mt: 'auto' }}>
+            <Box 
+              sx={{ 
+                p: 2, 
+                borderRadius: 2, 
+                background: `linear-gradient(135deg, ${alpha('#667eea', 0.05)} 0%, ${alpha('#764ba2', 0.05)} 100%)`,
+                border: `1px solid ${alpha('#667eea', 0.1)}`,
+              }}
+            >
+              <Box display="flex" alignItems="center" gap={1} mb={1}>
+                <HelpIcon sx={{ fontSize: 18, color: '#667eea' }} />
+                <Typography variant="caption" fontWeight={700} sx={{ color: '#667eea' }}>
+                  Quick Tip
+                </Typography>
+              </Box>
+              <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
+                Double-click on any view card to open the chart editor.
+              </Typography>
+            </Box>
+          </Box>
+        </Paper>
+
+        {/* Right Content Area */}
+        <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', p: 3, gap: 3 }}>
+          {/* Stats Row */}
+          <Grid container spacing={2}>
+          <Grid size={{xs:6, sm:3}}>
+            <StatCard
+              icon={<ViewModuleIcon sx={{ color: 'white', fontSize: 24 }} />}
+              label="Total Views"
+              value={stats.total}
+              color="#667eea"
+              gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+            />
+          </Grid>
+          <Grid size={{xs:6, sm:3}}>
+            <StatCard
+              icon={<BarChartIcon sx={{ color: 'white', fontSize: 24 }} />}
+              label="Total Charts"
+              value={stats.totalCharts}
+              color="#10b981"
+              gradient="linear-gradient(135deg, #10b981 0%, #059669 100%)"
+            />
+          </Grid>
+          <Grid size={{xs:6, sm:3}}>
+            <StatCard
+              icon={<TrendingUpIcon sx={{ color: 'white', fontSize: 24 }} />}
+              label="Recently Updated"
+              value={stats.recentlyUpdated}
+              color="#f59e0b"
+              gradient="linear-gradient(135deg, #f59e0b 0%, #d97706 100%)"
+            />
+          </Grid>
+          <Grid size={{xs:6, sm:3}}>
+            <StatCard
+              icon={<StarIcon sx={{ color: 'white', fontSize: 24 }} />}
+              label="Favorites"
+              value={stats.favorites}
+              color="#ef4444"
+              gradient="linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
+            />
+          </Grid>
+        </Grid>
+
+        {/* Search and Filters Bar */}
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2,
+            borderRadius: 3,
+            background: 'rgba(255,255,255,0.9)',
+            backdropFilter: 'blur(20px)',
+            border: `1px solid ${alpha('#667eea', 0.1)}`,
+            boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+          }}
+        >
+          <Box display="flex" alignItems="center" gap={2} flexWrap="wrap">
+            <TextField
+              placeholder="Search views..."
+              size="small"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              sx={{
+                flex: 1,
+                minWidth: 250,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                  bgcolor: alpha('#667eea', 0.03),
+                  '& fieldset': { borderColor: alpha('#667eea', 0.15) },
+                  '&:hover fieldset': { borderColor: alpha('#667eea', 0.3) },
+                  '&.Mui-focused fieldset': { borderColor: '#667eea' },
+                },
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: alpha('#667eea', 0.5), fontSize: 20 }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+
+            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+
+            <Box display="flex" alignItems="center" gap={1}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                Sort:
+              </Typography>
+              <ToggleButtonGroup
+                value={sortBy}
+                exclusive
+                onChange={(_, value) => value && setSortBy(value)}
+                size="small"
+                sx={{
+                  '& .MuiToggleButton-root': {
+                    border: `1px solid ${alpha('#667eea', 0.2)}`,
+                    color: '#64748b',
+                    textTransform: 'none',
+                    px: 1.5,
+                    py: 0.5,
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    '&.Mui-selected': {
+                      bgcolor: alpha('#667eea', 0.1),
+                      color: '#667eea',
+                      borderColor: alpha('#667eea', 0.3),
+                      '&:hover': {
+                        bgcolor: alpha('#667eea', 0.15),
+                      },
+                    },
+                  },
+                }}
+              >
+                <ToggleButton value="updated">Recent</ToggleButton>
+                <ToggleButton value="name">Name</ToggleButton>
+                <ToggleButton value="created">Created</ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+
+            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+
+            <Box display="flex" alignItems="center" gap={1}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                View:
+              </Typography>
+              <ToggleButtonGroup
+                value={viewMode}
+                exclusive
+                onChange={(_, value) => value && setViewMode(value)}
+                size="small"
+                sx={{
+                  '& .MuiToggleButton-root': {
+                    border: `1px solid ${alpha('#667eea', 0.2)}`,
+                    color: '#64748b',
+                    px: 1,
+                    '&.Mui-selected': {
+                      bgcolor: alpha('#667eea', 0.1),
+                      color: '#667eea',
+                      borderColor: alpha('#667eea', 0.3),
+                    },
+                  },
+                }}
+              >
+                <ToggleButton value="grid"><GridViewIcon fontSize="small" /></ToggleButton>
+                <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+
+            <Box sx={{ ml: 'auto' }}>
+              <Chip
+                label={`${filteredViews.length} view${filteredViews.length !== 1 ? 's' : ''}`}
+                size="small"
+                sx={{
+                  bgcolor: alpha('#667eea', 0.08),
+                  color: '#667eea',
+                  fontWeight: 600,
+                  border: `1px solid ${alpha('#667eea', 0.15)}`,
+                }}
+              />
+            </Box>
+          </Box>
+        </Paper>
+
+        {/* Views Grid/List */}
+        <Box sx={{ flex: 1, overflow: 'auto', pr: 1 }}>
+          {filteredViews.length === 0 ? (
+            <Paper
+              elevation={0}
+              sx={{
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 4,
+                background: 'rgba(255,255,255,0.6)',
+                border: `2px dashed ${alpha('#667eea', 0.2)}`,
+              }}
+            >
+              <Box sx={{ textAlign: 'center', maxWidth: 400, p: 4 }}>
+                <Box
+                  sx={{
+                    width: 100,
+                    height: 100,
+                    margin: '0 auto 24px',
+                    borderRadius: '50%',
+                    background: `linear-gradient(135deg, ${alpha('#667eea', 0.1)} 0%, ${alpha('#764ba2', 0.1)} 100%)`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {searchQuery ? (
+                    <SearchIcon sx={{ fontSize: 48, color: alpha('#667eea', 0.4) }} />
+                  ) : (
+                    <ViewModuleIcon sx={{ fontSize: 48, color: alpha('#667eea', 0.4) }} />
+                  )}
+                </Box>
+                <Typography variant="h5" fontWeight={700} gutterBottom sx={{ color: '#667eea' }}>
+                  {searchQuery ? 'No Results Found' : 
+                    activeNav === 'favorites' ? 'No Favorites Yet' :
+                    activeNav === 'recent' ? 'No Recent Views' : 'No Views Yet'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                  {searchQuery ? 'Try adjusting your search or filters' :
+                    activeNav === 'favorites' ? 'Star views to add them to favorites' :
+                    activeNav === 'recent' ? 'Views updated in the last 7 days will appear here' :
+                    'Create your first view to start building charts'}
+                </Typography>
+                {!searchQuery && activeNav === 'all' && (
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => setOpenCreateDialog(true)}
+                    sx={{
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      px: 4,
+                      py: 1.5,
+                      borderRadius: 2.5,
+                      boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
+                    }}
+                  >
+                    Create View
+                  </Button>
+                )}
+              </Box>
+            </Paper>
+          ) : viewMode === 'grid' ? (
+            <Grid container spacing={2.5}>
+              {filteredViews.map((view, index) => (
+                <Grid size={{xs:12, sm:6, md:4, lg:3}} key={view.id}>
+                  <ViewCard view={view} index={index} />
+                </Grid>
+              ))}
+            </Grid>
+          ) : (
+            <Paper
+              elevation={0}
+              sx={{
+                borderRadius: 3,
+                background: 'rgba(255,255,255,0.95)',
+                border: `1px solid ${alpha('#667eea', 0.1)}`,
+                overflow: 'hidden',
+              }}
+            >
+              <List disablePadding>
+                {filteredViews.map((view, index) => (
+                  <React.Fragment key={view.id}>
+                    {index > 0 && <Divider />}
+                    <ListItemButton
+                      selected={selectedView?.id === view.id}
+                      onClick={() => setSelectedView(view)}
+                      onDoubleClick={() => handleViewClick(view)}
+                      sx={{
+                        py: 2,
+                        px: 3,
+                        '&.Mui-selected': {
+                          bgcolor: alpha('#667eea', 0.08),
+                          '&:hover': { bgcolor: alpha('#667eea', 0.12) },
+                        },
+                        '&:hover': { bgcolor: alpha('#667eea', 0.04) },
+                      }}
+                    >
+                      <Box display="flex" alignItems="center" gap={2} width="100%">
+                        <Avatar
+                          sx={{
+                            width: 44,
+                            height: 44,
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            fontSize: '1rem',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {view.name.charAt(0).toUpperCase()}
+                        </Avatar>
+                        <Box flex={1}>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <Typography variant="subtitle1" fontWeight={600} sx={{ color: '#1e293b' }}>
+                              {view.name}
+                            </Typography>
+                            {favorites.has(view.id) && (
+                              <StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
+                            )}
+                          </Box>
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            {view.description || 'No description'}
+                          </Typography>
+                        </Box>
+                        <Box display="flex" alignItems="center" gap={2}>
+                          <Chip
+                            size="small"
+                            label={`${view.chartsCount} charts`}
+                            sx={{
+                              height: 24,
+                              fontSize: '0.7rem',
+                              bgcolor: alpha('#667eea', 0.08),
+                              color: '#667eea',
+                            }}
+                          />
+                          <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 80 }}>
+                            {getTimeAgo(view.updatedAt)}
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => { e.stopPropagation(); toggleFavorite(view.id); }}
+                            sx={{ color: favorites.has(view.id) ? '#f59e0b' : '#94a3b8' }}
+                          >
+                            {favorites.has(view.id) ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => { e.stopPropagation(); setMenuView(view); setAnchorEl(e.currentTarget); }}
+                          >
+                            <MoreVertIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      </Box>
+                    </ListItemButton>
+                  </React.Fragment>
+                ))}
+              </List>
+            </Paper>
+          )}
+        </Box>
+
+        {/* Selected View Preview Panel */}
+        {selectedView && (
+          <Fade in={true}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 3,
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.92) 100%)',
+                border: `1px solid ${alpha('#667eea', 0.2)}`,
+                boxShadow: `0 8px 32px ${alpha('#667eea', 0.1)}`,
+              }}
+            >
+              <Box display="flex" alignItems="center" justifyContent="space-between">
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Avatar
+                    sx={{
+                      width: 56,
+                      height: 56,
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      fontSize: '1.5rem',
+                      fontWeight: 700,
+                      boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
+                    }}
+                  >
+                    {selectedView.name.charAt(0).toUpperCase()}
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h6" fontWeight={700} sx={{ color: '#1e293b' }}>
+                      {selectedView.name}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      {selectedView.description || 'No description provided'}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Box display="flex" gap={1}>
+                    <Chip
+                      icon={<BarChartIcon sx={{ fontSize: 14 }} />}
+                      label={`${selectedView.chartsCount} Charts`}
+                      size="small"
+                      sx={{ bgcolor: alpha('#667eea', 0.1), color: '#667eea', fontWeight: 600 }}
+                    />
+                    <Chip
+                      icon={<AccessTimeIcon sx={{ fontSize: 14 }} />}
+                      label={getTimeAgo(selectedView.updatedAt)}
+                      size="small"
+                      sx={{ bgcolor: alpha('#10b981', 0.1), color: '#059669', fontWeight: 600 }}
+                    />
+                  </Box>
+                  <Button
+                    variant="contained"
+                    endIcon={<ChevronRightIcon />}
+                    onClick={() => handleViewClick(selectedView)}
+                    sx={{
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      px: 3,
+                      py: 1,
+                      borderRadius: 2,
+                      boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
+                      '&:hover': {
+                        boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)',
+                        transform: 'translateY(-1px)',
+                      },
+                    }}
+                  >
+                    Open View
+                  </Button>
+                </Box>
+              </Box>
+            </Paper>
+          </Fade>
+        )}
+        </Box>
+      </Box>
+
+      {/* Context Menu */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={() => setAnchorEl(null)}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            border: `1px solid ${alpha('#667eea', 0.1)}`,
+            minWidth: 160,
+          },
+        }}
+      >
+        <MenuItem onClick={() => menuView && handleViewClick(menuView)}>
+          <OpenInNewIcon fontSize="small" sx={{ mr: 1.5, color: '#667eea' }} />
+          Open
+        </MenuItem>
+        <MenuItem onClick={() => menuView && handleEditStart(menuView)}>
+          <EditIcon fontSize="small" sx={{ mr: 1.5, color: '#667eea' }} />
+          Edit
+        </MenuItem>
+        <MenuItem onClick={() => menuView && toggleFavorite(menuView.id)}>
+          {menuView && favorites.has(menuView.id) ? (
+            <StarIcon fontSize="small" sx={{ mr: 1.5, color: '#f59e0b' }} />
+          ) : (
+            <StarBorderIcon fontSize="small" sx={{ mr: 1.5, color: '#f59e0b' }} />
+          )}
+          {menuView && favorites.has(menuView.id) ? 'Unfavorite' : 'Favorite'}
+        </MenuItem>
+        <Divider sx={{ my: 1 }} />
+        <MenuItem onClick={() => menuView && handleDeleteClick(menuView)} sx={{ color: '#ef4444' }}>
+          <DeleteIcon fontSize="small" sx={{ mr: 1.5 }} />
+          Delete
+        </MenuItem>
+      </Menu>
+
+      {/* Create/Edit Dialog */}
       <Dialog
         open={openCreateDialog}
-        onClose={() => {
-          setOpenCreateDialog(false);
-          setEditingView(null);
-          setNewViewName('');
-          setNewViewDesc('');
-        }}
+        onClose={() => { setOpenCreateDialog(false); setEditingView(null); setNewViewName(''); setNewViewDesc(''); }}
         maxWidth="sm"
         fullWidth
         PaperProps={{
           sx: {
             borderRadius: 3,
             background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%)',
-            backdropFilter: 'blur(20px) saturate(180%)',
-            border: `1px solid ${alpha('#667eea', 0.2)}`,
-            boxShadow: '0 8px 32px rgba(102, 126, 234, 0.2)',
+            border: `1px solid ${alpha('#667eea', 0.15)}`,
+            boxShadow: '0 24px 48px rgba(0,0,0,0.12)',
           },
         }}
       >
-        <DialogTitle sx={{ pb: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <DialogTitle sx={{ pb: 1 }}>
+          <Box display="flex" alignItems="center" gap={2}>
             <Box
               sx={{
                 width: 48,
                 height: 48,
-                borderRadius: 2,
+                borderRadius: 2.5,
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 display: 'flex',
                 alignItems: 'center',
@@ -612,106 +1344,77 @@ const DashboardViews: React.FC = () => {
             >
               {editingView ? <EditIcon sx={{ color: 'white' }} /> : <AddIcon sx={{ color: 'white' }} />}
             </Box>
-            <Typography variant="h6" fontWeight={700}>
-              {editingView ? 'Edit View' : 'Create New View'}
-            </Typography>
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                {editingView ? 'Edit View' : 'Create New View'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {editingView ? 'Update view details' : 'Set up your new analytics view'}
+              </Typography>
+            </Box>
           </Box>
         </DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
+        <DialogContent sx={{ pt: 3 }}>
           <TextField
             autoFocus
-            margin="normal"
             label="View Name"
             fullWidth
             required
             value={newViewName}
             onChange={(e) => setNewViewName(e.target.value)}
-            placeholder="e.g., Patient View, Provider View"
+            placeholder="e.g., Patient View, Sales Overview"
             sx={{
+              mb: 3,
               '& .MuiOutlinedInput-root': {
-                '& fieldset': {
-                  borderColor: alpha('#667eea', 0.3),
-                },
-                '&:hover fieldset': {
-                  borderColor: alpha('#667eea', 0.5),
-                },
-                '&.Mui-focused fieldset': {
-                  borderColor: '#667eea',
-                },
+                borderRadius: 2,
+                '& fieldset': { borderColor: alpha('#667eea', 0.2) },
+                '&:hover fieldset': { borderColor: alpha('#667eea', 0.4) },
+                '&.Mui-focused fieldset': { borderColor: '#667eea' },
               },
-              '& .MuiInputLabel-root.Mui-focused': {
-                color: '#667eea',
-              },
+              '& .MuiInputLabel-root.Mui-focused': { color: '#667eea' },
             }}
           />
           <TextField
-            margin="normal"
-            label="Description"
+            label="Description (Optional)"
             fullWidth
             multiline
-            rows={4}
+            rows={3}
             value={newViewDesc}
             onChange={(e) => setNewViewDesc(e.target.value)}
             placeholder="Describe what this view will display..."
             sx={{
               '& .MuiOutlinedInput-root': {
-                '& fieldset': {
-                  borderColor: alpha('#667eea', 0.3),
-                },
-                '&:hover fieldset': {
-                  borderColor: alpha('#667eea', 0.5),
-                },
-                '&.Mui-focused fieldset': {
-                  borderColor: '#667eea',
-                },
+                borderRadius: 2,
+                '& fieldset': { borderColor: alpha('#667eea', 0.2) },
+                '&:hover fieldset': { borderColor: alpha('#667eea', 0.4) },
+                '&.Mui-focused fieldset': { borderColor: '#667eea' },
               },
-              '& .MuiInputLabel-root.Mui-focused': {
-                color: '#667eea',
-              },
+              '& .MuiInputLabel-root.Mui-focused': { color: '#667eea' },
             }}
           />
         </DialogContent>
-        <DialogActions sx={{ p: 3, gap: 1.5 }}>
+        <DialogActions sx={{ p: 3, pt: 2 }}>
           <Button
-            onClick={() => {
-              setOpenCreateDialog(false);
-              setEditingView(null);
-              setNewViewName('');
-              setNewViewDesc('');
-            }}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              color: 'text.secondary',
-              '&:hover': {
-                bgcolor: alpha('#667eea', 0.05),
-              },
-            }}
+            onClick={() => { setOpenCreateDialog(false); setEditingView(null); setNewViewName(''); setNewViewDesc(''); }}
+            sx={{ textTransform: 'none', fontWeight: 600, color: 'text.secondary' }}
           >
             Cancel
           </Button>
           <Button
             variant="contained"
-            onClick={handleCreateView}
+            onClick={editingView ? handleEditSave : handleCreateView}
             disabled={!newViewName.trim()}
             sx={{
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               textTransform: 'none',
-              fontWeight: 600,
+              fontWeight: 700,
               px: 4,
               borderRadius: 2,
               boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
-                boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)',
-              },
-              '&:disabled': {
-                background: alpha('#667eea', 0.3),
-              },
-              transition: 'all 0.3s ease',
+              '&:disabled': { background: alpha('#667eea', 0.3) },
             }}
           >
-            {editingView ? 'Update View' : 'Create View'}
+            {editingView ? 'Save Changes' : 'Create View'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -725,70 +1428,54 @@ const DashboardViews: React.FC = () => {
         PaperProps={{
           sx: {
             borderRadius: 3,
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%)',
-            backdropFilter: 'blur(20px) saturate(180%)',
-            border: `1px solid ${alpha('#f44336', 0.2)}`,
-            boxShadow: '0 8px 32px rgba(244, 67, 54, 0.2)',
+            border: `1px solid ${alpha('#ef4444', 0.2)}`,
+            boxShadow: '0 24px 48px rgba(239, 68, 68, 0.15)',
           },
         }}
       >
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: 2 }}>
-          <Box
-            sx={{
-              bgcolor: alpha('#f44336', 0.1),
-              borderRadius: '50%',
-              p: 1.5,
-              display: 'flex',
-              border: `2px solid ${alpha('#f44336', 0.2)}`,
-            }}
-          >
-            <WarningIcon sx={{ color: 'error.main', fontSize: 28 }} />
+        <DialogTitle sx={{ pb: 1 }}>
+          <Box display="flex" alignItems="center" gap={2}>
+            <Box
+              sx={{
+                width: 48,
+                height: 48,
+                borderRadius: '50%',
+                bgcolor: alpha('#ef4444', 0.1),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: `2px solid ${alpha('#ef4444', 0.2)}`,
+              }}
+            >
+              <WarningIcon sx={{ color: '#ef4444', fontSize: 24 }} />
+            </Box>
+            <Typography variant="h6" fontWeight={700}>Delete View</Typography>
           </Box>
-          <Typography variant="h6" fontWeight={700}>
-            Delete View
-          </Typography>
         </DialogTitle>
-        <DialogContent sx={{ pb: 2 }}>
-          <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+        <DialogContent>
+          <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.7 }}>
             Are you sure you want to delete{' '}
-            <strong style={{ color: '#667eea', fontWeight: 700 }}>
-              "{deletingView?.name}"
-            </strong>
-            ? All charts in this view will be permanently deleted. This action cannot be undone.
+            <strong style={{ color: '#667eea' }}>"{deletingView?.name}"</strong>?
+            All charts in this view will be permanently deleted.
           </Typography>
         </DialogContent>
-        <DialogActions sx={{ p: 3, gap: 1.5 }}>
-          <Button 
-            variant="outlined" 
+        <DialogActions sx={{ p: 3, pt: 2 }}>
+          <Button
             onClick={() => setOpenDeleteDialog(false)}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              borderRadius: 2,
-              px: 3,
-              borderColor: alpha('#667eea', 0.3),
-              color: '#667eea',
-              '&:hover': {
-                borderColor: '#667eea',
-                bgcolor: alpha('#667eea', 0.05),
-              },
-            }}
+            sx={{ textTransform: 'none', fontWeight: 600, color: 'text.secondary' }}
           >
             Cancel
           </Button>
-          <Button 
-            variant="contained" 
-            color="error" 
+          <Button
+            variant="contained"
             onClick={handleDeleteConfirm}
             sx={{
+              background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
               textTransform: 'none',
-              fontWeight: 600,
-              borderRadius: 2,
+              fontWeight: 700,
               px: 3,
-              boxShadow: '0 4px 16px rgba(244, 67, 54, 0.3)',
-              '&:hover': {
-                boxShadow: '0 6px 20px rgba(244, 67, 54, 0.4)',
-              },
+              borderRadius: 2,
+              boxShadow: '0 4px 16px rgba(239, 68, 68, 0.3)',
             }}
           >
             Delete View

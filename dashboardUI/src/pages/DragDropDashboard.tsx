@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from 'react-dom';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Responsive, WidthProvider, Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -149,7 +149,17 @@ const makeMutableLayoutItem = (item: Layout): Layout => {
 export default function DropDragDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { dashboardName: dashboardSlug, viewName: viewSlug } = useParams<{ dashboardName: string; viewName: string }>();
   const idRef = useRef(1);
+
+  // Convert slugs to display names
+  const currentDashboardName = dashboardSlug
+    ? dashboardSlug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+    : 'Dashboard';
+  
+  const currentViewName = viewSlug
+    ? viewSlug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+    : 'View';
 
   const [chartConfigs, setChartConfigs] = useRecoilState<Record<string, ChartConfigData>>(chartConfigState);
   const tooltipConfigs = useRecoilValue(tooltipConfigState);
@@ -1291,9 +1301,14 @@ export default function DropDragDashboard() {
     e.nativeEvent.stopImmediatePropagation();
 
     setTimeout(() => {
-      navigate(`/addChart/${itemId}`);
+      // Navigate using dashboard and view slugs
+      if (dashboardSlug && viewSlug) {
+        navigate(`/${dashboardSlug}/${viewSlug}/addChart/${itemId}`);
+      } else {
+        navigate(`/addChart/${itemId}`);
+      }
     }, 10);
-  }, [navigate]);
+  }, [navigate, dashboardSlug, viewSlug]);
 
   const handleRemoveClick = useCallback((e: React.MouseEvent, itemId: string) => {
     e.preventDefault();

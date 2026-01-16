@@ -57,12 +57,17 @@ interface Tab {
 // Define the URL params type
 interface ChartParams {
   id: string;
+  dashboardName?: string;
+  viewName?: string;
   [key: string]: string | undefined;
 }
 
 // Navigation Bar Component
-const NavBar: React.FC<{ chartId: string }> = ({ chartId }) => {
+const NavBar: React.FC<{ chartId: string; dashboardSlug?: string; viewSlug?: string }> = ({ chartId, dashboardSlug, viewSlug }) => {
   const navigate = useNavigate();
+
+  // Build back navigation URL
+  const backUrl = dashboardSlug && viewSlug ? `/${dashboardSlug}/${viewSlug}` : '/';
 
   return (
     <AppBar 
@@ -78,7 +83,7 @@ const NavBar: React.FC<{ chartId: string }> = ({ chartId }) => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Button 
             startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/dashboards")}
+            onClick={() => navigate(backUrl)}
             sx={{ 
               color: 'white',
               textTransform: 'none',
@@ -181,7 +186,7 @@ const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => {
 };
 
 const EditChart: React.FC = () => {
-  const { id } = useParams<ChartParams>();
+  const { id, dashboardName: dashboardSlug, viewName: viewSlug } = useParams<ChartParams>();
   const [activeTabIndex, setActiveTabIndex] = useState<number>(0);
 
   // Tab configuration with colors
@@ -251,7 +256,7 @@ const EditChart: React.FC = () => {
   return (
     <Box sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' }}>
       {/* Navigation Bar */}
-      <NavBar chartId={id || 'No ID provided'} />
+      <NavBar chartId={id || 'No ID provided'} dashboardSlug={dashboardSlug} viewSlug={viewSlug} />
       
       {/* Main Content */}
       <Container maxWidth={false} sx={{ py:4 }}>

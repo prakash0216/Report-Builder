@@ -16,10 +16,17 @@ function App() {
           <DataInitializer />
           <GlobalCalculationWrapper>
             <Routes>
-              <Route path="/dashboards" element={<DropDragDashboard/>}/>
-              <Route path="/addChart/:id" element={<EditChart/>}/>
-              <Route path="dashboard/:dashboardId/views" element={<DashboardViews />} />
-              <Route path ="/" element={<DashboardsManagement/>}/>
+              {/* Home - Dashboard Management */}
+              <Route path="/" element={<DashboardsManagement/>}/>
+              
+              {/* Dashboard Views - /dashboardName */}
+              <Route path="/:dashboardName" element={<DashboardViews />} />
+              
+              {/* View Editor - /dashboardName/viewName */}
+              <Route path="/:dashboardName/:viewName" element={<DropDragDashboard/>}/>
+              
+              {/* Edit Chart */}
+              <Route path="/:dashboardName/:viewName/addChart/:id" element={<EditChart/>}/>
             </Routes>
           </GlobalCalculationWrapper>
         </BrowserRouter>
