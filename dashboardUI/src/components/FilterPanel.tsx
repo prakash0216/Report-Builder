@@ -54,7 +54,7 @@ interface FilterPosition {
 // Recoil state for filter panel expanded/collapsed
 export const filterPanelExpandedState = atom<boolean>({
   key: 'filterPanelExpandedState',
-  default: true,
+  default: false,
 });
 
 // Recoil state for filter positions

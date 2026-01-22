@@ -69,6 +69,7 @@ async function createSnowFlakeConnnection() {
     username TEXT NOT NULL,
     authenticator TEXT NOT NULL,
     privateKey BLOB,
+    privateKeyFileName TEXT,
     warehouse TEXT NOT NULL,
     database TEXT NOT NULL,
     schema TEXT NOT NULL,
@@ -78,7 +79,16 @@ async function createSnowFlakeConnnection() {
   try {
     await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS snowflake_conn_id_seq START 1;`);
     await dbClient.run(createSnowFlakeTable);
-    console.log("✅ Table 'connections' created successfully.");
+    
+    // Add privateKeyFileName column if it doesn't exist (for existing databases)
+    try {
+      await dbClient.run(`ALTER TABLE snow_flake_connections ADD COLUMN IF NOT EXISTS privateKeyFileName TEXT;`);
+    } catch (alterErr) {
+      // Column might already exist, ignore error
+      console.log("Note: privateKeyFileName column already exists or could not be added");
+    }
+    
+    console.log("✅ Table 'snow_flake_connections' created successfully.");
   } catch (err) {
     console.error("❌ Error creating table:", err.message);
   }
@@ -96,7 +106,7 @@ async function createDataSourceRegistry(){
   parquet_path TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   last_refreshed TIMESTAMP,
-  las_modified TIMESTAMP,
+  last_modified TIMESTAMP,
   refresh_interval_days INTEGER,
   FOREIGN KEY (connection_id) REFERENCES snow_flake_connections(id)
 );
@@ -104,6 +114,14 @@ async function createDataSourceRegistry(){
   try{
     await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS ds_registry_seq START 1;`);
     await dbClient.run(createDataSourceRegistryTable);
+    
+    // Fix typo in existing databases: rename las_modified to last_modified
+    try {
+      await dbClient.run(`ALTER TABLE data_source_registry RENAME COLUMN las_modified TO last_modified;`);
+    } catch (alterErr) {
+      // Column might already be correctly named or doesn't exist, ignore error
+    }
+    
     console.log("✅ Table 'data_source_registry' created successfully.");
   }catch(err){
     console.error("❌ Error creating table:", err.message);
@@ -788,6 +806,88 @@ async function migrateDashboardIdColumns() {
   }
 }
 
+// Seed MSL Extract data source if parquet file exists but registry entry doesn't
+async function seedMslExtractDataSource() {
+  const path = await import('path');
+  const fs = await import('fs');
+  const { fileURLToPath } = await import('url');
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  
+  const dataSourceName = 'msl_extract';
+  const parquetPath = path.join(__dirname, 'parquet_files', `ds_${dataSourceName}.parquet`);
+  
+  // Check if parquet file exists
+  if (!fs.existsSync(parquetPath)) {
+    console.log(`ℹ️ MSL Extract parquet file not found at ${parquetPath}, skipping seed.`);
+    return;
+  }
+  
+  try {
+    // Check if data source already exists
+    const existing = await dbClient.query(`SELECT * FROM data_source_registry WHERE ds_name='${dataSourceName}'`);
+    if (existing.length > 0) {
+      console.log(`ℹ️ Data source '${dataSourceName}' already exists, skipping seed.`);
+      return;
+    }
+    
+    // Find snowflake1 connection
+    const connections = await dbClient.query(`SELECT id FROM snow_flake_connections WHERE connectionName='snowflake1' LIMIT 1`);
+    if (connections.length === 0) {
+      console.log(`⚠️ Connection 'snowflake1' not found, will use connection_id=1 for MSL extract seed.`);
+    }
+    const connectionId = connections.length > 0 ? connections[0].id : 1;
+    
+    const query = `SELECT
+                    SUM(NBRX_ELIGIBLE) + SUM(NBRX_NON_ELIGIBLE) AS "Paid NBRx",
+                    SUM(NBRX_ELIGIBLE) + SUM(CBRX_ELIGIBLE) AS "Paid TRX",
+                    SUM(WRITTEN_RXS_ELIGIBLE) + SUM(WRITTEN_RXS_NON_ELIGIBLE) AS "Written TRX",
+                    SUM(PROJECTED_TRX) AS "Projected TRX", 
+                    PRODUCT_GROUP,
+                    MOP,
+                    F_MONTH_2,
+                    PAYER_NAME,
+                    MOLECULE_NAME,
+                    MARKET,
+                    BRAND_GENERIC_FLAG,
+                    SPECIALTY_PROD_IND,
+                    MAAS_PRI_SPCL_GRP,
+                    DIAG_LVL4_DESC
+                FROM MSC_ADW_RPT_MSL_REPORTING_2B
+                WHERE F_MONTH_2 > '2025-01-01'
+                GROUP BY PRODUCT_GROUP, MOP, F_MONTH_2, PAYER_NAME, MOLECULE_NAME, MARKET,
+                        BRAND_GENERIC_FLAG, SPECIALTY_PROD_IND, MAAS_PRI_SPCL_GRP, DIAG_LVL4_DESC`;
+    
+    const escapedQuery = query.replace(/'/g, "''");
+    const escapedParquetPath = parquetPath.replace(/\\/g, '\\\\');
+    
+    const insertQuery = `INSERT INTO data_source_registry (ds_name, connection_id, type, query, parquet_path, created_at, last_modified) 
+      VALUES ('${dataSourceName}', ${connectionId}, 'Extract', '${escapedQuery}', '${escapedParquetPath}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
+    
+    await dbClient.run(insertQuery);
+    console.log(`✅ Seeded data source '${dataSourceName}' with existing parquet file.`);
+    
+    // Also create the base table from parquet if it doesn't exist
+    const tableName = `ds_${dataSourceName}`;
+    try {
+      const tableExists = await dbClient.query(`SELECT * FROM information_schema.tables WHERE table_name='${tableName}'`);
+      if (tableExists.length === 0) {
+        console.log(`🔨 Creating base table ${tableName} from parquet file...`);
+        const normalizedPath = parquetPath.replace(/\\/g, '/');
+        await dbClient.run(`CREATE TABLE IF NOT EXISTS ${tableName} AS SELECT * FROM read_parquet('${normalizedPath}')`);
+        console.log(`✅ Base table ${tableName} created successfully.`);
+      } else {
+        console.log(`ℹ️ Base table ${tableName} already exists.`);
+      }
+    } catch (tableErr) {
+      console.log(`⚠️ Could not create base table ${tableName}: ${tableErr.message}`);
+    }
+    
+  } catch (err) {
+    console.error(`❌ Error seeding MSL extract data source: ${err.message}`);
+  }
+}
+
 const createTables = async () => {
   // Create hierarchy tables first
   await createDashboardsTable();
@@ -824,6 +924,9 @@ const createTables = async () => {
   await migrateViewIdColumns();
   await migrateDashboardIdColumns();
   
+    // Seed data sources with existing parquet files
+    await seedMslExtractDataSource();
+  
   console.log("✅ All tables created and migrations completed.");
 }
 
@@ -859,6 +962,8 @@ export {
   migrateChartConfigsTable,
   migrateViewIdColumns,
   migrateDashboardIdColumns,
-  // All tables
-  createTables
+    // Data seeding
+    seedMslExtractDataSource,
+    // All tables
+    createTables
 };

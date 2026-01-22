@@ -1582,7 +1582,9 @@ const DashboardManagement: React.FC = () => {
             value={editingDashboard ? editName : newDashboardName}
             onChange={(e) => editingDashboard ? setEditName(e.target.value) : setNewDashboardName(e.target.value)}
             placeholder="e.g., Sales Analytics, Marketing KPIs"
+            InputLabelProps={{ shrink: true }}
             sx={{
+              mt: 1,
               mb: 3,
               '& .MuiOutlinedInput-root': {
                 borderRadius: 2,
@@ -1601,6 +1603,7 @@ const DashboardManagement: React.FC = () => {
             value={editingDashboard ? editDesc : newDashboardDesc}
             onChange={(e) => editingDashboard ? setEditDesc(e.target.value) : setNewDashboardDesc(e.target.value)}
             placeholder="Describe what this dashboard will display..."
+            InputLabelProps={{ shrink: true }}
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: 2,
@@ -1764,6 +1767,7 @@ const DashboardManagement: React.FC = () => {
             value={migrateDashboardName}
             onChange={(e) => setMigrateDashboardName(e.target.value)}
             placeholder="e.g., MSL Dashboard"
+            InputLabelProps={{ shrink: true }}
             sx={{
               mb: 3,
               '& .MuiOutlinedInput-root': {
@@ -1783,6 +1787,7 @@ const DashboardManagement: React.FC = () => {
             value={migrateViewName}
             onChange={(e) => setMigrateViewName(e.target.value)}
             placeholder="e.g., Patient View"
+            InputLabelProps={{ shrink: true }}
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: 2,

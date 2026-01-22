@@ -935,8 +935,63 @@ export default function AddDataSourceMui() {
       <Box
         sx={{ gridColumn: 'span 9', display: 'flex', flexDirection: 'column', gap: 3 }}
       >
-        {!selectedDS ? (
-          
+        {dataSourceNames.length === 0 ? (
+          // No data sources exist at all
+          <Box
+            sx={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
+              backdropFilter: 'blur(10px)',
+              border: '2px dashed rgba(102, 126, 234, 0.3)',
+              borderRadius: 3,
+              boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
+            }}
+          >
+            <Box
+              sx={{ textAlign: 'center', maxWidth: 500, px: 4 }}
+            >
+              <Box
+                sx={{
+                  width: 96,
+                  height: 96,
+                  margin: '0 auto 24px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <DataObjectIcon sx={{ fontSize: 48, color: '#667eea', opacity: 0.6 }} />
+              </Box>
+              <Typography 
+                variant="h5" 
+                sx={{ 
+                  mb: 2, 
+                  fontWeight: 700,
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}
+              >
+                No Data Sources
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 2, color: '#64748b' }}>
+                You haven't created any data sources yet. Create your first data source
+                using the panel on the left to start building your queries.
+              </Typography>
+              <Typography variant="body2" color="#94a3b8">
+                Data sources allow you to connect to your databases and execute
+                SQL queries to interact with your data.
+              </Typography>
+            </Box>
+          </Box>
+        ) : !selectedDS ? (
+          // Data sources exist but none selected
           <Box
             sx={{
               flex: 1,

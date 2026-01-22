@@ -156,6 +156,8 @@ const ConnectorManager: React.FC = () => {
   const [connectionToDelete, setConnectionToDelete] = useState<SnowflakeConnection | null>(null);
   const [isSnowflakeConnectionValid, setIsSnowflakeConnectionValid] = useState<boolean>(false);
   const [isEditSnowflakeConnectionValid, setIsEditSnowflakeConnectionValid] = useState<boolean>(false);
+  const [connectionCheckFailed, setConnectionCheckFailed] = useState<boolean>(false);
+  const [editConnectionCheckFailed, setEditConnectionCheckFailed] = useState<boolean>(false);
   
   const filteredConnectors = connectorTypes.filter((connector) =>
     connector.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -185,6 +187,7 @@ const ConnectorManager: React.FC = () => {
       schema: ''
     });
     setIsSnowflakeConnectionValid(false);
+    setConnectionCheckFailed(false);
   };
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -194,6 +197,7 @@ const ConnectorManager: React.FC = () => {
       [name]: value
     }));
     setIsSnowflakeConnectionValid(false);
+    setConnectionCheckFailed(false);
   };
 
   const handleSelectChange = (e: SelectChangeEvent) => {
@@ -204,6 +208,7 @@ const ConnectorManager: React.FC = () => {
       [name]: value
     }));
     setIsSnowflakeConnectionValid(false);
+    setConnectionCheckFailed(false);
   };
 
   const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -224,13 +229,16 @@ const ConnectorManager: React.FC = () => {
       showAlert(`File "${file.name}" uploaded successfully!`, 'success');
     }
     setIsSnowflakeConnectionValid(false);
+    setConnectionCheckFailed(false);
   };
 
   const showAlert = (message: string, severity: AlertState['severity'] = 'success') => {
     setAlert({ show: true, message, severity });
+    // Longer timeout for errors so users can read the full message
+    const timeout = severity === 'error' ? 8000 : severity === 'warning' ? 6000 : 4000;
     setTimeout(() => {
       setAlert((prev) => ({ ...prev, show: false }));
-    }, 4000);
+    }, timeout);
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -410,6 +418,7 @@ const ConnectorManager: React.FC = () => {
       [name]: value
     }));
     setIsEditSnowflakeConnectionValid(false);
+    setEditConnectionCheckFailed(false);
   };
 
   const handleEditSelectChange = (e: SelectChangeEvent) => {
@@ -420,6 +429,7 @@ const ConnectorManager: React.FC = () => {
       [name]: value
     }));
     setIsEditSnowflakeConnectionValid(false);
+    setEditConnectionCheckFailed(false);
   };
 
   const handleEditFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -438,6 +448,7 @@ const ConnectorManager: React.FC = () => {
         privateKey: file
       }));
       setIsEditSnowflakeConnectionValid(false);
+      setEditConnectionCheckFailed(false);
       showAlert(`New file "${file.name}" uploaded successfully! Please check the connection before saving.`, 'success');
     }
   };
@@ -455,11 +466,13 @@ const ConnectorManager: React.FC = () => {
     if (!formData.connectionName || !formData.account || !formData.username || 
         !formData.authenticator || !formData.warehouse || !formData.database || 
         !formData.schema || !formData.privateKey) {
-      showAlert('Please fill in all required fields ', 'error');
+      showAlert('Please fill in all required fields including the private key file.', 'error');
       return;
     }
 
     setIsCheckingConnection(true);
+    setIsSnowflakeConnectionValid(false);
+    setConnectionCheckFailed(false);
 
     try {
       const formDataToSend = new FormData();
@@ -475,17 +488,32 @@ const ConnectorManager: React.FC = () => {
       const response = await axios.post('http://localhost:3002/check-snowflake-connection', formDataToSend);
 
       if (response.data.success) {
-        showAlert('Snowflake connection is valid! You can now add this connection.', 'success');
+        showAlert('✓ Snowflake connection is valid! You can now add this connection.', 'success');
         setIsSnowflakeConnectionValid(true);
+        setConnectionCheckFailed(false);
       } else {
-        showAlert(`Connection check failed: ${response.data.message || 'Invalid credentials or configuration'}`, 'error');
+        const errorMsg = response.data.message || response.data.error || 'Invalid credentials or configuration';
+        showAlert(`✗ Connection failed: ${errorMsg}`, 'error');
         setIsSnowflakeConnectionValid(false);
+        setConnectionCheckFailed(true);
       }
     } catch (error: any) {
       console.error('Error checking connection:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to check connection. Please verify your credentials.';
-      showAlert(errorMessage, 'error');
+      // Extract detailed error message from response
+      const errorMessage = error.response?.data?.message 
+        || error.response?.data?.error 
+        || error.message 
+        || 'Failed to check connection. Please verify your credentials and try again.';
+      const errorDetails = error.response?.data?.details;
+      
+      let fullErrorMessage = `✗ Connection failed: ${errorMessage}`;
+      if (errorDetails && errorDetails !== errorMessage) {
+        fullErrorMessage += ` (${errorDetails})`;
+      }
+      
+      showAlert(fullErrorMessage, 'error');
       setIsSnowflakeConnectionValid(false);
+      setConnectionCheckFailed(true);
     } finally {
       setIsCheckingConnection(false);
     }
@@ -505,6 +533,8 @@ const ConnectorManager: React.FC = () => {
     }
     
     setIsEditCheckingConnection(true);
+    setIsEditSnowflakeConnectionValid(false);
+    setEditConnectionCheckFailed(false);
 
     try {
       const editFormData = new FormData();
@@ -520,17 +550,32 @@ const ConnectorManager: React.FC = () => {
       const response = await axios.post('http://localhost:3002/check-snowflake-connection', editFormData);
 
       if (response.data.success) {
-        showAlert('Snowflake connection is valid! You can now save the changes.', 'success');
+        showAlert('✓ Snowflake connection is valid! You can now save the changes.', 'success');
         setIsEditSnowflakeConnectionValid(true);
+        setEditConnectionCheckFailed(false);
       } else {
-        showAlert(`Connection check failed: ${response.data.message || 'Invalid credentials or configuration'}`, 'error');
+        const errorMsg = response.data.message || response.data.error || 'Invalid credentials or configuration';
+        showAlert(`✗ Connection failed: ${errorMsg}`, 'error');
         setIsEditSnowflakeConnectionValid(false);
+        setEditConnectionCheckFailed(true);
       }
     } catch (error: any) {
       console.error('Error checking connection:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to check connection. Please verify your credentials.';
-      showAlert(errorMessage, 'error');
+      // Extract detailed error message from response
+      const errorMessage = error.response?.data?.message 
+        || error.response?.data?.error 
+        || error.message 
+        || 'Failed to check connection. Please verify your credentials and try again.';
+      const errorDetails = error.response?.data?.details;
+      
+      let fullErrorMessage = `✗ Connection failed: ${errorMessage}`;
+      if (errorDetails && errorDetails !== errorMessage) {
+        fullErrorMessage += ` (${errorDetails})`;
+      }
+      
+      showAlert(fullErrorMessage, 'error');
       setIsEditSnowflakeConnectionValid(false);
+      setEditConnectionCheckFailed(true);
     } finally {
       setIsEditCheckingConnection(false);
     }
@@ -675,7 +720,7 @@ const ConnectorManager: React.FC = () => {
 
                 <Grid size={{ xs: 12 }}>
                   <Stack direction="row" spacing={2} flexWrap="wrap" gap={2}>
-                    <Tooltip title={!formData.privateKey ? "Please upload a private key file first" : "Test your connection credentials"}><span><Button variant='contained' type="button" startIcon={isCheckingConnection ? <CircularProgress size={16} color="inherit" /> : (isSnowflakeConnectionValid ? <Check /> : <Close />)} onClick={CheckSnowflakeConnection} disabled={isCheckingConnection || isAddingConnection || !formData.privateKey || !formData.connectionName || !formData.account || !formData.username || !formData.authenticator || !formData.warehouse || !formData.database || !formData.schema} sx={{ borderRadius: 2, fontWeight: 700, background: isSnowflakeConnectionValid ? 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)' : 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)', '&:hover': { background: isSnowflakeConnectionValid ? 'linear-gradient(135deg, #059669 0%, #0d9488 100%)' : 'linear-gradient(135deg, #64748b 0%, #475569 100%)' } }}>{isCheckingConnection ? 'Checking...' : (isSnowflakeConnectionValid ? 'Connection Valid ✓' : 'Check Connection')}</Button></span></Tooltip>
+                    <Tooltip title={!formData.privateKey ? "Please upload a private key file first" : "Test your connection credentials"}><span><Button variant='contained' type="button" startIcon={isCheckingConnection ? <CircularProgress size={16} color="inherit" /> : (isSnowflakeConnectionValid ? <Check /> : connectionCheckFailed ? <Warning /> : <Close />)} onClick={CheckSnowflakeConnection} disabled={isCheckingConnection || isAddingConnection || !formData.privateKey || !formData.connectionName || !formData.account || !formData.username || !formData.authenticator || !formData.warehouse || !formData.database || !formData.schema} sx={{ borderRadius: 2, fontWeight: 700, background: isSnowflakeConnectionValid ? 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)' : connectionCheckFailed ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)', '&:hover': { background: isSnowflakeConnectionValid ? 'linear-gradient(135deg, #059669 0%, #0d9488 100%)' : connectionCheckFailed ? 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)' : 'linear-gradient(135deg, #64748b 0%, #475569 100%)' } }}>{isCheckingConnection ? 'Checking...' : (isSnowflakeConnectionValid ? 'Connection Valid ✓' : connectionCheckFailed ? 'Connection Failed ✗' : 'Check Connection')}</Button></span></Tooltip>
                     <Tooltip title={!isSnowflakeConnectionValid ? "Please check connection first" : "Add this connection to your saved connections"}><span><Button variant="contained" type="submit" startIcon={isAddingConnection ? <CircularProgress size={16} color="inherit" /> : <Add />} disabled={isAddingConnection || !formData.privateKey || !isSnowflakeConnectionValid} sx={{ borderRadius: 2, fontWeight: 700, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)' } }}>{isAddingConnection ? 'Adding...' : 'Add Connection'}</Button></span></Tooltip>
                     <Button variant="outlined" startIcon={showTable ? <VisibilityOff /> : <Visibility />} onClick={() => setShowTable(prev => !prev)} sx={{ borderRadius: 2, fontWeight: 700, borderColor: '#667eea', color: '#667eea', '&:hover': { borderColor: '#5568d3', bgcolor: 'rgba(102, 126, 234, 0.05)' } }}>{showTable ? "Hide" : "Show"} Connections</Button>
                   </Stack>
@@ -716,7 +761,7 @@ const ConnectorManager: React.FC = () => {
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2.5, background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
           <Button onClick={() => setOpenDialog(false)} startIcon={<Close />} variant="outlined" sx={{ borderRadius: 2, fontWeight: 600, borderColor: '#cbd5e1', color: '#64748b', '&:hover': { borderColor: '#94a3b8', bgcolor: '#f1f5f9' } }}>Cancel</Button>
-          <Tooltip title={!editData.privateKey ? "Please upload a new private key file first" : "Test your connection before saving"}><span><Button variant='contained' type="button" startIcon={isEditCheckingConnection ? <CircularProgress size={16} color="inherit" /> : (isEditSnowflakeConnectionValid ? <Check /> : <Close />)} onClick={checkEditSnowFlakeConnection} disabled={isEditCheckingConnection || isEditingConnection || !editData.privateKey ||!editData.account || !editData.username || !editData.authenticator || !editData.warehouse || !editData.database || !editData.schema} sx={{ borderRadius: 2, fontWeight: 700, background: isEditSnowflakeConnectionValid ? 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)' : 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)', '&:hover': { background: isEditSnowflakeConnectionValid ? 'linear-gradient(135deg, #059669 0%, #0d9488 100%)' : 'linear-gradient(135deg, #64748b 0%, #475569 100%)' } }}>{isEditCheckingConnection ? 'Checking...' : (isEditSnowflakeConnectionValid ? 'Connection Valid ✓' : 'Check Connection')}</Button></span></Tooltip>
+          <Tooltip title={!editData.privateKey ? "Please upload a new private key file first" : "Test your connection before saving"}><span><Button variant='contained' type="button" startIcon={isEditCheckingConnection ? <CircularProgress size={16} color="inherit" /> : (isEditSnowflakeConnectionValid ? <Check /> : editConnectionCheckFailed ? <Warning /> : <Close />)} onClick={checkEditSnowFlakeConnection} disabled={isEditCheckingConnection || isEditingConnection || !editData.privateKey ||!editData.account || !editData.username || !editData.authenticator || !editData.warehouse || !editData.database || !editData.schema} sx={{ borderRadius: 2, fontWeight: 700, background: isEditSnowflakeConnectionValid ? 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)' : editConnectionCheckFailed ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)', '&:hover': { background: isEditSnowflakeConnectionValid ? 'linear-gradient(135deg, #059669 0%, #0d9488 100%)' : editConnectionCheckFailed ? 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)' : 'linear-gradient(135deg, #64748b 0%, #475569 100%)' } }}>{isEditCheckingConnection ? 'Checking...' : (isEditSnowflakeConnectionValid ? 'Connection Valid ✓' : editConnectionCheckFailed ? 'Connection Failed ✗' : 'Check Connection')}</Button></span></Tooltip>
           <Tooltip title={!editData.privateKey ? "Upload a new private key first" : !isEditSnowflakeConnectionValid ? "Check connection first" : "Save your changes"}><span><Button onClick={handleSaveEdit} startIcon={isEditingConnection ? <CircularProgress size={16} color="inherit" /> : <Save />} variant="contained" disabled={isEditingConnection || !editData.privateKey || !isEditSnowflakeConnectionValid} sx={{ borderRadius: 2, fontWeight: 700, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)' } }}>{isEditingConnection ? 'Saving...' : 'Save Changes'}</Button></span></Tooltip>
         </DialogActions>
       </Dialog>

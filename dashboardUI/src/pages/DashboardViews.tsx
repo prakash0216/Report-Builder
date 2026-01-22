@@ -1703,7 +1703,9 @@ const DashboardViews: React.FC = () => {
             value={newViewName}
             onChange={(e) => setNewViewName(e.target.value)}
             placeholder="e.g., Patient View, Sales Overview"
+            InputLabelProps={{ shrink: true }}
             sx={{
+              mt: 1,
               mb: 3,
               '& .MuiOutlinedInput-root': {
                 borderRadius: 2,
@@ -1722,6 +1724,7 @@ const DashboardViews: React.FC = () => {
             value={newViewDesc}
             onChange={(e) => setNewViewDesc(e.target.value)}
             placeholder="Describe what this view will display..."
+            InputLabelProps={{ shrink: true }}
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: 2,

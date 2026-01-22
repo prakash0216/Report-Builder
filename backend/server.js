@@ -869,53 +869,140 @@ app.get('/snowflake-connections', async (req, res) => {
   }
 });
 
-app.post('/check-snowflake-connection',upload.single('privateKey'), async (req, res) => {
+app.post('/check-snowflake-connection', upload.single('privateKey'), async (req, res) => {
   const { account, username, authenticator, warehouse, database, schema } = req.body;
-  const privateKeyFile=req.file;
+  const privateKeyFile = req.file;
 
   if (!account || !username || !authenticator || !privateKeyFile || !warehouse || !database || !schema) {
-    return res.status(400).json({ success: false, error: 'All fields are required' });
+    return res.status(400).json({ 
+      success: false, 
+      message: 'All fields are required including the private key file' 
+    });
   }
 
-  console.log('Received connection test request:', { account, username, authenticator, warehouse, database, schema, privateKeyFileName: privateKeyFile.originalname });
+  console.log('Received connection test request:', { 
+    account, 
+    username, 
+    authenticator, 
+    warehouse, 
+    database, 
+    schema, 
+    privateKeyFileName: privateKeyFile.originalname 
+  });
 
   try {
-    const privateKey=privateKeyFile.buffer;
-    const privateKeyObject = crypto.createPrivateKey({
-      key: privateKey,
-      format: 'der',
-      type: 'pkcs8',
-    });
-    const privateKeyPemBuffer = privateKeyObject.export({
-      format: 'pem',
-      type: 'pkcs8'
-  });
+    const privateKeyBuffer = privateKeyFile.buffer;
+    const fileExtension = privateKeyFile.originalname.toLowerCase().split('.').pop();
+    let privateKeyPem;
+
+    // Handle different key formats
+    try {
+      if (fileExtension === 'pem' || fileExtension === 'key') {
+        // PEM format - might already be in correct format
+        const keyString = privateKeyBuffer.toString('utf8');
+        if (keyString.includes('-----BEGIN')) {
+          // Already in PEM format
+          privateKeyPem = keyString;
+        } else {
+          // Try to convert from DER
+          const privateKeyObject = crypto.createPrivateKey({
+            key: privateKeyBuffer,
+            format: 'der',
+            type: 'pkcs8',
+          });
+          privateKeyPem = privateKeyObject.export({
+            format: 'pem',
+            type: 'pkcs8'
+          });
+        }
+      } else if (fileExtension === 'der' || fileExtension === 'p8') {
+        // DER format - convert to PEM
+        const privateKeyObject = crypto.createPrivateKey({
+          key: privateKeyBuffer,
+          format: 'der',
+          type: 'pkcs8',
+        });
+        privateKeyPem = privateKeyObject.export({
+          format: 'pem',
+          type: 'pkcs8'
+        });
+      } else {
+        // Try auto-detection
+        const keyString = privateKeyBuffer.toString('utf8');
+        if (keyString.includes('-----BEGIN')) {
+          privateKeyPem = keyString;
+        } else {
+          const privateKeyObject = crypto.createPrivateKey({
+            key: privateKeyBuffer,
+            format: 'der',
+            type: 'pkcs8',
+          });
+          privateKeyPem = privateKeyObject.export({
+            format: 'pem',
+            type: 'pkcs8'
+          });
+        }
+      }
+    } catch (keyError) {
+      console.error('❌ Error parsing private key:', keyError.message);
+      return res.status(400).json({ 
+        success: false, 
+        message: `Invalid private key format: ${keyError.message}. Please ensure you're using a valid PKCS8 private key file.` 
+      });
+    }
+
     const connection = snowflake.createConnection({
       account: account,
       username: username,
       authenticator: authenticator,
-      privateKey: privateKeyPemBuffer, 
+      privateKey: privateKeyPem,
       warehouse: warehouse,
       database: database,
       schema: schema,
     });
 
-    connection.connect((err, conn) => {
-      if (err) {
-        console.error('❌ Unable to connect to Snowflake:', err.message);
-        return res.status(500).json({ success: false, error: err.message });
-      } else {
-        console.log('✅ Successfully connected to Snowflake.');
-        connection.destroy();
-        return res.json({ success: true, message: 'Connection successful' });
-      }
+    // Use Promise wrapper for better error handling
+    await new Promise((resolve, reject) => {
+      connection.connect((err, conn) => {
+        if (err) {
+          console.error('❌ Unable to connect to Snowflake:', err.message);
+          reject(err);
+        } else {
+          console.log('✅ Successfully connected to Snowflake.');
+          connection.destroy();
+          resolve(conn);
+        }
+      });
     });
+
+    return res.json({ success: true, message: 'Connection successful' });
+
   } catch (err) {
     console.error('❌ Error during Snowflake connection test:', err.message);
-    res.status(500).json({ success: false, error: err.message });
+    
+    // Provide user-friendly error messages
+    let userMessage = err.message;
+    if (err.message.includes('Incorrect username or password')) {
+      userMessage = 'Authentication failed. Please check your username and private key.';
+    } else if (err.message.includes('Account')) {
+      userMessage = 'Invalid account identifier. Please verify your Snowflake account name.';
+    } else if (err.message.includes('Warehouse')) {
+      userMessage = 'Warehouse not found or access denied. Please check the warehouse name.';
+    } else if (err.message.includes('Database')) {
+      userMessage = 'Database not found or access denied. Please check the database name.';
+    } else if (err.message.includes('Schema')) {
+      userMessage = 'Schema not found or access denied. Please check the schema name.';
+    } else if (err.message.includes('Network') || err.message.includes('ENOTFOUND')) {
+      userMessage = 'Network error. Please check your internet connection and account identifier.';
+    }
+    
+    return res.status(400).json({ 
+      success: false, 
+      message: userMessage,
+      details: err.message 
+    });
   }
-}
-);
+});
 
 app.post('/add-snowflake-connection', upload.single('privateKey'), async (req, res) => {
   const { connectionName, account, username, authenticator, warehouse, database, schema } = req.body;
