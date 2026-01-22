@@ -5,6 +5,7 @@ import {
   hasValueChanged, 
   updateLastValue,
 } from "./initializationState";
+import { getCurrentViewId } from "./ViewContext";
 
 const ATOM_KEY = 'tooltipConfigState';
 
@@ -85,14 +86,16 @@ export const tooltipConfigState = atom<{[chartId: string]: TooltipConfig}>({
         clearTimeout(timeoutId);
         timeoutId = setTimeout(async () => {
           try {
+            const viewId = getCurrentViewId();
             // Save each tooltip config individually
             for (const [chartId, config] of Object.entries(newValue)) {
               await axios.post('http://localhost:3002/api/tooltip-configs', {
                 chartId,
+                viewId,
                 config,
               });
             }
-            console.log(`✅ TooltipConfig: Saved ${Object.keys(newValue).length} configs`);
+            console.log(`✅ TooltipConfig: Saved ${Object.keys(newValue).length} configs (viewId: ${viewId})`);
           } catch (error) {
             console.error('❌ TooltipConfig: Failed to save:', error);
           }

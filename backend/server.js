@@ -148,10 +148,19 @@ async function parseCsvByName(csvName) {
 /**
  * Get all parameter names
  * GET /api/parameters/names
+ * Supports optional dashboardId query param for dashboard-scoped filtering
  */
 app.get('/api/parameters/names', async (req, res) => {
   try {
-    const result = await dbClient.query('SELECT name FROM parameters ORDER BY created_at DESC');
+    const { dashboardId } = req.query;
+    
+    let query = 'SELECT name FROM parameters';
+    if (dashboardId) {
+      query += ` WHERE dashboard_id = ${parseInt(dashboardId)}`;
+    }
+    query += ' ORDER BY created_at DESC';
+    
+    const result = await dbClient.query(query);
     const paramNames = result.map(row => row.name);
     res.json({ success: true, parameterNames: paramNames });
   } catch (err) {
@@ -181,29 +190,34 @@ app.get('/api/parameters/:name', async (req, res) => {
 /**
  * Create or update parameter
  * POST /api/parameters/:name
+ * Supports optional dashboardId in body for dashboard-scoped parameters
  */
 app.post('/api/parameters/:name', async (req, res) => {
   const { name } = req.params;
-  const { value } = req.body;
+  const { value, dashboardId } = req.body;
   
   if (value === undefined) {
     return res.status(400).json({ success: false, error: 'Value is required' });
   }
 
   try {
-    // Check if parameter exists
-    const existing = await dbClient.query(`SELECT id FROM parameters WHERE name='${name}'`);
+    // Check if parameter exists (scoped by dashboardId if provided)
+    let existingQuery = `SELECT id FROM parameters WHERE name='${name}'`;
+    if (dashboardId) {
+      existingQuery += ` AND dashboard_id=${parseInt(dashboardId)}`;
+    }
+    const existing = await dbClient.query(existingQuery);
     
     if (existing.length > 0) {
       // Update existing parameter
-      const updateQuery = `UPDATE parameters SET value='${String(value).replace(/'/g, "''")}', last_modified=CURRENT_TIMESTAMP WHERE name='${name}'`;
+      const updateQuery = `UPDATE parameters SET value='${String(value).replace(/'/g, "''")}', last_modified=CURRENT_TIMESTAMP WHERE name='${name}'${dashboardId ? ` AND dashboard_id=${parseInt(dashboardId)}` : ''}`;
       await dbClient.run(updateQuery);
-      console.log(`✅ Updated parameter: ${name}`);
+      console.log(`✅ Updated parameter: ${name} (dashboardId: ${dashboardId || 'global'})`);
     } else {
-      // Insert new parameter
-      const insertQuery = `INSERT INTO parameters (name, value, created_at, last_modified) VALUES ('${name}', '${String(value).replace(/'/g, "''")}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
+      // Insert new parameter with dashboard_id
+      const insertQuery = `INSERT INTO parameters (name, value, dashboard_id, created_at, last_modified) VALUES ('${name}', '${String(value).replace(/'/g, "''")}', ${dashboardId ? parseInt(dashboardId) : 'NULL'}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
       await dbClient.run(insertQuery);
-      console.log(`✅ Created parameter: ${name}`);
+      console.log(`✅ Created parameter: ${name} (dashboardId: ${dashboardId || 'global'})`);
     }
     
     res.json({ success: true, message: 'Parameter saved successfully' });
@@ -469,10 +483,19 @@ app.post('/remove-data-source', async (req, res) => {
 /**
  * Get all calculations
  * GET /api/calculations
+ * Supports optional dashboardId query param for dashboard-scoped filtering
  */
 app.get('/api/calculations', async (req, res) => {
   try {
-    const result = await dbClient.query('SELECT * FROM calculations ORDER BY created_at ASC');
+    const { dashboardId } = req.query;
+    
+    let query = 'SELECT * FROM calculations';
+    if (dashboardId) {
+      query += ` WHERE dashboard_id = ${parseInt(dashboardId)}`;
+    }
+    query += ' ORDER BY execution_order ASC, created_at ASC';
+    
+    const result = await dbClient.query(query);
     res.json({ success: true, calculations: result || [] });
   } catch (err) {
     console.error('❌ Error fetching calculations:', err.message || err);
@@ -501,25 +524,30 @@ app.get('/api/calculations/:id', async (req, res) => {
 /**
  * Add new calculation
  * POST /api/calculations
+ * Supports optional dashboardId in body for dashboard-scoped calculations
  */
 app.post('/api/calculations', async (req, res) => {
-  const { variableName, logic } = req.body;
+  const { variableName, logic, dashboardId } = req.body;
   
   if (!variableName || !logic) {
     return res.status(400).json({ success: false, error: 'variableName and logic are required' });
   }
 
   try {
-    // Check if variable name already exists
-    const existing = await dbClient.query(`SELECT id FROM calculations WHERE variable_name='${variableName.replace(/'/g, "''")}'`);
+    // Check if variable name already exists (scoped by dashboardId if provided)
+    let existingQuery = `SELECT id FROM calculations WHERE variable_name='${variableName.replace(/'/g, "''")}'`;
+    if (dashboardId) {
+      existingQuery += ` AND dashboard_id=${parseInt(dashboardId)}`;
+    }
+    const existing = await dbClient.query(existingQuery);
     if (existing.length > 0) {
       return res.status(400).json({ success: false, error: 'Calculation with this variable name already exists' });
     }
 
-    const insertQuery = `INSERT INTO calculations (variable_name, logic, created_at) 
-      VALUES ('${variableName.replace(/'/g, "''")}', '${logic.replace(/'/g, "''")}', CURRENT_TIMESTAMP)`;
+    const insertQuery = `INSERT INTO calculations (variable_name, logic, dashboard_id, created_at) 
+      VALUES ('${variableName.replace(/'/g, "''")}', '${logic.replace(/'/g, "''")}', ${dashboardId ? parseInt(dashboardId) : 'NULL'}, CURRENT_TIMESTAMP)`;
     await dbClient.run(insertQuery);
-    console.log(`✅ Calculation added: ${variableName}`);
+    console.log(`✅ Calculation added: ${variableName} (dashboardId: ${dashboardId || 'global'})`);
     res.json({ success: true, message: 'Calculation added successfully' });
   } catch (err) {
     console.error('❌ Error adding calculation:', err);
@@ -632,8 +660,15 @@ app.delete('/api/calculations/:id', async (req, res) => {
  */
 app.get('/api/filters', async (req, res) => {
   try {
-    // Note: filters table doesn't have created_at, using last_modified for ordering
-    const result = await dbClient.query('SELECT * FROM filters ORDER BY last_modified DESC, id ASC');
+    const { dashboardId } = req.query;
+    
+    let query = 'SELECT * FROM filters';
+    if (dashboardId) {
+      query += ` WHERE dashboard_id = ${parseInt(dashboardId)}`;
+    }
+    query += ' ORDER BY last_modified DESC, id ASC';
+    
+    const result = await dbClient.query(query);
     res.json({ success: true, filters: result });
   } catch (err) {
     console.error('❌ Error fetching filters:', err);
@@ -662,6 +697,7 @@ app.get('/api/filters/:variableName', async (req, res) => {
 /**
  * Add new filter
  * POST /api/filters
+ * Supports optional dashboardId in body for dashboard-scoped filters
  */
 app.post('/api/filters', async (req, res) => {
   const { 
@@ -676,7 +712,8 @@ app.post('/api/filters', async (req, res) => {
     labelKey, 
     valueKey, 
     availableOptions, 
-    defaultValues 
+    defaultValues,
+    dashboardId
   } = req.body;
   
   if (!variableName || !category || !paramName || !displayName || !selectionType || !availableOptions || !defaultValues) {
@@ -687,8 +724,12 @@ app.post('/api/filters', async (req, res) => {
   }
 
   try {
-    // Check if variable name already exists
-    const existing = await dbClient.query(`SELECT id FROM filters WHERE variable_name='${variableName.replace(/'/g, "''")}'`);
+    // Check if variable name already exists (scoped by dashboardId if provided)
+    let existingQuery = `SELECT id FROM filters WHERE variable_name='${variableName.replace(/'/g, "''")}'`;
+    if (dashboardId) {
+      existingQuery += ` AND dashboard_id=${parseInt(dashboardId)}`;
+    }
+    const existing = await dbClient.query(existingQuery);
     if (existing.length > 0) {
       return res.status(400).json({ success: false, error: 'Filter with this variable name already exists' });
     }
@@ -706,6 +747,7 @@ app.post('/api/filters', async (req, res) => {
       value_key, 
       available_options_json, 
       default_values_json,
+      dashboard_id,
       last_modified
     ) VALUES (
       '${variableName.replace(/'/g, "''")}',
@@ -720,11 +762,12 @@ app.post('/api/filters', async (req, res) => {
       ${valueKey ? `'${valueKey.replace(/'/g, "''")}'` : 'NULL'},
       '${JSON.stringify(availableOptions).replace(/'/g, "''")}',
       '${JSON.stringify(defaultValues).replace(/'/g, "''")}',
+      ${dashboardId ? parseInt(dashboardId) : 'NULL'},
       CURRENT_TIMESTAMP
     )`;
     
     await dbClient.run(insertQuery);
-    console.log(`✅ Filter added: ${variableName}`);
+    console.log(`✅ Filter added: ${variableName} (dashboardId: ${dashboardId || 'global'})`);
     res.json({ success: true, message: 'Filter added successfully' });
   } catch (err) {
     console.error('❌ Error adding filter:', err);
@@ -2402,10 +2445,25 @@ app.get('/api/next-chart-id', async (req, res) => {
 /**
  * Get all chart configs
  * GET /api/chart-configs
+ * Query params: viewId (optional) - filter by view
  */
 app.get('/api/chart-configs', async (req, res) => {
   try {
-    const configs = await dbClient.query('SELECT * FROM chart_configs ORDER BY COALESCE(last_modified, created_at) DESC, created_at DESC');
+    const { viewId } = req.query;
+    
+    console.log(`📥 [GET /api/chart-configs] viewId=${viewId}`);
+    
+    // Build query with optional view_id filter
+    let query = 'SELECT * FROM chart_configs';
+    if (viewId) {
+      query += ` WHERE view_id = ${parseInt(viewId)}`;
+    }
+    query += ' ORDER BY COALESCE(last_modified, created_at) DESC, created_at DESC';
+    
+    console.log(`📥 [GET /api/chart-configs] Query: ${query}`);
+    
+    const configs = await dbClient.query(query);
+    console.log(`📥 [GET /api/chart-configs] Found ${configs?.length || 0} configs`);
     const result = {};
     if (configs && Array.isArray(configs)) {
       configs.forEach(row => {
@@ -2458,17 +2516,29 @@ app.get('/api/chart-configs/:chartId', async (req, res) => {
 /**
  * Create or update a chart config
  * POST /api/chart-configs
+ * Body: { chartId, viewId, template, type, processed, htmlContent, tableDataSource, tableSettings }
  */
 app.post('/api/chart-configs', async (req, res) => {
   try {
-    const { chartId, template, type, processed, htmlContent, tableDataSource, tableSettings } = req.body;
+    const { chartId, viewId, template, type, processed, htmlContent, tableDataSource, tableSettings } = req.body;
+    
+    console.log(`📤 [POST /api/chart-configs] chartId="${chartId}", viewId=${viewId}, type="${type}"`);
+    
     if (!chartId || !type) {
       return res.status(400).json({ success: false, error: 'chartId and type are required' });
     }
 
     const processedJson = processed ? JSON.stringify(processed) : null;
     const tableSettingsJson = tableSettings ? JSON.stringify(tableSettings) : null;
-    const existing = await dbClient.query(`SELECT id FROM chart_configs WHERE chart_id='${chartId.replace(/'/g, "''")}'`);
+    
+    // Check for existing config - if viewId provided, check within that view
+    let existingQuery = `SELECT id, view_id FROM chart_configs WHERE chart_id='${chartId.replace(/'/g, "''")}'`;
+    if (viewId) {
+      existingQuery += ` AND view_id = ${parseInt(viewId)}`;
+    }
+    console.log(`📤 [POST /api/chart-configs] existingQuery: ${existingQuery}`);
+    const existing = await dbClient.query(existingQuery);
+    console.log(`📤 [POST /api/chart-configs] existing count: ${existing?.length || 0}`);
     
     const escapedChartId = chartId.replace(/'/g, "''");
     const escapedTemplate = (template || '').replace(/'/g, "''");
@@ -2476,19 +2546,20 @@ app.post('/api/chart-configs', async (req, res) => {
     const escapedProcessedJson = (processedJson || '').replace(/'/g, "''");
     const escapedTableDataSource = (tableDataSource || '').replace(/'/g, "''");
     const escapedTableSettingsJson = (tableSettingsJson || '').replace(/'/g, "''");
+    const viewIdValue = viewId ? parseInt(viewId) : 'NULL';
     
     if (existing.length > 0) {
       // Update
       await dbClient.run(`
         UPDATE chart_configs 
-        SET template='${escapedTemplate}', type='${type}', processed_config_json='${escapedProcessedJson}', html_content='${escapedHtmlContent}', table_data_source='${escapedTableDataSource}', table_settings_json='${escapedTableSettingsJson}', last_modified=CURRENT_TIMESTAMP
-        WHERE chart_id='${escapedChartId}'
+        SET template='${escapedTemplate}', type='${type}', processed_config_json='${escapedProcessedJson}', html_content='${escapedHtmlContent}', table_data_source='${escapedTableDataSource}', table_settings_json='${escapedTableSettingsJson}', view_id=${viewIdValue}, last_modified=CURRENT_TIMESTAMP
+        WHERE chart_id='${escapedChartId}'${viewId ? ` AND view_id = ${parseInt(viewId)}` : ''}
       `);
     } else {
       // Insert
       await dbClient.run(`
-        INSERT INTO chart_configs (chart_id, template, type, processed_config_json, html_content, table_data_source, table_settings_json, last_modified)
-        VALUES ('${escapedChartId}', '${escapedTemplate}', '${type}', '${escapedProcessedJson}', '${escapedHtmlContent}', '${escapedTableDataSource}', '${escapedTableSettingsJson}', CURRENT_TIMESTAMP)
+        INSERT INTO chart_configs (chart_id, view_id, template, type, processed_config_json, html_content, table_data_source, table_settings_json, last_modified)
+        VALUES ('${escapedChartId}', ${viewIdValue}, '${escapedTemplate}', '${type}', '${escapedProcessedJson}', '${escapedHtmlContent}', '${escapedTableDataSource}', '${escapedTableSettingsJson}', CURRENT_TIMESTAMP)
       `);
     }
 
@@ -2549,7 +2620,15 @@ app.delete('/api/charts/:chartId', async (req, res) => {
  */
 app.get('/api/tooltip-configs', async (req, res) => {
   try {
-    const configs = await dbClient.query('SELECT * FROM tooltip_configs ORDER BY COALESCE(last_modified, created_at) DESC');
+    const { viewId } = req.query;
+    
+    let query = 'SELECT * FROM tooltip_configs';
+    if (viewId) {
+      query += ` WHERE view_id = ${parseInt(viewId)}`;
+    }
+    query += ' ORDER BY COALESCE(last_modified, created_at) DESC';
+    
+    const configs = await dbClient.query(query);
     const result = {};
     if (configs && Array.isArray(configs)) {
       configs.forEach(row => {
@@ -2625,11 +2704,12 @@ app.get('/api/tooltip-configs/:chartId', async (req, res) => {
  */
 app.post('/api/tooltip-configs', async (req, res) => {
   try {
-    const { chartId, config } = req.body;
+    const { chartId, viewId, config } = req.body;
     if (!chartId || !config) {
       return res.status(400).json({ success: false, error: 'chartId and config are required' });
     }
 
+    const viewIdValue = viewId ? parseInt(viewId) : null;
     const escapedChartId = chartId.replace(/'/g, "''");
     const escapedCardId = (config.cardId || '').replace(/'/g, "''");
     const escapedChartTemplate = (config.chartTemplate || '').replace(/'/g, "''");
@@ -2639,11 +2719,16 @@ app.post('/api/tooltip-configs', async (req, res) => {
     const escapedDataMappingJson = config.dataMapping ? JSON.stringify(config.dataMapping).replace(/'/g, "''") : '[]';
     const escapedHeaderTitle = (config.headerTitle || 'Details').replace(/'/g, "''");
 
-    const existing = await dbClient.query(`SELECT id FROM tooltip_configs WHERE chart_id='${escapedChartId}'`);
+    // Check existing with viewId scope
+    let existingQuery = `SELECT id FROM tooltip_configs WHERE chart_id='${escapedChartId}'`;
+    if (viewIdValue) {
+      existingQuery += ` AND view_id = ${viewIdValue}`;
+    }
+    const existing = await dbClient.query(existingQuery);
     
     if (existing.length > 0) {
       // Update existing
-      await dbClient.run(`
+      let updateQuery = `
         UPDATE tooltip_configs SET
           enabled = ${config.enabled ? 'true' : 'false'},
           type = '${config.type || 'html'}',
@@ -2661,19 +2746,24 @@ app.post('/api/tooltip-configs', async (req, res) => {
           hide_delay = ${config.hideDelay || 200},
           show_header = ${config.showHeader !== false ? 'true' : 'false'},
           header_title = '${escapedHeaderTitle}',
+          view_id = ${viewIdValue || 'NULL'},
           last_modified = CURRENT_TIMESTAMP
-        WHERE chart_id = '${escapedChartId}'
-      `);
+        WHERE chart_id = '${escapedChartId}'`;
+      if (viewIdValue) {
+        updateQuery += ` AND view_id = ${viewIdValue}`;
+      }
+      await dbClient.run(updateQuery);
     } else {
       // Insert new
       await dbClient.run(`
         INSERT INTO tooltip_configs (
-          chart_id, enabled, type, card_id, chart_template, table_data_source,
+          chart_id, view_id, enabled, type, card_id, chart_template, table_data_source,
           table_settings_json, html_template, data_mapping_json, width, height,
           offset_x, offset_y, show_on_hover, hide_delay, show_header, header_title,
           created_at, last_modified
         ) VALUES (
           '${escapedChartId}',
+          ${viewIdValue || 'NULL'},
           ${config.enabled ? 'true' : 'false'},
           '${config.type || 'html'}',
           '${escapedCardId}',
@@ -2726,10 +2816,19 @@ app.delete('/api/tooltip-configs/:chartId', async (req, res) => {
 /**
  * Get all child card configs
  * GET /api/child-card-configs
+ * Query params: viewId (optional) - filter by view
  */
 app.get('/api/child-card-configs', async (req, res) => {
   try {
-    const configs = await dbClient.query('SELECT * FROM child_card_configs ORDER BY COALESCE(last_modified, created_at) DESC');
+    const { viewId } = req.query;
+    
+    let query = 'SELECT * FROM child_card_configs';
+    if (viewId) {
+      query += ` WHERE view_id = ${parseInt(viewId)}`;
+    }
+    query += ' ORDER BY COALESCE(last_modified, created_at) DESC';
+    
+    const configs = await dbClient.query(query);
     console.log('[child-card-configs] Raw DB rows:', JSON.stringify(configs, null, 2));
     const result = {};
     
@@ -2741,18 +2840,14 @@ app.get('/api/child-card-configs', async (req, res) => {
           containerLayout: row.container_layout || 'grid',
           childCards: row.child_cards_json ? JSON.parse(row.child_cards_json) : [],
           enableContainerScroll: row.enable_container_scroll === true,
-          // 🔥 FIX: Use explicit null/undefined check instead of || to handle 0 values
           cardMinHeight: row.card_min_height != null ? row.card_min_height : 800,
           gap: row.gap != null ? row.gap : 8,
-          // 🔥 Dynamic height settings
           useDynamicHeight: row.use_dynamic_height === true,
           heightDataSource: row.height_data_source || '',
-          // 🔥 Dynamic parent title settings
           showParentTitle: row.show_parent_title === true,
           parentTitleMode: row.parent_title_mode || 'simple',
           parentTitle: row.parent_title || '',
           parentTitleTemplate: row.parent_title_template || '',
-          // 🔥 Visibility & Arrangement settings
           visibilityVariable: row.visibility_variable || '',
           arrangementVariable: row.arrangement_variable || '',
           childVisibilityMode: row.child_visibility_mode || 'all',
@@ -2771,12 +2866,13 @@ app.get('/api/child-card-configs', async (req, res) => {
 /**
  * Save or update child card config
  * POST /api/child-card-configs
+ * Body: { parentCardId, viewId (optional), config }
  */
 app.post('/api/child-card-configs', async (req, res) => {
   try {
-    const { parentCardId, config } = req.body;
+    const { parentCardId, viewId, config } = req.body;
     
-    console.log(`[child-card-configs POST] Saving ${parentCardId}:`, JSON.stringify({
+    console.log(`[child-card-configs POST] Saving ${parentCardId} (viewId: ${viewId}):`, JSON.stringify({
       gap: config?.gap,
       cardMinHeight: config?.cardMinHeight,
       enableContainerScroll: config?.enableContainerScroll,
@@ -2787,11 +2883,17 @@ app.post('/api/child-card-configs', async (req, res) => {
       return res.status(400).json({ success: false, error: 'parentCardId and config are required' });
     }
 
+    const viewIdValue = viewId ? parseInt(viewId) : null;
     const escapedParentCardId = parentCardId.replace(/'/g, "''");
     const escapedContainerLayout = (config.containerLayout || 'grid').replace(/'/g, "''");
     const escapedChildCardsJson = config.childCards ? JSON.stringify(config.childCards).replace(/'/g, "''") : '[]';
 
-    const existing = await dbClient.query(`SELECT id FROM child_card_configs WHERE parent_card_id='${escapedParentCardId}'`);
+    // Check for existing config - scoped to view if provided
+    let existingQuery = `SELECT id FROM child_card_configs WHERE parent_card_id='${escapedParentCardId}'`;
+    if (viewIdValue) {
+      existingQuery += ` AND view_id = ${viewIdValue}`;
+    }
+    const existing = await dbClient.query(existingQuery);
     
     if (existing.length > 0) {
       // Update existing
@@ -2829,12 +2931,13 @@ app.post('/api/child-card-configs', async (req, res) => {
       const escapedArrangementVariableInsert = (config.arrangementVariable || '').replace(/'/g, "''");
       await dbClient.run(`
         INSERT INTO child_card_configs (
-          parent_card_id, is_container, container_layout, child_cards_json,
+          view_id, parent_card_id, is_container, container_layout, child_cards_json,
           enable_container_scroll, card_min_height, gap, use_dynamic_height, height_data_source,
           show_parent_title, parent_title_mode, parent_title, parent_title_template,
           visibility_variable, arrangement_variable, child_visibility_mode,
           created_at, last_modified
         ) VALUES (
+          ${viewIdValue || 'NULL'},
           '${escapedParentCardId}',
           ${config.isContainer ? 'true' : 'false'},
           '${escapedContainerLayout}',
@@ -3064,10 +3167,19 @@ app.delete('/api/child-card-tooltip-configs/:childCardKey', async (req, res) => 
 /**
  * Get all layouts
  * GET /api/layouts
+ * Query params: viewId (optional) - filter by view
  */
 app.get('/api/layouts', async (req, res) => {
   try {
-    const layouts = await dbClient.query('SELECT * FROM layouts ORDER BY breakpoint, y, x');
+    const { viewId } = req.query;
+    
+    let query = 'SELECT * FROM layouts';
+    if (viewId) {
+      query += ` WHERE view_id = ${parseInt(viewId)}`;
+    }
+    query += ' ORDER BY breakpoint, y, x';
+    
+    const layouts = await dbClient.query(query);
     const result = {
       lg: [],
       md: [],
@@ -3108,21 +3220,28 @@ app.get('/api/layouts', async (req, res) => {
 /**
  * Save all layouts
  * POST /api/layouts
+ * Body: { layouts, viewId (optional) }
  */
 app.post('/api/layouts', async (req, res) => {
   try {
-    const { layouts } = req.body;
+    const { layouts, viewId } = req.body;
     if (!layouts || typeof layouts !== 'object') {
       return res.status(400).json({ success: false, error: 'layouts object is required' });
     }
 
-    // Delete existing layouts for breakpoints we're updating
+    const viewIdValue = viewId ? parseInt(viewId) : null;
+
+    // Delete existing layouts for breakpoints we're updating (scoped to view if provided)
     const breakpoints = ['lg', 'md', 'sm', 'xs', 'xxs'];
     const breakpointsToUpdate = breakpoints.filter(bp => layouts[bp] && Array.isArray(layouts[bp]) && layouts[bp].length > 0);
     
     if (breakpointsToUpdate.length > 0) {
       const breakpointList = breakpointsToUpdate.map(bp => `'${bp}'`).join(',');
-      await dbClient.run(`DELETE FROM layouts WHERE breakpoint IN (${breakpointList})`);
+      let deleteQuery = `DELETE FROM layouts WHERE breakpoint IN (${breakpointList})`;
+      if (viewIdValue) {
+        deleteQuery += ` AND view_id = ${viewIdValue}`;
+      }
+      await dbClient.run(deleteQuery);
     }
 
     // Insert new layouts
@@ -3147,9 +3266,9 @@ app.post('/api/layouts', async (req, res) => {
           
           await dbClient.run(`
             INSERT INTO layouts (
-              breakpoint, chart_id, x, y, w, h, min_w, max_w, min_h, max_h,
+              view_id, breakpoint, chart_id, x, y, w, h, min_w, max_w, min_h, max_h,
               static, is_draggable, is_resizable, is_bounded, resize_handles, moved, last_modified
-            ) VALUES ('${breakpoint}', '${escapedChartId}', ${x}, ${y}, ${w}, ${h}, ${minW}, ${maxW}, ${minH}, ${maxH}, ${staticVal}, ${isDraggable}, ${isResizable}, ${isBounded}, ${resizeHandles}, ${moved}, CURRENT_TIMESTAMP)
+            ) VALUES (${viewIdValue || 'NULL'}, '${breakpoint}', '${escapedChartId}', ${x}, ${y}, ${w}, ${h}, ${minW}, ${maxW}, ${minH}, ${maxH}, ${staticVal}, ${isDraggable}, ${isResizable}, ${isBounded}, ${resizeHandles}, ${moved}, CURRENT_TIMESTAMP)
           `);
         }
       }
@@ -3172,7 +3291,14 @@ app.post('/api/layouts', async (req, res) => {
  */
 app.get('/api/chart-visibility', async (req, res) => {
   try {
-    const visibility = await dbClient.query('SELECT * FROM chart_visibility');
+    const { viewId } = req.query;
+    
+    let query = 'SELECT * FROM chart_visibility';
+    if (viewId) {
+      query += ` WHERE view_id = ${parseInt(viewId)}`;
+    }
+    
+    const visibility = await dbClient.query(query);
     const result = {};
     if (visibility && Array.isArray(visibility)) {
       visibility.forEach(row => {
@@ -3192,13 +3318,19 @@ app.get('/api/chart-visibility', async (req, res) => {
  */
 app.post('/api/chart-visibility', async (req, res) => {
   try {
-    const { visibility } = req.body;
+    const { visibility, viewId } = req.body;
     if (!visibility || typeof visibility !== 'object') {
       return res.status(400).json({ success: false, error: 'visibility object is required' });
     }
 
-    // Delete all existing visibility mappings
-    await dbClient.run('DELETE FROM chart_visibility');
+    const viewIdValue = viewId ? parseInt(viewId) : null;
+    
+    // Delete existing visibility mappings for this view
+    let deleteQuery = 'DELETE FROM chart_visibility';
+    if (viewIdValue) {
+      deleteQuery += ` WHERE view_id = ${viewIdValue}`;
+    }
+    await dbClient.run(deleteQuery);
 
     // Insert new mappings
     for (const [chartId, variableName] of Object.entries(visibility)) {
@@ -3206,8 +3338,8 @@ app.post('/api/chart-visibility', async (req, res) => {
         const escapedChartId = chartId.replace(/'/g, "''");
         const escapedVariableName = variableName.replace(/'/g, "''");
         await dbClient.run(`
-          INSERT INTO chart_visibility (chart_id, variable_name, last_modified)
-          VALUES ('${escapedChartId}', '${escapedVariableName}', CURRENT_TIMESTAMP)
+          INSERT INTO chart_visibility (chart_id, view_id, variable_name, last_modified)
+          VALUES ('${escapedChartId}', ${viewIdValue || 'NULL'}, '${escapedVariableName}', CURRENT_TIMESTAMP)
         `);
       }
     }
@@ -3267,7 +3399,15 @@ app.put('/api/chart-visibility/:chartId', async (req, res) => {
  */
 app.get('/api/filter-panel-state', async (req, res) => {
   try {
-    const states = await dbClient.query('SELECT * FROM filter_panel_state WHERE is_active = true ORDER BY COALESCE(display_order, 0), last_modified DESC');
+    const { viewId } = req.query;
+    
+    let query = 'SELECT * FROM filter_panel_state WHERE is_active = true';
+    if (viewId) {
+      query += ` AND view_id = ${parseInt(viewId)}`;
+    }
+    query += ' ORDER BY COALESCE(display_order, 0), last_modified DESC';
+    
+    const states = await dbClient.query(query);
     const positions = {};
     const activeFilterIds = [];
     
@@ -3541,7 +3681,15 @@ app.post('/api/cards/:cardId/filter-panel-state', async (req, res) => {
  */
 app.get('/api/card-dimension-conditions', async (req, res) => {
   try {
-    const conditions = await dbClient.query('SELECT * FROM card_dimension_conditions ORDER BY chart_id, priority');
+    const { viewId } = req.query;
+    
+    let query = 'SELECT * FROM card_dimension_conditions';
+    if (viewId) {
+      query += ` WHERE view_id = ${parseInt(viewId)}`;
+    }
+    query += ' ORDER BY chart_id, priority';
+    
+    const conditions = await dbClient.query(query);
     const result = {};
     conditions.forEach(row => {
       if (!result[row.chart_id]) {
@@ -3569,24 +3717,30 @@ app.get('/api/card-dimension-conditions', async (req, res) => {
  */
 app.post('/api/card-dimension-conditions', async (req, res) => {
   try {
-    const { chartId, conditions } = req.body;
+    const { chartId, viewId, conditions } = req.body;
     if (!chartId) {
       return res.status(400).json({ success: false, error: 'chartId is required' });
     }
 
-    // Delete existing conditions for this chart
-    await dbClient.run(`DELETE FROM card_dimension_conditions WHERE chart_id='${chartId.replace(/'/g, "''")}'`);
+    const viewIdValue = viewId ? parseInt(viewId) : null;
+    const escapedChartId = chartId.replace(/'/g, "''");
+    
+    // Delete existing conditions for this chart (scoped to view if provided)
+    let deleteQuery = `DELETE FROM card_dimension_conditions WHERE chart_id='${escapedChartId}'`;
+    if (viewIdValue) {
+      deleteQuery += ` AND view_id = ${viewIdValue}`;
+    }
+    await dbClient.run(deleteQuery);
 
     // Insert new conditions
     if (conditions && Array.isArray(conditions)) {
       for (const condition of conditions) {
-        const escapedChartId = chartId.replace(/'/g, "''");
         const escapedConditionId = condition.id.replace(/'/g, "''");
         const escapedVariableName = condition.variableName.replace(/'/g, "''");
         await dbClient.run(`
           INSERT INTO card_dimension_conditions (
-            chart_id, condition_id, variable_name, expected_value, width, height, priority, last_modified
-          ) VALUES ('${escapedChartId}', '${escapedConditionId}', '${escapedVariableName}', ${condition.expectedValue ? 'true' : 'false'}, ${condition.width}, ${condition.height}, ${condition.priority}, CURRENT_TIMESTAMP)
+            chart_id, view_id, condition_id, variable_name, expected_value, width, height, priority, last_modified
+          ) VALUES ('${escapedChartId}', ${viewIdValue || 'NULL'}, '${escapedConditionId}', '${escapedVariableName}', ${condition.expectedValue ? 'true' : 'false'}, ${condition.width}, ${condition.height}, ${condition.priority}, CURRENT_TIMESTAMP)
         `);
       }
     }
@@ -3812,52 +3966,1484 @@ app.get('/api/data-sources/:dsName/schedule', async (req, res) => {
   }
 });
 
+// ============================================
+// DASHBOARD & VIEW HIERARCHY API ENDPOINTS
+// ============================================
+
+// Helper function to generate URL-friendly slugs
+function generateSlug(name) {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .trim();
+}
+
+// Helper to count chart child-cards from DB rows containing child_cards_json
+function countChartsInChildCards(rows, jsonKey = 'child_cards_json') {
+  let total = 0;
+  for (const row of rows || []) {
+    const raw = row?.[jsonKey];
+    if (!raw) continue;
+    try {
+      const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (Array.isArray(arr)) {
+        for (const child of arr) {
+          // Count items explicitly marked as charts; if type missing, count as 1
+          if (!child) continue;
+          if (child.type === 'chart' || child.type === undefined) total += 1;
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Failed to parse child_cards_json for chart count:', err?.message);
+    }
+  }
+  return total;
+}
+
+// ============================================
+// DASHBOARDS CRUD
+// ============================================
+
+/**
+ * Get all dashboards
+ * GET /api/dashboards
+ */
+app.get('/api/dashboards', async (req, res) => {
+  try {
+    const dashboards = await dbClient.query(`
+      SELECT d.*, 
+             CAST((SELECT COUNT(DISTINCT v.id) FROM views v WHERE v.dashboard_id = d.id) AS INTEGER) as views_count,
+             CAST((SELECT COUNT(DISTINCT cc.chart_id) FROM chart_configs cc 
+              INNER JOIN views v ON cc.view_id = v.id 
+              WHERE v.dashboard_id = d.id) AS INTEGER) as charts_count
+      FROM dashboards d
+      ORDER BY d.updated_at DESC
+    `);
+
+    // Child card charts per dashboard
+    const childCardRows = await dbClient.query(`
+      SELECT c.child_cards_json, v.dashboard_id
+      FROM child_card_configs c
+      INNER JOIN views v ON c.view_id = v.id
+    `);
+    const childChartsByDashboard = {};
+    for (const row of childCardRows || []) {
+      const dashId = row.dashboard_id;
+      const count = countChartsInChildCards([row]);
+      childChartsByDashboard[dashId] = (childChartsByDashboard[dashId] || 0) + count;
+    }
+    
+    console.log('📊 [API /dashboards] raw rows:', dashboards.map(d => ({
+      id: d.id,
+      name: d.name,
+      charts_count: d.charts_count,
+      views_count: d.views_count,
+      child_charts: childChartsByDashboard[d.id] || 0,
+    })));
+
+    // Convert BigInt to Number for JSON serialization
+    const serializedDashboards = dashboards.map(d => {
+      const childCharts = childChartsByDashboard[d.id] || 0;
+      return {
+        ...d,
+        views_count: Number(d.views_count) || 0,
+        charts_count: (Number(d.charts_count) || 0) + childCharts,
+      };
+    });
+    
+    console.log('📊 Dashboards with counts:', serializedDashboards.map(d => ({ name: d.name, charts_count: d.charts_count, views_count: d.views_count })));
+    
+    res.json({ success: true, dashboards: serializedDashboards });
+  } catch (err) {
+    console.error('❌ Error fetching dashboards:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get single dashboard by slug or ID
+ * GET /api/dashboards/:identifier
+ */
+app.get('/api/dashboards/:identifier', async (req, res) => {
+  const { identifier } = req.params;
+  
+  try {
+    // Try by ID first, then by slug
+    const isNumeric = /^\d+$/.test(identifier);
+    const query = isNumeric
+      ? `SELECT * FROM dashboards WHERE id = ${identifier}`
+      : `SELECT * FROM dashboards WHERE slug = '${identifier.replace(/'/g, "''")}'`;
+    
+    const result = await dbClient.query(query);
+    
+    if (result.length === 0) {
+      return res.status(404).json({ success: false, error: 'Dashboard not found' });
+    }
+    
+    res.json({ success: true, dashboard: result[0] });
+  } catch (err) {
+    console.error('❌ Error fetching dashboard:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Create new dashboard
+ * POST /api/dashboards
+ */
+app.post('/api/dashboards', async (req, res) => {
+  const { name, description, icon, color } = req.body;
+  
+  if (!name || name.trim() === '') {
+    return res.status(400).json({ success: false, error: 'Dashboard name is required' });
+  }
+  
+  const slug = generateSlug(name);
+  
+  try {
+    // Check if slug already exists
+    const existing = await dbClient.query(`SELECT id FROM dashboards WHERE slug = '${slug}'`);
+    if (existing.length > 0) {
+      return res.status(409).json({ success: false, error: 'A dashboard with this name already exists' });
+    }
+    
+    await dbClient.run(`
+      INSERT INTO dashboards (name, slug, description, icon, color, created_at, updated_at)
+      VALUES (
+        '${name.replace(/'/g, "''")}',
+        '${slug}',
+        ${description ? `'${description.replace(/'/g, "''")}'` : 'NULL'},
+        '${icon || 'dashboard'}',
+        '${color || '#667eea'}',
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Get the created dashboard
+    const result = await dbClient.query(`SELECT * FROM dashboards WHERE slug = '${slug}'`);
+    
+    console.log(`✅ Created dashboard: ${name} (${slug})`);
+    res.status(201).json({ success: true, dashboard: result[0] });
+  } catch (err) {
+    console.error('❌ Error creating dashboard:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Update dashboard
+ * PUT /api/dashboards/:id
+ */
+app.put('/api/dashboards/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, description, icon, color } = req.body;
+  
+  try {
+    const updates = [];
+    if (name) {
+      updates.push(`name='${name.replace(/'/g, "''")}'`);
+      updates.push(`slug='${generateSlug(name)}'`);
+    }
+    if (description !== undefined) {
+      updates.push(description ? `description='${description.replace(/'/g, "''")}'` : `description=NULL`);
+    }
+    if (icon) updates.push(`icon='${icon}'`);
+    if (color) updates.push(`color='${color}'`);
+    updates.push(`updated_at=CURRENT_TIMESTAMP`);
+    
+    await dbClient.run(`UPDATE dashboards SET ${updates.join(', ')} WHERE id=${id}`);
+    
+    const result = await dbClient.query(`SELECT * FROM dashboards WHERE id=${id}`);
+    
+    console.log(`✅ Updated dashboard: ${id}`);
+    res.json({ success: true, dashboard: result[0] });
+  } catch (err) {
+    console.error('❌ Error updating dashboard:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Delete dashboard (cascades to views and all view-specific resources)
+ * DELETE /api/dashboards/:id
+ */
+app.delete('/api/dashboards/:id', async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    // Get all views for this dashboard first
+    let views = [];
+    try {
+      views = await dbClient.query(`SELECT id FROM views WHERE dashboard_id=${id}`);
+    } catch (err) {
+      console.warn(`⚠️ Could not fetch views: ${err.message}`);
+    }
+    
+    // Delete view-specific resources for each view (cascading)
+    for (const view of views) {
+      await deleteViewResources(view.id);
+    }
+    
+    // Delete views
+    try {
+      await dbClient.run(`DELETE FROM views WHERE dashboard_id=${id}`);
+    } catch (err) {
+      console.warn(`⚠️ Could not delete views: ${err.message}`);
+    }
+    
+    // Delete dashboard-level common resources (each wrapped in try-catch)
+    const commonTables = ['parameters', 'calculations', 'filters', 'data_source_registry', 'snow_flake_connections'];
+    for (const table of commonTables) {
+      try {
+        await dbClient.run(`DELETE FROM ${table} WHERE dashboard_id=${id}`);
+      } catch (err) {
+        console.warn(`⚠️ Could not delete from ${table}: ${err.message}`);
+      }
+    }
+    
+    // Delete dashboard
+    await dbClient.run(`DELETE FROM dashboards WHERE id=${id}`);
+    
+    console.log(`✅ Deleted dashboard ${id} with all associated resources`);
+    res.json({ success: true, message: 'Dashboard and all associated resources deleted' });
+  } catch (err) {
+    console.error('❌ Error deleting dashboard:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Helper function to delete all view-specific resources
+async function deleteViewResources(viewId) {
+  // Wrap each delete in try-catch to handle missing columns gracefully
+  const tables = [
+    { table: 'chart_configs', column: 'view_id' },
+    { table: 'layouts', column: 'view_id' },
+    { table: 'chart_visibility', column: 'view_id' },
+    { table: 'card_dimension_conditions', column: 'view_id' },
+    { table: 'filter_panel_state', column: 'view_id' },
+    { table: 'card_filter_panel_state', column: 'view_id' },
+    { table: 'tooltip_configs', column: 'view_id' },
+    { table: 'child_card_configs', column: 'view_id' },
+    { table: 'child_card_tooltip_configs', column: 'view_id' },
+  ];
+  
+  for (const { table, column } of tables) {
+    try {
+      await dbClient.run(`DELETE FROM ${table} WHERE ${column}=${viewId}`);
+    } catch (err) {
+      console.warn(`⚠️ Could not delete from ${table}: ${err.message}`);
+    }
+  }
+  console.log(`✅ Deleted resources for view ${viewId}`);
+}
+
+// ============================================
+// VIEWS CRUD (scoped to dashboard)
+// ============================================
+
+/**
+ * Get all views for a dashboard
+ * GET /api/dashboards/:dashboardId/views
+ */
+app.get('/api/dashboards/:dashboardId/views', async (req, res) => {
+  const { dashboardId } = req.params;
+  
+  try {
+    // Support both ID and slug
+    const isNumeric = /^\d+$/.test(dashboardId);
+    let actualDashboardId = dashboardId;
+    
+    if (!isNumeric) {
+      const dashboard = await dbClient.query(`SELECT id FROM dashboards WHERE slug='${dashboardId.replace(/'/g, "''")}'`);
+      if (dashboard.length === 0) {
+        return res.status(404).json({ success: false, error: 'Dashboard not found' });
+      }
+      actualDashboardId = dashboard[0].id;
+    }
+    
+    const views = await dbClient.query(`
+      SELECT v.*,
+             CAST((SELECT COUNT(DISTINCT chart_id) FROM chart_configs WHERE view_id = v.id) AS INTEGER) as charts_count
+      FROM views v
+      WHERE v.dashboard_id = ${actualDashboardId}
+      ORDER BY v.display_order, v.created_at
+    `);
+
+    // Child card charts per view
+    const childCardRows = await dbClient.query(`
+      SELECT child_cards_json, view_id
+      FROM child_card_configs
+      WHERE view_id IN (SELECT id FROM views WHERE dashboard_id = ${actualDashboardId})
+    `);
+    const childChartsByView = {};
+    for (const row of childCardRows || []) {
+      const viewId = row.view_id;
+      const count = countChartsInChildCards([row]);
+      childChartsByView[viewId] = (childChartsByView[viewId] || 0) + count;
+    }
+    
+    console.log('📊 [API /dashboards/:identifier/views] raw rows:', views.map(v => ({
+      id: v.id,
+      name: v.name,
+      charts_count: v.charts_count,
+      dashboard_id: v.dashboard_id,
+      child_charts: childChartsByView[v.id] || 0,
+    })));
+
+    // Convert BigInt to Number for JSON serialization
+    const serializedViews = views.map(v => {
+      const childCharts = childChartsByView[v.id] || 0;
+      return {
+        ...v,
+        charts_count: (Number(v.charts_count) || 0) + childCharts,
+      };
+    });
+    
+    console.log('📊 Views with counts:', serializedViews.map(v => ({ name: v.name, charts_count: v.charts_count })));
+    
+    res.json({ success: true, views: serializedViews, dashboardId: actualDashboardId });
+  } catch (err) {
+    console.error('❌ Error fetching views:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get single view by slug or ID
+ * GET /api/dashboards/:dashboardId/views/:viewIdentifier
+ */
+app.get('/api/dashboards/:dashboardId/views/:viewIdentifier', async (req, res) => {
+  const { dashboardId, viewIdentifier } = req.params;
+  
+  try {
+    // Get dashboard ID
+    const isDashboardNumeric = /^\d+$/.test(dashboardId);
+    let actualDashboardId = dashboardId;
+    
+    if (!isDashboardNumeric) {
+      const dashboard = await dbClient.query(`SELECT id FROM dashboards WHERE slug='${dashboardId.replace(/'/g, "''")}'`);
+      if (dashboard.length === 0) {
+        return res.status(404).json({ success: false, error: 'Dashboard not found' });
+      }
+      actualDashboardId = dashboard[0].id;
+    }
+    
+    // Get view
+    const isViewNumeric = /^\d+$/.test(viewIdentifier);
+    const viewQuery = isViewNumeric
+      ? `SELECT * FROM views WHERE id = ${viewIdentifier} AND dashboard_id = ${actualDashboardId}`
+      : `SELECT * FROM views WHERE slug = '${viewIdentifier.replace(/'/g, "''")}' AND dashboard_id = ${actualDashboardId}`;
+    
+    const result = await dbClient.query(viewQuery);
+    
+    if (result.length === 0) {
+      return res.status(404).json({ success: false, error: 'View not found' });
+    }
+    
+    res.json({ success: true, view: result[0] });
+  } catch (err) {
+    console.error('❌ Error fetching view:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Create new view
+ * POST /api/dashboards/:dashboardId/views
+ */
+app.post('/api/dashboards/:dashboardId/views', async (req, res) => {
+  const { dashboardId } = req.params;
+  const { name, description, icon, is_default, display_order } = req.body;
+  
+  if (!name || name.trim() === '') {
+    return res.status(400).json({ success: false, error: 'View name is required' });
+  }
+  
+  try {
+    // Get dashboard ID
+    const isDashboardNumeric = /^\d+$/.test(dashboardId);
+    let actualDashboardId = dashboardId;
+    
+    if (!isDashboardNumeric) {
+      const dashboard = await dbClient.query(`SELECT id FROM dashboards WHERE slug='${dashboardId.replace(/'/g, "''")}'`);
+      if (dashboard.length === 0) {
+        return res.status(404).json({ success: false, error: 'Dashboard not found' });
+      }
+      actualDashboardId = dashboard[0].id;
+    }
+    
+    const slug = generateSlug(name);
+    
+    // Check if slug already exists for this dashboard
+    const existing = await dbClient.query(`SELECT id FROM views WHERE slug = '${slug}' AND dashboard_id = ${actualDashboardId}`);
+    if (existing.length > 0) {
+      return res.status(409).json({ success: false, error: 'A view with this name already exists in this dashboard' });
+    }
+    
+    // If this is marked as default, unset other defaults
+    if (is_default) {
+      await dbClient.run(`UPDATE views SET is_default = FALSE WHERE dashboard_id = ${actualDashboardId}`);
+    }
+    
+    await dbClient.run(`
+      INSERT INTO views (dashboard_id, name, slug, description, icon, is_default, display_order, created_at, updated_at)
+      VALUES (
+        ${actualDashboardId},
+        '${name.replace(/'/g, "''")}',
+        '${slug}',
+        ${description ? `'${description.replace(/'/g, "''")}'` : 'NULL'},
+        '${icon || 'view_module'}',
+        ${is_default ? 'TRUE' : 'FALSE'},
+        ${display_order || 0},
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Get the created view
+    const result = await dbClient.query(`SELECT * FROM views WHERE slug = '${slug}' AND dashboard_id = ${actualDashboardId}`);
+    
+    console.log(`✅ Created view: ${name} (${slug}) in dashboard ${actualDashboardId}`);
+    res.status(201).json({ success: true, view: result[0] });
+  } catch (err) {
+    console.error('❌ Error creating view:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Update view
+ * PUT /api/dashboards/:dashboardId/views/:viewId
+ */
+app.put('/api/dashboards/:dashboardId/views/:viewId', async (req, res) => {
+  const { dashboardId, viewId } = req.params;
+  const { name, description, icon, is_default, display_order } = req.body;
+  
+  try {
+    // Get dashboard ID
+    const isDashboardNumeric = /^\d+$/.test(dashboardId);
+    let actualDashboardId = dashboardId;
+    
+    if (!isDashboardNumeric) {
+      const dashboard = await dbClient.query(`SELECT id FROM dashboards WHERE slug='${dashboardId.replace(/'/g, "''")}'`);
+      if (dashboard.length === 0) {
+        return res.status(404).json({ success: false, error: 'Dashboard not found' });
+      }
+      actualDashboardId = dashboard[0].id;
+    }
+    
+    // If setting as default, unset other defaults
+    if (is_default) {
+      await dbClient.run(`UPDATE views SET is_default = FALSE WHERE dashboard_id = ${actualDashboardId}`);
+    }
+    
+    const updates = [];
+    if (name) {
+      updates.push(`name='${name.replace(/'/g, "''")}'`);
+      updates.push(`slug='${generateSlug(name)}'`);
+    }
+    if (description !== undefined) {
+      updates.push(description ? `description='${description.replace(/'/g, "''")}'` : `description=NULL`);
+    }
+    if (icon) updates.push(`icon='${icon}'`);
+    if (is_default !== undefined) updates.push(`is_default=${is_default ? 'TRUE' : 'FALSE'}`);
+    if (display_order !== undefined) updates.push(`display_order=${display_order}`);
+    updates.push(`updated_at=CURRENT_TIMESTAMP`);
+    
+    await dbClient.run(`UPDATE views SET ${updates.join(', ')} WHERE id=${viewId} AND dashboard_id=${actualDashboardId}`);
+    
+    const result = await dbClient.query(`SELECT * FROM views WHERE id=${viewId}`);
+    
+    console.log(`✅ Updated view: ${viewId}`);
+    res.json({ success: true, view: result[0] });
+  } catch (err) {
+    console.error('❌ Error updating view:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Delete view (cascades to all view-specific resources)
+ * DELETE /api/dashboards/:dashboardId/views/:viewId
+ */
+app.delete('/api/dashboards/:dashboardId/views/:viewId', async (req, res) => {
+  const { dashboardId, viewId } = req.params;
+  
+  try {
+    // Delete all view-specific resources
+    await deleteViewResources(viewId);
+    
+    // Delete the view
+    await dbClient.run(`DELETE FROM views WHERE id=${viewId}`);
+    
+    console.log(`✅ Deleted view ${viewId} with all associated resources`);
+    res.json({ success: true, message: 'View and all associated resources deleted' });
+  } catch (err) {
+    console.error('❌ Error deleting view:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// VIEW-SCOPED RESOURCES API ENDPOINTS
+// ============================================
+
+/**
+ * Get all chart configs for a view
+ * GET /api/dashboards/:dashboardId/views/:viewId/chart-configs
+ */
+app.get('/api/dashboards/:dashboardId/views/:viewId/chart-configs', async (req, res) => {
+  const { viewId } = req.params;
+  
+  try {
+    // Support slug
+    const isViewNumeric = /^\d+$/.test(viewId);
+    let actualViewId = viewId;
+    
+    if (!isViewNumeric) {
+      const view = await dbClient.query(`SELECT id FROM views WHERE slug='${viewId.replace(/'/g, "''")}'`);
+      if (view.length === 0) {
+        return res.status(404).json({ success: false, error: 'View not found' });
+      }
+      actualViewId = view[0].id;
+    }
+    
+    const configs = await dbClient.query(`
+      SELECT * FROM chart_configs WHERE view_id=${actualViewId}
+    `);
+    
+    res.json({ success: true, configs, viewId: actualViewId });
+  } catch (err) {
+    console.error('❌ Error fetching chart configs:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get all layouts for a view
+ * GET /api/dashboards/:dashboardId/views/:viewId/layouts
+ */
+app.get('/api/dashboards/:dashboardId/views/:viewId/layouts', async (req, res) => {
+  const { viewId } = req.params;
+  
+  try {
+    const isViewNumeric = /^\d+$/.test(viewId);
+    let actualViewId = viewId;
+    
+    if (!isViewNumeric) {
+      const view = await dbClient.query(`SELECT id FROM views WHERE slug='${viewId.replace(/'/g, "''")}'`);
+      if (view.length === 0) {
+        return res.status(404).json({ success: false, error: 'View not found' });
+      }
+      actualViewId = view[0].id;
+    }
+    
+    const layouts = await dbClient.query(`
+      SELECT * FROM layouts WHERE view_id=${actualViewId}
+    `);
+    
+    res.json({ success: true, layouts, viewId: actualViewId });
+  } catch (err) {
+    console.error('❌ Error fetching layouts:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get all child card configs for a view
+ * GET /api/dashboards/:dashboardId/views/:viewId/child-card-configs
+ */
+app.get('/api/dashboards/:dashboardId/views/:viewId/child-card-configs', async (req, res) => {
+  const { viewId } = req.params;
+  
+  try {
+    const isViewNumeric = /^\d+$/.test(viewId);
+    let actualViewId = viewId;
+    
+    if (!isViewNumeric) {
+      const view = await dbClient.query(`SELECT id FROM views WHERE slug='${viewId.replace(/'/g, "''")}'`);
+      if (view.length === 0) {
+        return res.status(404).json({ success: false, error: 'View not found' });
+      }
+      actualViewId = view[0].id;
+    }
+    
+    const configs = await dbClient.query(`
+      SELECT * FROM child_card_configs WHERE view_id=${actualViewId}
+    `);
+    
+    res.json({ success: true, configs, viewId: actualViewId });
+  } catch (err) {
+    console.error('❌ Error fetching child card configs:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// DASHBOARD-SCOPED COMMON RESOURCES API ENDPOINTS
+// ============================================
+
+/**
+ * Get all parameters for a dashboard
+ * GET /api/dashboards/:dashboardId/parameters
+ */
+app.get('/api/dashboards/:dashboardId/parameters', async (req, res) => {
+  const { dashboardId } = req.params;
+  
+  try {
+    const isNumeric = /^\d+$/.test(dashboardId);
+    let actualDashboardId = dashboardId;
+    
+    if (!isNumeric) {
+      const dashboard = await dbClient.query(`SELECT id FROM dashboards WHERE slug='${dashboardId.replace(/'/g, "''")}'`);
+      if (dashboard.length === 0) {
+        return res.status(404).json({ success: false, error: 'Dashboard not found' });
+      }
+      actualDashboardId = dashboard[0].id;
+    }
+    
+    const parameters = await dbClient.query(`
+      SELECT * FROM parameters WHERE dashboard_id=${actualDashboardId}
+    `);
+    
+    res.json({ success: true, parameters, dashboardId: actualDashboardId });
+  } catch (err) {
+    console.error('❌ Error fetching parameters:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get all calculations for a dashboard
+ * GET /api/dashboards/:dashboardId/calculations
+ */
+app.get('/api/dashboards/:dashboardId/calculations', async (req, res) => {
+  const { dashboardId } = req.params;
+  
+  try {
+    const isNumeric = /^\d+$/.test(dashboardId);
+    let actualDashboardId = dashboardId;
+    
+    if (!isNumeric) {
+      const dashboard = await dbClient.query(`SELECT id FROM dashboards WHERE slug='${dashboardId.replace(/'/g, "''")}'`);
+      if (dashboard.length === 0) {
+        return res.status(404).json({ success: false, error: 'Dashboard not found' });
+      }
+      actualDashboardId = dashboard[0].id;
+    }
+    
+    const calculations = await dbClient.query(`
+      SELECT * FROM calculations WHERE dashboard_id=${actualDashboardId} ORDER BY execution_order
+    `);
+    
+    res.json({ success: true, calculations, dashboardId: actualDashboardId });
+  } catch (err) {
+    console.error('❌ Error fetching calculations:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get all filters for a dashboard
+ * GET /api/dashboards/:dashboardId/filters
+ */
+app.get('/api/dashboards/:dashboardId/filters', async (req, res) => {
+  const { dashboardId } = req.params;
+  
+  try {
+    const isNumeric = /^\d+$/.test(dashboardId);
+    let actualDashboardId = dashboardId;
+    
+    if (!isNumeric) {
+      const dashboard = await dbClient.query(`SELECT id FROM dashboards WHERE slug='${dashboardId.replace(/'/g, "''")}'`);
+      if (dashboard.length === 0) {
+        return res.status(404).json({ success: false, error: 'Dashboard not found' });
+      }
+      actualDashboardId = dashboard[0].id;
+    }
+    
+    const filters = await dbClient.query(`
+      SELECT * FROM filters WHERE dashboard_id=${actualDashboardId}
+    `);
+    
+    res.json({ success: true, filters, dashboardId: actualDashboardId });
+  } catch (err) {
+    console.error('❌ Error fetching filters:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get all data sources for a dashboard
+ * GET /api/dashboards/:dashboardId/data-sources
+ */
+app.get('/api/dashboards/:dashboardId/data-sources', async (req, res) => {
+  const { dashboardId } = req.params;
+  
+  try {
+    const isNumeric = /^\d+$/.test(dashboardId);
+    let actualDashboardId = dashboardId;
+    
+    if (!isNumeric) {
+      const dashboard = await dbClient.query(`SELECT id FROM dashboards WHERE slug='${dashboardId.replace(/'/g, "''")}'`);
+      if (dashboard.length === 0) {
+        return res.status(404).json({ success: false, error: 'Dashboard not found' });
+      }
+      actualDashboardId = dashboard[0].id;
+    }
+    
+    const dataSources = await dbClient.query(`
+      SELECT * FROM data_source_registry WHERE dashboard_id=${actualDashboardId}
+    `);
+    
+    res.json({ success: true, dataSources, dashboardId: actualDashboardId });
+  } catch (err) {
+    console.error('❌ Error fetching data sources:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get all connections for a dashboard
+ * GET /api/dashboards/:dashboardId/connections
+ */
+app.get('/api/dashboards/:dashboardId/connections', async (req, res) => {
+  const { dashboardId } = req.params;
+  
+  try {
+    const isNumeric = /^\d+$/.test(dashboardId);
+    let actualDashboardId = dashboardId;
+    
+    if (!isNumeric) {
+      const dashboard = await dbClient.query(`SELECT id FROM dashboards WHERE slug='${dashboardId.replace(/'/g, "''")}'`);
+      if (dashboard.length === 0) {
+        return res.status(404).json({ success: false, error: 'Dashboard not found' });
+      }
+      actualDashboardId = dashboard[0].id;
+    }
+    
+    const connections = await dbClient.query(`
+      SELECT * FROM snow_flake_connections WHERE dashboard_id=${actualDashboardId}
+    `);
+    
+    res.json({ success: true, connections, dashboardId: actualDashboardId });
+  } catch (err) {
+    console.error('❌ Error fetching connections:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// FAVORITES API ENDPOINTS
+// ============================================
+
+/**
+ * Get all favorite dashboard IDs
+ * GET /api/favorites/dashboards
+ */
+app.get('/api/favorites/dashboards', async (req, res) => {
+  try {
+    const favorites = await dbClient.query(`
+      SELECT entity_id FROM favorites WHERE entity_type = 'dashboard'
+    `);
+    const favoriteIds = favorites.map(f => f.entity_id.toString());
+    res.json({ success: true, favoriteIds });
+  } catch (err) {
+    console.error('❌ Error fetching dashboard favorites:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Add dashboard to favorites
+ * POST /api/favorites/dashboards/:id
+ */
+app.post('/api/favorites/dashboards/:id', async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    // Check if already favorited
+    const existing = await dbClient.query(`
+      SELECT id FROM favorites WHERE entity_type = 'dashboard' AND entity_id = ${id}
+    `);
+    
+    if (existing.length > 0) {
+      return res.json({ success: true, message: 'Already favorited' });
+    }
+    
+    await dbClient.run(`
+      INSERT INTO favorites (entity_type, entity_id, created_at)
+      VALUES ('dashboard', ${id}, CURRENT_TIMESTAMP)
+    `);
+    
+    console.log(`✅ Added dashboard ${id} to favorites`);
+    res.json({ success: true, message: 'Added to favorites' });
+  } catch (err) {
+    console.error('❌ Error adding dashboard to favorites:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Remove dashboard from favorites
+ * DELETE /api/favorites/dashboards/:id
+ */
+app.delete('/api/favorites/dashboards/:id', async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    await dbClient.run(`
+      DELETE FROM favorites WHERE entity_type = 'dashboard' AND entity_id = ${id}
+    `);
+    
+    console.log(`✅ Removed dashboard ${id} from favorites`);
+    res.json({ success: true, message: 'Removed from favorites' });
+  } catch (err) {
+    console.error('❌ Error removing dashboard from favorites:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get all favorite view IDs for a dashboard
+ * GET /api/favorites/views/:dashboardId
+ */
+app.get('/api/favorites/views/:dashboardId', async (req, res) => {
+  const { dashboardId } = req.params;
+  
+  try {
+    const favorites = await dbClient.query(`
+      SELECT entity_id FROM favorites 
+      WHERE entity_type = 'view' AND dashboard_id = ${dashboardId}
+    `);
+    const favoriteIds = favorites.map(f => f.entity_id.toString());
+    res.json({ success: true, favoriteIds });
+  } catch (err) {
+    console.error('❌ Error fetching view favorites:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Add view to favorites
+ * POST /api/favorites/views/:dashboardId/:viewId
+ */
+app.post('/api/favorites/views/:dashboardId/:viewId', async (req, res) => {
+  const { dashboardId, viewId } = req.params;
+  
+  try {
+    // Check if already favorited
+    const existing = await dbClient.query(`
+      SELECT id FROM favorites WHERE entity_type = 'view' AND entity_id = ${viewId}
+    `);
+    
+    if (existing.length > 0) {
+      return res.json({ success: true, message: 'Already favorited' });
+    }
+    
+    await dbClient.run(`
+      INSERT INTO favorites (entity_type, entity_id, dashboard_id, created_at)
+      VALUES ('view', ${viewId}, ${dashboardId}, CURRENT_TIMESTAMP)
+    `);
+    
+    console.log(`✅ Added view ${viewId} to favorites`);
+    res.json({ success: true, message: 'Added to favorites' });
+  } catch (err) {
+    console.error('❌ Error adding view to favorites:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Remove view from favorites
+ * DELETE /api/favorites/views/:dashboardId/:viewId
+ */
+app.delete('/api/favorites/views/:dashboardId/:viewId', async (req, res) => {
+  const { viewId } = req.params;
+  
+  try {
+    await dbClient.run(`
+      DELETE FROM favorites WHERE entity_type = 'view' AND entity_id = ${viewId}
+    `);
+    
+    console.log(`✅ Removed view ${viewId} from favorites`);
+    res.json({ success: true, message: 'Removed from favorites' });
+  } catch (err) {
+    console.error('❌ Error removing view from favorites:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// MIGRATION ENDPOINT - Move existing data to new structure
+// ============================================
+
+/**
+ * Migrate existing data to new dashboard/view structure
+ * POST /api/migrate-to-hierarchy
+ */
+app.post('/api/migrate-to-hierarchy', async (req, res) => {
+  const { dashboardName, viewName } = req.body;
+  
+  if (!dashboardName || !viewName) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Both dashboardName and viewName are required for migration' 
+    });
+  }
+  
+  try {
+    const dashboardSlug = generateSlug(dashboardName);
+    const viewSlug = generateSlug(viewName);
+    
+    // Check if dashboard exists
+    let dashboard = await dbClient.query(`SELECT id FROM dashboards WHERE slug='${dashboardSlug}'`);
+    let dashboardId;
+    
+    if (dashboard.length === 0) {
+      // Create dashboard
+      await dbClient.run(`
+        INSERT INTO dashboards (name, slug, description, created_at, updated_at)
+        VALUES ('${dashboardName.replace(/'/g, "''")}', '${dashboardSlug}', 'Migrated dashboard', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `);
+      dashboard = await dbClient.query(`SELECT id FROM dashboards WHERE slug='${dashboardSlug}'`);
+    }
+    dashboardId = dashboard[0].id;
+    
+    // Check if view exists
+    let view = await dbClient.query(`SELECT id FROM views WHERE slug='${viewSlug}' AND dashboard_id=${dashboardId}`);
+    let viewId;
+    
+    if (view.length === 0) {
+      // Create view
+      await dbClient.run(`
+        INSERT INTO views (dashboard_id, name, slug, description, is_default, created_at, updated_at)
+        VALUES (${dashboardId}, '${viewName.replace(/'/g, "''")}', '${viewSlug}', 'Migrated view', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `);
+      view = await dbClient.query(`SELECT id FROM views WHERE slug='${viewSlug}' AND dashboard_id=${dashboardId}`);
+    }
+    viewId = view[0].id;
+    
+    // Migrate existing data without dashboard_id/view_id
+    // Common resources -> assign to dashboard
+    await dbClient.run(`UPDATE parameters SET dashboard_id=${dashboardId} WHERE dashboard_id IS NULL`);
+    await dbClient.run(`UPDATE calculations SET dashboard_id=${dashboardId} WHERE dashboard_id IS NULL`);
+    await dbClient.run(`UPDATE filters SET dashboard_id=${dashboardId} WHERE dashboard_id IS NULL`);
+    await dbClient.run(`UPDATE data_source_registry SET dashboard_id=${dashboardId} WHERE dashboard_id IS NULL`);
+    await dbClient.run(`UPDATE snow_flake_connections SET dashboard_id=${dashboardId} WHERE dashboard_id IS NULL`);
+    
+    // View-specific resources -> assign to view
+    await dbClient.run(`UPDATE chart_configs SET view_id=${viewId} WHERE view_id IS NULL`);
+    await dbClient.run(`UPDATE layouts SET view_id=${viewId} WHERE view_id IS NULL`);
+    await dbClient.run(`UPDATE chart_visibility SET view_id=${viewId} WHERE view_id IS NULL`);
+    await dbClient.run(`UPDATE card_dimension_conditions SET view_id=${viewId} WHERE view_id IS NULL`);
+    await dbClient.run(`UPDATE filter_panel_state SET view_id=${viewId} WHERE view_id IS NULL`);
+    await dbClient.run(`UPDATE card_filter_panel_state SET view_id=${viewId} WHERE view_id IS NULL`);
+    await dbClient.run(`UPDATE tooltip_configs SET view_id=${viewId} WHERE view_id IS NULL`);
+    await dbClient.run(`UPDATE child_card_configs SET view_id=${viewId} WHERE view_id IS NULL`);
+    await dbClient.run(`UPDATE child_card_tooltip_configs SET view_id=${viewId} WHERE view_id IS NULL`);
+    
+    console.log(`✅ Migrated existing data to dashboard '${dashboardName}' and view '${viewName}'`);
+    res.json({ 
+      success: true, 
+      message: 'Migration completed successfully',
+      dashboardId,
+      viewId,
+      dashboardSlug,
+      viewSlug
+    });
+  } catch (err) {
+    console.error('❌ Error during migration:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// AUTHENTICATION ENDPOINTS
+// ============================================
+
+// Simple password hashing using crypto (for enterprise, consider bcrypt)
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(password + 'iqvia_analytics_salt_2024').digest('hex');
+}
+
+function generateSessionToken() {
+  return crypto.randomBytes(64).toString('hex');
+}
+
+// Validate IQVIA email domain
+function isValidIqviaEmail(email) {
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@iqvia\.com$/i;
+  return emailRegex.test(email);
+}
+
+/**
+ * Sign Up - Create new user
+ * POST /api/auth/signup
+ */
+app.post('/api/auth/signup', async (req, res) => {
+  const { email, password, firstName, lastName, department } = req.body;
+  
+  // Validate required fields
+  if (!email || !password || !firstName || !lastName) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Email, password, first name, and last name are required' 
+    });
+  }
+  
+  // Validate IQVIA email domain
+  if (!isValidIqviaEmail(email)) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Only @iqvia.com email addresses are allowed' 
+    });
+  }
+  
+  // Validate password strength
+  if (password.length < 8) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Password must be at least 8 characters long' 
+    });
+  }
+  
+  try {
+    // Check if user already exists
+    const existingUser = await dbClient.query(
+      `SELECT id FROM users WHERE email='${email.toLowerCase().replace(/'/g, "''")}'`
+    );
+    
+    if (existingUser && existingUser.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'An account with this email already exists' 
+      });
+    }
+    
+    // Hash password and create user
+    const passwordHash = hashPassword(password);
+    const insertQuery = `
+      INSERT INTO users (email, password_hash, first_name, last_name, department, role, is_active, created_at, updated_at)
+      VALUES (
+        '${email.toLowerCase().replace(/'/g, "''")}',
+        '${passwordHash}',
+        '${firstName.replace(/'/g, "''")}',
+        '${lastName.replace(/'/g, "''")}',
+        ${department ? `'${department.replace(/'/g, "''")}'` : 'NULL'},
+        'analyst',
+        TRUE,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      )
+    `;
+    
+    await dbClient.run(insertQuery);
+    
+    // Get the created user
+    const newUser = await dbClient.query(
+      `SELECT id, email, first_name, last_name, department, role FROM users WHERE email='${email.toLowerCase().replace(/'/g, "''")}'`
+    );
+    
+    // Generate session token
+    const sessionToken = generateSessionToken();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    
+    await dbClient.run(`
+      INSERT INTO user_sessions (user_id, session_token, expires_at, created_at)
+      VALUES (${newUser[0].id}, '${sessionToken}', '${expiresAt.toISOString()}', CURRENT_TIMESTAMP)
+    `);
+    
+    console.log(`✅ New user registered: ${email}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Account created successfully',
+      user: {
+        id: newUser[0].id,
+        email: newUser[0].email,
+        firstName: newUser[0].first_name,
+        lastName: newUser[0].last_name,
+        department: newUser[0].department,
+        role: newUser[0].role
+      },
+      sessionToken,
+      expiresAt: expiresAt.toISOString()
+    });
+  } catch (err) {
+    console.error('❌ Error creating user:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to create account' });
+  }
+});
+
+/**
+ * Login - Authenticate user
+ * POST /api/auth/login
+ */
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  
+  if (!email || !password) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Email and password are required' 
+    });
+  }
+  
+  // Validate IQVIA email domain
+  if (!isValidIqviaEmail(email)) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Only @iqvia.com email addresses are allowed' 
+    });
+  }
+  
+  try {
+    // Find user
+    const users = await dbClient.query(
+      `SELECT id, email, password_hash, first_name, last_name, department, role, is_active 
+       FROM users WHERE email='${email.toLowerCase().replace(/'/g, "''")}'`
+    );
+    
+    if (!users || users.length === 0) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Invalid email or password' 
+      });
+    }
+    
+    const user = users[0];
+    
+    // Check if user is active
+    if (!user.is_active) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Account is deactivated. Please contact your administrator.' 
+      });
+    }
+    
+    // Verify password
+    const passwordHash = hashPassword(password);
+    if (passwordHash !== user.password_hash) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Invalid email or password' 
+      });
+    }
+    
+    // Update last login
+    await dbClient.run(`UPDATE users SET last_login=CURRENT_TIMESTAMP WHERE id=${user.id}`);
+    
+    // Generate session token
+    const sessionToken = generateSessionToken();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    
+    // Clean up old sessions for this user
+    await dbClient.run(`DELETE FROM user_sessions WHERE user_id=${user.id}`);
+    
+    // Create new session
+    await dbClient.run(`
+      INSERT INTO user_sessions (user_id, session_token, expires_at, created_at)
+      VALUES (${user.id}, '${sessionToken}', '${expiresAt.toISOString()}', CURRENT_TIMESTAMP)
+    `);
+    
+    console.log(`✅ User logged in: ${email}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Login successful',
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        department: user.department,
+        role: user.role
+      },
+      sessionToken,
+      expiresAt: expiresAt.toISOString()
+    });
+  } catch (err) {
+    console.error('❌ Error during login:', err.message);
+    res.status(500).json({ success: false, error: 'Login failed' });
+  }
+});
+
+/**
+ * Verify Session - Check if session token is valid
+ * GET /api/auth/verify
+ */
+app.get('/api/auth/verify', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, error: 'No session token provided' });
+  }
+  
+  const sessionToken = authHeader.substring(7);
+  
+  try {
+    const sessions = await dbClient.query(`
+      SELECT s.user_id, s.expires_at, u.id, u.email, u.first_name, u.last_name, u.department, u.role, u.is_active
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.session_token='${sessionToken.replace(/'/g, "''")}'
+    `);
+    
+    if (!sessions || sessions.length === 0) {
+      return res.status(401).json({ success: false, error: 'Invalid session' });
+    }
+    
+    const session = sessions[0];
+    
+    // Check if session is expired
+    if (new Date(session.expires_at) < new Date()) {
+      await dbClient.run(`DELETE FROM user_sessions WHERE session_token='${sessionToken.replace(/'/g, "''")}'`);
+      return res.status(401).json({ success: false, error: 'Session expired' });
+    }
+    
+    // Check if user is still active
+    if (!session.is_active) {
+      return res.status(401).json({ success: false, error: 'Account is deactivated' });
+    }
+    
+    res.json({ 
+      success: true, 
+      user: {
+        id: session.id,
+        email: session.email,
+        firstName: session.first_name,
+        lastName: session.last_name,
+        department: session.department,
+        role: session.role
+      }
+    });
+  } catch (err) {
+    console.error('❌ Error verifying session:', err.message);
+    res.status(500).json({ success: false, error: 'Session verification failed' });
+  }
+});
+
+/**
+ * Logout - Invalidate session
+ * POST /api/auth/logout
+ */
+app.post('/api/auth/logout', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.json({ success: true, message: 'Logged out' });
+  }
+  
+  const sessionToken = authHeader.substring(7);
+  
+  try {
+    await dbClient.run(`DELETE FROM user_sessions WHERE session_token='${sessionToken.replace(/'/g, "''")}'`);
+    console.log('✅ User logged out');
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (err) {
+    console.error('❌ Error during logout:', err.message);
+    res.json({ success: true, message: 'Logged out' });
+  }
+});
+
+/**
+ * Get current user profile
+ * GET /api/auth/profile
+ */
+app.get('/api/auth/profile', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' });
+  }
+  
+  const sessionToken = authHeader.substring(7);
+  
+  try {
+    const sessions = await dbClient.query(`
+      SELECT u.id, u.email, u.first_name, u.last_name, u.department, u.role, u.created_at, u.last_login
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.session_token='${sessionToken.replace(/'/g, "''")}'
+      AND s.expires_at > CURRENT_TIMESTAMP
+    `);
+    
+    if (!sessions || sessions.length === 0) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+    }
+    
+    const user = sessions[0];
+    
+    res.json({ 
+      success: true, 
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        department: user.department,
+        role: user.role,
+        createdAt: user.created_at,
+        lastLogin: user.last_login
+      }
+    });
+  } catch (err) {
+    console.error('❌ Error fetching profile:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to fetch profile' });
+  }
+});
+
+/**
+ * Update user profile
+ * PUT /api/auth/profile
+ */
+app.put('/api/auth/profile', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' });
+  }
+  
+  const sessionToken = authHeader.substring(7);
+  const { firstName, lastName, department } = req.body;
+  
+  // Validation
+  if (!firstName || !lastName) {
+    return res.status(400).json({ success: false, error: 'First name and last name are required' });
+  }
+  
+  try {
+    // First verify the session and get user id
+    const sessions = await dbClient.query(`
+      SELECT u.id
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.session_token='${sessionToken.replace(/'/g, "''")}'
+      AND s.expires_at > CURRENT_TIMESTAMP
+    `);
+    
+    if (!sessions || sessions.length === 0) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+    }
+    
+    const userId = sessions[0].id;
+    
+    // Update user profile
+    await dbClient.query(`
+      UPDATE users 
+      SET first_name='${firstName.replace(/'/g, "''")}',
+          last_name='${lastName.replace(/'/g, "''")}',
+          department=${department ? `'${department.replace(/'/g, "''")}'` : 'NULL'}
+      WHERE id=${userId}
+    `);
+    
+    // Fetch updated user data
+    const updatedUsers = await dbClient.query(`
+      SELECT id, email, first_name, last_name, department, role, created_at, last_login
+      FROM users WHERE id=${userId}
+    `);
+    
+    if (!updatedUsers || updatedUsers.length === 0) {
+      return res.status(500).json({ success: false, error: 'Failed to fetch updated profile' });
+    }
+    
+    const user = updatedUsers[0];
+    
+    console.log(`✅ Profile updated for user: ${user.email}`);
+    
+    res.json({ 
+      success: true, 
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        department: user.department,
+        role: user.role,
+        createdAt: user.created_at,
+        lastLogin: user.last_login
+      }
+    });
+  } catch (err) {
+    console.error('❌ Error updating profile:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to update profile' });
+  }
+});
+
+/**
+ * Change user password
+ * PUT /api/auth/password
+ */
+app.put('/api/auth/password', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' });
+  }
+  
+  const sessionToken = authHeader.substring(7);
+  const { currentPassword, newPassword } = req.body;
+  
+  // Validation
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ success: false, error: 'Current and new passwords are required' });
+  }
+  
+  if (newPassword.length < 8) {
+    return res.status(400).json({ success: false, error: 'New password must be at least 8 characters' });
+  }
+  
+  try {
+    // First verify the session and get user
+    const sessions = await dbClient.query(`
+      SELECT u.id, u.password_hash
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.session_token='${sessionToken.replace(/'/g, "''")}'
+      AND s.expires_at > CURRENT_TIMESTAMP
+    `);
+    
+    if (!sessions || sessions.length === 0) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+    }
+    
+    const userId = sessions[0].id;
+    const storedHash = sessions[0].password_hash;
+    
+    // Verify current password
+    const currentPasswordHash = hashPassword(currentPassword);
+    if (currentPasswordHash !== storedHash) {
+      return res.status(400).json({ success: false, error: 'Current password is incorrect' });
+    }
+    
+    // Hash new password and update
+    const newPasswordHash = hashPassword(newPassword);
+    
+    await dbClient.query(`
+      UPDATE users SET password_hash='${newPasswordHash}' WHERE id=${userId}
+    `);
+    
+    console.log(`✅ Password changed for user ID: ${userId}`);
+    
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('❌ Error changing password:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to change password' });
+  }
+});
+
 (async () => {
   try {
     await dbClient.query('SELECT 1');
     console.log('✅ DuckDB is connected');
 
-     // Initialize new tables
-     const { 
-      createSnowFlakeConnnection,
-      createDataSourceRegistry,
-      createChartConfigsTable, 
-      createLayoutsTable, 
-      createChartVisibilityTable, 
-      createCardDimensionConditionsTable,
-      createFilterPanelStateTable,
-      createCardFilterPanelStateTable,
-      createParametersTable,
-      createCalculationsTable,
-      createFiltersTable,
-      createTooltipConfigsTable,
-      migrateChartConfigsTable,
-      createChildCardConfigsTable,
-      createChildCardTooltipConfigsTable
-    } = await import('./db/initDb.js');
-    
-    // Create essential tables first (parameters, calculations, filters)
-    await createParametersTable();
-    await createCalculationsTable();
-    await createFiltersTable();
-    await createSnowFlakeConnnection();
-    await createDataSourceRegistry();
-    
-    // Create UI-related tables
-    await createChartConfigsTable();
-    await migrateChartConfigsTable(); // Run migrations for new columns
-    await createLayoutsTable();
-    await createChartVisibilityTable();
-    await createCardDimensionConditionsTable();
-    await createFilterPanelStateTable();
-    await createCardFilterPanelStateTable();
-    await createTooltipConfigsTable();
-    await createChildCardConfigsTable();
-    await createChildCardTooltipConfigsTable();
-    
-    // Import materialized views table creation
-    const { createMaterializedViewsTable } = await import('./db/initDb.js');
-    await createMaterializedViewsTable();
+    // Initialize all tables using the new createTables function
+    const { createTables } = await import('./db/initDb.js');
+    await createTables();
 
     // Start extract scheduler
     startExtractScheduler();

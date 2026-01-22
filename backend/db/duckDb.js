@@ -135,11 +135,26 @@ class DuckDBClient {
     }
   }
 
-  async query(sql, params = []) {
+  async query(sql, params = [], maxRetries = 3) {
     await this.ready;
-    const reader = await this.connection.runAndReadAll(sql, params);
-    const result = reader.getRowObjectsJson();
-    return result;
+    let lastError;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const reader = await this.connection.runAndReadAll(sql, params);
+        const result = reader.getRowObjectsJson();
+        return result;
+      } catch (err) {
+        lastError = err;
+        if (attempt < maxRetries) {
+          // Wait a bit before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 50 * attempt));
+        }
+      }
+    }
+    
+    console.error(`DuckDB query failed after ${maxRetries} attempts:`, lastError.message);
+    throw lastError;
   }
 
   // Optimized method for reading parquet files directly to JSON
@@ -150,22 +165,37 @@ class DuckDBClient {
     return reader.getRowObjectsJson();
   }
 
-  async run(sql, params = []) {
+  async run(sql, params = [], maxRetries = 3) {
     await this.ready;
-    try {
-      // Try using runAndReadAll which is more reliable for DML operations
-      // DuckDB auto-commits, so this will persist data
-      await this.connection.runAndReadAll(sql, params);
-    } catch (err) {
-      // Fallback to prepared statement approach if needed
+    let lastError;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const stmt = await this.connection.prepare(sql);
-        await stmt.run(...params);
-      } catch (prepErr) {
-        console.error('DuckDB run error:', prepErr.message);
-        throw prepErr;
+        // Try using runAndReadAll which is more reliable for DML operations
+        // DuckDB auto-commits, so this will persist data
+        await this.connection.runAndReadAll(sql, params);
+        return; // Success
+      } catch (err) {
+        lastError = err;
+        
+        // Fallback to prepared statement approach if needed
+        try {
+          const stmt = await this.connection.prepare(sql);
+          await stmt.run(...params);
+          return; // Success with fallback
+        } catch (prepErr) {
+          lastError = prepErr;
+        }
+        
+        if (attempt < maxRetries) {
+          // Wait a bit before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 50 * attempt));
+        }
       }
     }
+    
+    console.error('DuckDB run error:', lastError.message);
+    throw lastError;
   }
 
   // Force a checkpoint to ensure all data is written to disk

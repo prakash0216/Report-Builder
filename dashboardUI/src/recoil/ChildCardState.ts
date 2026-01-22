@@ -5,6 +5,7 @@ import {
   hasValueChanged, 
   updateLastValue,
 } from "./initializationState";
+import { getCurrentViewId } from "./ViewContext";
 import { TableSettings } from "../types/tableTypes";
 
 const ATOM_KEY = 'childCardConfigState';
@@ -179,22 +180,7 @@ export const childCardConfigState = atom<{[parentCardId: string]: ParentCardConf
   key: ATOM_KEY,
   default: {},
   effects: [
-    // 🔥 LOAD EFFECT: Load saved configs from backend on startup
-    ({ setSelf }) => {
-      const loadConfigs = async () => {
-        try {
-          const response = await axios.get('http://localhost:3002/api/child-card-configs');
-          if (response.data?.success && response.data.configs) {
-            // Backend returns { success: true, configs: { parentCardId: ParentCardConfig } }
-            setSelf(response.data.configs);
-            console.log(`✅ ChildCardConfig: Loaded ${Object.keys(response.data.configs).length} configs from backend`);
-          }
-        } catch (error) {
-          console.warn('⚠️ ChildCardConfig: Failed to load from backend, using defaults:', error);
-        }
-      };
-      loadConfigs();
-    },
+    // Skip loading - DataInitializer handles this to avoid duplicate API calls
     // 🔥 SAVE EFFECT: Save configs to backend when they change
     ({ onSet }) => {
       let timeoutId: NodeJS.Timeout;
@@ -211,13 +197,15 @@ export const childCardConfigState = atom<{[parentCardId: string]: ParentCardConf
         clearTimeout(timeoutId);
         timeoutId = setTimeout(async () => {
           try {
+            const viewId = getCurrentViewId();
             for (const [parentCardId, config] of Object.entries(newValue)) {
               await axios.post('http://localhost:3002/api/child-card-configs', {
                 parentCardId,
+                viewId,
                 config,
               });
             }
-            console.log(`✅ ChildCardConfig: Saved ${Object.keys(newValue).length} parent configs`);
+            console.log(`✅ ChildCardConfig: Saved ${Object.keys(newValue).length} parent configs (viewId: ${viewId})`);
           } catch (error) {
             console.error('❌ ChildCardConfig: Failed to save:', error);
           }

@@ -1,5 +1,7 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useRecoilState } from 'recoil';
+import { authState, authAPI } from '../recoil/AuthState';
 import {
   Box,
   Paper,
@@ -22,7 +24,6 @@ import {
   Tooltip,
   alpha,
   Zoom,
-  Fade,
   Avatar,
   Divider,
   Menu,
@@ -35,7 +36,9 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  CircularProgress,
 } from '@mui/material';
+import NotFound from './NotFound';
 import {
   ArrowBack as ArrowBackIcon,
   Add as AddIcon,
@@ -45,8 +48,6 @@ import {
   BarChart as BarChartIcon,
   ChevronRight as ChevronRightIcon,
   Warning as WarningIcon,
-  TableChart as TableChartIcon,
-  AutoAwesome as AutoAwesomeIcon,
   Layers as LayersIcon,
   TrendingUp as TrendingUpIcon,
   Search as SearchIcon,
@@ -54,19 +55,27 @@ import {
   ViewList as ViewListIcon,
   MoreVert as MoreVertIcon,
   AccessTime as AccessTimeIcon,
-  CalendarToday as CalendarTodayIcon,
   Star as StarIcon,
   StarBorder as StarBorderIcon,
   OpenInNew as OpenInNewIcon,
-  Analytics as AnalyticsIcon,
   History as HistoryIcon,
   Help as HelpIcon,
-  Dashboard as DashboardIcon,
+  Storage as StorageIcon,
+  CloudQueue as CloudQueueIcon,
+  AcUnit as SnowflakeIcon,
+  Logout as LogoutIcon,
+  Email as EmailIcon,
 } from '@mui/icons-material';
+import AddDataSource from '../components/AddDataSource';
+import SnowflakeConnector from '../components/SnowflakeConnector';
+
+// API base URL
+const API_BASE = 'http://localhost:3002/api';
 
 interface View {
   id: string;
   name: string;
+  slug?: string;
   description: string;
   createdAt: number;
   updatedAt: number;
@@ -76,14 +85,25 @@ interface View {
 const DashboardViews: React.FC = () => {
   const navigate = useNavigate();
   const { dashboardName: dashboardSlug } = useParams<{ dashboardName: string }>();
+  const [auth, setAuth] = useRecoilState(authState);
+  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
   
-  // Convert slug back to display name (capitalize first letter of each word)
-  const dashboardName = dashboardSlug
-    ? dashboardSlug
-        .split('-')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ')
-    : 'Dashboard';
+  // State for dashboard info
+  const [, setDashboardId] = useState<number | null>(null);
+  const [dashboardName, setDashboardName] = useState<string>('Dashboard');
+  const [isLoading, setIsLoading] = useState(true);
+  const [dashboardNotFound, setDashboardNotFound] = useState(false);
+
+  // Handle logout
+  const handleLogout = () => {
+    setUserMenuAnchor(null);
+    authAPI.logout();
+    setAuth({
+      isAuthenticated: false,
+      email: null,
+    });
+    navigate('/login');
+  };
 
   // Convert name to URL-friendly slug
   const toSlug = (name: string) => {
@@ -95,24 +115,7 @@ const DashboardViews: React.FC = () => {
       .trim();
   };
   
-  const [views, setViews] = useState<View[]>([
-    {
-      id: '1',
-      name: 'Patient View',
-      description: 'Patient-focused metrics and analytics with comprehensive health indicators',
-      createdAt: Date.now() - 86400000 * 5,
-      updatedAt: Date.now() - 86400000,
-      chartsCount: 8,
-    },
-    {
-      id: '2',
-      name: 'Provider View',
-      description: 'Provider performance and engagement metrics for healthcare professionals',
-      createdAt: Date.now() - 86400000 * 3,
-      updatedAt: Date.now(),
-      chartsCount: 6,
-    },
-  ]);
+  const [views, setViews] = useState<View[]>([]);
   
   const [newViewName, setNewViewName] = useState<string>('');
   const [newViewDesc, setNewViewDesc] = useState<string>('');
@@ -124,11 +127,104 @@ const DashboardViews: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'name' | 'updated' | 'created'>('updated');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [dashboardIdForFavorites, setDashboardIdForFavorites] = useState<number | null>(null);
   const [selectedView, setSelectedView] = useState<View | null>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [menuView, setMenuView] = useState<View | null>(null);
-  const [activeNav, setActiveNav] = useState<'all' | 'favorites' | 'recent'>('all');
+  const [activeNav, setActiveNav] = useState<'all' | 'favorites' | 'recent' | 'dataConnections'>('all');
+  const [dataTabIndex, setDataTabIndex] = useState<number>(0);
   const viewIdRef = useRef(3);
+
+  const closeMenu = () => {
+    setAnchorEl(null);
+    setMenuView(null);
+    setMenuPosition(null);
+  };
+
+  // Fetch favorites from backend
+  const fetchFavorites = useCallback(async (dashId: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/favorites/views/${dashId}`);
+      const data = await response.json();
+      if (data.success && data.favoriteIds) {
+        setFavorites(new Set(data.favoriteIds));
+      }
+    } catch (err) {
+      console.error('Error fetching favorites:', err);
+    }
+  }, []);
+
+  // Fetch dashboard info and views from backend
+  const fetchDashboardAndViews = useCallback(async () => {
+    if (!dashboardSlug) return;
+    
+    try {
+      setIsLoading(true);
+      setDashboardNotFound(false);
+      
+      // First get dashboard info
+      const dashboardResponse = await fetch(`${API_BASE}/dashboards/${dashboardSlug}`);
+      const dashboardData = await dashboardResponse.json();
+      
+      if (dashboardData.success && dashboardData.dashboard) {
+        const dashId = dashboardData.dashboard.id;
+        setDashboardId(dashId);
+        setDashboardIdForFavorites(dashId);
+        setDashboardName(dashboardData.dashboard.name);
+        
+        // Fetch favorites for this dashboard
+        fetchFavorites(dashId);
+        
+        // Then get views for this dashboard
+        const viewsResponse = await fetch(`${API_BASE}/dashboards/${dashboardSlug}/views`);
+        const viewsData = await viewsResponse.json();
+        
+        if (viewsData.success && viewsData.views) {
+          console.log('📥 [Views] raw response', viewsData.views);
+          if (viewsData.views.length > 0) {
+            const v0 = viewsData.views[0];
+            console.log('📥 [Views] sample fields', {
+              charts_count: v0.charts_count,
+              chartsCount: v0.chartsCount,
+            });
+          }
+          const mappedViews: View[] = viewsData.views.map((v: any) => ({
+            id: v.id.toString(),
+            name: v.name,
+            slug: v.slug,
+            description: v.description || '',
+            createdAt: new Date(v.created_at).getTime(),
+            updatedAt: new Date(v.updated_at).getTime(),
+            chartsCount: Number(v.charts_count ?? v.chartsCount ?? 0),
+          }));
+          setViews(mappedViews);
+          console.log('📊 [Views] mapped totals', {
+            totalViews: mappedViews.length,
+            totalCharts: mappedViews.reduce((acc, v) => acc + (v.chartsCount || 0), 0),
+            sample: mappedViews.slice(0, 3).map(v => ({ name: v.name, chartsCount: v.chartsCount })),
+          });
+          
+          // Update viewIdRef for new view creation
+          const maxId = Math.max(0, ...mappedViews.map(v => parseInt(v.id) || 0));
+          viewIdRef.current = maxId + 1;
+        }
+      } else {
+        // Dashboard not found - show 404 page
+        console.error(`Dashboard not found: "${dashboardSlug}"`);
+        setDashboardNotFound(true);
+      }
+    } catch (err) {
+      console.error('Error fetching dashboard/views:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dashboardSlug, fetchFavorites]);
+
+  // Load dashboard and views on mount
+  useEffect(() => {
+    fetchDashboardAndViews();
+  }, [fetchDashboardAndViews]);
 
   // Filter and sort views
   const filteredViews = useMemo(() => {
@@ -194,23 +290,44 @@ const DashboardViews: React.FC = () => {
     return formatDate(timestamp);
   };
 
-  const handleCreateView = () => {
-    if (!newViewName.trim()) return;
+  const handleCreateView = async () => {
+    if (!newViewName.trim() || !dashboardSlug) return;
 
-    const newView: View = {
-      id: viewIdRef.current.toString(),
-      name: newViewName,
-      description: newViewDesc,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      chartsCount: 0,
-    };
-
-    viewIdRef.current += 1;
-    setViews([...views, newView]);
-    setNewViewName('');
-    setNewViewDesc('');
-    setOpenCreateDialog(false);
+    try {
+      const response = await fetch(`${API_BASE}/dashboards/${dashboardSlug}/views`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newViewName,
+          description: newViewDesc,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.view) {
+        const newView: View = {
+          id: data.view.id.toString(),
+          name: data.view.name,
+          slug: data.view.slug,
+          description: data.view.description || '',
+          createdAt: new Date(data.view.created_at).getTime(),
+          updatedAt: new Date(data.view.updated_at).getTime(),
+          chartsCount: 0,
+        };
+        
+        setViews([...views, newView]);
+        setNewViewName('');
+        setNewViewDesc('');
+        setOpenCreateDialog(false);
+      } else {
+        console.error('Failed to create view:', data.error);
+        alert(data.error || 'Failed to create view');
+      }
+    } catch (err) {
+      console.error('Error creating view:', err);
+      alert('Error creating view');
+    }
   };
 
   const handleEditStart = (view: View) => {
@@ -221,19 +338,51 @@ const DashboardViews: React.FC = () => {
     setAnchorEl(null);
   };
 
-  const handleEditSave = () => {
-    if (!newViewName.trim() || !editingView) return;
+  const handleEditSave = async () => {
+    if (!newViewName.trim() || !editingView || !dashboardSlug) return;
 
-    setViews(
-      views.map((v) =>
-        v.id === editingView.id
-          ? { ...v, name: newViewName, description: newViewDesc, updatedAt: Date.now() }
-          : v
-      )
-    );
+    try {
+      const response = await fetch(`${API_BASE}/dashboards/${dashboardSlug}/views/${editingView.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newViewName,
+          description: newViewDesc,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.view) {
+        setViews(
+          views.map((v) =>
+            v.id === editingView.id
+              ? { 
+                  ...v, 
+                  name: data.view.name, 
+                  slug: data.view.slug,
+                  description: data.view.description || '', 
+                  updatedAt: new Date(data.view.updated_at).getTime() 
+                }
+              : v
+          )
+        );
 
-    if (selectedView?.id === editingView.id) {
-      setSelectedView({ ...editingView, name: newViewName, description: newViewDesc });
+        if (selectedView?.id === editingView.id) {
+          setSelectedView({ 
+            ...editingView, 
+            name: data.view.name, 
+            slug: data.view.slug,
+            description: data.view.description || '' 
+          });
+        }
+      } else {
+        console.error('Failed to update view:', data.error);
+        alert(data.error || 'Failed to update view');
+      }
+    } catch (err) {
+      console.error('Error updating view:', err);
+      alert('Error updating view');
     }
 
     setEditingView(null);
@@ -248,32 +397,71 @@ const DashboardViews: React.FC = () => {
     setAnchorEl(null);
   };
 
-  const handleDeleteConfirm = () => {
-    if (deletingView) {
-      setViews(views.filter((v) => v.id !== deletingView.id));
-      if (selectedView?.id === deletingView.id) {
-        setSelectedView(null);
+  const handleDeleteConfirm = async () => {
+    if (!deletingView || !dashboardSlug) return;
+    
+    try {
+      const response = await fetch(`${API_BASE}/dashboards/${dashboardSlug}/views/${deletingView.id}`, {
+        method: 'DELETE',
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setViews(views.filter((v) => v.id !== deletingView.id));
+        if (selectedView?.id === deletingView.id) {
+          setSelectedView(null);
+        }
+        // Remove from favorites (if favorited)
+        if (favorites.has(deletingView.id) && dashboardIdForFavorites) {
+          try {
+            await fetch(`${API_BASE}/favorites/views/${dashboardIdForFavorites}/${deletingView.id}`, { method: 'DELETE' });
+            const newFavorites = new Set(favorites);
+            newFavorites.delete(deletingView.id);
+            setFavorites(newFavorites);
+          } catch (err) {
+            console.error('Error removing from favorites:', err);
+          }
+        }
+      } else {
+        console.error('Failed to delete view:', data.error);
+        alert(data.error || 'Failed to delete view');
       }
-      favorites.delete(deletingView.id);
-      setFavorites(new Set(favorites));
+    } catch (err) {
+      console.error('Error deleting view:', err);
+      alert('Error deleting view');
     }
+    
     setOpenDeleteDialog(false);
     setDeletingView(null);
   };
 
   const handleViewClick = (view: View) => {
-    const viewSlug = toSlug(view.name);
+    // Use slug from view if available, otherwise generate from name
+    const viewSlug = view.slug || toSlug(view.name);
     navigate(`/${dashboardSlug}/${viewSlug}`);
   };
 
-  const toggleFavorite = (id: string) => {
+  const toggleFavorite = async (id: string) => {
+    if (!dashboardIdForFavorites) return;
+    
     const newFavorites = new Set(favorites);
-    if (newFavorites.has(id)) {
-      newFavorites.delete(id);
-    } else {
-      newFavorites.add(id);
+    const isFavorite = newFavorites.has(id);
+    
+    try {
+      if (isFavorite) {
+        // Remove from favorites
+        await fetch(`${API_BASE}/favorites/views/${dashboardIdForFavorites}/${id}`, { method: 'DELETE' });
+        newFavorites.delete(id);
+      } else {
+        // Add to favorites
+        await fetch(`${API_BASE}/favorites/views/${dashboardIdForFavorites}/${id}`, { method: 'POST' });
+        newFavorites.add(id);
+      }
+      setFavorites(newFavorites);
+    } catch (err) {
+      console.error('Error toggling favorite:', err);
     }
-    setFavorites(newFavorites);
   };
 
   const StatCard = ({ icon, label, value, color, gradient }: { icon: React.ReactNode; label: string; value: number; color: string; gradient: string }) => (
@@ -351,8 +539,7 @@ const DashboardViews: React.FC = () => {
               },
             },
           }}
-          onClick={() => setSelectedView(view)}
-          onDoubleClick={() => handleViewClick(view)}
+          onClick={() => handleViewClick(view)}
         >
           {/* Top gradient bar */}
           <Box
@@ -416,7 +603,12 @@ const DashboardViews: React.FC = () => {
               <Tooltip title="More options">
                 <IconButton
                   size="small"
-                  onClick={(e) => { e.stopPropagation(); setMenuView(view); setAnchorEl(e.currentTarget); }}
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setMenuView(view); 
+                    setAnchorEl(e.currentTarget); 
+                    setMenuPosition({ top: e.clientY, left: e.clientX });
+                  }}
                   sx={{ 
                     bgcolor: 'rgba(255,255,255,0.9)',
                     color: alpha('#667eea', 0.6),
@@ -453,7 +645,7 @@ const DashboardViews: React.FC = () => {
               }}
             >
               <Typography variant="caption" fontWeight={700} sx={{ color: '#667eea' }}>
-                Double-click to open
+                Click to open
               </Typography>
               <ChevronRightIcon sx={{ fontSize: 14, color: '#667eea' }} />
             </Box>
@@ -532,6 +724,33 @@ const DashboardViews: React.FC = () => {
     );
   };
 
+  // 🔥 CRITICAL: Show 404 page if dashboard doesn't exist
+  // This prevents confusion and data corruption from invalid routes
+  if (dashboardNotFound) {
+    return <NotFound type="dashboard" />;
+  }
+
+  // Show loading state while fetching dashboard info
+  if (isLoading) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+        }}
+      >
+        <CircularProgress size={60} sx={{ mb: 2, color: '#667eea' }} />
+        <Typography variant="h6" color="text.secondary">
+          Loading dashboard...
+        </Typography>
+      </Box>
+    );
+  }
+
   return (
     <Box 
       sx={{ 
@@ -582,7 +801,7 @@ const DashboardViews: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
             <Tooltip title="Back to Dashboards" arrow>
               <IconButton 
-                onClick={() => navigate('/dashboards')} 
+                onClick={() => navigate('/')} 
                 sx={{ 
                   color: 'white',
                   bgcolor: 'rgba(255, 255, 255, 0.15)',
@@ -616,7 +835,7 @@ const DashboardViews: React.FC = () => {
               >
                 <Link
                   underline="hover"
-                  onClick={() => navigate('/dashboards')}
+                  onClick={() => navigate('/')}
                   sx={{ 
                     cursor: 'pointer', 
                     fontWeight: 600,
@@ -660,6 +879,68 @@ const DashboardViews: React.FC = () => {
           >
             New View
           </Button>
+
+          {/* User Menu */}
+          <Box sx={{ ml: 2 }}>
+            <Tooltip title={auth.email || 'User'}>
+              <IconButton
+                onClick={(e) => setUserMenuAnchor(e.currentTarget)}
+                sx={{
+                  p: 0.5,
+                  background: 'rgba(255,255,255,0.15)',
+                  border: '2px solid rgba(255,255,255,0.3)',
+                  '&:hover': {
+                    background: 'rgba(255,255,255,0.25)',
+                    border: '2px solid rgba(255,255,255,0.5)',
+                  },
+                }}
+              >
+                <Avatar
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    bgcolor: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    fontWeight: 700,
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  {auth.email ? auth.email[0].toUpperCase() : 'U'}
+                </Avatar>
+              </IconButton>
+            </Tooltip>
+            <Menu
+              anchorEl={userMenuAnchor}
+              open={Boolean(userMenuAnchor)}
+              onClose={() => setUserMenuAnchor(null)}
+              PaperProps={{
+                sx: {
+                  mt: 1,
+                  minWidth: 220,
+                  borderRadius: 2,
+                  boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+                  border: '1px solid rgba(102, 126, 234, 0.1)',
+                },
+              }}
+              transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+            >
+              <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <EmailIcon sx={{ fontSize: 16, color: '#667eea' }} />
+                  <Typography variant="body2" fontWeight={600} color="text.primary">
+                    {auth.email || 'User'}
+                  </Typography>
+                </Box>
+              </Box>
+              <MenuItem onClick={handleLogout} sx={{ py: 1.5, color: '#ef4444' }}>
+                <ListItemIcon>
+                  <LogoutIcon fontSize="small" sx={{ color: '#ef4444' }} />
+                </ListItemIcon>
+                <ListItemText primary="Logout" />
+              </MenuItem>
+            </Menu>
+          </Box>
         </Toolbar>
       </AppBar>
 
@@ -678,19 +959,14 @@ const DashboardViews: React.FC = () => {
             overflow: 'hidden',
           }}
         >
-          {/* Nav Header */}
-          <Box sx={{ p: 2.5, borderBottom: `1px solid ${alpha('#667eea', 0.08)}` }}>
-            <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: 1 }}>
-              Navigation
-            </Typography>
-          </Box>
+          
 
           {/* Nav Items */}
-          <List sx={{ flex: 1, p: 1.5 }}>
+          <List sx={{ flex: 1, p: 1.5, mt:1.5 }}>
             {/* Back to Dashboards */}
             <ListItem disablePadding sx={{ mb: 1.5 }}>
               <ListItemButton
-                onClick={() => navigate('/dashboards')}
+                onClick={() => navigate('/')}
                 sx={{
                   borderRadius: 2,
                   py: 1.25,
@@ -820,35 +1096,50 @@ const DashboardViews: React.FC = () => {
                 />
               </ListItemButton>
             </ListItem>
+
+            {/* Divider */}
+            <Divider sx={{ my: 2, mx: 1, borderColor: alpha('#667eea', 0.1) }} />
+
+            {/* Data & Connections */}
+            <ListItem disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                selected={activeNav === 'dataConnections'}
+                onClick={() => setActiveNav('dataConnections')}
+                sx={{
+                  borderRadius: 2,
+                  py: 1.25,
+                  bgcolor: activeNav === 'dataConnections' 
+                    ? 'linear-gradient(135deg, rgba(79, 172, 254, 0.15) 0%, rgba(102, 126, 234, 0.15) 100%)'
+                    : alpha('#4facfe', 0.06),
+                  border: `1px solid ${activeNav === 'dataConnections' ? alpha('#4facfe', 0.3) : alpha('#4facfe', 0.1)}`,
+                  '&.Mui-selected': {
+                    background: 'linear-gradient(135deg, rgba(79, 172, 254, 0.15) 0%, rgba(102, 126, 234, 0.15) 100%)',
+                    '& .MuiListItemIcon-root': { color: '#4facfe' },
+                    '& .MuiListItemText-primary': { color: '#4facfe', fontWeight: 700 },
+                    '&:hover': { 
+                      background: 'linear-gradient(135deg, rgba(79, 172, 254, 0.2) 0%, rgba(102, 126, 234, 0.2) 100%)',
+                    },
+                  },
+                  '&:hover': { 
+                    bgcolor: alpha('#4facfe', 0.1),
+                    borderColor: alpha('#4facfe', 0.2),
+                  },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 40, color: activeNav === 'dataConnections' ? '#4facfe' : '#64748b' }}>
+                  <StorageIcon sx={{ fontSize: 20 }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="Data & Connections" 
+                  primaryTypographyProps={{ 
+                    fontSize: '0.875rem', 
+                    fontWeight: 600,
+                    color: activeNav === 'dataConnections' ? '#4facfe' : 'inherit',
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
           </List>
-
-          <Divider sx={{ mx: 2 }} />
-
-          {/* Quick Actions */}
-          <Box sx={{ p: 2 }}>
-            <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: 1, mb: 1, display: 'block' }}>
-              Quick Actions
-            </Typography>
-            <Button
-              fullWidth
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => { setEditingView(null); setNewViewName(''); setNewViewDesc(''); setOpenCreateDialog(true); }}
-              sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                textTransform: 'none',
-                fontWeight: 600,
-                py: 1.25,
-                borderRadius: 2,
-                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.25)',
-                '&:hover': {
-                  boxShadow: '0 6px 16px rgba(102, 126, 234, 0.35)',
-                },
-              }}
-            >
-              New View
-            </Button>
-          </Box>
 
           {/* Help Section */}
           <Box sx={{ p: 2, borderTop: `1px solid ${alpha('#667eea', 0.08)}`, mt: 'auto' }}>
@@ -867,7 +1158,7 @@ const DashboardViews: React.FC = () => {
                 </Typography>
               </Box>
               <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
-                Double-click on any view card to open the chart editor.
+                Click on any view card to open the chart editor.
               </Typography>
             </Box>
           </Box>
@@ -875,6 +1166,115 @@ const DashboardViews: React.FC = () => {
 
         {/* Right Content Area */}
         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', p: 3, gap: 3 }}>
+          
+          {/* Data & Connections Panel */}
+          {activeNav === 'dataConnections' ? (
+            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              {/* Tabs Card */}
+              <Paper
+                elevation={0}
+                sx={{
+                  flex: 1,
+                  borderRadius: 4,
+                  background: 'rgba(255,255,255,0.98)',
+                  backdropFilter: 'blur(20px)',
+                  border: `1px solid ${alpha('#667eea', 0.12)}`,
+                  boxShadow: '0 8px 40px rgba(102, 126, 234, 0.08)',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                {/* Centered Tab Headers with Underline Style */}
+                <Box 
+                  sx={{ 
+                    borderBottom: `1px solid ${alpha('#667eea', 0.1)}`,
+                    background: 'rgba(255,255,255,1)',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', justifyContent: 'center', gap: 4, pt: 2 }}>
+                    <Box
+                      onClick={() => setDataTabIndex(0)}
+                      sx={{
+                        position: 'relative',
+                        pb: 1.5,
+                        px: 2,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        color: dataTabIndex === 0 ? '#667eea' : '#64748b',
+                        fontWeight: 600,
+                        fontSize: '0.95rem',
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          color: dataTabIndex === 0 ? '#667eea' : '#4facfe',
+                        },
+                        '&::after': {
+                          content: '""',
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          height: 3,
+                          borderRadius: '3px 3px 0 0',
+                          background: dataTabIndex === 0 
+                            ? 'linear-gradient(90deg, #4facfe 0%, #00f2fe 100%)'
+                            : 'transparent',
+                          transition: 'all 0.3s ease',
+                        },
+                      }}
+                    >
+                      <CloudQueueIcon sx={{ fontSize: 20 }} />
+                      Data Sources
+                    </Box>
+                    <Box
+                      onClick={() => setDataTabIndex(1)}
+                      sx={{
+                        position: 'relative',
+                        pb: 1.5,
+                        px: 2,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        color: dataTabIndex === 1 ? '#667eea' : '#64748b',
+                        fontWeight: 600,
+                        fontSize: '0.95rem',
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          color: dataTabIndex === 1 ? '#667eea' : '#764ba2',
+                        },
+                        '&::after': {
+                          content: '""',
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          height: 3,
+                          borderRadius: '3px 3px 0 0',
+                          background: dataTabIndex === 1 
+                            ? 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)'
+                            : 'transparent',
+                          transition: 'all 0.3s ease',
+                        },
+                      }}
+                    >
+                      <SnowflakeIcon sx={{ fontSize: 20 }} />
+                      Connections
+                    </Box>
+                  </Box>
+                </Box>
+
+                {/* Tab Content */}
+                <Box sx={{ flex: 1, overflow: 'auto', p: 0 }}>
+                  {dataTabIndex === 0 && <AddDataSource />}
+                  {dataTabIndex === 1 && <SnowflakeConnector />}
+                </Box>
+              </Paper>
+            </Box>
+          ) : (
+          <>
           {/* Stats Row */}
           <Grid container spacing={2}>
           <Grid size={{xs:6, sm:3}}>
@@ -1123,8 +1523,7 @@ const DashboardViews: React.FC = () => {
                     {index > 0 && <Divider />}
                     <ListItemButton
                       selected={selectedView?.id === view.id}
-                      onClick={() => setSelectedView(view)}
-                      onDoubleClick={() => handleViewClick(view)}
+                      onClick={() => handleViewClick(view)}
                       sx={{
                         py: 2,
                         px: 3,
@@ -1183,7 +1582,12 @@ const DashboardViews: React.FC = () => {
                           </IconButton>
                           <IconButton
                             size="small"
-                            onClick={(e) => { e.stopPropagation(); setMenuView(view); setAnchorEl(e.currentTarget); }}
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              setMenuView(view); 
+                              setAnchorEl(e.currentTarget); 
+                              setMenuPosition({ top: e.clientY, left: e.clientX });
+                            }}
                           >
                             <MoreVertIcon fontSize="small" />
                           </IconButton>
@@ -1196,91 +1600,27 @@ const DashboardViews: React.FC = () => {
             </Paper>
           )}
         </Box>
-
-        {/* Selected View Preview Panel */}
-        {selectedView && (
-          <Fade in={true}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 3,
-                borderRadius: 3,
-                background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.92) 100%)',
-                border: `1px solid ${alpha('#667eea', 0.2)}`,
-                boxShadow: `0 8px 32px ${alpha('#667eea', 0.1)}`,
-              }}
-            >
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box display="flex" alignItems="center" gap={2}>
-                  <Avatar
-                    sx={{
-                      width: 56,
-                      height: 56,
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      fontSize: '1.5rem',
-                      fontWeight: 700,
-                      boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
-                    }}
-                  >
-                    {selectedView.name.charAt(0).toUpperCase()}
-                  </Avatar>
-                  <Box>
-                    <Typography variant="h6" fontWeight={700} sx={{ color: '#1e293b' }}>
-                      {selectedView.name}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      {selectedView.description || 'No description provided'}
-                    </Typography>
-                  </Box>
-                </Box>
-                <Box display="flex" alignItems="center" gap={2}>
-                  <Box display="flex" gap={1}>
-                    <Chip
-                      icon={<BarChartIcon sx={{ fontSize: 14 }} />}
-                      label={`${selectedView.chartsCount} Charts`}
-                      size="small"
-                      sx={{ bgcolor: alpha('#667eea', 0.1), color: '#667eea', fontWeight: 600 }}
-                    />
-                    <Chip
-                      icon={<AccessTimeIcon sx={{ fontSize: 14 }} />}
-                      label={getTimeAgo(selectedView.updatedAt)}
-                      size="small"
-                      sx={{ bgcolor: alpha('#10b981', 0.1), color: '#059669', fontWeight: 600 }}
-                    />
-                  </Box>
-                  <Button
-                    variant="contained"
-                    endIcon={<ChevronRightIcon />}
-                    onClick={() => handleViewClick(selectedView)}
-                    sx={{
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      textTransform: 'none',
-                      fontWeight: 700,
-                      px: 3,
-                      py: 1,
-                      borderRadius: 2,
-                      boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
-                      '&:hover': {
-                        boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)',
-                        transform: 'translateY(-1px)',
-                      },
-                    }}
-                  >
-                    Open View
-                  </Button>
-                </Box>
-              </Box>
-            </Paper>
-          </Fade>
+        </>
         )}
+
         </Box>
       </Box>
 
       {/* Context Menu */}
       <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={() => setAnchorEl(null)}
+        anchorEl={menuPosition ? undefined : anchorEl || undefined}
+        anchorReference={menuPosition ? 'anchorPosition' : 'anchorEl'}
+        anchorPosition={menuPosition || undefined}
+        open={Boolean((menuPosition || anchorEl) && menuView)}
+        onClose={closeMenu}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
         PaperProps={{
           sx: {
             borderRadius: 2,
@@ -1290,15 +1630,15 @@ const DashboardViews: React.FC = () => {
           },
         }}
       >
-        <MenuItem onClick={() => menuView && handleViewClick(menuView)}>
+        <MenuItem onClick={() => { if (menuView) handleViewClick(menuView); closeMenu(); }}>
           <OpenInNewIcon fontSize="small" sx={{ mr: 1.5, color: '#667eea' }} />
           Open
         </MenuItem>
-        <MenuItem onClick={() => menuView && handleEditStart(menuView)}>
+        <MenuItem onClick={() => { if (menuView) handleEditStart(menuView); closeMenu(); }}>
           <EditIcon fontSize="small" sx={{ mr: 1.5, color: '#667eea' }} />
           Edit
         </MenuItem>
-        <MenuItem onClick={() => menuView && toggleFavorite(menuView.id)}>
+        <MenuItem onClick={() => { if (menuView) toggleFavorite(menuView.id); closeMenu(); }}>
           {menuView && favorites.has(menuView.id) ? (
             <StarIcon fontSize="small" sx={{ mr: 1.5, color: '#f59e0b' }} />
           ) : (
@@ -1307,7 +1647,7 @@ const DashboardViews: React.FC = () => {
           {menuView && favorites.has(menuView.id) ? 'Unfavorite' : 'Favorite'}
         </MenuItem>
         <Divider sx={{ my: 1 }} />
-        <MenuItem onClick={() => menuView && handleDeleteClick(menuView)} sx={{ color: '#ef4444' }}>
+        <MenuItem onClick={() => { if (menuView) handleDeleteClick(menuView); closeMenu(); }} sx={{ color: '#ef4444' }}>
           <DeleteIcon fontSize="small" sx={{ mr: 1.5 }} />
           Delete
         </MenuItem>

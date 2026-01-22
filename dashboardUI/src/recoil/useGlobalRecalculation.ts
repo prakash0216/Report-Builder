@@ -64,8 +64,9 @@ export const useGlobalRecalculation = () => {
   const mountCalculationDoneRef = useRef(false);
   const mountSequenceRunningRef = useRef(false); // Atomic flag to prevent double execution
 
-  // Check if we're on dashboard route
-  const isDashboardRoute = location.pathname === '/dashboards';
+  // Check if we're on a dashboard view route (/:dashboardName/:viewName)
+  // This is true when we're viewing charts, not on management pages
+  const isDashboardRoute = location.pathname.split('/').filter(Boolean).length >= 2;
 
   // 🔥 PERFORMANCE: Pre-fetch all context once, not per-calculation
   const getCalculationContext = useRecoilCallback(({ snapshot }) => async () => {

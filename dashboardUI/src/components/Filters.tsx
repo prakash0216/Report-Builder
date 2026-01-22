@@ -39,6 +39,7 @@ import { arrayParameterNamesSelector, arrayOfArrayParameterNamesSelector, arrayO
 import { parameterAtomFamily } from '../recoil/ParameterFamliy';
 import { variableAtomFamily } from '../recoil/VariableFamily';
 import { hooksArraySelector,hooksArrayOfArraySelector,hooksArrayOfObjectsSelector } from '../recoil/Variabletracker';
+import { getCurrentDashboardId } from '../recoil/ViewContext';
 import axios from 'axios';
 
 // Utility function to format dates to yyyy-mm-dd
@@ -708,6 +709,7 @@ const CascadingDropdown: React.FC = () => {
         };
 
         try {
+            const dashboardId = getCurrentDashboardId();
             const filterData = {
                 variableName: newConfig.variableName,
                 category: newConfig.category,
@@ -721,6 +723,7 @@ const CascadingDropdown: React.FC = () => {
                 valueKey: newConfig.valuekey,
                 availableOptions: newConfig.availableOptions,
                 defaultValues: newConfig.defaultValues,
+                dashboardId,
             };
 
             if (editingId) {
@@ -737,8 +740,8 @@ const CascadingDropdown: React.FC = () => {
             // Update local state
             setSpecificConfig(newConfig);
             
-            // Reload filters from database to ensure consistency
-            const reloadResponse = await axios.get('http://localhost:3002/api/filters');
+            // Reload filters from database to ensure consistency (scoped by dashboardId)
+            const reloadResponse = await axios.get(`http://localhost:3002/api/filters${dashboardId ? `?dashboardId=${dashboardId}` : ''}`);
             if (reloadResponse.data.success && reloadResponse.data.filters) {
                 const reloadedFilterNames = reloadResponse.data.filters.map((f: any) => f.variable_name);
                 setFilterNames(reloadedFilterNames);

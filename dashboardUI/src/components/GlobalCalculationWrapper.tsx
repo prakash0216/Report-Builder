@@ -10,8 +10,9 @@ interface GlobalCalculationWrapperProps {
 const GlobalCalculationWrapper: React.FC<GlobalCalculationWrapperProps> = ({ children }) => {
   const location = useLocation();
   
-  // 🔑 CRITICAL: Check if we're on dashboard route
-  const isDashboardRoute = location.pathname === '/dashboards';
+  // 🔑 CRITICAL: Check if we're on a dashboard view route (/:dashboardName/:viewName)
+  // This is true when we're viewing charts, not on management pages
+  const isDashboardRoute = location.pathname.split('/').filter(Boolean).length >= 2;
   
   // Always call the hook (React rules), but it will check route internally
   const { isRecalculating } = useGlobalRecalculation();

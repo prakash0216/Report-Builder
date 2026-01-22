@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Responsive, WidthProvider, Layout } from "react-grid-layout";
+import { useDashboardContext } from '../context/DashboardContext';
+import { authState, authAPI } from '../recoil/AuthState';
+import NotFound from './NotFound';
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import "../App";
@@ -10,7 +13,7 @@ import { chartConfigState } from "../recoil/ChartConfig";
 import { layoutState } from "../recoil/LayoutState";
 import ResizableChart from "../components/ResizableChart";
 import ChartWithTooltip from "../components/ChartWithTooltip";
-import FilterPanel from "../components/FilterPanel";
+import FilterPanel, { filterPanelExpandedState } from "../components/FilterPanel";
 import CardFilterPanel from "../components/CardFilterPanel";
 import DashboardTable from "../components/DashboardTable";
 import { tooltipConfigState } from "../recoil/TooltipConfigState";
@@ -39,7 +42,23 @@ import {
   TableRow,
   TablePagination,
   Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  alpha,
+  Avatar,
+  Tooltip,
+  IconButton,
+  ListItemIcon,
+  ListItemText,
 } from "@mui/material";
+import {
+  Logout as LogoutIcon,
+  Email as EmailIcon,
+} from "@mui/icons-material";
 import { dataLoadedState } from '../components/DataInitializer';
 import { filterResetTriggerState, isFirstDashboardVisitState } from '../recoil/initializationState';
 import Highcharts from 'highcharts';
@@ -151,6 +170,22 @@ export default function DropDragDashboard() {
   const location = useLocation();
   const { dashboardName: dashboardSlug, viewName: viewSlug } = useParams<{ dashboardName: string; viewName: string }>();
   const idRef = useRef(1);
+  const [auth, setAuth] = useRecoilState(authState);
+  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
+  
+  // Get dashboard context for error handling
+  const { isLoading: contextLoading, errorType } = useDashboardContext();
+
+  // Handle logout
+  const handleLogout = () => {
+    setUserMenuAnchor(null);
+    authAPI.logout();
+    setAuth({
+      isAuthenticated: false,
+      email: null,
+    });
+    navigate('/login');
+  };
 
   // Convert slugs to display names
   const currentDashboardName = dashboardSlug
@@ -176,16 +211,16 @@ export default function DropDragDashboard() {
   const [visibilityVarValues, setVisibilityVarValues] = useState<Record<string, any>>({});
 
   const [layouts, setLayouts] = useRecoilState(layoutState);
-  const [showFilters, setShowFilters] = useState(false);
   const [openCardFilterId, setOpenCardFilterId] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useRecoilState<boolean>(IsEditModeState);
+  const isFilterPanelExpanded = useRecoilValue(filterPanelExpandedState);
   const setFilterResetTrigger = useSetRecoilState(filterResetTriggerState);
   const [isFirstDashboardVisit, setIsFirstDashboardVisit] = useRecoilState(isFirstDashboardVisitState);
 
   // Track if we've already reset filters for this dashboard visit
   const hasResetForThisVisitRef = useRef<boolean>(false);
 
-  // 🔥 Reset filters to default values when navigating to /dashboards
+  // 🔥 Reset filters to default values when navigating to / (dashboard management)
   const resetFiltersToDefaults = useRecoilCallback(
     ({ snapshot, set }) =>
       async () => {
@@ -225,17 +260,17 @@ export default function DropDragDashboard() {
     []
   );
 
-  // Reset filters to defaults whenever we're on /dashboards route
+  // Reset filters to defaults whenever we're on the dashboard management route (/)
   useEffect(() => {
     const currentPath = location.pathname;
-    const isOnDashboards = currentPath === '/dashboards';
+    const isOnDashboardManagement = currentPath === '/';
     
     // Reset filters if:
-    // 1. We're on /dashboards
+    // 1. We're on / (dashboard management)
     // 2. Data is loaded
     // 3. We haven't reset for this visit yet
     // 4. This is NOT the first visit (on first visit, DataInitializer already set defaults)
-    if (isOnDashboards && dataLoaded && !hasResetForThisVisitRef.current) {
+    if (isOnDashboardManagement && dataLoaded && !hasResetForThisVisitRef.current) {
       
       // 🔥 FIX: On first visit, skip filter reset (DataInitializer already set defaults)
       // Mount calculation will handle the initial calculation
@@ -246,7 +281,7 @@ export default function DropDragDashboard() {
         return;
       }
       
-      console.log('🔄 [Dashboard] Returning to dashboard - resetting filters to defaults');
+      console.log('🔄 [Dashboard] Returning to dashboard management - resetting filters to defaults');
       
       // Reset filters and wait for it to complete
       resetFiltersToDefaults().then(() => {
@@ -262,10 +297,10 @@ export default function DropDragDashboard() {
       });
     }
     
-    // Reset the flag when we leave /dashboards (so it resets again on next visit)
-    if (!isOnDashboards && hasResetForThisVisitRef.current) {
+    // Reset the flag when we leave / (so it resets again on next visit)
+    if (!isOnDashboardManagement && hasResetForThisVisitRef.current) {
       hasResetForThisVisitRef.current = false;
-      console.log('📍 [Dashboard] Left /dashboards, reset flag cleared for next visit');
+      console.log('📍 [Dashboard] Left dashboard management, reset flag cleared for next visit');
     }
   }, [location.pathname, dataLoaded, resetFiltersToDefaults, setFilterResetTrigger, isFirstDashboardVisit, setIsFirstDashboardVisit]);
 
@@ -291,12 +326,93 @@ export default function DropDragDashboard() {
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [downloadMenuAnchor, setDownloadMenuAnchor] = useState<null | HTMLElement>(null);
 
-  const [views] = useState([
-    { id: "dashboardName", name: dashboardName },
-    { id: "view-1", name: "View 1" },
-    { id: "view-2", name: "View 2" },
-    { id: "view-3", name: "View 3" },
-  ]);
+  // Dynamic views from database
+  interface ViewData {
+    id: string;
+    name: string;
+    slug: string;
+  }
+  const [dynamicViews, setDynamicViews] = useState<ViewData[]>([]);
+  const [openCreateViewDialog, setOpenCreateViewDialog] = useState(false);
+  const [newViewName, setNewViewName] = useState('');
+  const [newViewDesc, setNewViewDesc] = useState('');
+  const [isCreatingView, setIsCreatingView] = useState(false);
+
+  // Fetch views from database
+  const fetchViews = useCallback(async () => {
+    if (!dashboardSlug) return;
+    
+    try {
+      const response = await fetch(`http://localhost:3002/api/dashboards/${dashboardSlug}/views`);
+      const data = await response.json();
+      
+      if (data.success && data.views) {
+        const mappedViews: ViewData[] = data.views.map((v: any) => ({
+          id: v.id.toString(),
+          name: v.name,
+          slug: v.slug,
+        }));
+        setDynamicViews(mappedViews);
+      }
+    } catch (err) {
+      console.error('Error fetching views:', err);
+    }
+  }, [dashboardSlug]);
+
+  // Fetch views on mount
+  useEffect(() => {
+    fetchViews();
+  }, [fetchViews]);
+
+  // Handle create new view
+  const handleCreateView = async () => {
+    if (!newViewName.trim() || !dashboardSlug) return;
+
+    try {
+      setIsCreatingView(true);
+      const response = await fetch(`http://localhost:3002/api/dashboards/${dashboardSlug}/views`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newViewName,
+          description: newViewDesc,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.view) {
+        // Add to local state
+        const newView: ViewData = {
+          id: data.view.id.toString(),
+          name: data.view.name,
+          slug: data.view.slug,
+        };
+        setDynamicViews(prev => [...prev, newView]);
+        
+        // Reset form and close dialog
+        setNewViewName('');
+        setNewViewDesc('');
+        setOpenCreateViewDialog(false);
+        
+        // Navigate to the new view
+        navigate(`/${dashboardSlug}/${data.view.slug}`);
+      } else {
+        console.error('Failed to create view:', data.error);
+        alert(data.error || 'Failed to create view');
+      }
+    } catch (err) {
+      console.error('Error creating view:', err);
+      alert('Error creating view');
+    } finally {
+      setIsCreatingView(false);
+    }
+  };
+
+  // Handle view tab click - navigate to the view
+  const handleViewTabClick = (view: ViewData) => {
+    navigate(`/${dashboardSlug}/${view.slug}`);
+  };
 
   const [customViews] = useState([
     { id: "default", name: "Default" },
@@ -1346,7 +1462,8 @@ export default function DropDragDashboard() {
     return () => clearTimeout(timer);
   }, [isEditMode, chartVisibility]);
 
-  const filterPanelTopOffset: string = isEditMode ? '155px' : '111px';
+  // Align filter panel to the navbar height; allow extra space in edit mode for edit toolbar
+  const filterPanelTopOffset: string = isEditMode ? '158px' : '80px';
 
   const renderChartContent = (item: Layout) => {
     const chartConfig = getChartConfig(item.i);
@@ -1554,6 +1671,17 @@ export default function DropDragDashboard() {
     );
   };
 
+  // 🔥 CRITICAL: Show 404 page if dashboard or view doesn't exist
+  // This prevents data corruption from invalid routes
+  if (!contextLoading && errorType) {
+    if (errorType === 'dashboard_not_found') {
+      return <NotFound type="dashboard" />;
+    }
+    if (errorType === 'view_not_found') {
+      return <NotFound type="view" />;
+    }
+  }
+
   // Show loading state if data isn't loaded yet
   if (!dataLoaded) {
     return (
@@ -1586,7 +1714,7 @@ export default function DropDragDashboard() {
         background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
       }}
     >
-      <FilterPanel showFilters={showFilters} topOffset={filterPanelTopOffset} />
+      <FilterPanel showFilters={true} topOffset={filterPanelTopOffset} />
 
       {/* Navbar */}
       <div 
@@ -1599,91 +1727,66 @@ export default function DropDragDashboard() {
         <div className="px-6 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div 
-                className="flex items-center justify-center w-12 h-12 rounded-xl shadow-lg"
+              {/* Back Button */}
+              <button
+                onClick={() => navigate(`/${dashboardSlug}`)}
+                className="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 hover:scale-105"
                 style={{
-                  background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-                  boxShadow: '0 4px 15px rgba(245, 87, 108, 0.3)',
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  backdropFilter: 'blur(10px)',
+                }}
+                title="Back to Views"
+              >
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+              </button>
+
+              {/* Icon */}
+              <div 
+                className="flex items-center justify-center w-10 h-10 rounded-xl"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  backdropFilter: 'blur(10px)',
                 }}
               >
-                <img src="RBI.png" alt="Logo" className="h-8 w-8" />
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                </svg>
               </div>
+
+              {/* Breadcrumb & View Name */}
               <div>
-                <h1 
-                  className="text-xl font-bold leading-tight drop-shadow-md"
-                  style={{ color: 'white', letterSpacing: '0.5px' }}
-                >
-                  Report Builder
-                </h1>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <p className="text-xs font-medium" style={{ color: 'rgba(255, 255, 255, 0.9)' }}>
-                    {isEditMode ? (
-                      <span className="inline-flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: '#fde047' }}></span>
-                        Edit Mode
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#86efac' }}></span>
-                        View Mode
-                      </span>
-                    )}
-                  </p>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '10px' }}>•</span>
-                  <div className="flex items-center gap-2">
-                    <span 
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white font-semibold backdrop-blur-sm"
-                      style={{ 
-                        fontSize: '10px',
-                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                      }}
-                    >
-                      <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                      </svg>
-                      {Object.keys(availableVariables).length}
-                    </span>
-                    <span 
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white font-semibold backdrop-blur-sm"
-                      style={{ 
-                        fontSize: '10px',
-                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                      }}
-                    >
-                      <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
-                      {visibleCharts.length}
-                    </span>
-                    {hiddenChartCount > 0 && (
-                      <span 
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white font-semibold backdrop-blur-sm"
-                        style={{ 
-                          fontSize: '10px',
-                          backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                        }}
-                        title={`${hiddenChartCount} hidden`}
-                      >
-                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                        </svg>
-                        {hiddenChartCount}
-                      </span>
-                    )}
-                    <span 
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white font-semibold backdrop-blur-sm"
-                      style={{ 
-                        fontSize: '10px',
-                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                      }}
-                    >
-                      <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 7V4z" />
-                      </svg>
-                      {filterNames.length}
-                    </span>
-                  </div>
+                {/* Breadcrumb Navigation */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => navigate('/')}
+                    className="text-sm font-semibold transition-colors hover:underline"
+                    style={{ color: 'rgba(255, 255, 255, 0.8)' }}
+                  >
+                    Dashboards
+                  </button>
+                  <svg className="w-4 h-4" style={{ color: 'rgba(255, 255, 255, 0.5)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                  <button
+                    onClick={() => navigate(`/${dashboardSlug}`)}
+                    className="text-sm font-semibold transition-colors hover:underline"
+                    style={{ color: 'rgba(255, 255, 255, 0.8)' }}
+                  >
+                    {currentDashboardName}
+                  </button>
+                  <svg className="w-4 h-4" style={{ color: 'rgba(255, 255, 255, 0.5)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                  <span className="text-sm font-bold text-white">
+                    {currentViewName}
+                  </span>
                 </div>
+                {/* View Name - Large */}
+                <h1 className="text-xl font-bold text-white mt-0.5" style={{ letterSpacing: '0.5px' }}>
+                  {currentViewName}
+                </h1>
               </div>
             </div>
 
@@ -1711,34 +1814,6 @@ export default function DropDragDashboard() {
                   ))}
                 </select>
               </div>
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 backdrop-blur-sm ${
-                  showFilters 
-                    ? "text-white shadow-lg" 
-                    : "text-white hover:bg-white/20 border"
-                }`}
-                style={{
-                  backgroundColor: showFilters ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.1)',
-                  borderColor: showFilters ? 'transparent' : 'rgba(255, 255, 255, 0.2)',
-                }}
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 7V4z" />
-                </svg>
-                Filters
-                {filterNames.length > 0 && (
-                  <span 
-                    className="inline-flex items-center justify-center min-w-[18px] h-4 px-1 rounded-full text-[10px] font-bold"
-                    style={{
-                      backgroundColor: showFilters ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.2)',
-                    }}
-                  >
-                    {filterNames.length}
-                  </span>
-                )}
-              </button>
-
               {isEditMode && (
                 <button 
                   onClick={toggleCompactType} 
@@ -1784,73 +1859,70 @@ export default function DropDragDashboard() {
                   </>
                 )}
               </button>
+
+              {/* User Menu */}
+              <Box sx={{ ml: 2 }}>
+                <Tooltip title={auth.email || 'User'}>
+                  <IconButton
+                    onClick={(e) => setUserMenuAnchor(e.currentTarget)}
+                    sx={{
+                      p: 0.5,
+                      background: 'rgba(255,255,255,0.15)',
+                      border: '2px solid rgba(255,255,255,0.3)',
+                      '&:hover': {
+                        background: 'rgba(255,255,255,0.25)',
+                        border: '2px solid rgba(255,255,255,0.5)',
+                      },
+                    }}
+                  >
+                    <Avatar
+                      sx={{
+                        width: 36,
+                        height: 36,
+                        bgcolor: 'rgba(255,255,255,0.2)',
+                        color: 'white',
+                        fontWeight: 700,
+                        fontSize: '0.875rem',
+                      }}
+                    >
+                      {auth.email ? auth.email[0].toUpperCase() : 'U'}
+                    </Avatar>
+                  </IconButton>
+                </Tooltip>
+                <Menu
+                  anchorEl={userMenuAnchor}
+                  open={Boolean(userMenuAnchor)}
+                  onClose={() => setUserMenuAnchor(null)}
+                  PaperProps={{
+                    sx: {
+                      mt: 1,
+                      minWidth: 220,
+                      borderRadius: 2,
+                      boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+                      border: '1px solid rgba(102, 126, 234, 0.1)',
+                    },
+                  }}
+                  transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                  anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+                >
+                  <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      <EmailIcon sx={{ fontSize: 16, color: '#667eea' }} />
+                      <Typography variant="body2" fontWeight={600} color="text.primary">
+                        {auth.email || 'User'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <MenuItem onClick={handleLogout} sx={{ py: 1.5, color: '#ef4444' }}>
+                    <ListItemIcon>
+                      <LogoutIcon fontSize="small" sx={{ color: '#ef4444' }} />
+                    </ListItemIcon>
+                    <ListItemText primary="Logout" />
+                  </MenuItem>
+                </Menu>
+              </Box>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Dashboard Name Section */}
-      <div 
-        className="fixed left-0 right-0 z-40"
-        style={{
-          top: '68px',
-          background: 'linear-gradient(135deg, #e0e7ff 0%, #ddd6fe 100%)',
-          borderBottom: '2px solid rgba(139, 92, 246, 0.3)',
-          boxShadow: '0 2px 12px rgba(139, 92, 246, 0.15)',
-        }}
-      >
-        <div className="px-6 py-2 flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div 
-              className="flex items-center justify-center w-7 h-7 rounded-lg"
-              style={{
-                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(124, 58, 237, 0.15) 100%)',
-              }}
-            >
-              <svg className="w-4 h-4 text-indigo-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <span className="text-sm font-semibold text-indigo-900">Dashboard:</span>
-          </div>
-          
-          {isEditingName ? (
-            <input
-              ref={nameInputRef}
-              type="text"
-              value={dashboardName}
-              onChange={(e) => setDashboardName(e.target.value)}
-              onBlur={() => setIsEditingName(false)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') setIsEditingName(false);
-                if (e.key === 'Escape') {
-                  setDashboardName("My Dashboard");
-                  setIsEditingName(false);
-                }
-              }}
-              className="text-base font-bold text-gray-900 bg-white border-2 border-indigo-500 outline-none rounded-lg shadow-sm px-2 py-1"
-              style={{ minWidth: '200px', maxWidth: '400px' }}
-            />
-          ) : (
-            <button
-              onClick={() => isEditMode ? setIsEditingName(true) : setIsEditingName(false)}
-              className="text-base font-bold text-indigo-900 hover:text-indigo-700 transition-colors px-2 py-1 rounded-lg hover:bg-white/40 border border-transparent hover:border-indigo-300"
-            >
-              {dashboardName}
-            </button>
-          )}
-
-          {isEditMode && (
-            <button
-              onClick={() => setIsEditingName(true)}
-              className="p-1 text-indigo-600 hover:text-indigo-700 hover:bg-white/40 rounded transition-colors"
-              title="Edit name"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
-            </button>
-          )}
         </div>
       </div>
 
@@ -1859,7 +1931,7 @@ export default function DropDragDashboard() {
         <div 
           className="fixed left-0 right-0 z-40"
           style={{
-            top: '111px',
+            top: '68px',
             background: 'linear-gradient(135deg,rgb(204, 204, 224) 0%,rgb(205, 195, 250) 100%)',
             borderBottom: '1px solid rgba(139, 92, 246, 0.2)',
             boxShadow: '0 2px 8px rgba(139, 92, 246, 0.1)',
@@ -1902,7 +1974,7 @@ export default function DropDragDashboard() {
       {/* Main Content */}
       <div 
         ref={dashboardGridRef}
-        className={`px-2 pb-16 transition-all duration-300 ${isEditMode ? 'pt-48' : 'pt-32'} ${showFilters ? 'mr-80' : 'mr-0'}`}
+        className={`px-2 pb-16 transition-all duration-300 ${isEditMode ? 'pt-36' : 'pt-20'} ${isFilterPanelExpanded ? 'mr-80' : 'mr-12'}`}
         style={{
           backgroundImage: isEditMode ? `radial-gradient(circle, #94a3b8 1.5px, transparent 1.5px)` : 'none',
           backgroundSize: isEditMode ? '24px 24px' : 'auto',
@@ -2039,24 +2111,27 @@ export default function DropDragDashboard() {
       >
         <div className="flex items-center justify-between px-4 py-2">
           <div className="flex items-center gap-1">
-            {views.map((view) => (
+            {/* Dynamic View Tabs */}
+            {dynamicViews.map((view) => (
               <button
                 key={view.id}
-                onClick={() => setSelectedView(view.id)}
+                onClick={() => handleViewTabClick(view)}
                 className={`group relative px-4 py-1.5 text-sm font-medium rounded-t-lg transition-all ${
-                  selectedView === view.id
+                  viewSlug === view.slug
                     ? "bg-white text-gray-900 shadow-md"
                     : "bg-transparent text-white hover:bg-white/20 hover:text-white"
                 }`}
               >
                 {view.name}
-                {selectedView === view.id && (
+                {viewSlug === view.slug && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
                 )}
               </button>
             ))}
             
+            {/* Add View Button */}
             <button
+              onClick={() => setOpenCreateViewDialog(true)}
               className="ml-2 p-1.5 text-white/60 hover:text-white hover:bg-white/20 rounded transition-colors"
               title="Add View"
             >
@@ -2222,6 +2297,115 @@ export default function DropDragDashboard() {
         </div>,
         document.body
       )}
+
+      {/* Create View Dialog */}
+      <Dialog
+        open={openCreateViewDialog}
+        onClose={() => { setOpenCreateViewDialog(false); setNewViewName(''); setNewViewDesc(''); }}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%)',
+            border: '1px solid rgba(102, 126, 234, 0.15)',
+            boxShadow: '0 24px 48px rgba(0,0,0,0.12)',
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Box display="flex" alignItems="center" gap={2}>
+            <Box
+              sx={{
+                width: 48,
+                height: 48,
+                borderRadius: 2.5,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
+              }}
+            >
+              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                Create New View
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Add a new view to {currentDashboardName}
+              </Typography>
+            </Box>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <TextField
+            autoFocus
+            label="View Name"
+            fullWidth
+            required
+            value={newViewName}
+            onChange={(e) => setNewViewName(e.target.value)}
+            placeholder="e.g., Patient View, Sales Overview"
+            sx={{
+              mb: 3,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                '& fieldset': { borderColor: alpha('#667eea', 0.2) },
+                '&:hover fieldset': { borderColor: alpha('#667eea', 0.4) },
+                '&.Mui-focused fieldset': { borderColor: '#667eea' },
+              },
+              '& .MuiInputLabel-root.Mui-focused': { color: '#667eea' },
+            }}
+          />
+          <TextField
+            label="Description (Optional)"
+            fullWidth
+            multiline
+            rows={3}
+            value={newViewDesc}
+            onChange={(e) => setNewViewDesc(e.target.value)}
+            placeholder="Describe what this view will display..."
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                '& fieldset': { borderColor: alpha('#667eea', 0.2) },
+                '&:hover fieldset': { borderColor: alpha('#667eea', 0.4) },
+                '&.Mui-focused fieldset': { borderColor: '#667eea' },
+              },
+              '& .MuiInputLabel-root.Mui-focused': { color: '#667eea' },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 2 }}>
+          <Button
+            onClick={() => { setOpenCreateViewDialog(false); setNewViewName(''); setNewViewDesc(''); }}
+            disabled={isCreatingView}
+            sx={{ textTransform: 'none', fontWeight: 600, color: 'text.secondary' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleCreateView}
+            disabled={!newViewName.trim() || isCreatingView}
+            sx={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              textTransform: 'none',
+              fontWeight: 700,
+              px: 4,
+              borderRadius: 2,
+              boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
+              '&:disabled': { background: alpha('#667eea', 0.3) },
+            }}
+          >
+            {isCreatingView ? 'Creating...' : 'Create View'}
+          </Button>
+        </DialogActions>
+      </Dialog>
   </>
   );
 }

@@ -1,7 +1,8 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useRecoilState } from 'recoil';
+import { useRecoilState, useSetRecoilState } from 'recoil';
 import { dashboardsManager, Dashboard } from '../recoil/Dashboards';
+import { authState, authAPI } from '../recoil/AuthState';
 import {
   Box,
   Paper,
@@ -27,29 +28,25 @@ import {
   Toolbar,
   InputAdornment,
   alpha,
-  Fade,
   Zoom,
-  Badge,
   Avatar,
   Divider,
   Menu,
   MenuItem,
   ToggleButtonGroup,
   ToggleButton,
+  CircularProgress,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Dashboard as DashboardIcon,
   FolderOpen as FolderOpenIcon,
   ChevronRight as ChevronRightIcon,
   BarChart as BarChartIcon,
   Warning as WarningIcon,
   TrendingUp as TrendingUpIcon,
-  AutoAwesome as AutoAwesomeIcon,
   Layers as LayersIcon,
-  ViewModule as ViewModuleIcon,
   OpenInNew as OpenInNewIcon,
   Search as SearchIcon,
   GridView as GridViewIcon,
@@ -60,18 +57,24 @@ import {
   Analytics as AnalyticsIcon,
   Star as StarIcon,
   StarBorder as StarBorderIcon,
-  Home as HomeIcon,
-  Settings as SettingsIcon,
   History as HistoryIcon,
-  Bookmark as BookmarkIcon,
-  Speed as SpeedIcon,
   Help as HelpIcon,
-  FilterAlt as FilterAltIcon,
+  Storage as StorageIcon,
+  CloudQueue as CloudQueueIcon,
+  AcUnit as SnowflakeIcon,
+  Logout as LogoutIcon,
+  Email as EmailIcon,
 } from '@mui/icons-material';
+import AddDataSource from '../components/AddDataSource';
+import SnowflakeConnector from '../components/SnowflakeConnector';
+
+// API base URL
+const API_BASE = 'http://localhost:3002/api';
 
 const DashboardManagement: React.FC = () => {
   const navigate = useNavigate();
   const [dashboards, setDashboards] = useRecoilState(dashboardsManager);
+  const [auth, setAuth] = useRecoilState(authState);
   const [selectedDashboard, setSelectedDashboard] = useState<Dashboard | null>(null);
   const [newDashboardName, setNewDashboardName] = useState<string>('');
   const [newDashboardDesc, setNewDashboardDesc] = useState<string>('');
@@ -80,15 +83,112 @@ const DashboardManagement: React.FC = () => {
   const [editDesc, setEditDesc] = useState<string>('');
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
+  const [openMigrateDialog, setOpenMigrateDialog] = useState(false);
   const [deletingDashboard, setDeletingDashboard] = useState<Dashboard | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [migrateDashboardName, setMigrateDashboardName] = useState('');
+  const [migrateViewName, setMigrateViewName] = useState('');
+  const [isMigrating, setIsMigrating] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'name' | 'updated' | 'created'>('updated');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [menuDashboard, setMenuDashboard] = useState<Dashboard | null>(null);
-  const [activeNav, setActiveNav] = useState<'all' | 'favorites' | 'recent'>('all');
+  const [activeNav, setActiveNav] = useState<'all' | 'favorites' | 'recent' | 'dataConnections'>('all');
+  const [dataTabIndex, setDataTabIndex] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
   const dashIdRef = useRef(1);
+
+  // Handle logout
+  const handleLogout = () => {
+    setUserMenuAnchor(null);
+    authAPI.logout();
+    setAuth({
+      isAuthenticated: false,
+      email: null,
+    });
+    navigate('/login');
+  };
+
+  const closeMenu = () => {
+    setAnchorEl(null);
+    setMenuDashboard(null);
+    setMenuPosition(null);
+  };
+
+  // Fetch favorites from backend
+  const fetchFavorites = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/favorites/dashboards`);
+      const data = await response.json();
+      if (data.success && data.favoriteIds) {
+        setFavorites(new Set(data.favoriteIds));
+      }
+    } catch (err) {
+      console.error('Error fetching favorites:', err);
+    }
+  }, []);
+
+  // Fetch dashboards from backend
+  const fetchDashboards = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`${API_BASE}/dashboards`);
+      const data = await response.json();
+      
+      if (data.success && data.dashboards) {
+        console.log('📥 [Dashboards] raw response', data.dashboards);
+        if (data.dashboards.length > 0) {
+          const d0 = data.dashboards[0];
+          console.log('📥 [Dashboards] sample fields', {
+            charts_count: d0.charts_count,
+            chartsCount: d0.chartsCount,
+            views_count: d0.views_count,
+            viewsCount: d0.viewsCount,
+          });
+        }
+        const mappedDashboards: Dashboard[] = data.dashboards.map((d: any) => {
+          const rawCharts = d.charts_count ?? d.chartsCount ?? 0;
+          const rawViews = d.views_count ?? d.viewsCount ?? 0;
+          return {
+          id: d.id.toString(),
+          name: d.name,
+          slug: d.slug,
+          description: d.description || '',
+          thumbnail: '',
+          createdAt: new Date(d.created_at).getTime(),
+          updatedAt: new Date(d.updated_at).getTime(),
+          chartsCount: Number(rawCharts),
+          viewsCount: Number(rawViews),
+          icon: d.icon,
+          color: d.color,
+        };
+        });
+        setDashboards(mappedDashboards);
+        console.log('📊 [Dashboards] mapped totals', {
+          totalDashboards: mappedDashboards.length,
+          totalCharts: mappedDashboards.reduce((acc, d) => acc + (d.chartsCount || 0), 0),
+          sample: mappedDashboards.slice(0, 3).map(d => ({ name: d.name, chartsCount: d.chartsCount, viewsCount: d.viewsCount })),
+        });
+        
+        // Update dashIdRef for new dashboard creation
+        const maxId = Math.max(0, ...mappedDashboards.map(d => parseInt(d.id) || 0));
+        dashIdRef.current = maxId + 1;
+      }
+    } catch (err) {
+      console.error('Error fetching dashboards:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setDashboards]);
+
+  // Load dashboards and favorites on mount
+  useEffect(() => {
+    fetchDashboards();
+    fetchFavorites();
+  }, [fetchDashboards, fetchFavorites]);
 
   // Filter and sort dashboards
   const filteredDashboards = useMemo(() => {
@@ -137,25 +237,46 @@ const DashboardManagement: React.FC = () => {
   }), [dashboards, favorites]);
 
   // Create new dashboard
-  const handleCreateDashboard = () => {
+  const handleCreateDashboard = async () => {
     if (!newDashboardName.trim()) return;
 
-    const newDashboard: Dashboard = {
-      id: dashIdRef.current.toString(),
-      name: newDashboardName,
-      description: newDashboardDesc,
-      thumbnail: '',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      chartsCount: 0,
-    };
-
-    dashIdRef.current += 1;
-    setDashboards([...dashboards, newDashboard]);
-    setNewDashboardName('');
-    setNewDashboardDesc('');
-    setOpenCreateDialog(false);
-    setSelectedDashboard(newDashboard);
+    try {
+      const response = await fetch(`${API_BASE}/dashboards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newDashboardName,
+          description: newDashboardDesc,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.dashboard) {
+        const newDashboard: Dashboard = {
+          id: data.dashboard.id.toString(),
+          name: data.dashboard.name,
+          slug: data.dashboard.slug,
+          description: data.dashboard.description || '',
+          thumbnail: '',
+          createdAt: new Date(data.dashboard.created_at).getTime(),
+          updatedAt: new Date(data.dashboard.updated_at).getTime(),
+          chartsCount: 0,
+        };
+        
+        setDashboards([...dashboards, newDashboard]);
+        setNewDashboardName('');
+        setNewDashboardDesc('');
+        setOpenCreateDialog(false);
+        setSelectedDashboard(newDashboard);
+      } else {
+        console.error('Failed to create dashboard:', data.error);
+        alert(data.error || 'Failed to create dashboard');
+      }
+    } catch (err) {
+      console.error('Error creating dashboard:', err);
+      alert('Error creating dashboard');
+    }
   };
 
   // Edit dashboard
@@ -167,19 +288,51 @@ const DashboardManagement: React.FC = () => {
     setAnchorEl(null);
   };
 
-  const handleEditSave = () => {
+  const handleEditSave = async () => {
     if (!editName.trim() || !editingDashboard) return;
 
-    setDashboards(
-      dashboards.map((d) =>
-        d.id === editingDashboard.id
-          ? { ...d, name: editName, description: editDesc, updatedAt: Date.now() }
-          : d
-      )
-    );
+    try {
+      const response = await fetch(`${API_BASE}/dashboards/${editingDashboard.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editName,
+          description: editDesc,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.dashboard) {
+        setDashboards(
+          dashboards.map((d) =>
+            d.id === editingDashboard.id
+              ? { 
+                  ...d, 
+                  name: data.dashboard.name, 
+                  slug: data.dashboard.slug,
+                  description: data.dashboard.description || '', 
+                  updatedAt: new Date(data.dashboard.updated_at).getTime() 
+                }
+              : d
+          )
+        );
 
-    if (selectedDashboard?.id === editingDashboard.id) {
-      setSelectedDashboard({ ...editingDashboard, name: editName, description: editDesc });
+        if (selectedDashboard?.id === editingDashboard.id) {
+          setSelectedDashboard({ 
+            ...editingDashboard, 
+            name: data.dashboard.name, 
+            slug: data.dashboard.slug,
+            description: data.dashboard.description || '' 
+          });
+        }
+      } else {
+        console.error('Failed to update dashboard:', data.error);
+        alert(data.error || 'Failed to update dashboard');
+      }
+    } catch (err) {
+      console.error('Error updating dashboard:', err);
+      alert('Error updating dashboard');
     }
 
     setEditingDashboard(null);
@@ -194,42 +347,109 @@ const DashboardManagement: React.FC = () => {
     setAnchorEl(null);
   };
 
-  const handleDeleteConfirm = () => {
-    if (deletingDashboard) {
-      setDashboards(dashboards.filter((d) => d.id !== deletingDashboard.id));
-      if (selectedDashboard?.id === deletingDashboard.id) {
-        setSelectedDashboard(null);
+  const handleDeleteConfirm = async () => {
+    if (!deletingDashboard) return;
+    
+    try {
+      const response = await fetch(`${API_BASE}/dashboards/${deletingDashboard.id}`, {
+        method: 'DELETE',
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setDashboards(dashboards.filter((d) => d.id !== deletingDashboard.id));
+        if (selectedDashboard?.id === deletingDashboard.id) {
+          setSelectedDashboard(null);
+        }
+        // Remove from favorites (if favorited)
+        if (favorites.has(deletingDashboard.id)) {
+          try {
+            await fetch(`${API_BASE}/favorites/dashboards/${deletingDashboard.id}`, { method: 'DELETE' });
+            const newFavorites = new Set(favorites);
+            newFavorites.delete(deletingDashboard.id);
+            setFavorites(newFavorites);
+          } catch (err) {
+            console.error('Error removing from favorites:', err);
+          }
+        }
+      } else {
+        console.error('Failed to delete dashboard:', data.error);
+        alert(data.error || 'Failed to delete dashboard');
       }
-      favorites.delete(deletingDashboard.id);
-      setFavorites(new Set(favorites));
+    } catch (err) {
+      console.error('Error deleting dashboard:', err);
+      alert('Error deleting dashboard');
     }
+    
     setOpenDeleteDialog(false);
     setDeletingDashboard(null);
   };
 
-  // Convert name to URL-friendly slug
-  const toSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
-      .replace(/\s+/g, '-') // Replace spaces with dashes
-      .replace(/-+/g, '-') // Replace multiple dashes with single
-      .trim();
-  };
-
+  // Use slug from dashboard if available, otherwise generate from name
   const handleDashboardClick = (dashboard: Dashboard) => {
-    const slug = toSlug(dashboard.name);
+    const slug = (dashboard as any).slug || dashboard.name
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .trim();
     navigate(`/${slug}`);
   };
 
-  const toggleFavorite = (id: string) => {
-    const newFavorites = new Set(favorites);
-    if (newFavorites.has(id)) {
-      newFavorites.delete(id);
-    } else {
-      newFavorites.add(id);
+  // Migration handler - migrate existing data to new hierarchy
+  const handleMigrate = async () => {
+    if (!migrateDashboardName.trim() || !migrateViewName.trim()) return;
+    
+    try {
+      setIsMigrating(true);
+      const response = await fetch(`${API_BASE}/migrate-to-hierarchy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dashboardName: migrateDashboardName,
+          viewName: migrateViewName,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        alert(`Migration successful!\n\nDashboard: ${migrateDashboardName}\nView: ${migrateViewName}\n\nYou can now access your data at:\n/${data.dashboardSlug}/${data.viewSlug}`);
+        setOpenMigrateDialog(false);
+        setMigrateDashboardName('');
+        setMigrateViewName('');
+        // Refresh dashboards list
+        fetchDashboards();
+      } else {
+        alert(data.error || 'Migration failed');
+      }
+    } catch (err) {
+      console.error('Migration error:', err);
+      alert('Error during migration');
+    } finally {
+      setIsMigrating(false);
     }
-    setFavorites(newFavorites);
+  };
+
+  const toggleFavorite = async (id: string) => {
+    const newFavorites = new Set(favorites);
+    const isFavorite = newFavorites.has(id);
+    
+    try {
+      if (isFavorite) {
+        // Remove from favorites
+        await fetch(`${API_BASE}/favorites/dashboards/${id}`, { method: 'DELETE' });
+        newFavorites.delete(id);
+      } else {
+        // Add to favorites
+        await fetch(`${API_BASE}/favorites/dashboards/${id}`, { method: 'POST' });
+        newFavorites.add(id);
+      }
+      setFavorites(newFavorites);
+    } catch (err) {
+      console.error('Error toggling favorite:', err);
+    }
   };
 
   const formatDate = (timestamp: number) => {
@@ -323,8 +543,7 @@ const DashboardManagement: React.FC = () => {
             },
           },
         }}
-        onClick={() => setSelectedDashboard(dashboard)}
-        onDoubleClick={() => handleDashboardClick(dashboard)}
+        onClick={() => handleDashboardClick(dashboard)}
       >
         {/* Top gradient bar */}
         <Box
@@ -403,7 +622,12 @@ const DashboardManagement: React.FC = () => {
               <Tooltip title="More options">
                 <IconButton
                   size="small"
-                  onClick={(e) => { e.stopPropagation(); setMenuDashboard(dashboard); setAnchorEl(e.currentTarget); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuDashboard(dashboard);
+                    setAnchorEl(e.currentTarget);
+                    setMenuPosition({ top: e.clientY, left: e.clientX });
+                  }}
                   sx={{ color: alpha('#667eea', 0.6) }}
                 >
                   <MoreVertIcon fontSize="small" />
@@ -512,19 +736,15 @@ const DashboardManagement: React.FC = () => {
       >
         <Toolbar sx={{ py: 1.5, px: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-            <Box
-              sx={{
-                background: 'rgba(255,255,255,0.2)',
-                borderRadius: 2.5,
-                p: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backdropFilter: 'blur(10px)',
-              }}
-            >
-              <AnalyticsIcon sx={{ color: 'white', fontSize: 28 }} />
-            </Box>
+          <div 
+                className="flex items-center justify-center w-12 h-12 rounded-xl shadow-lg"
+                style={{
+                  background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                  boxShadow: '0 4px 15px rgba(245, 87, 108, 0.3)',
+                }}
+              >
+                <img src="RBI.png" alt="Logo" className="h-8 w-8" />
+              </div>
             <Box>
               <Typography variant="h6" fontWeight={700} sx={{ color: 'white', letterSpacing: '-0.3px' }}>
                 Report Builder Intelligence
@@ -558,6 +778,68 @@ const DashboardManagement: React.FC = () => {
           >
             New Dashboard
           </Button>
+
+          {/* User Menu */}
+          <Box sx={{ ml: 2 }}>
+            <Tooltip title={auth.email || 'User'}>
+              <IconButton
+                onClick={(e) => setUserMenuAnchor(e.currentTarget)}
+                sx={{
+                  p: 0.5,
+                  background: 'rgba(255,255,255,0.15)',
+                  border: '2px solid rgba(255,255,255,0.3)',
+                  '&:hover': {
+                    background: 'rgba(255,255,255,0.25)',
+                    border: '2px solid rgba(255,255,255,0.5)',
+                  },
+                }}
+              >
+                <Avatar
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    bgcolor: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    fontWeight: 700,
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  {auth.email ? auth.email[0].toUpperCase() : 'U'}
+                </Avatar>
+              </IconButton>
+            </Tooltip>
+            <Menu
+              anchorEl={userMenuAnchor}
+              open={Boolean(userMenuAnchor)}
+              onClose={() => setUserMenuAnchor(null)}
+              PaperProps={{
+                sx: {
+                  mt: 1,
+                  minWidth: 220,
+                  borderRadius: 2,
+                  boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+                  border: '1px solid rgba(102, 126, 234, 0.1)',
+                },
+              }}
+              transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+            >
+              <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <EmailIcon sx={{ fontSize: 16, color: '#667eea' }} />
+                  <Typography variant="body2" fontWeight={600} color="text.primary">
+                    {auth.email || 'User'}
+                  </Typography>
+                </Box>
+              </Box>
+              <MenuItem onClick={handleLogout} sx={{ py: 1.5, color: '#ef4444' }}>
+                <ListItemIcon>
+                  <LogoutIcon fontSize="small" sx={{ color: '#ef4444' }} />
+                </ListItemIcon>
+                <ListItemText primary="Logout" />
+              </MenuItem>
+            </Menu>
+          </Box>
         </Toolbar>
       </AppBar>
 
@@ -689,35 +971,50 @@ const DashboardManagement: React.FC = () => {
                 />
               </ListItemButton>
             </ListItem>
+
+            {/* Divider */}
+            <Divider sx={{ my: 2, mx: 1, borderColor: alpha('#667eea', 0.1) }} />
+
+            {/* Data & Connections - Always has background */}
+            <ListItem disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                selected={activeNav === 'dataConnections'}
+                onClick={() => setActiveNav('dataConnections')}
+                sx={{
+                  borderRadius: 2,
+                  py: 1.25,
+                  bgcolor: activeNav === 'dataConnections' 
+                    ? 'linear-gradient(135deg, rgba(79, 172, 254, 0.15) 0%, rgba(102, 126, 234, 0.15) 100%)'
+                    : alpha('#4facfe', 0.06),
+                  border: `1px solid ${activeNav === 'dataConnections' ? alpha('#4facfe', 0.3) : alpha('#4facfe', 0.1)}`,
+                  '&.Mui-selected': {
+                    background: 'linear-gradient(135deg, rgba(79, 172, 254, 0.15) 0%, rgba(102, 126, 234, 0.15) 100%)',
+                    '& .MuiListItemIcon-root': { color: '#4facfe' },
+                    '& .MuiListItemText-primary': { color: '#4facfe', fontWeight: 700 },
+                    '&:hover': { 
+                      background: 'linear-gradient(135deg, rgba(79, 172, 254, 0.2) 0%, rgba(102, 126, 234, 0.2) 100%)',
+                    },
+                  },
+                  '&:hover': { 
+                    bgcolor: alpha('#4facfe', 0.1),
+                    borderColor: alpha('#4facfe', 0.2),
+                  },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 40, color: activeNav === 'dataConnections' ? '#4facfe' : '#64748b' }}>
+                  <StorageIcon sx={{ fontSize: 20 }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="Data & Connections" 
+                  primaryTypographyProps={{ 
+                    fontSize: '0.875rem', 
+                    fontWeight: 600,
+                    color: activeNav === 'dataConnections' ? '#4facfe' : 'inherit',
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
           </List>
-
-          <Divider sx={{ mx: 2 }} />
-
-          {/* Quick Actions */}
-          <Box sx={{ p: 2 }}>
-            <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: 1, mb: 1, display: 'block' }}>
-              Quick Actions
-            </Typography>
-            <Button
-              fullWidth
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => { setEditingDashboard(null); setNewDashboardName(''); setNewDashboardDesc(''); setOpenCreateDialog(true); }}
-              sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                textTransform: 'none',
-                fontWeight: 600,
-                py: 1.25,
-                borderRadius: 2,
-                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.25)',
-                '&:hover': {
-                  boxShadow: '0 6px 16px rgba(102, 126, 234, 0.35)',
-                },
-              }}
-            >
-              New Dashboard
-            </Button>
-          </Box>
 
           {/* Help Section */}
           <Box sx={{ p: 2, borderTop: `1px solid ${alpha('#667eea', 0.08)}`, mt: 'auto' }}>
@@ -736,7 +1033,7 @@ const DashboardManagement: React.FC = () => {
                 </Typography>
               </Box>
               <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
-                Double-click on any dashboard card to open it directly.
+                Click on any dashboard card to open it directly.
               </Typography>
             </Box>
           </Box>
@@ -744,6 +1041,115 @@ const DashboardManagement: React.FC = () => {
 
         {/* Right Content Area */}
         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', p: 3, gap: 3 }}>
+          
+          {/* Data & Connections Panel */}
+          {activeNav === 'dataConnections' ? (
+            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              {/* Tabs Card */}
+              <Paper
+                elevation={0}
+                sx={{
+                  flex: 1,
+                  borderRadius: 4,
+                  background: 'rgba(255,255,255,0.98)',
+                  backdropFilter: 'blur(20px)',
+                  border: `1px solid ${alpha('#667eea', 0.12)}`,
+                  boxShadow: '0 8px 40px rgba(102, 126, 234, 0.08)',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                {/* Centered Tab Headers with Underline Style */}
+                <Box 
+                  sx={{ 
+                    borderBottom: `1px solid ${alpha('#667eea', 0.1)}`,
+                    background: 'rgba(255,255,255,1)',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', justifyContent: 'center', gap: 4, pt: 2 }}>
+                    <Box
+                      onClick={() => setDataTabIndex(0)}
+                      sx={{
+                        position: 'relative',
+                        pb: 1.5,
+                        px: 2,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        color: dataTabIndex === 0 ? '#667eea' : '#64748b',
+                        fontWeight: 600,
+                        fontSize: '0.95rem',
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          color: dataTabIndex === 0 ? '#667eea' : '#4facfe',
+                        },
+                        '&::after': {
+                          content: '""',
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          height: 3,
+                          borderRadius: '3px 3px 0 0',
+                          background: dataTabIndex === 0 
+                            ? 'linear-gradient(90deg, #4facfe 0%, #00f2fe 100%)'
+                            : 'transparent',
+                          transition: 'all 0.3s ease',
+                        },
+                      }}
+                    >
+                      <CloudQueueIcon sx={{ fontSize: 20 }} />
+                      Data Sources
+                    </Box>
+                    <Box
+                      onClick={() => setDataTabIndex(1)}
+                      sx={{
+                        position: 'relative',
+                        pb: 1.5,
+                        px: 2,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        color: dataTabIndex === 1 ? '#667eea' : '#64748b',
+                        fontWeight: 600,
+                        fontSize: '0.95rem',
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          color: dataTabIndex === 1 ? '#667eea' : '#764ba2',
+                        },
+                        '&::after': {
+                          content: '""',
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          height: 3,
+                          borderRadius: '3px 3px 0 0',
+                          background: dataTabIndex === 1 
+                            ? 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)'
+                            : 'transparent',
+                          transition: 'all 0.3s ease',
+                        },
+                      }}
+                    >
+                      <SnowflakeIcon sx={{ fontSize: 20 }} />
+                      Connections
+                    </Box>
+                  </Box>
+                </Box>
+
+                {/* Tab Content */}
+                <Box sx={{ flex: 1, overflow: 'auto', p: 0 }}>
+                  {dataTabIndex === 0 && <AddDataSource />}
+                  {dataTabIndex === 1 && <SnowflakeConnector />}
+                </Box>
+              </Paper>
+            </Box>
+          ) : (
+          <>
           {/* Stats Row */}
           <Grid container spacing={2}>
           <Grid size={{xs:6, sm:3}}>
@@ -905,7 +1311,11 @@ const DashboardManagement: React.FC = () => {
 
         {/* Dashboards Grid/List */}
         <Box sx={{ flex: 1, overflow: 'auto', pr: 1 }}>
-          {filteredDashboards.length === 0 ? (
+          {isLoading ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+              <CircularProgress sx={{ color: '#667eea' }} />
+            </Box>
+          ) : filteredDashboards.length === 0 ? (
             <Paper
               elevation={0}
               sx={{
@@ -992,8 +1402,7 @@ const DashboardManagement: React.FC = () => {
                     {index > 0 && <Divider />}
                     <ListItemButton
                       selected={selectedDashboard?.id === dashboard.id}
-                      onClick={() => setSelectedDashboard(dashboard)}
-                      onDoubleClick={() => handleDashboardClick(dashboard)}
+                      onClick={() => handleDashboardClick(dashboard)}
                       sx={{
                         py: 2,
                         px: 3,
@@ -1052,7 +1461,12 @@ const DashboardManagement: React.FC = () => {
                           </IconButton>
                           <IconButton
                             size="small"
-                            onClick={(e) => { e.stopPropagation(); setMenuDashboard(dashboard); setAnchorEl(e.currentTarget); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuDashboard(dashboard);
+                              setAnchorEl(e.currentTarget);
+                              setMenuPosition({ top: e.clientY, left: e.clientX });
+                            }}
                           >
                             <MoreVertIcon fontSize="small" />
                           </IconButton>
@@ -1065,91 +1479,27 @@ const DashboardManagement: React.FC = () => {
             </Paper>
           )}
         </Box>
-
-        {/* Selected Dashboard Preview Panel */}
-        {selectedDashboard && (
-          <Fade in={true}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 3,
-                borderRadius: 3,
-                background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.92) 100%)',
-                border: `1px solid ${alpha('#667eea', 0.2)}`,
-                boxShadow: `0 8px 32px ${alpha('#667eea', 0.1)}`,
-              }}
-            >
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box display="flex" alignItems="center" gap={2}>
-                  <Avatar
-                    sx={{
-                      width: 56,
-                      height: 56,
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      fontSize: '1.5rem',
-                      fontWeight: 700,
-                      boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
-                    }}
-                  >
-                    {selectedDashboard.name.charAt(0).toUpperCase()}
-                  </Avatar>
-                  <Box>
-                    <Typography variant="h6" fontWeight={700} sx={{ color: '#1e293b' }}>
-                      {selectedDashboard.name}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      {selectedDashboard.description || 'No description provided'}
-                    </Typography>
-                  </Box>
-                </Box>
-                <Box display="flex" alignItems="center" gap={2}>
-                  <Box display="flex" gap={1}>
-                    <Chip
-                      icon={<BarChartIcon sx={{ fontSize: 14 }} />}
-                      label={`${selectedDashboard.chartsCount || 0} Charts`}
-                      size="small"
-                      sx={{ bgcolor: alpha('#667eea', 0.1), color: '#667eea', fontWeight: 600 }}
-                    />
-                    <Chip
-                      icon={<AccessTimeIcon sx={{ fontSize: 14 }} />}
-                      label={getTimeAgo(selectedDashboard.updatedAt)}
-                      size="small"
-                      sx={{ bgcolor: alpha('#10b981', 0.1), color: '#059669', fontWeight: 600 }}
-                    />
-                  </Box>
-                  <Button
-                    variant="contained"
-                    endIcon={<ChevronRightIcon />}
-                    onClick={() => handleDashboardClick(selectedDashboard)}
-                    sx={{
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      textTransform: 'none',
-                      fontWeight: 700,
-                      px: 3,
-                      py: 1,
-                      borderRadius: 2,
-                      boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
-                      '&:hover': {
-                        boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)',
-                        transform: 'translateY(-1px)',
-                      },
-                    }}
-                  >
-                    Open Dashboard
-                  </Button>
-                </Box>
-              </Box>
-            </Paper>
-          </Fade>
+        </>
         )}
+
         </Box>
       </Box>
 
       {/* Context Menu */}
       <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={() => setAnchorEl(null)}
+        anchorEl={anchorEl || undefined}
+        anchorReference={menuPosition ? 'anchorPosition' : 'anchorEl'}
+        anchorPosition={menuPosition || undefined}
+        open={Boolean((anchorEl || menuPosition) && menuDashboard)}
+        onClose={closeMenu}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
         PaperProps={{
           sx: {
             borderRadius: 2,
@@ -1159,15 +1509,15 @@ const DashboardManagement: React.FC = () => {
           },
         }}
       >
-        <MenuItem onClick={() => menuDashboard && handleDashboardClick(menuDashboard)}>
+        <MenuItem onClick={() => { if (menuDashboard) handleDashboardClick(menuDashboard); closeMenu(); }}>
           <OpenInNewIcon fontSize="small" sx={{ mr: 1.5, color: '#667eea' }} />
           Open
         </MenuItem>
-        <MenuItem onClick={() => menuDashboard && handleEditStart(menuDashboard)}>
+        <MenuItem onClick={() => { if (menuDashboard) handleEditStart(menuDashboard); closeMenu(); }}>
           <EditIcon fontSize="small" sx={{ mr: 1.5, color: '#667eea' }} />
           Edit
         </MenuItem>
-        <MenuItem onClick={() => menuDashboard && toggleFavorite(menuDashboard.id)}>
+        <MenuItem onClick={() => { if (menuDashboard) toggleFavorite(menuDashboard.id); closeMenu(); }}>
           {menuDashboard && favorites.has(menuDashboard.id) ? (
             <StarIcon fontSize="small" sx={{ mr: 1.5, color: '#f59e0b' }} />
           ) : (
@@ -1176,7 +1526,7 @@ const DashboardManagement: React.FC = () => {
           {menuDashboard && favorites.has(menuDashboard.id) ? 'Unfavorite' : 'Favorite'}
         </MenuItem>
         <Divider sx={{ my: 1 }} />
-        <MenuItem onClick={() => menuDashboard && handleDeleteClick(menuDashboard)} sx={{ color: '#ef4444' }}>
+        <MenuItem onClick={() => { if (menuDashboard) handleDeleteClick(menuDashboard); closeMenu(); }} sx={{ color: '#ef4444' }}>
           <DeleteIcon fontSize="small" sx={{ mr: 1.5 }} />
           Delete
         </MenuItem>
@@ -1348,6 +1698,126 @@ const DashboardManagement: React.FC = () => {
             }}
           >
             Delete Dashboard
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Migration Dialog */}
+      <Dialog
+        open={openMigrateDialog}
+        onClose={() => setOpenMigrateDialog(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%)',
+            border: `1px solid ${alpha('#667eea', 0.15)}`,
+            boxShadow: '0 24px 48px rgba(0,0,0,0.12)',
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Box display="flex" alignItems="center" gap={2}>
+            <Box
+              sx={{
+                width: 48,
+                height: 48,
+                borderRadius: 2.5,
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)',
+              }}
+            >
+              <TrendingUpIcon sx={{ color: 'white' }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                Migrate Existing Data
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Move your current dashboard data to the new hierarchy structure
+              </Typography>
+            </Box>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <Box sx={{ 
+            p: 2, 
+            mb: 3, 
+            borderRadius: 2, 
+            bgcolor: alpha('#f59e0b', 0.1),
+            border: `1px solid ${alpha('#f59e0b', 0.2)}`,
+          }}>
+            <Typography variant="body2" sx={{ color: '#b45309' }}>
+              <strong>Note:</strong> This will move all existing configurations (charts, layouts, filters, parameters, calculations) 
+              that don't have a dashboard/view assigned to the new dashboard and view you specify below.
+            </Typography>
+          </Box>
+          <TextField
+            autoFocus
+            label="Dashboard Name"
+            fullWidth
+            required
+            value={migrateDashboardName}
+            onChange={(e) => setMigrateDashboardName(e.target.value)}
+            placeholder="e.g., MSL Dashboard"
+            sx={{
+              mb: 3,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                '& fieldset': { borderColor: alpha('#667eea', 0.2) },
+                '&:hover fieldset': { borderColor: alpha('#667eea', 0.4) },
+                '&.Mui-focused fieldset': { borderColor: '#667eea' },
+              },
+              '& .MuiInputLabel-root.Mui-focused': { color: '#667eea' },
+            }}
+            helperText="The dashboard to migrate data into (will be created if it doesn't exist)"
+          />
+          <TextField
+            label="View Name"
+            fullWidth
+            required
+            value={migrateViewName}
+            onChange={(e) => setMigrateViewName(e.target.value)}
+            placeholder="e.g., Patient View"
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                '& fieldset': { borderColor: alpha('#667eea', 0.2) },
+                '&:hover fieldset': { borderColor: alpha('#667eea', 0.4) },
+                '&.Mui-focused fieldset': { borderColor: '#667eea' },
+              },
+              '& .MuiInputLabel-root.Mui-focused': { color: '#667eea' },
+            }}
+            helperText="The view within the dashboard to assign chart configs and layouts to"
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 2 }}>
+          <Button
+            onClick={() => setOpenMigrateDialog(false)}
+            disabled={isMigrating}
+            sx={{ textTransform: 'none', fontWeight: 600, color: 'text.secondary' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleMigrate}
+            disabled={!migrateDashboardName.trim() || !migrateViewName.trim() || isMigrating}
+            sx={{
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              textTransform: 'none',
+              fontWeight: 700,
+              px: 4,
+              borderRadius: 2,
+              boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)',
+              '&:disabled': { background: alpha('#10b981', 0.3) },
+            }}
+          >
+            {isMigrating ? 'Migrating...' : 'Start Migration'}
           </Button>
         </DialogActions>
       </Dialog>

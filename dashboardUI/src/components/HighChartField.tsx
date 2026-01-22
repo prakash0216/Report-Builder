@@ -1203,7 +1203,7 @@ export default function HighChartField() {
           <Button
             variant="contained"
             startIcon={<DashboardIcon />}
-            onClick={() => navigate("/dashboards")}
+            onClick={() => navigate("/")}
             sx={{ 
               textTransform: 'none',
               fontWeight: 700,
@@ -2088,7 +2088,7 @@ export default function HighChartField() {
                 <Button
                   variant="contained"
                   startIcon={<SaveIcon />}
-                  onClick={() => navigate("/dashboards")}
+                  onClick={() => navigate("/")}
                   sx={{ 
                     textTransform: 'none',
                     fontWeight: 700,

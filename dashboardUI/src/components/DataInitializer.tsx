@@ -1,5 +1,5 @@
 // components/DataInitializer.tsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useSetRecoilState, useRecoilCallback } from 'recoil';
 import { storedLogicsState } from '../recoil/StoredLogic';
 import { parameterNamesState } from '../recoil/ParameterTracker';
@@ -19,6 +19,12 @@ import {
   completeDataInitialization,
   updateLastValue 
 } from '../recoil/initializationState';
+import { 
+  currentViewContextState,
+  setCurrentViewId, 
+  setCurrentDashboardId 
+} from '../recoil/ViewContext';
+import { useParams } from 'react-router-dom';
 import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:3002';
@@ -26,21 +32,89 @@ const API_BASE_URL = 'http://localhost:3002';
 // Re-export dataLoadedState for backwards compatibility
 export { dataLoadedState } from '../recoil/initializationState';
 
-// Component to preload all data at app startup
+// Component to preload all data at app startup - now view-aware
 export const DataInitializer: React.FC = () => {
   const setDataLoaded = useSetRecoilState(dataLoadedState);
+  const { dashboardName: dashboardSlug, viewName: viewSlug } = useParams<{ dashboardName?: string; viewName?: string }>();
+  const lastLoadedViewRef = useRef<string | null>(null);
 
-  const initializeAllData = useRecoilCallback(({ set }) => async () => {
-    console.log('🚀 [Data Initializer] Starting to preload all data from database...');
+  // Fetch dashboard and view IDs from slugs
+  // Returns { dashboardId, viewId, error } where error indicates if resource was not found
+  const fetchViewContext = useRecoilCallback(({ set }) => async (): Promise<{ 
+    dashboardId: number | null; 
+    viewId: number | null; 
+    error: 'dashboard_not_found' | 'view_not_found' | null;
+  }> => {
+    if (!dashboardSlug || !viewSlug) {
+      // Not on a view page, clear context
+      setCurrentViewId(null);
+      setCurrentDashboardId(null);
+      set(currentViewContextState, {
+        dashboardId: null,
+        dashboardSlug: null,
+        viewId: null,
+        viewSlug: null,
+      });
+      return { dashboardId: null, viewId: null, error: null };
+    }
+
+    try {
+      // Get dashboard ID from slug
+      const dashboardRes = await axios.get(`${API_BASE_URL}/api/dashboards/${dashboardSlug}`);
+      if (!dashboardRes.data.success || !dashboardRes.data.dashboard) {
+        console.error(`❌ [Data Initializer] Dashboard not found: "${dashboardSlug}"`);
+        return { dashboardId: null, viewId: null, error: 'dashboard_not_found' };
+      }
+      const dashboardId = dashboardRes.data.dashboard.id;
+      
+      // Get view ID from slug
+      const viewRes = await axios.get(`${API_BASE_URL}/api/dashboards/${dashboardSlug}/views/${viewSlug}`);
+      if (!viewRes.data.success || !viewRes.data.view) {
+        console.error(`❌ [Data Initializer] View not found: "${viewSlug}" in dashboard "${dashboardSlug}"`);
+        return { dashboardId, viewId: null, error: 'view_not_found' };
+      }
+      const viewId = viewRes.data.view.id;
+
+      // Update global context
+      setCurrentViewId(viewId);
+      setCurrentDashboardId(dashboardId);
+      set(currentViewContextState, {
+        dashboardId,
+        dashboardSlug,
+        viewId,
+        viewSlug,
+      });
+
+      console.log(`✅ [Data Initializer] Context set: dashboardId=${dashboardId}, viewId=${viewId}`);
+      return { dashboardId, viewId, error: null };
+    } catch (err) {
+      console.error('Failed to fetch view context:', err);
+      return { dashboardId: null, viewId: null, error: null };
+    }
+  }, [dashboardSlug, viewSlug]);
+
+  const initializeAllData = useRecoilCallback(({ set }) => async (viewId: number | null, dashboardId: number | null) => {
+    const viewIdParam = viewId ? `?viewId=${viewId}` : '';
+    const dashboardIdParam = dashboardId ? `?dashboardId=${dashboardId}` : '';
+    
+    console.log(`🚀 [Data Initializer] Starting to preload data (viewId: ${viewId}, dashboardId: ${dashboardId})...`);
     
     // Signal that initialization is starting - block all saves
     startDataInitialization();
     
+    // Clear existing view-specific state before loading new data
+    set(chartConfigState, {});
+    set(layoutState, { lg: [], md: [], sm: [], xs: [], xxs: [] });
+    set(chartVisibilityVariableState, {});
+    set(cardDimensionConditionsState, {});
+    set(tooltipConfigState, {});
+    set(childCardConfigState, {});
+    
     try {
-      // 1. Load all calculations
+      // 1. Load all calculations (dashboard-scoped)
       console.log('📊 [Data Initializer] Loading calculations...');
       try {
-        const calculationsResponse = await axios.get(`${API_BASE_URL}/api/calculations`);
+        const calculationsResponse = await axios.get(`${API_BASE_URL}/api/calculations${dashboardIdParam}`);
         if (calculationsResponse.data.success && calculationsResponse.data.calculations) {
           const storedLogics = calculationsResponse.data.calculations.map((dbCalc: any) => ({
             id: dbCalc.id.toString(),
@@ -56,10 +130,10 @@ export const DataInitializer: React.FC = () => {
         console.warn('⚠️ [Data Initializer] Failed to load calculations:', err);
       }
 
-      // 2. Load all parameter names and values
+      // 2. Load all parameter names and values (dashboard-scoped)
       console.log('📊 [Data Initializer] Loading parameters...');
       try {
-        const paramsResponse = await axios.get(`${API_BASE_URL}/api/parameters/names`);
+        const paramsResponse = await axios.get(`${API_BASE_URL}/api/parameters/names${dashboardIdParam}`);
         if (paramsResponse.data.success && paramsResponse.data.parameterNames) {
           const paramNames = paramsResponse.data.parameterNames;
           set(parameterNamesState, paramNames);
@@ -82,10 +156,10 @@ export const DataInitializer: React.FC = () => {
         console.warn('⚠️ [Data Initializer] Failed to load parameters:', err);
       }
 
-      // 3. Load all filters from the main filters endpoint (not individual ones)
+      // 3. Load all filters (dashboard-scoped)
       console.log('📊 [Data Initializer] Loading filters...');
       try {
-        const filtersResponse = await axios.get(`${API_BASE_URL}/api/filters`);
+        const filtersResponse = await axios.get(`${API_BASE_URL}/api/filters${dashboardIdParam}`);
         if (filtersResponse.data.success && filtersResponse.data.filters) {
           const filters = filtersResponse.data.filters;
           const filterNames = filters.map((f: any) => f.variable_name);
@@ -127,10 +201,10 @@ export const DataInitializer: React.FC = () => {
         console.warn('⚠️ [Data Initializer] Failed to load filters:', err);
       }
 
-      // 4. Load chart configs
+      // 4. Load chart configs (VIEW-SCOPED)
       console.log('📊 [Data Initializer] Loading chart configs...');
       try {
-        const configsResponse = await axios.get(`${API_BASE_URL}/api/chart-configs`);
+        const configsResponse = await axios.get(`${API_BASE_URL}/api/chart-configs${viewIdParam}`);
         if (configsResponse.data.success && configsResponse.data.configs) {
           const configs = configsResponse.data.configs;
           set(chartConfigState, configs);
@@ -141,10 +215,10 @@ export const DataInitializer: React.FC = () => {
         console.warn('⚠️ [Data Initializer] Failed to load chart configs:', err);
       }
 
-      // 5. Load layouts
+      // 5. Load layouts (VIEW-SCOPED)
       console.log('📊 [Data Initializer] Loading layouts...');
       try {
-        const layoutsResponse = await axios.get(`${API_BASE_URL}/api/layouts`);
+        const layoutsResponse = await axios.get(`${API_BASE_URL}/api/layouts${viewIdParam}`);
         if (layoutsResponse.data.success && layoutsResponse.data.layouts) {
           const layouts = layoutsResponse.data.layouts;
           set(layoutState, layouts);
@@ -155,10 +229,10 @@ export const DataInitializer: React.FC = () => {
         console.warn('⚠️ [Data Initializer] Failed to load layouts:', err);
       }
 
-      // 6. Load chart visibility
+      // 6. Load chart visibility (VIEW-SCOPED)
       console.log('📊 [Data Initializer] Loading chart visibility...');
       try {
-        const visibilityResponse = await axios.get(`${API_BASE_URL}/api/chart-visibility`);
+        const visibilityResponse = await axios.get(`${API_BASE_URL}/api/chart-visibility${viewIdParam}`);
         if (visibilityResponse.data.success && visibilityResponse.data.visibility) {
           const visibility = visibilityResponse.data.visibility;
           set(chartVisibilityVariableState, visibility);
@@ -169,10 +243,10 @@ export const DataInitializer: React.FC = () => {
         console.warn('⚠️ [Data Initializer] Failed to load chart visibility:', err);
       }
 
-      // 7. Load card dimension conditions
+      // 7. Load card dimension conditions (VIEW-SCOPED)
       console.log('📊 [Data Initializer] Loading card dimension conditions...');
       try {
-        const conditionsResponse = await axios.get(`${API_BASE_URL}/api/card-dimension-conditions`);
+        const conditionsResponse = await axios.get(`${API_BASE_URL}/api/card-dimension-conditions${viewIdParam}`);
         if (conditionsResponse.data.success && conditionsResponse.data.conditions) {
           const conditions = conditionsResponse.data.conditions;
           set(cardDimensionConditionsState, conditions);
@@ -184,10 +258,10 @@ export const DataInitializer: React.FC = () => {
         console.warn('⚠️ [Data Initializer] Failed to load card dimension conditions:', err);
       }
 
-      // 8. Load filter panel state (positions and active filters)
+      // 8. Load filter panel state (VIEW-SCOPED)
       console.log('📊 [Data Initializer] Loading filter panel state...');
       try {
-        const filterPanelResponse = await axios.get(`${API_BASE_URL}/api/filter-panel-state`);
+        const filterPanelResponse = await axios.get(`${API_BASE_URL}/api/filter-panel-state${viewIdParam}`);
         if (filterPanelResponse.data.success) {
           if (filterPanelResponse.data.positions) {
             set(filterPositionsState, filterPanelResponse.data.positions);
@@ -202,10 +276,10 @@ export const DataInitializer: React.FC = () => {
         console.warn('⚠️ [Data Initializer] Failed to load filter panel state:', err);
       }
 
-      // 9. Load tooltip configs
+      // 9. Load tooltip configs (VIEW-SCOPED)
       console.log('📊 [Data Initializer] Loading tooltip configs...');
       try {
-        const tooltipResponse = await axios.get(`${API_BASE_URL}/api/tooltip-configs`);
+        const tooltipResponse = await axios.get(`${API_BASE_URL}/api/tooltip-configs${viewIdParam}`);
         if (tooltipResponse.data.success && tooltipResponse.data.configs) {
           const configs = tooltipResponse.data.configs;
           set(tooltipConfigState, configs);
@@ -216,10 +290,10 @@ export const DataInitializer: React.FC = () => {
         console.warn('⚠️ [Data Initializer] Failed to load tooltip configs:', err);
       }
 
-      // 10. Load child card configs (multi-card containers)
+      // 10. Load child card configs (VIEW-SCOPED)
       console.log('📊 [Data Initializer] Loading child card configs...');
       try {
-        const childCardResponse = await axios.get(`${API_BASE_URL}/api/child-card-configs`);
+        const childCardResponse = await axios.get(`${API_BASE_URL}/api/child-card-configs${viewIdParam}`);
         if (childCardResponse.data.success && childCardResponse.data.configs) {
           const configs = childCardResponse.data.configs;
           set(childCardConfigState, configs);
@@ -246,8 +320,50 @@ export const DataInitializer: React.FC = () => {
   }, [setDataLoaded]);
 
   useEffect(() => {
-    initializeAllData();
-  }, [initializeAllData]);
+    const initialize = async () => {
+      // Create a unique key for this view
+      const viewKey = `${dashboardSlug || 'none'}/${viewSlug || 'none'}`;
+      
+      console.log(`🔍 [DataInitializer] Route params: dashboardSlug="${dashboardSlug}", viewSlug="${viewSlug}"`);
+      console.log(`🔍 [DataInitializer] View key: "${viewKey}", lastLoaded: "${lastLoadedViewRef.current}"`);
+      
+      // Skip if we already loaded this view
+      if (lastLoadedViewRef.current === viewKey) {
+        console.log(`⏭️ [DataInitializer] Skipping - already loaded this view`);
+        return;
+      }
+      
+      // Fetch view context (dashboard/view IDs from slugs)
+      console.log(`📡 [DataInitializer] Fetching view context...`);
+      const { dashboardId, viewId, error } = await fetchViewContext();
+      console.log(`📡 [DataInitializer] Got context: dashboardId=${dashboardId}, viewId=${viewId}, error=${error}`);
+      
+      // 🔥 CRITICAL: Do NOT initialize data if dashboard or view doesn't exist
+      // This prevents database corruption from invalid routes
+      if (error) {
+        console.error(`🚫 [DataInitializer] Skipping data initialization due to error: ${error}`);
+        // Mark data as "loaded" to prevent infinite loading state, but don't actually load data
+        setDataLoaded(true);
+        return;
+      }
+      
+      // Only initialize data if we have valid dashboard and view IDs
+      if (viewId === null || dashboardId === null) {
+        console.warn(`⚠️ [DataInitializer] Missing viewId or dashboardId, skipping initialization`);
+        setDataLoaded(true);
+        return;
+      }
+      
+      // Initialize data with the current view context
+      await initializeAllData(viewId, dashboardId);
+      
+      // Mark this view as loaded
+      lastLoadedViewRef.current = viewKey;
+      console.log(`✅ [DataInitializer] Marked "${viewKey}" as loaded`);
+    };
+
+    initialize();
+  }, [dashboardSlug, viewSlug, fetchViewContext, initializeAllData, setDataLoaded]);
 
   return null; // This component doesn't render anything
 };

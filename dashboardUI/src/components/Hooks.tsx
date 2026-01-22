@@ -51,6 +51,7 @@ import { filterNamesState } from '../recoil/FiltersFamily';
 import { parameterNamesState } from '../recoil/ParameterTracker';
 import { liveFilterFamily } from '../recoil/LiveFilterFamily';
 import { CalculationEditor } from './CalculationEditor';
+import { getCurrentDashboardId } from '../recoil/ViewContext';
 
 // Helper to safely parse stored strings into arrays/objects/values
 const safeParse = (value: string): any => {
@@ -1103,12 +1104,14 @@ export default function Hooks() {
                         } else {
                         // Create new calculation in database
                         try {
+                            const dashboardId = getCurrentDashboardId();
                             const createResponse = await fetch('http://localhost:3002/api/calculations', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     variableName,
                                     logic: calculationLogic,
+                                    dashboardId,
                                 }),
                             });
 

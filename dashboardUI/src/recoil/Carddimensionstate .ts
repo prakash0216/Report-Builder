@@ -4,9 +4,9 @@ import axios from 'axios';
 import { 
   shouldBlockSave, 
   hasValueChanged, 
-  updateLastValue,
-  markAtomInitialized 
+  updateLastValue
 } from './initializationState';
+import { getCurrentViewId } from './ViewContext';
 
 export interface DimensionCondition {
   id: string;
@@ -46,14 +46,16 @@ export const cardDimensionConditionsState = atom<Record<string, DimensionConditi
         clearTimeout(timeoutId);
         timeoutId = setTimeout(async () => {
           try {
+            const viewId = getCurrentViewId();
             // Save conditions for each chart
             for (const [chartId, conditions] of Object.entries(newValue)) {
               await axios.post('http://localhost:3002/api/card-dimension-conditions', {
                 chartId,
+                viewId,
                 conditions: conditions || [],
               });
             }
-            console.log('✅ CardDimensions: Saved conditions');
+            console.log(`✅ CardDimensions: Saved conditions (viewId: ${viewId})`);
           } catch (error) {
             console.error('❌ CardDimensions: Failed to save:', error);
           }

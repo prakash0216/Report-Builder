@@ -8,6 +8,7 @@ import {
   arrayOfArrayParameterNamesSelector,
   arrayOfObjectsParameterNamesSelector,
 } from '../recoil/ParameterTracker';
+import { getCurrentDashboardId } from '../recoil/ViewContext';
 import axios from 'axios';
 import {
   Box,
@@ -78,8 +79,9 @@ export default function AddParameterMui() {
   const addParameter = async (): Promise<void> => {
     if (newParamName && !parameterNames.includes(newParamName)) {
       try {
-        // Create parameter in database with empty value
-        await axios.post(`${API_BASE_URL}/api/parameters/${newParamName}`, { value: '' });
+        // Create parameter in database with empty value (dashboard-scoped)
+        const dashboardId = getCurrentDashboardId();
+        await axios.post(`${API_BASE_URL}/api/parameters/${newParamName}`, { value: '', dashboardId });
         
         // Update local state
         setParameterNames((prev: string[]) => [...prev, newParamName]);

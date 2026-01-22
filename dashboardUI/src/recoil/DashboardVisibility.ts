@@ -6,9 +6,9 @@ import axios from 'axios';
 import { 
   shouldBlockSave, 
   hasValueChanged, 
-  updateLastValue,
-  markAtomInitialized 
+  updateLastValue
 } from './initializationState';
+import { getCurrentViewId } from './ViewContext';
 
 const ATOM_KEY = 'chartVisibilityVariableState';
 
@@ -35,15 +35,18 @@ export const chartVisibilityVariableState = atom<Record<string, string>>({
         clearTimeout(timeoutId);
         if (isReset) {
           // If reset, clear all visibility
-          axios.post('http://localhost:3002/api/chart-visibility', { visibility: {} })
+          const viewId = getCurrentViewId();
+          axios.post('http://localhost:3002/api/chart-visibility', { visibility: {}, viewId })
             .catch(error => console.error('Failed to reset chart visibility:', error));
         } else {
           timeoutId = setTimeout(async () => {
             try {
+              const viewId = getCurrentViewId();
               await axios.post('http://localhost:3002/api/chart-visibility', {
                 visibility: newValue,
+                viewId,
               });
-              console.log('✅ ChartVisibility: Saved visibility');
+              console.log(`✅ ChartVisibility: Saved visibility (viewId: ${viewId})`);
             } catch (error) {
               console.error('❌ ChartVisibility: Failed to save:', error);
             }

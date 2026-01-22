@@ -1,6 +1,7 @@
 import { atomFamily } from 'recoil';
 import axios from 'axios';
 import { shouldBlockSave } from './initializationState';
+import { getCurrentDashboardId } from './ViewContext';
 
 const API_BASE_URL = 'http://localhost:3002';
 
@@ -21,9 +22,10 @@ const parameterDbSyncEffect = (param: string) => ({ setSelf, onSet, trigger }: a
       return;
     }
     
-    axios.post(`${API_BASE_URL}/api/parameters/${param}`, { value: newValue })
+    const dashboardId = getCurrentDashboardId();
+    axios.post(`${API_BASE_URL}/api/parameters/${param}`, { value: newValue, dashboardId })
       .then(response => {
-        console.log(`✅ Parameter ${param} synced to database`);
+        console.log(`✅ Parameter ${param} synced to database (dashboardId: ${dashboardId || 'global'})`);
       })
       .catch(error => {
         console.error(`❌ Error syncing parameter ${param}:`, error);

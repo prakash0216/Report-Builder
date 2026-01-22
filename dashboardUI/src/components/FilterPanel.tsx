@@ -19,11 +19,14 @@ import {
   RadioGroup,
   ListItemText,
   Menu,
+  Tooltip,
+  Badge,
 } from '@mui/material';
 import { 
   Close as CloseIcon,
   DragIndicator as DragIndicatorIcon,
   KeyboardArrowDown as KeyboardArrowDownIcon,
+  FilterAlt as FilterAltIcon,
 } from '@mui/icons-material';
 import Draggable from 'react-draggable';
 import { allFiltersSelector, filterNamesState, filterConfigFamily } from "../recoil/FiltersFamily";
@@ -31,15 +34,28 @@ import { liveFilterFamily } from "../recoil/LiveFilterFamily";
 import { atom } from 'recoil';
 import { IsEditModeState } from "../recoil/IsEditeMode";
 
+// Type for filter options
+interface DefaultValueOption {
+  label: string;
+  value: string | number;
+}
+
 interface FilterPanelProps {
   showFilters: boolean;
   topOffset?: string;
+  onToggle?: () => void;
 }
 
 interface FilterPosition {
   x: number;
   y: number;
 }
+
+// Recoil state for filter panel expanded/collapsed
+export const filterPanelExpandedState = atom<boolean>({
+  key: 'filterPanelExpandedState',
+  default: true,
+});
 
 // Recoil state for filter positions
 export const filterPositionsState = atom<Record<string, FilterPosition>>({
@@ -132,8 +148,13 @@ export const CompactFilterItem: React.FC<{
 
   if (!filterConfig) return null;
 
-  const selectedValues = tempValue || [];
-  const options = filterConfig.availableOptions || [];
+  const selectedValues: DefaultValueOption[] = tempValue || [];
+  const options: DefaultValueOption[] = filterConfig.availableOptions || [];
+  
+  // Helper to check if a value is selected
+  const isValueSelected = (optionValue: string | number) => {
+    return selectedValues.some((sv: DefaultValueOption) => sv.value === optionValue);
+  };
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -148,583 +169,472 @@ export const CompactFilterItem: React.FC<{
     handleClose();
   };
 
-  const handleCancel = () => {
-    setTempValue(liveValue || []);
+  const handleReset = () => {
+    const defaultVals = filterConfig?.defaultValues || [];
+    setTempValue(defaultVals);
+    setLiveValue(defaultVals);
     handleClose();
   };
 
-  const getCategoryColor = (category: string) => {
-    switch (category.toLowerCase()) {
-      case 'params':
-        return { bgcolor: '#f0fdf4', color: '#16a34a', borderColor: '#4ade80' };
-      case 'data-source':
-        return { bgcolor: '#faf5ff', color: '#9333ea', borderColor: '#c084fc' };
-      case 'hooks':
-        return { bgcolor: '#fff7ed', color: '#ea580c', borderColor: '#fb923c' };
-      default:
-        return { bgcolor: '#f8fafc', color: '#64748b', borderColor: '#cbd5e1' };
+  const handleSelectAll = () => {
+    setTempValue([...options]);
+  };
+
+  const handleClearAll = () => {
+    setTempValue([]);
+  };
+
+  const handleToggleOption = (option: DefaultValueOption) => {
+    if (isValueSelected(option.value)) {
+      setTempValue(tempValue.filter((v: DefaultValueOption) => v.value !== option.value));
+    } else {
+      setTempValue([...tempValue, option]);
     }
   };
 
-  const categoryColor = getCategoryColor(filterConfig.category);
-
-  // Format display text
-  const getDisplayText = () => {
-    if (selectedValues.length === 0) return '(All)';
-    if (selectedValues.length === options.length) return '(All)';
-    if (selectedValues.length === 1) return selectedValues[0].label;
-    return `${selectedValues.length} selected`;
+  const handleRadioChange = (option: DefaultValueOption) => {
+    setTempValue([option]);
   };
 
-  // Single selection (Radio)
-  const renderSingleSelect = () => {
-    const selectedValue = selectedValues.length > 0 ? selectedValues[0].value : '';
+  const displayValue = selectedValues.length === 0 
+    ? 'Select...'
+    : selectedValues.length === 1 
+      ? selectedValues[0].label
+      : selectedValues.length === options.length
+        ? 'All'
+        : `${selectedValues.length} selected`;
 
-    const handleChange = (option: any) => {
-      setTempValue([option]);
-    };
-
-    return (
-      <Box sx={{ width: 280, maxHeight: 400, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <Box sx={{ flexGrow: 1, overflow: 'auto', px: 1.5, py: 1, maxHeight: 'calc(400px - 60px)' }}>
-          <RadioGroup value={selectedValue}>
-            {options.map((option) => (
-              <FormControlLabel
-                key={option.value}
-                value={option.value}
-                control={<Radio size="small" sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }} />}
-                label={
-                  <Typography 
-                    variant="body2"
-                    sx={{ 
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      width: '100%',
-                    }}
-                    title={option.label}
-                  >
-                    {option.label}
-                  </Typography>
-                }
-                onChange={() => handleChange(option)}
-                sx={{ 
-                  py: 0.25,
-                  mr: 0,
-                  width: '100%',
-                  '&:hover': { bgcolor: '#f0f4ff' },
-                  borderRadius: 1,
-                  '& .MuiFormControlLabel-label': {
-                    width: 'calc(100% - 32px)',
-                    overflow: 'hidden',
-                  }
-                }}
-              />
-            ))}
-          </RadioGroup>
-        </Box>
-        <Box sx={{ p: 1.5, pt: 1, borderTop: 1, borderColor: '#e2e8f0', display: 'flex', gap: 1 }}>
-          <Button 
-            variant="outlined" 
-            size="small" 
-            fullWidth
-            onClick={handleCancel}
-            sx={{
-              borderColor: '#cbd5e1',
-              color: '#64748b',
-              '&:hover': {
-                borderColor: '#94a3b8',
-                bgcolor: '#f8fafc',
-              }
-            }}
-          >
-            Cancel
-          </Button>
-          <Button 
-            variant="contained" 
-            size="small" 
-            fullWidth
-            onClick={handleApply}
-            sx={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
-              }
-            }}
-          >
-            Apply
-          </Button>
-        </Box>
-      </Box>
-    );
+  const getCategoryColor = (category: string) => {
+    switch (category?.toLowerCase()) {
+      case 'params':
+        return { bg: '#f0fdf4', text: '#16a34a', border: '#86efac' };
+      case 'data-source':
+        return { bg: '#faf5ff', text: '#9333ea', border: '#d8b4fe' };
+      case 'hooks':
+        return { bg: '#fff7ed', text: '#ea580c', border: '#fdba74' };
+      default:
+        return { bg: '#f8fafc', text: '#64748b', border: '#cbd5e1' };
+    }
   };
 
-  // Multi selection (Checkboxes)
-  const renderMultiSelect = () => {
-    const handleToggle = (option: any) => {
-      const isSelected = selectedValues.some((v: any) => v.value === option.value);
-      if (isSelected) {
-        setTempValue(selectedValues.filter((v: any) => v.value !== option.value));
-      } else {
-        setTempValue([...selectedValues, option]);
-      }
-    };
+  const categoryColors = getCategoryColor(filterConfig.category);
 
-    const handleSelectAll = () => {
-      if (selectedValues.length === options.length) {
-        setTempValue([]);
-      } else {
-        setTempValue(options);
-      }
-    };
+  const handleDrag = (_e: any, data: { x: number; y: number }) => {
+    if (onPositionChange && variant === 'global') {
+      onPositionChange({ x: data.x, y: data.y });
+    }
+  };
 
-    const allSelected = selectedValues.length === options.length;
-    const someSelected = selectedValues.length > 0 && selectedValues.length < options.length;
+  const handleDragStop = (_e: any, data: { x: number; y: number }) => {
+    if (onPositionChange && variant === 'global') {
+      onPositionChange({ x: data.x, y: data.y });
+      // Save position to database
+      axios.post('http://localhost:3002/api/filter-panel-state', {
+        positions: { [variableName]: { x: data.x, y: data.y } }
+      }).catch(err => console.error('Failed to save filter position:', err));
+    }
+  };
 
+  // Inline variant - simple non-draggable filter
+  if (isInlineVariant) {
     return (
-      <Box sx={{ width: 280, maxHeight: 400, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {/* Select All Checkbox Header */}
-        <Box sx={{ 
-          px: 1.5, 
-          py: 0.75, 
-          borderBottom: 1, 
-          borderColor: '#e2e8f0',
-          background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-        }}>
-          <FormControlLabel
-            control={
-              <Checkbox 
-                size="small"
-                checked={allSelected}
-                indeterminate={someSelected}
-                onChange={handleSelectAll}
-                sx={{ 
-                  color: '#667eea', 
-                  '&.Mui-checked': { color: '#667eea' },
-                  '&.MuiCheckbox-indeterminate': { color: '#667eea' }
-                }}
-              />
-            }
-            label={<Typography variant="body2" fontWeight="600">(All)</Typography>}
-            sx={{ 
-              mr: 0,
-              width: '100%',
-              '& .MuiFormControlLabel-label': {
-                width: '100%',
-              }
+      <Box sx={{ mb: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+          <Chip 
+            label={filterConfig.category}
+            size="small"
+            sx={{
+              bgcolor: categoryColors.bg,
+              color: categoryColors.text,
+              border: `1px solid ${categoryColors.border}`,
+              fontSize: '0.6rem',
+              height: 18,
+              fontWeight: 700,
             }}
           />
-        </Box>
-
-        {/* Scrollable Options */}
-        <Box sx={{ flexGrow: 1, overflow: 'auto', px: 1.5, py: 1, maxHeight: 'calc(400px - 100px)' }}>
-          <FormGroup sx={{ width: '100%' }}>
-            {options.map((option) => {
-              const isSelected = selectedValues.some((v: any) => v.value === option.value);
-              return (
-                <FormControlLabel
-                  key={option.value}
-                  control={
-                    <Checkbox 
-                      size="small"
-                      checked={isSelected}
-                      onChange={() => handleToggle(option)}
-                      sx={{ 
-                        color: '#667eea', 
-                        '&.Mui-checked': { color: '#667eea' }
-                      }}
-                    />
-                  }
-                  label={
-                    <Typography 
-                      variant="body2" 
-                      sx={{ 
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        width: '100%',
-                      }}
-                      title={option.label}
-                    >
-                      {option.label}
-                    </Typography>
-                  }
-                  sx={{ 
-                    py: 0.25,
-                    mr: 0,
-                    width: '100%',
-                    '&:hover': { bgcolor: '#f0f4ff' },
-                    borderRadius: 1,
-                    '& .MuiFormControlLabel-label': {
-                      width: 'calc(100% - 32px)',
-                      overflow: 'hidden',
-                    }
-                  }}
-                />
-              );
-            })}
-          </FormGroup>
-        </Box>
-        
-        {/* Apply/Cancel Buttons */}
-        <Box sx={{ p: 1.5, pt: 1, borderTop: 1, borderColor: '#e2e8f0', display: 'flex', gap: 1 }}>
-          <Button 
-            variant="outlined" 
-            size="small" 
-            fullWidth
-            onClick={handleCancel}
-            sx={{
-              borderColor: '#cbd5e1',
-              color: '#64748b',
-              '&:hover': {
-                borderColor: '#94a3b8',
-                bgcolor: '#f8fafc',
-              }
-            }}
-          >
-            Cancel
-          </Button>
-          <Button 
-            variant="contained" 
-            size="small" 
-            fullWidth
-            onClick={handleApply}
-            sx={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
-              }
-            }}
-          >
-            Apply
-          </Button>
-        </Box>
-      </Box>
-    );
-  };
-
-  const filterCard = (
-    <Paper
-      ref={nodeRef}
-      className="local-filter-card"
-      elevation={0}
-      sx={{
-        position: isInlineVariant && !position ? 'relative' : 'absolute', // Relative if inline and no saved position (flexbox), otherwise absolute
-        width: 280,
-        maxWidth: '100%', // Ensure it doesn't exceed container width
-        flexShrink: 0, // Don't shrink in flexbox
-        background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%)',
-        backdropFilter: 'blur(10px)',
-        border: '1px solid rgba(102, 126, 234, 0.2)',
-        borderRadius: 2,
-        overflow: 'hidden',
-        boxShadow: isInlineVariant ? '0 6px 20px rgba(102, 126, 234, 0.12)' : '0 8px 32px rgba(102, 126, 234, 0.15)',
-        touchAction: 'none', // Prevent touch scrolling on mobile
-        pointerEvents: 'auto', // Ensure pointer events work
-        boxSizing: 'border-box', // Include border in width
-      }}
-      onMouseDown={(e) => {
-        // Only prevent grid drag if NOT clicking on drag handle
-        const isDragHandle = !!(e.target as HTMLElement)?.closest('.drag-handle');
-        console.log('🖱️ [CompactFilterItem] MouseDown on Paper:', {
-          variant,
-          variableName,
-          target: (e.target as HTMLElement)?.className,
-          isDragHandle,
-        });
-        // If clicking on drag handle, let react-draggable handle it
-        // Otherwise, prevent grid drag
-        if (!isDragHandle) {
-          e.stopPropagation();
-        }
-      }}
-    >
-      {/* Header with drag handle (shown for both inline and global; drag active in edit mode) */}
-      <Box
-        className="drag-handle"
-        data-draggable-handle="true"
-        sx={{
-          background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-          borderBottom: '1px solid #e2e8f0',
-          px: 1,
-          py: 0.5,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          cursor: isEditMode ? 'move' : 'default', // always show move cursor in edit mode
-          userSelect: 'none', // Prevent text selection during drag
-          WebkitUserSelect: 'none',
-          MozUserSelect: 'none',
-          msUserSelect: 'none',
-          position: 'relative',
-          zIndex: 10, // Ensure drag handle is above other elements
-          pointerEvents: 'auto', // Ensure pointer events work
-          '&:hover': {
-            background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
-          },
-        }}
-        onMouseDown={(e) => {
-          console.log('🖱️ [CompactFilterItem] MouseDown on drag-handle:', {
-            variant,
-            variableName,
-            isEditMode,
-            target: (e.target as HTMLElement)?.className,
-            currentTarget: (e.currentTarget as HTMLElement)?.className,
-            nodeRef: !!nodeRef.current,
-          });
-          // CRITICAL: Don't stop propagation here - let react-draggable handle it first
-          // The grid's draggableCancel will prevent grid drag, and react-draggable needs the event
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
-          {/* Always show drag indicator in edit mode for visual cue */}
-          {isEditMode && <DragIndicatorIcon sx={{ fontSize: 16, mr: 0.5, color: '#667eea' }} />}
-          <Typography 
-            variant="caption" 
-            fontWeight="700" 
-            noWrap 
-            sx={{ 
-              flex: 1,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}
-          >
+          <Typography variant="caption" fontWeight={600} color="#334155">
             {filterConfig.displayName}
           </Typography>
         </Box>
-        {isEditMode && (
-          <IconButton
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove();
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
+        
+        <Box 
+          onClick={handleClick}
           sx={{
-            p: 0.25,
-            ml: 0.5,
-            color: '#64748b',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            p: 1,
+            borderRadius: 1.5,
+            bgcolor: 'white',
+            border: '1px solid #e2e8f0',
+            cursor: 'pointer',
             '&:hover': {
-              bgcolor: '#fee2e2',
-              color: '#dc2626',
+              borderColor: '#667eea',
+              bgcolor: '#f8fafc',
             },
           }}
         >
-          <CloseIcon sx={{ fontSize: 16 }} />
-        </IconButton>
-        )}
+          <Typography variant="body2" sx={{ color: selectedValues.length ? '#334155' : '#94a3b8' }}>
+            {displayValue}
+          </Typography>
+          <KeyboardArrowDownIcon sx={{ color: '#94a3b8', fontSize: 18 }} />
+        </Box>
+
+        <Menu
+          anchorEl={anchorEl}
+          open={isOpen}
+          onClose={handleClose}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+          PaperProps={{
+            sx: {
+              mt: 0.5,
+              borderRadius: 2,
+              boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+              border: '1px solid #e2e8f0',
+              minWidth: 200,
+              maxHeight: 300,
+            }
+          }}
+        >
+          {filterConfig.selectionType === 'single' ? (
+            <RadioGroup value={selectedValues[0]?.value || ''}>
+              {options.map((option: DefaultValueOption) => (
+                <MenuItem 
+                  key={String(option.value)} 
+                  onClick={() => handleRadioChange(option)}
+                  sx={{ py: 0.5 }}
+                >
+                  <Radio 
+                    size="small" 
+                    checked={isValueSelected(option.value)}
+                    sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
+                  />
+                  <Typography variant="body2">{option.label}</Typography>
+                </MenuItem>
+              ))}
+            </RadioGroup>
+          ) : (
+            <>
+              <Box sx={{ px: 1.5, py: 1, borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 1 }}>
+                <Button size="small" onClick={handleSelectAll} sx={{ fontSize: '0.7rem' }}>All</Button>
+                <Button size="small" onClick={handleClearAll} sx={{ fontSize: '0.7rem' }}>None</Button>
+              </Box>
+              {options.map((option: DefaultValueOption) => (
+                <MenuItem 
+                  key={String(option.value)} 
+                  onClick={() => handleToggleOption(option)}
+                  sx={{ py: 0.5 }}
+                >
+                  <Checkbox 
+                    size="small" 
+                    checked={isValueSelected(option.value)}
+                    sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
+                  />
+                  <Typography variant="body2">{option.label}</Typography>
+                </MenuItem>
+              ))}
+            </>
+          )}
+          <Box sx={{ p: 1.5, borderTop: '1px solid #e2e8f0', display: 'flex', gap: 1 }}>
+            <Button 
+              fullWidth 
+              size="small" 
+              variant="outlined"
+              onClick={handleReset}
+              sx={{ borderColor: '#cbd5e1', color: '#64748b' }}
+            >
+              Reset
+            </Button>
+            <Button 
+              fullWidth 
+              size="small" 
+              variant="contained"
+              onClick={handleApply}
+              sx={{ bgcolor: '#667eea', '&:hover': { bgcolor: '#5568d3' } }}
+            >
+              Apply
+            </Button>
+          </Box>
+        </Menu>
       </Box>
+    );
+  }
 
-      {/* Dropdown selector */}
-      <Box
-        onClick={handleClick}
-        sx={{
-          px: 1.5,
-          py: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          cursor: 'pointer',
-          bgcolor: 'white',
-          '&:hover': {
-            bgcolor: '#f8fafc',
-          },
-          borderLeft: 3,
-          borderColor: categoryColor.borderColor,
-        }}
-      >
-        <Typography variant="body2" noWrap sx={{ flex: 1, mr: 1, fontWeight: 500 }}>
-          {getDisplayText()}
-        </Typography>
-        <KeyboardArrowDownIcon 
-          sx={{ 
-            fontSize: 18, 
-            color: '#667eea',
-            transform: isOpen ? 'rotate(180deg)' : 'rotate(0)',
-            transition: 'transform 0.2s',
-          }} 
-        />
-      </Box>
-
-      {/* Dropdown Menu */}
-      <Menu
-        anchorEl={anchorEl}
-        open={isOpen}
-        onClose={handleClose}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'left',
-        }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'left',
-        }}
-        disableAutoFocusItem
-        PaperProps={{
-          sx: {
-            mt: 0.5,
-            boxShadow: '0 8px 32px rgba(102, 126, 234, 0.2)',
-            maxHeight: 400,
-            overflow: 'hidden',
-            width: 280,
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(102, 126, 234, 0.1)',
-            borderRadius: 2,
-          },
-        }}
-        MenuListProps={{
-          sx: { p: 0, width: '100%' },
-        }}
-      >
-        {filterConfig.selectionType === 'single' ? renderSingleSelect() : renderMultiSelect()}
-      </Menu>
-    </Paper>
-  );
-
-  // For inline variant: use flexbox layout initially, but allow dragging to reposition
-  // Once dragged, switch to absolute positioning
-  // For global variant: always use absolute positioning with dragging
-  
-  // Inline variant: allow dragging even if no saved position (uses defaultPosition)
-  // Global variant: controlled position
-  const shouldDisableDrag = !isEditMode;
-  const draggablePosition = position ? effectivePosition : undefined; // uncontrolled when no saved position
-  const draggableDefault = position ? effectivePosition : { x: 0, y: 0 };
-
+  // Global variant - draggable filter chip
   return (
     <Draggable
       nodeRef={nodeRef}
       handle=".drag-handle"
-      position={draggablePosition}
-      defaultPosition={draggableDefault}
-      onStart={(e, data) => {
-        console.log('🎯 [CompactFilterItem] Drag START:', {
-          variant,
-          variableName,
-          isEditMode,
-          position: effectivePosition,
-          dataX: data.x,
-          dataY: data.y,
-          eventType: e?.type,
-          target: (e?.target as HTMLElement)?.className,
-          disabled: shouldDisableDrag,
-        });
-        // prevent parent chart/card drag when moving inline filter
-        if (e && typeof e.stopPropagation === 'function') {
-          e.stopPropagation();
-        }
-        // DO NOT call preventDefault() here - let react-draggable handle it
-      }}
-      onDrag={(e, data) => {
-        console.log('🔄 [CompactFilterItem] Drag MOVE:', {
-          variant,
-          variableName,
-          x: data.x,
-          y: data.y,
-        });
-        onPositionChange?.({ x: data.x, y: data.y });
-      }}
-      onStop={(e, data) => {
-        console.log('✅ [CompactFilterItem] Drag STOP:', {
-          variant,
-          variableName,
-          finalX: data.x,
-          finalY: data.y,
-        });
-        onPositionChange?.({ x: data.x, y: data.y });
-      }}
+      position={effectivePosition}
+      onDrag={handleDrag}
+      onStop={handleDragStop}
       bounds="parent"
-      disabled={shouldDisableDrag}
-      cancel=".MuiMenu-root, .MuiMenu-paper, .MuiButton-root, .MuiIconButton-root"
+      disabled={!isEditMode}
     >
-      {filterCard}
+      <Paper
+        ref={nodeRef}
+        elevation={2}
+        sx={{
+          position: 'absolute',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          p: 0.75,
+          pl: 1,
+          pr: 0.5,
+          borderRadius: 2,
+          bgcolor: 'white',
+          border: '1px solid #e2e8f0',
+          minWidth: 180,
+          maxWidth: 280,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          transition: 'box-shadow 0.2s, border-color 0.2s',
+          '&:hover': {
+            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+            borderColor: '#667eea',
+          },
+        }}
+      >
+        {/* Drag Handle - Only visible in edit mode */}
+        {isEditMode && (
+          <Box 
+            className="drag-handle"
+            sx={{ 
+              cursor: 'grab',
+              color: '#94a3b8',
+              display: 'flex',
+              alignItems: 'center',
+              mr: 0.5,
+              '&:hover': { color: '#667eea' },
+              '&:active': { cursor: 'grabbing' },
+            }}
+          >
+            <DragIndicatorIcon sx={{ fontSize: 16 }} />
+          </Box>
+        )}
+
+        {/* Filter Info */}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+            <Chip 
+              label={filterConfig.category}
+              size="small"
+              sx={{
+                bgcolor: categoryColors.bg,
+                color: categoryColors.text,
+                border: `1px solid ${categoryColors.border}`,
+                fontSize: '0.55rem',
+                height: 16,
+                fontWeight: 700,
+                '& .MuiChip-label': { px: 0.75 },
+              }}
+            />
+            <Typography 
+              variant="caption" 
+              fontWeight={600} 
+              color="#334155"
+              sx={{ 
+                overflow: 'hidden', 
+                textOverflow: 'ellipsis', 
+                whiteSpace: 'nowrap' 
+              }}
+            >
+              {filterConfig.displayName}
+            </Typography>
+          </Box>
+          
+          {/* Value Display - Clickable */}
+          <Box 
+            onClick={handleClick}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              px: 1,
+              py: 0.5,
+              borderRadius: 1,
+              bgcolor: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              cursor: 'pointer',
+              '&:hover': {
+                borderColor: '#667eea',
+                bgcolor: '#f0f4ff',
+              },
+            }}
+          >
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                color: selectedValues.length ? '#334155' : '#94a3b8',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flex: 1,
+              }}
+            >
+              {displayValue}
+            </Typography>
+            <KeyboardArrowDownIcon sx={{ color: '#94a3b8', fontSize: 16, ml: 0.5 }} />
+          </Box>
+        </Box>
+
+        {/* Remove Button - Only visible in edit mode */}
+        {isEditMode && (
+          <IconButton 
+            size="small" 
+            onClick={onRemove}
+            sx={{ 
+              color: '#94a3b8',
+              p: 0.25,
+              '&:hover': { color: '#ef4444', bgcolor: '#fef2f2' },
+            }}
+          >
+            <CloseIcon sx={{ fontSize: 14 }} />
+          </IconButton>
+        )}
+
+        {/* Dropdown Menu */}
+        <Menu
+          anchorEl={anchorEl}
+          open={isOpen}
+          onClose={handleClose}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+          PaperProps={{
+            sx: {
+              mt: 0.5,
+              borderRadius: 2,
+              boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+              border: '1px solid #e2e8f0',
+              minWidth: 220,
+              maxHeight: 350,
+            }
+          }}
+        >
+          {filterConfig.selectionType === 'single' ? (
+            <RadioGroup value={selectedValues[0]?.value || ''}>
+              {options.map((option: DefaultValueOption) => (
+                <MenuItem 
+                  key={String(option.value)} 
+                  onClick={() => handleRadioChange(option)}
+                  sx={{ py: 0.5 }}
+                >
+                  <Radio 
+                    size="small" 
+                    checked={isValueSelected(option.value)}
+                    sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
+                  />
+                  <Typography variant="body2">{option.label}</Typography>
+                </MenuItem>
+              ))}
+            </RadioGroup>
+          ) : (
+            <>
+              <Box sx={{ px: 1.5, py: 1, borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 1 }}>
+                <Button size="small" onClick={handleSelectAll} sx={{ fontSize: '0.7rem', textTransform: 'none' }}>Select All</Button>
+                <Button size="small" onClick={handleClearAll} sx={{ fontSize: '0.7rem', textTransform: 'none' }}>Clear</Button>
+              </Box>
+              <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
+                {options.map((option: DefaultValueOption) => (
+                  <MenuItem 
+                    key={String(option.value)} 
+                    onClick={() => handleToggleOption(option)}
+                    sx={{ py: 0.5 }}
+                  >
+                    <Checkbox 
+                      size="small" 
+                      checked={isValueSelected(option.value)}
+                      sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
+                    />
+                    <Typography variant="body2">{option.label}</Typography>
+                  </MenuItem>
+                ))}
+              </Box>
+            </>
+          )}
+          <Box sx={{ p: 1.5, borderTop: '1px solid #e2e8f0', display: 'flex', gap: 1 }}>
+            <Button 
+              fullWidth 
+              size="small" 
+              variant="outlined"
+              onClick={handleReset}
+              sx={{ 
+                borderColor: '#cbd5e1', 
+                color: '#64748b',
+                textTransform: 'none',
+                '&:hover': { borderColor: '#94a3b8', bgcolor: '#f8fafc' }
+              }}
+            >
+              Reset
+            </Button>
+            <Button 
+              fullWidth 
+              size="small" 
+              variant="contained"
+              onClick={handleApply}
+              sx={{ 
+                bgcolor: '#667eea', 
+                textTransform: 'none',
+                '&:hover': { bgcolor: '#5568d3' } 
+              }}
+            >
+              Apply
+            </Button>
+          </Box>
+        </Menu>
+      </Paper>
     </Draggable>
   );
 };
 
-// Main FilterPanel
-const FilterPanel: React.FC<FilterPanelProps> = ({ 
+// ============================================
+// ENTERPRISE COLLAPSIBLE FILTER PANEL
+// ============================================
+
+const COLLAPSED_WIDTH = 48;
+const EXPANDED_WIDTH = 320;
+
+export const FilterPanel: React.FC<FilterPanelProps> = ({ 
   showFilters, 
-  topOffset = '80px'
+  topOffset = '0px',
+  onToggle 
 }) => {
-  const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
-  const [tempSelectedFilters, setTempSelectedFilters] = useState<string[]>([]);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const isEdit = useRecoilValue(IsEditModeState);
+  const filterNames = useRecoilValue(filterNamesState);
+  const allFilters = useRecoilValue(allFiltersSelector);
   const [activeFilterIds, setActiveFilterIds] = useRecoilState(activeFilterIdsState);
   const [filterPositions, setFilterPositions] = useRecoilState(filterPositionsState);
   
-  const allFilters = useRecoilValue(allFiltersSelector);
-  const filterNames = useRecoilValue(filterNamesState);
+  // Shared expanded state - allows parent components to react to panel state
+  const [isExpanded, setIsExpanded] = useRecoilState(filterPanelExpandedState);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [tempSelectedFilters, setTempSelectedFilters] = useState<string[]>([]);
 
-  const isEdit=useRecoilValue(IsEditModeState);
+  // Filter configurations for the dropdown
+  const availableFilters: { variableName: string; displayName: string; category: string; }[] = Object.values(allFilters).map((f) => ({
+    variableName: f.variableName,
+    displayName: f.displayName || f.variableName,
+    category: f.category || 'Other',
+  }));
 
-  // Save filter panel state to API when it changes (debounced)
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const initialLoadRef = useRef(true);
-  const lastSavedRef = useRef<string>('');
-  
+  // Save filter state to database whenever active filters or positions change
   useEffect(() => {
-    // Skip initial load
-    if (initialLoadRef.current) {
-      // Mark as initialized after a short delay
-      setTimeout(() => {
-        initialLoadRef.current = false;
-        // Store initial state to compare against
-        lastSavedRef.current = JSON.stringify({ filterPositions, activeFilterIds });
-      }, 1000);
-      return;
-    }
-
-    // Check if data actually changed
-    const currentState = JSON.stringify({ filterPositions, activeFilterIds });
-    if (currentState === lastSavedRef.current) {
-      return; // No change, skip save
-    }
-
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    
-    saveTimeoutRef.current = setTimeout(async () => {
-      const stateToSave = JSON.stringify({ filterPositions, activeFilterIds });
-      if (stateToSave === lastSavedRef.current) {
-        return; // Double-check before saving
-      }
-      
+    const saveState = async () => {
       try {
         await axios.post('http://localhost:3002/api/filter-panel-state', {
+          activeFilterIds,
           positions: filterPositions,
-          activeFilterIds: activeFilterIds,
         });
-        lastSavedRef.current = stateToSave;
-      } catch (error: any) {
-        // Only log if it's a real error, not a queued save
-        if (error?.response?.status >= 500) {
-          console.warn('Filter panel save warning:', error.message);
-        }
-      }
-    }, 800); // Increased debounce to 800ms
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
+      } catch (err) {
+        console.error('Failed to save filter panel state:', err);
       }
     };
-  }, [filterPositions, activeFilterIds]);
-
-  // Get all available filters sorted by category
-  const availableFilters = filterNames
-    .map(name => allFilters[name])
-    .filter(config => config)
-    .sort((a, b) => {
-      if (a.category !== b.category) {
-        return a.category.localeCompare(b.category);
-      }
-      return a.displayName.localeCompare(b.displayName);
-    });
+    
+    // Debounce save
+    const timeoutId = setTimeout(saveState, 500);
+    return () => clearTimeout(timeoutId);
+  }, [activeFilterIds, filterPositions]);
 
   const handleToggleFilter = (filterName: string) => {
     if (filterName === 'ALL') {
@@ -732,12 +642,12 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
       if (tempSelectedFilters.length === filterNames.length) {
         setTempSelectedFilters([]);
       } else {
-        setTempSelectedFilters(filterNames);
+        setTempSelectedFilters([...filterNames]);
       }
     } else {
       // Toggle individual filter
       if (tempSelectedFilters.includes(filterName)) {
-        setTempSelectedFilters(tempSelectedFilters.filter(f => f !== filterName));
+        setTempSelectedFilters(tempSelectedFilters.filter(name => name !== filterName));
       } else {
         setTempSelectedFilters([...tempSelectedFilters, filterName]);
       }
@@ -797,346 +707,424 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     });
   };
 
-  if (!showFilters) return null;
+  const toggleExpanded = () => {
+    setIsExpanded(!isExpanded);
+  };
 
+  // Always render the panel (collapsed or expanded)
   return (
-    <Paper 
-      elevation={0}
+    <Box
       sx={{
         position: 'fixed',
         right: 0,
         top: topOffset,
         height: `calc(100vh - ${topOffset})`,
-        width: 320,
-        background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.95) 100%)',
-        backdropFilter: 'blur(10px)',
-        borderLeft: '1px solid rgba(102, 126, 234, 0.2)',
+        width: isExpanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
         display: 'flex',
-        flexDirection: 'column',
-        transition: 'transform 0.3s',
-        transform: showFilters ? 'translateX(0)' : 'translateX(100%)',
         zIndex: 30,
-        overflow: 'hidden',
-        padding: 0.5,
-        paddingBottom:8
+        transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
-      {/* Header Section */}
-      <Box sx={{ p: 2, pt:isEdit?7:3, borderBottom: isEdit? '1px solid #e2e8f0' : 0 }}>
-        <Box 
-          sx={{ 
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white', 
-            textAlign: 'center', 
-            py: 1.25,
-            mx: -2,
-            mt: -2,
-            mb: isEdit ? 2 : -1.5,
-            boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)',
-          }}
-        >
-          <Typography variant="subtitle2" fontWeight="700" letterSpacing={0.5}>
-            FILTERS
-          </Typography>
-        </Box>
-
-        {/* Filter Selector */}
-        {isEdit && (
-          <Paper 
-            elevation={0}
-            sx={{ 
-              p: 2, 
-              background: 'linear-gradient(135deg, rgba(224, 231, 255, 0.3) 0%, rgba(199, 210, 254, 0.3) 100%)',
-              border: '1px solid rgba(102, 126, 234, 0.3)',
-              borderRadius: 2,
-            }}
-          >
-            <FormControl fullWidth size="small">
-              <InputLabel sx={{ color: '#667eea', '&.Mui-focused': { color: '#667eea' } }}>
-                Add Filters
-              </InputLabel>
-              <Select
-                multiple
-                value={tempSelectedFilters}
-                open={dropdownOpen}
-                onOpen={() => {
-                  setTempSelectedFilters(activeFilterIds);
-                  setDropdownOpen(true);
-                }}
-                onClose={() => {}} // Prevent auto-close
-                label="Add Filters"
-                renderValue={(selected) => {
-                  if (selected.length === 0) return <em>No filters selected</em>;
-                  if (selected.length === filterNames.length) return `All Filters (${selected.length})`;
-                  return `${selected.length} filter${selected.length > 1 ? 's' : ''} selected`;
-                }}
-                sx={{ 
-                  bgcolor: 'white',
-                  borderRadius: 1.5,
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'rgba(102, 126, 234, 0.3)',
-                  },
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#667eea',
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#667eea',
-                  }
-                }}
-                MenuProps={{
-                  PaperProps: {
-                    sx: {
-                      maxHeight: 400,
-                      '& .MuiList-root': {
-                        pt: 0,
-                      }
-                    }
-                  },
-                  autoFocus: false,
-                }}
-              >
-                {/* Select All Option */}
-                <MenuItem
-                  value="ALL"
-                  onClick={() => handleToggleFilter('ALL')}
-                  sx={{
-                    borderBottom: '1px solid #e2e8f0',
-                    bgcolor: '#f8fafc',
-                    '&:hover': {
-                      bgcolor: '#f0f4ff',
-                    }
-                  }}
-                >
-                  <Checkbox
-                    size="small"
-                    checked={tempSelectedFilters.length === filterNames.length}
-                    indeterminate={tempSelectedFilters.length > 0 && tempSelectedFilters.length < filterNames.length}
-                    sx={{ 
-                      color: '#667eea', 
-                      '&.Mui-checked': { color: '#667eea' },
-                      '&.MuiCheckbox-indeterminate': { color: '#667eea' }
-                    }}
-                  />
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Chip 
-                      label="ALL" 
-                      size="small"
-                      sx={{ 
-                        bgcolor: '#ede9fe',
-                        color: '#7c3aed',
-                        border: '1px solid #c4b5fd',
-                        fontSize: '0.65rem',
-                        height: 20,
-                        fontWeight: 700,
-                      }}
-                    />
-                    <Typography variant="body2" fontWeight={600}>
-                      All Filters
-                    </Typography>
-                  </Box>
-                </MenuItem>
-
-                {/* Individual Filter Options */}
-                {availableFilters.map((config) => {
-                  const getCategoryChipColor = (category: string) => {
-                    switch (category.toLowerCase()) {
-                      case 'params':
-                        return { bgcolor: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac' };
-                      case 'data-source':
-                        return { bgcolor: '#faf5ff', color: '#9333ea', border: '1px solid #d8b4fe' };
-                      case 'hooks':
-                        return { bgcolor: '#fff7ed', color: '#ea580c', border: '1px solid #fdba74' };
-                      default:
-                        return { bgcolor: '#f8fafc', color: '#64748b', border: '1px solid #cbd5e1' };
-                    }
-                  };
-                  
-                  const chipColor = getCategoryChipColor(config.category);
-                  const isChecked = tempSelectedFilters.includes(config.variableName);
-                  
-                  return (
-                    <MenuItem
-                      key={config.variableName}
-                      value={config.variableName}
-                      onClick={() => handleToggleFilter(config.variableName)}
-                      sx={{
-                        '&:hover': {
-                          bgcolor: '#f0f4ff',
-                        },
-                      }}
-                    >
-                      <Checkbox
-                        size="small"
-                        checked={isChecked}
-                        sx={{ 
-                          color: '#667eea', 
-                          '&.Mui-checked': { color: '#667eea' }
-                        }}
-                      />
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-                        <Chip 
-                          label={config.category} 
-                          size="small"
-                          sx={{ 
-                            ...chipColor,
-                            fontSize: '0.65rem',
-                            height: 20,
-                            fontWeight: 700,
-                          }}
-                        />
-                        <Typography 
-                          variant="body2" 
-                          fontWeight={500}
-                          sx={{ flex: 1 }}
-                        >
-                          {config.displayName}
-                        </Typography>
-                      </Box>
-                    </MenuItem>
-                  );
-                })}
-
-                {/* Apply and Cancel Buttons inside dropdown */}
-                <Box 
-                  sx={{ 
-                    p: 1.5, 
-                    pt: 1, 
-                    borderTop: '2px solid #e2e8f0',
-                    display: 'flex', 
-                    gap: 1,
-                    position: 'sticky',
-                    bottom: 0,
-                    bgcolor: 'white',
-                    zIndex: 1,
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    onClick={handleCancelFilters}
-                    size="small"
-                    sx={{
-                      borderColor: '#cbd5e1',
-                      color: '#64748b',
-                      fontWeight: 600,
-                      borderRadius: 1.5,
-                      '&:hover': {
-                        borderColor: '#94a3b8',
-                        bgcolor: '#f8fafc',
-                      }
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    onClick={handleApplyFilters}
-                    size="small"
-                    sx={{
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      fontWeight: 600,
-                      borderRadius: 1.5,
-                      '&:hover': {
-                        background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
-                      }
-                    }}
-                  >
-                    Apply ({tempSelectedFilters.length})
-                  </Button>
-                </Box>
-              </Select>
-            </FormControl>
-          </Paper>
-        )}
-      </Box>
-
-      {/* Draggable Filters Area - Now Scrollable */}
-      <Box 
-        sx={{ 
-          flexGrow: 1,
-          overflow: 'auto',
-          background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.5) 0%, rgba(241, 245, 249, 0.5) 100%)',
+      {/* Collapse/Expand Toggle Bar */}
+      <Box
+        sx={{
+          width: COLLAPSED_WIDTH,
+          height: '100%',
+          background: 'linear-gradient(180deg, #64748b 0%, #475569 100%)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          pt: 0,
+          boxShadow: '-4px 0 20px rgba(71, 85, 105, 0.2)',
           position: 'relative',
-          '&::-webkit-scrollbar': {
-            width: '8px',
-          },
-          '&::-webkit-scrollbar-track': {
-            background: 'rgba(0, 0, 0, 0.05)',
-            borderRadius: '10px',
-          },
-          '&::-webkit-scrollbar-thumb': {
-            background: 'rgba(102, 126, 234, 0.3)',
-            borderRadius: '10px',
-            '&:hover': {
-              background: 'rgba(102, 126, 234, 0.5)',
-            },
-          },
+          zIndex: 2,
         }}
       >
-        {activeFilterIds.length === 0 ? (
-          <Box 
-            sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
+        {/* Filter Icon with Badge and Text - Toggle Button */}
+        <Tooltip title={isExpanded ? "Collapse Filters" : "Expand Filters"} placement="left" arrow>
+          <Box
+            onClick={toggleExpanded}
+            sx={{
+              width: COLLAPSED_WIDTH,
               height: '100%',
-              textAlign: 'center',
-              p: 3,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              '&:hover': {
+                bgcolor: 'rgba(65, 61, 61, 0.35)',
+              },
             }}
           >
-            <Box>
-              <Box
-                sx={{
-                  width: 64,
-                  height: 64,
-                  margin: '0 auto 16px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <svg 
-                  style={{ width: 32, height: 32, opacity: 0.6 }} 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
-                  stroke="#667eea"
-                  strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
-                </svg>
-              </Box>
-              <Typography variant="body2" color="#475569" gutterBottom fontWeight={600}>
-                No filters added yet
-              </Typography>
-              <Typography variant="caption" color="#94a3b8">
-                Select a filter above to add
-              </Typography>
-            </Box>
+            <Badge 
+              badgeContent={activeFilterIds.length} 
+              color="error"
+              sx={{
+                '& .MuiBadge-badge': {
+                  fontSize: '0.6rem',
+                  height: 14,
+                  minWidth: 14,
+                  bgcolor: '#ef4444',
+                  top: 2,
+                  right: 2,
+                }
+              }}
+            >
+              <FilterAltIcon sx={{ color: 'white', fontSize: 22 }} />
+            </Badge>
+            <Typography
+              sx={{
+                writingMode: 'vertical-lr',
+                textOrientation: 'mixed',
+                color: 'white',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                letterSpacing: 1,
+                mt: 1.5,
+              }}
+            >
+              Filters
+            </Typography>
           </Box>
-        ) : (
-          <Box sx={{ 
-            position: 'relative', 
-            width: '100%', 
-            minHeight: '100%', // Changed from height to minHeight
-            p: 1 
-          }}>
-            {activeFilterIds.map((filterId) => (
-              <CompactFilterItem
-                key={filterId}
-                variableName={filterId}
-                onRemove={() => handleRemoveFilter(filterId)}
-                position={filterPositions[filterId] || { x: 10, y: 10 }}
-                onPositionChange={(pos) => handlePositionChange(filterId, pos)}
-              />
-            ))}
-          </Box>
-        )}
+        </Tooltip>
       </Box>
-    </Paper>
+
+      {/* Expanded Panel Content */}
+      <Box
+        sx={{
+          flex: 1,
+          background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.95) 100%)',
+          backdropFilter: 'blur(10px)',
+          borderLeft: '1px solid rgba(102, 126, 234, 0.1)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          opacity: isExpanded ? 1 : 0,
+          transform: isExpanded ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'opacity 0.3s ease, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          pointerEvents: isExpanded ? 'auto' : 'none',
+        }}
+      >
+        {/* Header Section */}
+        <Box sx={{ p: 2, pt: isEdit ? 2 : 2, borderBottom: isEdit ? '1px solid #e2e8f0' : 0 }}>
+          <Box 
+            sx={{ 
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white', 
+              textAlign: 'center',
+              py: 1.25,
+              mx: -2,
+              mt: -2,
+              mb: isEdit ? 2 : -1.5,
+              boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)',
+            }}
+          >
+            <Typography variant="subtitle2" fontWeight="700" letterSpacing={0.5}>
+              Filters
+            </Typography>
+          </Box>
+
+          {/* Filter Selector */}
+          {isEdit && (
+            <Paper 
+              elevation={0}
+              sx={{ 
+                p: 2, 
+                background: 'linear-gradient(135deg, rgba(224, 231, 255, 0.3) 0%, rgba(199, 210, 254, 0.3) 100%)',
+                border: '1px solid rgba(102, 126, 234, 0.3)',
+                borderRadius: 2,
+              }}
+            >
+              <FormControl fullWidth size="small">
+                <InputLabel sx={{ color: '#667eea', '&.Mui-focused': { color: '#667eea' } }}>
+                  Add Filters
+                </InputLabel>
+                <Select
+                  multiple
+                  value={tempSelectedFilters}
+                  open={dropdownOpen}
+                  onOpen={() => {
+                    setTempSelectedFilters(activeFilterIds);
+                    setDropdownOpen(true);
+                  }}
+                  onClose={() => {}} // Prevent auto-close
+                  label="Add Filters"
+                  renderValue={(selected) => {
+                    if (selected.length === 0) return <em>No filters selected</em>;
+                    if (selected.length === filterNames.length) return `All Filters (${selected.length})`;
+                    return `${selected.length} filter${selected.length > 1 ? 's' : ''} selected`;
+                  }}
+                  sx={{ 
+                    bgcolor: 'white',
+                    borderRadius: 1.5,
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'rgba(102, 126, 234, 0.3)',
+                    },
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#667eea',
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#667eea',
+                    }
+                  }}
+                  MenuProps={{
+                    PaperProps: {
+                      sx: {
+                        maxHeight: 400,
+                        '& .MuiList-root': {
+                          pt: 0,
+                        }
+                      }
+                    },
+                    autoFocus: false,
+                  }}
+                >
+                  {/* Select All Option */}
+                  <MenuItem
+                    value="ALL"
+                    onClick={() => handleToggleFilter('ALL')}
+                    sx={{
+                      borderBottom: '1px solid #e2e8f0',
+                      bgcolor: '#f8fafc',
+                      '&:hover': {
+                        bgcolor: '#f0f4ff',
+                      }
+                    }}
+                  >
+                    <Checkbox
+                      size="small"
+                      checked={tempSelectedFilters.length === filterNames.length}
+                      indeterminate={tempSelectedFilters.length > 0 && tempSelectedFilters.length < filterNames.length}
+                      sx={{ 
+                        color: '#667eea', 
+                        '&.Mui-checked': { color: '#667eea' },
+                        '&.MuiCheckbox-indeterminate': { color: '#667eea' }
+                      }}
+                    />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Chip 
+                        label="ALL" 
+                        size="small"
+                        sx={{ 
+                          bgcolor: '#ede9fe',
+                          color: '#7c3aed',
+                          border: '1px solid #c4b5fd',
+                          fontSize: '0.65rem',
+                          height: 20,
+                          fontWeight: 700,
+                        }}
+                      />
+                      <Typography variant="body2" fontWeight={600}>
+                        All Filters
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+
+                  {/* Individual Filter Options */}
+                  {availableFilters.map((config) => {
+                    const getCategoryChipColor = (category: string) => {
+                      switch (category.toLowerCase()) {
+                        case 'params':
+                          return { bgcolor: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac' };
+                        case 'data-source':
+                          return { bgcolor: '#faf5ff', color: '#9333ea', border: '1px solid #d8b4fe' };
+                        case 'hooks':
+                          return { bgcolor: '#fff7ed', color: '#ea580c', border: '1px solid #fdba74' };
+                        default:
+                          return { bgcolor: '#f8fafc', color: '#64748b', border: '1px solid #cbd5e1' };
+                      }
+                    };
+                    
+                    const chipColor = getCategoryChipColor(config.category);
+                    const isChecked = tempSelectedFilters.includes(config.variableName);
+                    
+                    return (
+                      <MenuItem
+                        key={config.variableName}
+                        value={config.variableName}
+                        onClick={() => handleToggleFilter(config.variableName)}
+                        sx={{
+                          '&:hover': {
+                            bgcolor: '#f0f4ff',
+                          },
+                        }}
+                      >
+                        <Checkbox
+                          size="small"
+                          checked={isChecked}
+                          sx={{ 
+                            color: '#667eea', 
+                            '&.Mui-checked': { color: '#667eea' }
+                          }}
+                        />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+                          <Chip 
+                            label={config.category} 
+                            size="small"
+                            sx={{ 
+                              ...chipColor,
+                              fontSize: '0.65rem',
+                              height: 20,
+                              fontWeight: 700,
+                            }}
+                          />
+                          <Typography 
+                            variant="body2" 
+                            fontWeight={500}
+                            sx={{ flex: 1 }}
+                          >
+                            {config.displayName}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    );
+                  })}
+
+                  {/* Apply and Cancel Buttons inside dropdown */}
+                  <Box 
+                    sx={{ 
+                      p: 1.5, 
+                      pt: 1, 
+                      borderTop: '2px solid #e2e8f0',
+                      display: 'flex', 
+                      gap: 1,
+                      position: 'sticky',
+                      bottom: 0,
+                      bgcolor: 'white',
+                      zIndex: 1,
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      onClick={handleCancelFilters}
+                      size="small"
+                      sx={{
+                        borderColor: '#cbd5e1',
+                        color: '#64748b',
+                        fontWeight: 600,
+                        borderRadius: 1.5,
+                        '&:hover': {
+                          borderColor: '#94a3b8',
+                          bgcolor: '#f8fafc',
+                        }
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      onClick={handleApplyFilters}
+                      size="small"
+                      sx={{
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        fontWeight: 600,
+                        borderRadius: 1.5,
+                        '&:hover': {
+                          background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                        }
+                      }}
+                    >
+                      Apply ({tempSelectedFilters.length})
+                    </Button>
+                  </Box>
+                </Select>
+              </FormControl>
+            </Paper>
+          )}
+        </Box>
+
+        {/* Draggable Filters Area - Now Scrollable */}
+        <Box 
+          sx={{ 
+            flexGrow: 1,
+            overflow: 'auto',
+            background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.5) 0%, rgba(241, 245, 249, 0.5) 100%)',
+            position: 'relative',
+            '&::-webkit-scrollbar': {
+              width: '8px',
+            },
+            '&::-webkit-scrollbar-track': {
+              background: 'rgba(0, 0, 0, 0.05)',
+              borderRadius: '10px',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: 'rgba(102, 126, 234, 0.3)',
+              borderRadius: '10px',
+              '&:hover': {
+                background: 'rgba(102, 126, 234, 0.5)',
+              },
+            },
+          }}
+        >
+          {activeFilterIds.length === 0 ? (
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                height: '100%',
+                textAlign: 'center',
+                p: 3,
+              }}
+            >
+              <Box>
+                <Box
+                  sx={{
+                    width: 64,
+                    height: 64,
+                    margin: '0 auto 16px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <svg 
+                    style={{ width: 32, height: 32, opacity: 0.6 }} 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="#667eea"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
+                  </svg>
+                </Box>
+                <Typography variant="body2" color="#475569" gutterBottom fontWeight={600}>
+                  No filters added yet
+                </Typography>
+                <Typography variant="caption" color="#94a3b8">
+                  Select a filter above to add
+                </Typography>
+              </Box>
+            </Box>
+          ) : (
+            <Box sx={{ 
+              position: 'relative', 
+              width: '100%', 
+              minHeight: '100%',
+              p: 1 
+            }}>
+              {activeFilterIds.map((filterId) => (
+                <CompactFilterItem
+                  key={filterId}
+                  variableName={filterId}
+                  onRemove={() => handleRemoveFilter(filterId)}
+                  position={filterPositions[filterId] || { x: 10, y: 10 }}
+                  onPositionChange={(pos) => handlePositionChange(filterId, pos)}
+                />
+              ))}
+            </Box>
+          )}
+        </Box>
+      </Box>
+    </Box>
   );
 };
 

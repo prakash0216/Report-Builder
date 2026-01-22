@@ -3,9 +3,9 @@ import axios from "axios";
 import { 
   shouldBlockSave, 
   hasValueChanged, 
-  updateLastValue,
-  markAtomInitialized 
+  updateLastValue
 } from "./initializationState";
+import { getCurrentViewId } from "./ViewContext";
 
 const ATOM_KEY = 'chartConfigState';
 
@@ -32,10 +32,15 @@ export const chartConfigState = atom<{[id:string]:any}>({
                 clearTimeout(timeoutId);
                 timeoutId = setTimeout(async () => {
                     try {
-                        // Save each chart config individually
+                        const viewId = getCurrentViewId();
+                        console.log(`💾 [ChartConfig SAVE] viewId=${viewId}, saving ${Object.keys(newValue).length} configs`);
+                        
+                        // Save each chart config individually with viewId
                         for (const [chartId, config] of Object.entries(newValue)) {
+                            console.log(`💾 [ChartConfig SAVE] Saving chartId="${chartId}" with viewId=${viewId}`);
                             await axios.post('http://localhost:3002/api/chart-configs', {
                                 chartId,
+                                viewId, // Include viewId to scope to current view
                                 template: config.template,
                                 type: config.type,
                                 processed: config.processed,
@@ -44,7 +49,7 @@ export const chartConfigState = atom<{[id:string]:any}>({
                                 tableSettings: config.tableSettings,
                             });
                         }
-                        console.log(`✅ ChartConfig: Saved ${Object.keys(newValue).length} configs`);
+                        console.log(`✅ ChartConfig: Saved ${Object.keys(newValue).length} configs (viewId: ${viewId})`);
                     } catch (error) {
                         console.error('❌ ChartConfig: Failed to save:', error);
                     }

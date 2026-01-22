@@ -4,9 +4,9 @@ import axios from "axios";
 import { 
   shouldBlockSave, 
   hasValueChanged, 
-  updateLastValue,
-  markAtomInitialized 
+  updateLastValue
 } from "./initializationState";
+import { getCurrentViewId } from "./ViewContext";
 
 const ATOM_KEY = 'layoutState';
 
@@ -39,10 +39,15 @@ export const layoutState = atom<{ [key: string]: Layout[] }>({
                 clearTimeout(timeoutId);
                 timeoutId = setTimeout(async () => {
                     try {
+                        const viewId = getCurrentViewId();
+                        const totalItems = Object.values(newValue).reduce((sum, arr) => sum + (arr?.length || 0), 0);
+                        console.log(`💾 [LayoutState SAVE] viewId=${viewId}, saving ${totalItems} layout items`);
+                        
                         await axios.post('http://localhost:3002/api/layouts', {
                             layouts: newValue,
+                            viewId, // Include viewId to scope to current view
                         });
-                        console.log('✅ LayoutState: Saved layouts');
+                        console.log(`✅ LayoutState: Saved layouts (viewId: ${viewId})`);
                     } catch (error) {
                         console.error('❌ LayoutState: Failed to save:', error);
                     }
