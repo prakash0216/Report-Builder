@@ -8,7 +8,7 @@ import NotFound from './NotFound';
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import "../App";
-import { useRecoilState, useRecoilValue, useRecoilCallback, useSetRecoilState } from "recoil";
+import { useRecoilState, useRecoilValue, useRecoilCallback } from "recoil";
 import { chartConfigState } from "../recoil/ChartConfig";
 import { layoutState } from "../recoil/LayoutState";
 import ResizableChart from "../components/ResizableChart";
@@ -22,8 +22,7 @@ import { childCardTooltipConfigState } from "../recoil/ChildCardTooltipState";
 import ParentCardContainer from "../components/ParentCardContainer";
 import { variableUpdateTriggerState, variableNamesState } from '../recoil/Variabletracker';
 import { variableAtomFamily } from '../recoil/VariableFamily';
-import { filterNamesState, filterConfigFamily } from '../recoil/FiltersFamily';
-import { liveFilterFamily } from '../recoil/LiveFilterFamily';
+import { filterNamesState } from '../recoil/FiltersFamily';
 import { isChartVisibleSelector, chartDynamicDimensionsSelector, chartVisibilityVariableState } from '../recoil/DashboardVisibility';
 import { IsEditModeState } from "../recoil/IsEditeMode";
 import { dahboardNameMain } from "../recoil/DashboardName";
@@ -60,7 +59,6 @@ import {
   Email as EmailIcon,
 } from "@mui/icons-material";
 import { dataLoadedState } from '../components/DataInitializer';
-import { filterResetTriggerState, isFirstDashboardVisitState } from '../recoil/initializationState';
 import Highcharts from 'highcharts';
 import {
   exportAllAsPDF,
@@ -214,95 +212,6 @@ export default function DropDragDashboard() {
   const [openCardFilterId, setOpenCardFilterId] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useRecoilState<boolean>(IsEditModeState);
   const isFilterPanelExpanded = useRecoilValue(filterPanelExpandedState);
-  const setFilterResetTrigger = useSetRecoilState(filterResetTriggerState);
-  const [isFirstDashboardVisit, setIsFirstDashboardVisit] = useRecoilState(isFirstDashboardVisitState);
-
-  // Track if we've already reset filters for this dashboard visit
-  const hasResetForThisVisitRef = useRef<boolean>(false);
-
-  // 🔥 Reset filters to default values when navigating to / (dashboard management)
-  const resetFiltersToDefaults = useRecoilCallback(
-    ({ snapshot, set }) =>
-      async () => {
-        console.log('🔄 [Dashboard] Resetting filters to default values...');
-        
-        try {
-          const currentFilterNames = await snapshot.getPromise(filterNamesState);
-          console.log(`   Found ${currentFilterNames.length} filters to reset`);
-          
-          let resetCount = 0;
-          for (const filterVariableName of currentFilterNames) {
-            try {
-              const filterConfig = await snapshot.getPromise(filterConfigFamily(filterVariableName));
-              
-              if (filterConfig?.defaultValues && filterConfig.defaultValues.length > 0) {
-                console.log(`   Resetting ${filterConfig.variableName} to:`, filterConfig.defaultValues);
-                set(liveFilterFamily(filterConfig.variableName), filterConfig.defaultValues);
-                resetCount++;
-              } else {
-                console.log(`   Skipping ${filterVariableName} - no default values`);
-              }
-            } catch (err) {
-              console.warn(`   Error resetting ${filterVariableName}:`, err);
-            }
-          }
-          
-          // Small delay to ensure state propagates
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          console.log(`✅ [Dashboard] Reset ${resetCount} filters to default values`);
-          return resetCount;
-        } catch (err) {
-          console.error('❌ [Dashboard] Error resetting filters:', err);
-          throw err;
-        }
-      },
-    []
-  );
-
-  // Reset filters to defaults whenever we're on the dashboard management route (/)
-  useEffect(() => {
-    const currentPath = location.pathname;
-    const isOnDashboardManagement = currentPath === '/';
-    
-    // Reset filters if:
-    // 1. We're on / (dashboard management)
-    // 2. Data is loaded
-    // 3. We haven't reset for this visit yet
-    // 4. This is NOT the first visit (on first visit, DataInitializer already set defaults)
-    if (isOnDashboardManagement && dataLoaded && !hasResetForThisVisitRef.current) {
-      
-      // 🔥 FIX: On first visit, skip filter reset (DataInitializer already set defaults)
-      // Mount calculation will handle the initial calculation
-      if (isFirstDashboardVisit) {
-        console.log('🔄 [Dashboard] First visit - skipping filter reset (DataInitializer already set defaults)');
-        hasResetForThisVisitRef.current = true;
-        setIsFirstDashboardVisit(false); // Mark first visit as complete
-        return;
-      }
-      
-      console.log('🔄 [Dashboard] Returning to dashboard management - resetting filters to defaults');
-      
-      // Reset filters and wait for it to complete
-      resetFiltersToDefaults().then(() => {
-        console.log('✅ [Dashboard] Filter reset completed');
-        hasResetForThisVisitRef.current = true; // Mark as reset for this visit
-        
-        // 🔥 FIX: Trigger recalculation AFTER filters are reset
-        // This ensures the dashboard uses the new default filter values
-        console.log('🔄 [Dashboard] Triggering recalculation after filter reset...');
-        setFilterResetTrigger(prev => prev + 1);
-      }).catch(err => {
-        console.error('❌ [Dashboard] Filter reset failed:', err);
-      });
-    }
-    
-    // Reset the flag when we leave / (so it resets again on next visit)
-    if (!isOnDashboardManagement && hasResetForThisVisitRef.current) {
-      hasResetForThisVisitRef.current = false;
-      console.log('📍 [Dashboard] Left dashboard management, reset flag cleared for next visit');
-    }
-  }, [location.pathname, dataLoaded, resetFiltersToDefaults, setFilterResetTrigger, isFirstDashboardVisit, setIsFirstDashboardVisit]);
 
   const [availableVariables, setAvailableVariables] = useState<Record<string, any>>({});
   const [chartVisibility, setChartVisibility] = useState<Record<string, boolean>>({});
@@ -906,8 +815,14 @@ export default function DropDragDashboard() {
   }, [layouts, currentBreakpoint, chartVisibility]);
 
   // Collect chart references for export (after configs & visibility are computed)
+  // 🔥 IMPORTANT: Only exports visible charts based on chartVisibility state
   const collectChartRefs = useRecoilCallback(({ snapshot }) => (): ChartRef[] => {
     const refs: ChartRef[] = [];
+    
+    // 🔥 DEBUG: Log which charts are being exported
+    console.log(`[Export] Collecting refs for ${visibleCharts.length} visible charts (total in layout: ${layouts[currentBreakpoint]?.length || 0})`);
+    console.log('[Export] Visible chart IDs:', visibleCharts.map(c => c.i));
+    console.log('[Export] Current chartVisibility state:', chartVisibility);
     
     // Helper to get table data from a data source
     const getTableData = (dataSource: string) => {
@@ -951,6 +866,39 @@ export default function DropDragDashboard() {
         console.log(`[collectChartRefs] Processing multi-card container ${item.i} with ${containerConfig.childCards.length} children`);
         
         for (const childConfig of containerConfig.childCards) {
+          // 🔥 CHECK CHILD CARD VISIBILITY - skip hidden child cards
+          if (childConfig.visibilityVariable) {
+            try {
+              const loadable = snapshot.getLoadable(variableAtomFamily(childConfig.visibilityVariable));
+              if (loadable.state === 'hasValue') {
+                const rawValue = loadable.contents;
+                let isVisible = true; // Default to visible
+                
+                // Parse the visibility value
+                if (typeof rawValue === 'boolean') {
+                  isVisible = rawValue;
+                } else if (typeof rawValue === 'string') {
+                  try {
+                    const parsed = JSON.parse(rawValue);
+                    isVisible = parsed === true;
+                  } catch {
+                    // Keep as string - might be "true" or "false"
+                    isVisible = rawValue.toLowerCase() === 'true';
+                  }
+                }
+                
+                // If visibility is false, skip this child card
+                if (!isVisible) {
+                  console.log(`[Export] Skipping hidden child card: ${childConfig.id} (visibility var: ${childConfig.visibilityVariable} = false)`);
+                  continue;
+                }
+              }
+            } catch (e) {
+              console.warn(`[Export] Could not check visibility for child ${childConfig.id}:`, e);
+              // Default to visible if we can't check
+            }
+          }
+          
           // Find the child card container element
           const childContainer = container?.querySelector(`[data-child-id="${childConfig.id}"]`) as HTMLElement | null;
           
@@ -977,6 +925,7 @@ export default function DropDragDashboard() {
             childHtmlContent = childContainer.innerHTML;
           }
           
+          console.log(`[Export] Including visible child card: ${childConfig.id}`);
           refs.push({
             chart: childChartInstance,
             chartId: childConfig.id,
@@ -1048,8 +997,10 @@ export default function DropDragDashboard() {
         tableTheme: configData?.tableSettings?.theme,
       });
     }
+    
+    console.log(`[Export] Total refs collected: ${refs.length}`);
     return refs;
-  }, [visibleCharts, chartConfigs, processedChartConfigs, childCardConfigs]);
+  }, [visibleCharts, chartConfigs, processedChartConfigs, childCardConfigs, chartVisibility, layouts, currentBreakpoint]);
 
   const handleDownload = useCallback(async (format: string) => {
     if (isDownloading || visibleCharts.length === 0) return;
@@ -2001,7 +1952,7 @@ export default function DropDragDashboard() {
           isDroppable={isEditMode}
           isResizable={isEditMode}
           isDraggable={isEditMode}
-          draggableCancel=".non-draggable-close-btn, .non-draggable-edit-btn, .non-draggable-visibility-btn, .non-draggable-configure-btn, .non-draggable-filter-btn, .drag-handle, .local-filter-card, .MuiMenu-root, .MuiMenu-paper, .MuiSelect-root, .MuiButton-root, .MuiIconButton-root, .MuiCheckbox-root, .MuiRadio-root"
+          draggableCancel=".non-draggable-close-btn, .non-draggable-edit-btn, .non-draggable-visibility-btn, .non-draggable-configure-btn, .non-draggable-filter-btn, .drag-handle, .drag-handle-inline, .local-filter-card, .card-filter-panel, .compact-filter-item, .MuiMenu-root, .MuiMenu-paper, .MuiSelect-root, .MuiButton-root, .MuiIconButton-root, .MuiCheckbox-root, .MuiRadio-root"
           resizeHandles={isEditMode ? resizeHandle : []}
           allowOverlap={false}
           margin={[12, 12]}

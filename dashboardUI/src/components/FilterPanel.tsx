@@ -33,6 +33,8 @@ import { allFiltersSelector, filterNamesState, filterConfigFamily } from "../rec
 import { liveFilterFamily } from "../recoil/LiveFilterFamily";
 import { atom } from 'recoil';
 import { IsEditModeState } from "../recoil/IsEditeMode";
+import { shouldBlockSave } from "../recoil/initializationState";
+import { currentViewContextState } from "../recoil/ViewContext";
 
 // Type for filter options
 interface DefaultValueOption {
@@ -58,42 +60,17 @@ export const filterPanelExpandedState = atom<boolean>({
 });
 
 // Recoil state for filter positions
+// NOTE: Loading is handled by DataInitializer to avoid race conditions
 export const filterPositionsState = atom<Record<string, FilterPosition>>({
   key: 'filterPositionsState',
   default: {},
-  effects: [
-    ({ setSelf }) => {
-      // Load filter positions from API on initialization
-      axios.get('http://localhost:3002/api/filter-panel-state')
-        .then(response => {
-          if (response.data.success && response.data.positions) {
-            setSelf(response.data.positions);
-          }
-        })
-        .catch(error => {
-          console.error('Failed to load filter positions:', error);
-        });
-    },
-  ]
 });
 
+// Recoil state for active filter IDs
+// NOTE: Loading is handled by DataInitializer to avoid race conditions
 export const activeFilterIdsState = atom<string[]>({
   key: 'activeFilterIdsState',
   default: [],
-  effects: [
-    ({ setSelf }) => {
-      // Load active filter IDs from API on initialization
-      axios.get('http://localhost:3002/api/filter-panel-state')
-        .then(response => {
-          if (response.data.success && response.data.activeFilterIds) {
-            setSelf(response.data.activeFilterIds);
-          }
-        })
-        .catch(error => {
-          console.error('Failed to load active filter IDs:', error);
-        });
-    },
-  ]
 });
 
 // Compact Filter Item with Dropdown (exported for card-level reuse)
@@ -114,27 +91,6 @@ export const CompactFilterItem: React.FC<{
   const isInlineVariant = variant === 'inline';
   const effectivePosition = position || { x: 0, y: 0 };
   const isEditMode=useRecoilValue(IsEditModeState);
-
-  // Debug: Log when component mounts or edit mode changes
-  useEffect(() => {
-    console.log('🔍 [CompactFilterItem] Component state:', {
-      variant,
-      variableName,
-      isEditMode,
-      position: effectivePosition,
-      disabled: !isEditMode,
-    });
-    
-    // Verify drag handle exists
-    if (nodeRef.current) {
-      const dragHandle = (nodeRef.current as HTMLElement).querySelector('.drag-handle');
-      console.log('🔍 [CompactFilterItem] Drag handle check:', {
-        nodeRefExists: !!nodeRef.current,
-        dragHandleExists: !!dragHandle,
-        dragHandleElement: dragHandle,
-      });
-    }
-  }, [variant, variableName, isEditMode, effectivePosition]);
 
   // Initialize with default values
   useEffect(() => {
@@ -219,67 +175,177 @@ export const CompactFilterItem: React.FC<{
 
   const categoryColors = getCategoryColor(filterConfig.category);
 
-  const handleDrag = (_e: any, data: { x: number; y: number }) => {
-    if (onPositionChange && variant === 'global') {
-      onPositionChange({ x: data.x, y: data.y });
-    }
-  };
-
+  // Simple drag stop handler - just update position
   const handleDragStop = (_e: any, data: { x: number; y: number }) => {
-    if (onPositionChange && variant === 'global') {
-      onPositionChange({ x: data.x, y: data.y });
-      // Save position to database
-      axios.post('http://localhost:3002/api/filter-panel-state', {
-        positions: { [variableName]: { x: data.x, y: data.y } }
-      }).catch(err => console.error('Failed to save filter position:', err));
+    if (variant === 'global' && onPositionChange) {
+      // Ensure minimum margins
+      const newPos = {
+        x: Math.max(8, data.x),
+        y: Math.max(8, data.y),
+      };
+      onPositionChange(newPos);
     }
   };
 
-  // Inline variant - simple non-draggable filter
+  // Inline variant - draggable filter within card (same as global but styled for cards)
+  // Handle drag stop for inline variant
+  const handleInlineDragStop = (_e: any, data: { x: number; y: number }) => {
+    if (onPositionChange) {
+      const newPos = {
+        x: Math.max(0, data.x),
+        y: Math.max(0, data.y),
+      };
+      onPositionChange(newPos);
+    }
+  };
+
+  // Check if filter has a valid stored position (for absolute positioning)
+  const hasValidPosition = position && typeof position.x === 'number' && typeof position.y === 'number' && position.x >= 0 && position.y >= 0;
+
   if (isInlineVariant) {
-    return (
-      <Box sx={{ mb: 1.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-          <Chip 
-            label={filterConfig.category}
-            size="small"
-            sx={{
-              bgcolor: categoryColors.bg,
-              color: categoryColors.text,
-              border: `1px solid ${categoryColors.border}`,
-              fontSize: '0.6rem',
-              height: 18,
-              fontWeight: 700,
+    // If no valid position yet (not dragged), use flex layout; once dragged, switch to absolute
+    const filterContent = (
+      <Paper
+        ref={nodeRef}
+        elevation={2}
+        className="compact-filter-item"
+        sx={{
+          // Use absolute positioning only if dragged (has valid position)
+          position: hasValidPosition ? 'absolute' : 'relative',
+          // Apply left/top when we have a valid position (for non-edit mode)
+          // In edit mode, Draggable handles positioning via transform
+          ...(hasValidPosition && !isEditMode ? {
+            left: position!.x,
+            top: position!.y,
+          } : {}),
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          p: 0.75,
+          pl: 1,
+          pr: 0.5,
+          borderRadius: 2,
+          bgcolor: 'white',
+          border: '1px solid #e2e8f0',
+          width: 220,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          transition: hasValidPosition ? 'none' : 'all 0.2s ease',
+          '&:hover': {
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            borderColor: '#667eea',
+          },
+          // CSS for when being dragged (applied by react-draggable)
+          '&.react-draggable-dragging': {
+            zIndex: 1000,
+            boxShadow: '0 8px 20px rgba(102, 126, 234, 0.3)',
+            border: '2px solid #667eea',
+          },
+        }}
+      >
+        {/* Drag Handle - Only visible in edit mode */}
+        {isEditMode && (
+          <Box 
+            className="drag-handle-inline"
+            sx={{ 
+              cursor: 'grab',
+              color: '#94a3b8',
+              display: 'flex',
+              alignItems: 'center',
+              mr: 0.5,
+              '&:hover': { color: '#667eea' },
+              '&:active': { cursor: 'grabbing' },
             }}
-          />
-          <Typography variant="caption" fontWeight={600} color="#334155">
-            {filterConfig.displayName}
-          </Typography>
-        </Box>
-        
-        <Box 
-          onClick={handleClick}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            p: 1,
-            borderRadius: 1.5,
-            bgcolor: 'white',
-            border: '1px solid #e2e8f0',
-            cursor: 'pointer',
-            '&:hover': {
-              borderColor: '#667eea',
+          >
+            <DragIndicatorIcon sx={{ fontSize: 16 }} />
+          </Box>
+        )}
+
+        {/* Filter Info */}
+        <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+            <Typography 
+              variant="caption" 
+              fontWeight={600} 
+              color="#334155"
+              title={filterConfig.displayName}
+              sx={{ 
+                overflow: 'hidden', 
+                textOverflow: 'ellipsis', 
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+                fontSize: '0.7rem',
+              }}
+            >
+              {filterConfig.displayName}
+            </Typography>
+            <Chip 
+              label={filterConfig.category}
+              size="small"
+              sx={{
+                bgcolor: categoryColors.bg,
+                color: categoryColors.text,
+                border: `1px solid ${categoryColors.border}`,
+                fontSize: '0.5rem',
+                height: 14,
+                fontWeight: 700,
+                flexShrink: 0,
+                '& .MuiChip-label': { px: 0.5 },
+              }}
+            />
+          </Box>
+          
+          {/* Value Display - Clickable */}
+          <Box 
+            onClick={handleClick}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              px: 0.75,
+              py: 0.35,
+              borderRadius: 1,
               bgcolor: '#f8fafc',
-            },
-          }}
-        >
-          <Typography variant="body2" sx={{ color: selectedValues.length ? '#334155' : '#94a3b8' }}>
-            {displayValue}
-          </Typography>
-          <KeyboardArrowDownIcon sx={{ color: '#94a3b8', fontSize: 18 }} />
+              border: '1px solid #e2e8f0',
+              cursor: 'pointer',
+              '&:hover': {
+                borderColor: '#667eea',
+                bgcolor: '#f0f4ff',
+              },
+            }}
+          >
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                color: selectedValues.length ? '#334155' : '#94a3b8',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flex: 1,
+                fontSize: '0.7rem',
+              }}
+            >
+              {displayValue}
+            </Typography>
+            <KeyboardArrowDownIcon sx={{ color: '#94a3b8', fontSize: 14, ml: 0.5 }} />
+          </Box>
         </Box>
 
+        {/* Remove Button - Only visible in edit mode */}
+        {isEditMode && (
+          <IconButton 
+            size="small" 
+            onClick={onRemove}
+            sx={{ 
+              color: '#94a3b8',
+              p: 0.25,
+              '&:hover': { color: '#ef4444', bgcolor: '#fef2f2' },
+            }}
+          >
+            <CloseIcon sx={{ fontSize: 14 }} />
+          </IconButton>
+        )}
+
+        {/* Dropdown Menu */}
         <Menu
           anchorEl={anchorEl}
           open={isOpen}
@@ -292,57 +358,94 @@ export const CompactFilterItem: React.FC<{
               borderRadius: 2,
               boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
               border: '1px solid #e2e8f0',
-              minWidth: 200,
-              maxHeight: 300,
+              width: 220,
+              maxWidth: 220,
+              maxHeight: 350,
+              display: 'flex',
+              flexDirection: 'column',
             }
           }}
         >
           {filterConfig.selectionType === 'single' ? (
-            <RadioGroup value={selectedValues[0]?.value || ''}>
-              {options.map((option: DefaultValueOption) => (
-                <MenuItem 
-                  key={String(option.value)} 
-                  onClick={() => handleRadioChange(option)}
-                  sx={{ py: 0.5 }}
-                >
-                  <Radio 
-                    size="small" 
-                    checked={isValueSelected(option.value)}
-                    sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
-                  />
-                  <Typography variant="body2">{option.label}</Typography>
-                </MenuItem>
-              ))}
-            </RadioGroup>
+            <Box sx={{ maxHeight: 200, overflow: 'auto', flex: 1 }}>
+              <RadioGroup value={selectedValues[0]?.value || ''}>
+                {options.map((option: DefaultValueOption) => (
+                  <MenuItem 
+                    key={String(option.value)} 
+                    onClick={() => handleRadioChange(option)}
+                    sx={{ py: 0.5 }}
+                  >
+                    <Radio 
+                      size="small" 
+                      checked={isValueSelected(option.value)}
+                      sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
+                    />
+                    <Typography variant="body2" noWrap sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{option.label}</Typography>
+                  </MenuItem>
+                ))}
+              </RadioGroup>
+            </Box>
           ) : (
             <>
-              <Box sx={{ px: 1.5, py: 1, borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 1 }}>
-                <Button size="small" onClick={handleSelectAll} sx={{ fontSize: '0.7rem' }}>All</Button>
-                <Button size="small" onClick={handleClearAll} sx={{ fontSize: '0.7rem' }}>None</Button>
+              {/* Select All Checkbox */}
+              <MenuItem 
+                onClick={() => {
+                  if (selectedValues.length === options.length) {
+                    handleClearAll();
+                  } else {
+                    handleSelectAll();
+                  }
+                }}
+                sx={{ 
+                  py: 0.75, 
+                  borderBottom: '1px solid #e2e8f0',
+                  bgcolor: '#f8fafc',
+                  '&:hover': { bgcolor: '#f0f4ff' }
+                }}
+              >
+                <Checkbox 
+                  size="small" 
+                  checked={selectedValues.length === options.length}
+                  indeterminate={selectedValues.length > 0 && selectedValues.length < options.length}
+                  sx={{ 
+                    color: '#667eea', 
+                    '&.Mui-checked': { color: '#667eea' },
+                    '&.MuiCheckbox-indeterminate': { color: '#667eea' }
+                  }}
+                />
+                <Typography variant="body2" fontWeight={600} color="#475569">Select All</Typography>
+              </MenuItem>
+              <Box sx={{ maxHeight: 200, overflow: 'auto', flex: 1 }}>
+                {options.map((option: DefaultValueOption) => (
+                  <MenuItem 
+                    key={String(option.value)} 
+                    onClick={() => handleToggleOption(option)}
+                    sx={{ py: 0.5 }}
+                  >
+                    <Checkbox 
+                      size="small" 
+                      checked={isValueSelected(option.value)}
+                      sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
+                    />
+                    <Typography variant="body2" noWrap sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{option.label}</Typography>
+                  </MenuItem>
+                ))}
               </Box>
-              {options.map((option: DefaultValueOption) => (
-                <MenuItem 
-                  key={String(option.value)} 
-                  onClick={() => handleToggleOption(option)}
-                  sx={{ py: 0.5 }}
-                >
-                  <Checkbox 
-                    size="small" 
-                    checked={isValueSelected(option.value)}
-                    sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
-                  />
-                  <Typography variant="body2">{option.label}</Typography>
-                </MenuItem>
-              ))}
             </>
           )}
-          <Box sx={{ p: 1.5, borderTop: '1px solid #e2e8f0', display: 'flex', gap: 1 }}>
+          <Box sx={{ p: 1.5, borderTop: '1px solid #e2e8f0', display: 'flex', gap: 1, flexShrink: 0 }}>
             <Button 
               fullWidth 
               size="small" 
               variant="outlined"
               onClick={handleReset}
-              sx={{ borderColor: '#cbd5e1', color: '#64748b' }}
+              sx={{ 
+                borderColor: '#cbd5e1', 
+                color: '#64748b',
+                textTransform: 'none',
+                fontSize: '0.75rem',
+                '&:hover': { borderColor: '#94a3b8', bgcolor: '#f8fafc' }
+              }}
             >
               Reset
             </Button>
@@ -351,14 +454,37 @@ export const CompactFilterItem: React.FC<{
               size="small" 
               variant="contained"
               onClick={handleApply}
-              sx={{ bgcolor: '#667eea', '&:hover': { bgcolor: '#5568d3' } }}
+              sx={{ 
+                bgcolor: '#667eea', 
+                textTransform: 'none',
+                fontSize: '0.75rem',
+                '&:hover': { bgcolor: '#5568d3' } 
+              }}
             >
               Apply
             </Button>
           </Box>
         </Menu>
-      </Box>
+      </Paper>
     );
+
+    // Wrap with Draggable for edit mode
+    if (isEditMode) {
+      return (
+        <Draggable
+          nodeRef={nodeRef}
+          handle=".drag-handle-inline"
+          position={hasValidPosition ? position : { x: 0, y: 0 }}
+          onStop={handleInlineDragStop}
+          bounds="parent"
+        >
+          {filterContent}
+        </Draggable>
+      );
+    }
+
+    // Non-edit mode - render without drag
+    return filterContent;
   }
 
   // Global variant - draggable filter chip
@@ -367,7 +493,6 @@ export const CompactFilterItem: React.FC<{
       nodeRef={nodeRef}
       handle=".drag-handle"
       position={effectivePosition}
-      onDrag={handleDrag}
       onStop={handleDragStop}
       bounds="parent"
       disabled={!isEditMode}
@@ -386,13 +511,17 @@ export const CompactFilterItem: React.FC<{
           borderRadius: 2,
           bgcolor: 'white',
           border: '1px solid #e2e8f0',
-          minWidth: 180,
-          maxWidth: 280,
+          width: 240,
           boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-          transition: 'box-shadow 0.2s, border-color 0.2s',
           '&:hover': {
-            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
             borderColor: '#667eea',
+          },
+          // CSS for when being dragged (applied by react-draggable)
+          '&.react-draggable-dragging': {
+            zIndex: 1000,
+            boxShadow: '0 8px 20px rgba(102, 126, 234, 0.3)',
+            border: '2px solid #667eea',
           },
         }}
       >
@@ -415,8 +544,22 @@ export const CompactFilterItem: React.FC<{
         )}
 
         {/* Filter Info */}
-        <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+            <Typography 
+              variant="caption" 
+              fontWeight={600} 
+              color="#334155"
+              title={filterConfig.displayName}
+              sx={{ 
+                overflow: 'hidden', 
+                textOverflow: 'ellipsis', 
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+              }}
+            >
+              {filterConfig.displayName}
+            </Typography>
             <Chip 
               label={filterConfig.category}
               size="small"
@@ -427,21 +570,10 @@ export const CompactFilterItem: React.FC<{
                 fontSize: '0.55rem',
                 height: 16,
                 fontWeight: 700,
+                flexShrink: 0,
                 '& .MuiChip-label': { px: 0.75 },
               }}
             />
-            <Typography 
-              variant="caption" 
-              fontWeight={600} 
-              color="#334155"
-              sx={{ 
-                overflow: 'hidden', 
-                textOverflow: 'ellipsis', 
-                whiteSpace: 'nowrap' 
-              }}
-            >
-              {filterConfig.displayName}
-            </Typography>
           </Box>
           
           {/* Value Display - Clickable */}
@@ -507,35 +639,64 @@ export const CompactFilterItem: React.FC<{
               borderRadius: 2,
               boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
               border: '1px solid #e2e8f0',
-              minWidth: 220,
+              width: 240, // Fixed width to match filter
+              maxWidth: 240,
               maxHeight: 350,
+              display: 'flex',
+              flexDirection: 'column',
             }
           }}
         >
           {filterConfig.selectionType === 'single' ? (
-            <RadioGroup value={selectedValues[0]?.value || ''}>
-              {options.map((option: DefaultValueOption) => (
-                <MenuItem 
-                  key={String(option.value)} 
-                  onClick={() => handleRadioChange(option)}
-                  sx={{ py: 0.5 }}
-                >
-                  <Radio 
-                    size="small" 
-                    checked={isValueSelected(option.value)}
-                    sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
-                  />
-                  <Typography variant="body2">{option.label}</Typography>
-                </MenuItem>
-              ))}
-            </RadioGroup>
+            <Box sx={{ maxHeight: 200, overflow: 'auto', flex: 1 }}>
+              <RadioGroup value={selectedValues[0]?.value || ''}>
+                {options.map((option: DefaultValueOption) => (
+                  <MenuItem 
+                    key={String(option.value)} 
+                    onClick={() => handleRadioChange(option)}
+                    sx={{ py: 0.5 }}
+                  >
+                    <Radio 
+                      size="small" 
+                      checked={isValueSelected(option.value)}
+                      sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
+                    />
+                    <Typography variant="body2" noWrap sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{option.label}</Typography>
+                  </MenuItem>
+                ))}
+              </RadioGroup>
+            </Box>
           ) : (
             <>
-              <Box sx={{ px: 1.5, py: 1, borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 1 }}>
-                <Button size="small" onClick={handleSelectAll} sx={{ fontSize: '0.7rem', textTransform: 'none' }}>Select All</Button>
-                <Button size="small" onClick={handleClearAll} sx={{ fontSize: '0.7rem', textTransform: 'none' }}>Clear</Button>
-              </Box>
-              <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
+              {/* Select All Checkbox */}
+              <MenuItem 
+                onClick={() => {
+                  if (selectedValues.length === options.length) {
+                    handleClearAll();
+                  } else {
+                    handleSelectAll();
+                  }
+                }}
+                sx={{ 
+                  py: 0.75, 
+                  borderBottom: '1px solid #e2e8f0',
+                  bgcolor: '#f8fafc',
+                  '&:hover': { bgcolor: '#f0f4ff' }
+                }}
+              >
+                <Checkbox 
+                  size="small" 
+                  checked={selectedValues.length === options.length}
+                  indeterminate={selectedValues.length > 0 && selectedValues.length < options.length}
+                  sx={{ 
+                    color: '#667eea', 
+                    '&.Mui-checked': { color: '#667eea' },
+                    '&.MuiCheckbox-indeterminate': { color: '#667eea' }
+                  }}
+                />
+                <Typography variant="body2" fontWeight={600} color="#475569">Select All</Typography>
+              </MenuItem>
+              <Box sx={{ maxHeight: 200, overflow: 'auto', flex: 1 }}>
                 {options.map((option: DefaultValueOption) => (
                   <MenuItem 
                     key={String(option.value)} 
@@ -547,13 +708,13 @@ export const CompactFilterItem: React.FC<{
                       checked={isValueSelected(option.value)}
                       sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
                     />
-                    <Typography variant="body2">{option.label}</Typography>
+                    <Typography variant="body2" noWrap sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{option.label}</Typography>
                   </MenuItem>
                 ))}
               </Box>
             </>
           )}
-          <Box sx={{ p: 1.5, borderTop: '1px solid #e2e8f0', display: 'flex', gap: 1 }}>
+          <Box sx={{ p: 1.5, borderTop: '1px solid #e2e8f0', display: 'flex', gap: 1, flexShrink: 0 }}>
             <Button 
               fullWidth 
               size="small" 
@@ -606,6 +767,9 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
   const [activeFilterIds, setActiveFilterIds] = useRecoilState(activeFilterIdsState);
   const [filterPositions, setFilterPositions] = useRecoilState(filterPositionsState);
   
+  // Get current dashboard context for scoped saves
+  const viewContext = useRecoilValue(currentViewContextState);
+  
   // Shared expanded state - allows parent components to react to panel state
   const [isExpanded, setIsExpanded] = useRecoilState(filterPanelExpandedState);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -619,13 +783,34 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
   }));
 
   // Save filter state to database whenever active filters or positions change
+  // Filter panel state is DASHBOARD-SCOPED (shared across all views in a dashboard)
   useEffect(() => {
+    // Don't save during data initialization (prevents overwriting with empty/stale values)
+    if (shouldBlockSave()) {
+      console.log('⏭️ [FilterPanel] Skipping save - data initialization in progress');
+      return;
+    }
+    
+    // Don't save if no dashboard context yet
+    if (!viewContext.dashboardId) {
+      console.log('⏭️ [FilterPanel] Skipping save - no dashboard context');
+      return;
+    }
+    
+    // Don't save if no filters are active and no positions exist
+    // This prevents saving empty state when first mounting before data loads
+    if (activeFilterIds.length === 0 && Object.keys(filterPositions).length === 0) {
+      return;
+    }
+    
     const saveState = async () => {
       try {
         await axios.post('http://localhost:3002/api/filter-panel-state', {
+          dashboardId: viewContext.dashboardId,
           activeFilterIds,
           positions: filterPositions,
         });
+        console.log('💾 [FilterPanel] Saved filter state for dashboard', viewContext.dashboardId, ':', { activeFilterIds: activeFilterIds.length, positions: Object.keys(filterPositions).length });
       } catch (err) {
         console.error('Failed to save filter panel state:', err);
       }
@@ -634,7 +819,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
     // Debounce save
     const timeoutId = setTimeout(saveState, 500);
     return () => clearTimeout(timeoutId);
-  }, [activeFilterIds, filterPositions]);
+  }, [activeFilterIds, filterPositions, viewContext.dashboardId]);
 
   const handleToggleFilter = (filterName: string) => {
     if (filterName === 'ALL') {
@@ -665,17 +850,24 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
     const newActiveFilters = tempSelectedFilters.filter(name => filterNames.includes(name));
     setActiveFilterIds(newActiveFilters);
 
-    // Set initial positions for new filters
+    // Set initial positions for new filters - stack them vertically with consistent spacing
     const newPositions = { ...filterPositions };
-    let yOffset = 6 + (newActiveFilters.filter(id => filterPositions[id]).length * 80);
+    const FILTER_HEIGHT = 70; // Approximate height of each filter
+    const FILTER_SPACING = 8; // Gap between filters
+    const INITIAL_X = 12; // Left margin
+    const INITIAL_Y = 8; // Top margin
+    
+    // Calculate starting Y position based on existing filters
+    const existingFiltersCount = newActiveFilters.filter(id => filterPositions[id]).length;
+    let yOffset = INITIAL_Y + (existingFiltersCount * (FILTER_HEIGHT + FILTER_SPACING));
     
     filtersToAdd.forEach((filterId) => {
       if (!newPositions[filterId]) {
         newPositions[filterId] = {
-          x: 6,
+          x: INITIAL_X,
           y: yOffset,
         };
-        yOffset += 80;
+        yOffset += FILTER_HEIGHT + FILTER_SPACING;
       }
     });
 
@@ -707,18 +899,55 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
     });
   };
 
+  // Simple position update - no complex repositioning during drag for better performance
+  const handleFinalPosition = useCallback((movedFilterId: string, newPosition: FilterPosition) => {
+    setFilterPositions(prev => ({
+      ...prev,
+      [movedFilterId]: newPosition,
+    }));
+    
+    // Save to database (debounced by the useEffect above)
+  }, [setFilterPositions]);
+
+  // Reset all filter positions to default stacked layout
+  const handleResetPositions = () => {
+    const FILTER_HEIGHT = 70;
+    const FILTER_SPACING = 8;
+    const INITIAL_X = 12;
+    const INITIAL_Y = 8;
+    
+    const newPositions: Record<string, FilterPosition> = {};
+    activeFilterIds.forEach((filterId, index) => {
+      newPositions[filterId] = {
+        x: INITIAL_X,
+        y: INITIAL_Y + (index * (FILTER_HEIGHT + FILTER_SPACING)),
+      };
+    });
+    
+    setFilterPositions(newPositions);
+    
+    // Save to database
+    axios.post('http://localhost:3002/api/filter-panel-state', {
+      activeFilterIds,
+      positions: newPositions,
+    }).catch(err => console.error('Failed to save reset positions:', err));
+  };
+
   const toggleExpanded = () => {
     setIsExpanded(!isExpanded);
   };
 
   // Always render the panel (collapsed or expanded)
+  // Account for footer height (approx 56px) to prevent content overlap
+  const FOOTER_HEIGHT = 56;
+  
   return (
     <Box
       sx={{
         position: 'fixed',
         right: 0,
         top: topOffset,
-        height: `calc(100vh - ${topOffset})`,
+        height: `calc(100vh - ${topOffset} - ${FOOTER_HEIGHT}px)`,
         width: isExpanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
         display: 'flex',
         zIndex: 30,
@@ -838,6 +1067,29 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 borderRadius: 2,
               }}
             >
+              {/* Reset Layout Button - only show when there are active filters */}
+              {activeFilterIds.length > 0 && (
+                <Box sx={{ mb: 1.5, display: 'flex', justifyContent: 'flex-end' }}>
+                  <Tooltip title="Reset all filters to default stacked layout" placement="left">
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={handleResetPositions}
+                      sx={{
+                        fontSize: '0.7rem',
+                        color: '#64748b',
+                        textTransform: 'none',
+                        '&:hover': {
+                          bgcolor: 'rgba(102, 126, 234, 0.1)',
+                          color: '#667eea',
+                        }
+                      }}
+                    >
+                      Reset Layout
+                    </Button>
+                  </Tooltip>
+                </Box>
+              )}
               <FormControl fullWidth size="small">
                 <InputLabel sx={{ color: '#667eea', '&.Mui-focused': { color: '#667eea' } }}>
                   Add Filters
@@ -874,21 +1126,32 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                     PaperProps: {
                       sx: {
                         maxHeight: 400,
+                        width: 240, // Fixed width to fit panel
+                        maxWidth: 260,
+                        display: 'flex',
+                        flexDirection: 'column',
                         '& .MuiList-root': {
                           pt: 0,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          flex: 1,
+                          overflow: 'hidden',
                         }
                       }
                     },
                     autoFocus: false,
                   }}
                 >
-                  {/* Select All Option */}
+                  {/* Select All Option - Sticky at top */}
                   <MenuItem
                     value="ALL"
                     onClick={() => handleToggleFilter('ALL')}
                     sx={{
                       borderBottom: '1px solid #e2e8f0',
                       bgcolor: '#f8fafc',
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 2,
                       '&:hover': {
                         bgcolor: '#f0f4ff',
                       }
@@ -901,87 +1164,86 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                       sx={{ 
                         color: '#667eea', 
                         '&.Mui-checked': { color: '#667eea' },
-                        '&.MuiCheckbox-indeterminate': { color: '#667eea' }
+                        '&.MuiCheckbox-indeterminate': { color: '#667eea' },
+                        ml: -0.5,
                       }}
                     />
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Chip 
-                        label="ALL" 
-                        size="small"
-                        sx={{ 
-                          bgcolor: '#ede9fe',
-                          color: '#7c3aed',
-                          border: '1px solid #c4b5fd',
-                          fontSize: '0.65rem',
-                          height: 20,
-                          fontWeight: 700,
-                        }}
-                      />
-                      <Typography variant="body2" fontWeight={600}>
-                        All Filters
-                      </Typography>
-                    </Box>
+                    <Typography variant="body2" fontWeight={600}>
+                      Select All
+                    </Typography>
                   </MenuItem>
 
-                  {/* Individual Filter Options */}
-                  {availableFilters.map((config) => {
-                    const getCategoryChipColor = (category: string) => {
-                      switch (category.toLowerCase()) {
-                        case 'params':
-                          return { bgcolor: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac' };
-                        case 'data-source':
-                          return { bgcolor: '#faf5ff', color: '#9333ea', border: '1px solid #d8b4fe' };
-                        case 'hooks':
-                          return { bgcolor: '#fff7ed', color: '#ea580c', border: '1px solid #fdba74' };
-                        default:
-                          return { bgcolor: '#f8fafc', color: '#64748b', border: '1px solid #cbd5e1' };
-                      }
-                    };
-                    
-                    const chipColor = getCategoryChipColor(config.category);
-                    const isChecked = tempSelectedFilters.includes(config.variableName);
-                    
-                    return (
-                      <MenuItem
-                        key={config.variableName}
-                        value={config.variableName}
-                        onClick={() => handleToggleFilter(config.variableName)}
-                        sx={{
-                          '&:hover': {
-                            bgcolor: '#f0f4ff',
-                          },
-                        }}
-                      >
-                        <Checkbox
-                          size="small"
-                          checked={isChecked}
-                          sx={{ 
-                            color: '#667eea', 
-                            '&.Mui-checked': { color: '#667eea' }
+                  {/* Individual Filter Options - Scrollable */}
+                  <Box sx={{ maxHeight: 250, overflow: 'auto', flex: 1 }}>
+                    {availableFilters.map((config) => {
+                      const getCategoryChipColor = (category: string) => {
+                        switch (category.toLowerCase()) {
+                          case 'params':
+                            return { bgcolor: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac' };
+                          case 'data-source':
+                            return { bgcolor: '#faf5ff', color: '#9333ea', border: '1px solid #d8b4fe' };
+                          case 'hooks':
+                            return { bgcolor: '#fff7ed', color: '#ea580c', border: '1px solid #fdba74' };
+                          default:
+                            return { bgcolor: '#f8fafc', color: '#64748b', border: '1px solid #cbd5e1' };
+                        }
+                      };
+                      
+                      const chipColor = getCategoryChipColor(config.category);
+                      const isChecked = tempSelectedFilters.includes(config.variableName);
+                      
+                      return (
+                        <MenuItem
+                          key={config.variableName}
+                          value={config.variableName}
+                          onClick={() => handleToggleFilter(config.variableName)}
+                          sx={{
+                            py: 0.75,
+                            '&:hover': {
+                              bgcolor: '#f0f4ff',
+                            },
                           }}
-                        />
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-                          <Chip 
-                            label={config.category} 
+                        >
+                          <Checkbox
                             size="small"
+                            checked={isChecked}
                             sx={{ 
-                              ...chipColor,
-                              fontSize: '0.65rem',
-                              height: 20,
-                              fontWeight: 700,
+                              color: '#667eea', 
+                              '&.Mui-checked': { color: '#667eea' },
+                              p: 0.5,
+                              mr: 0.5,
                             }}
                           />
-                          <Typography 
-                            variant="body2" 
-                            fontWeight={500}
-                            sx={{ flex: 1 }}
-                          >
-                            {config.displayName}
-                          </Typography>
-                        </Box>
-                      </MenuItem>
-                    );
-                  })}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
+                            <Chip 
+                              label={config.category} 
+                              size="small"
+                              sx={{ 
+                                ...chipColor,
+                                fontSize: '0.6rem',
+                                height: 18,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                              }}
+                            />
+                            <Typography 
+                              variant="body2" 
+                              fontWeight={500}
+                              sx={{ 
+                                flex: 1, 
+                                overflow: 'hidden', 
+                                textOverflow: 'ellipsis', 
+                                whiteSpace: 'nowrap',
+                                fontSize: '0.8rem',
+                              }}
+                            >
+                              {config.displayName}
+                            </Typography>
+                          </Box>
+                        </MenuItem>
+                      );
+                    })}
+                  </Box>
 
                   {/* Apply and Cancel Buttons inside dropdown */}
                   <Box 
@@ -1039,7 +1301,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
           )}
         </Box>
 
-        {/* Draggable Filters Area - Now Scrollable */}
+        {/* Draggable Filters Area */}
         <Box 
           sx={{ 
             flexGrow: 1,
@@ -1108,18 +1370,25 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
             <Box sx={{ 
               position: 'relative', 
               width: '100%', 
-              minHeight: '100%',
-              p: 1 
+              minHeight: activeFilterIds.length * 78 + 20,
+              p: 1,
+              pb: 3, // Extra bottom padding for last filter visibility
             }}>
-              {activeFilterIds.map((filterId) => (
-                <CompactFilterItem
-                  key={filterId}
-                  variableName={filterId}
-                  onRemove={() => handleRemoveFilter(filterId)}
-                  position={filterPositions[filterId] || { x: 10, y: 10 }}
-                  onPositionChange={(pos) => handlePositionChange(filterId, pos)}
-                />
-              ))}
+              {activeFilterIds.map((filterId, index) => {
+                const defaultPosition = {
+                  x: 12,
+                  y: 8 + (index * 78),
+                };
+                return (
+                  <CompactFilterItem
+                    key={filterId}
+                    variableName={filterId}
+                    onRemove={() => handleRemoveFilter(filterId)}
+                    position={filterPositions[filterId] || defaultPosition}
+                    onPositionChange={(pos) => handleFinalPosition(filterId, pos)}
+                  />
+                );
+              })}
             </Box>
           )}
         </Box>

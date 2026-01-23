@@ -17,7 +17,8 @@ import {
   dataLoadedState,
   startDataInitialization, 
   completeDataInitialization,
-  updateLastValue 
+  updateLastValue,
+  filterResetTriggerState
 } from '../recoil/initializationState';
 import { 
   currentViewContextState,
@@ -37,6 +38,7 @@ export const DataInitializer: React.FC = () => {
   const setDataLoaded = useSetRecoilState(dataLoadedState);
   const { dashboardName: dashboardSlug, viewName: viewSlug } = useParams<{ dashboardName?: string; viewName?: string }>();
   const lastLoadedViewRef = useRef<string | null>(null);
+  const lastLoadedDashboardRef = useRef<number | null>(null);
 
   // Fetch dashboard and view IDs from slugs
   // Returns { dashboardId, viewId, error } where error indicates if resource was not found
@@ -93,22 +95,37 @@ export const DataInitializer: React.FC = () => {
     }
   }, [dashboardSlug, viewSlug]);
 
-  const initializeAllData = useRecoilCallback(({ set }) => async (viewId: number | null, dashboardId: number | null) => {
+  const initializeAllData = useRecoilCallback(({ set, snapshot }) => async (viewId: number | null, dashboardId: number | null) => {
     const viewIdParam = viewId ? `?viewId=${viewId}` : '';
     const dashboardIdParam = dashboardId ? `?dashboardId=${dashboardId}` : '';
     
-    console.log(`🚀 [Data Initializer] Starting to preload data (viewId: ${viewId}, dashboardId: ${dashboardId})...`);
+    // Check if we're switching dashboards or just views within the same dashboard
+    const isSameDashboard = lastLoadedDashboardRef.current === dashboardId;
+    const isNewDashboard = !isSameDashboard && dashboardId !== null;
+    
+    console.log(`🚀 [Data Initializer] Starting to preload data (viewId: ${viewId}, dashboardId: ${dashboardId}, sameDashboard: ${isSameDashboard})...`);
     
     // Signal that initialization is starting - block all saves
     startDataInitialization();
     
-    // Clear existing view-specific state before loading new data
+    // Clear existing VIEW-SPECIFIC state before loading new data
+    // (charts, layouts, visibility, etc. are view-specific)
     set(chartConfigState, {});
     set(layoutState, { lg: [], md: [], sm: [], xs: [], xxs: [] });
     set(chartVisibilityVariableState, {});
     set(cardDimensionConditionsState, {});
     set(tooltipConfigState, {});
     set(childCardConfigState, {});
+    
+    // NOTE: Filter panel state is DASHBOARD-scoped, so we DON'T clear it when switching views
+    // within the same dashboard. Only clear when switching to a different dashboard.
+    if (isNewDashboard) {
+      console.log(`🔄 [Data Initializer] New dashboard - clearing filter panel state`);
+      set(filterPositionsState, {});
+      set(activeFilterIdsState, []);
+    } else if (isSameDashboard) {
+      console.log(`⏭️ [Data Initializer] Same dashboard - preserving filter panel state`);
+    }
     
     try {
       // 1. Load all calculations (dashboard-scoped)
@@ -156,8 +173,9 @@ export const DataInitializer: React.FC = () => {
         console.warn('⚠️ [Data Initializer] Failed to load parameters:', err);
       }
 
-      // 3. Load all filters (dashboard-scoped)
+      // 3. Load all filters (dashboard-scoped configs, but ALWAYS reset values to defaults)
       console.log('📊 [Data Initializer] Loading filters...');
+      let filtersResetToDefaults = false;
       try {
         const filtersResponse = await axios.get(`${API_BASE_URL}/api/filters${dashboardIdParam}`);
         if (filtersResponse.data.success && filtersResponse.data.filters) {
@@ -187,15 +205,29 @@ export const DataInitializer: React.FC = () => {
               
               set(filterConfigFamily(dbFilter.variable_name), filterConfig);
               
-              // Initialize filter with default values
+              // 🔥 ALWAYS reset filter VALUES to defaults when visiting ANY view
+              // This ensures dashboard shows fresh data with default filter values
               if (filterConfig.defaultValues && filterConfig.defaultValues.length > 0) {
                 set(liveFilterFamily(dbFilter.variable_name), filterConfig.defaultValues);
+                console.log(`🔄 [Data Initializer] Reset filter "${dbFilter.variable_name}" to defaults`);
+                filtersResetToDefaults = true;
               }
             } catch (parseErr) {
               console.warn(`⚠️ [Data Initializer] Failed to parse filter ${dbFilter.variable_name}:`, parseErr);
             }
           }
-          console.log(`✅ [Data Initializer] Loaded all filter configs and default values`);
+          
+          // 🔥 CRITICAL: Trigger recalculation AFTER filters are reset to defaults
+          // This ensures charts/data recalculate with the new default filter values
+          if (filtersResetToDefaults) {
+            // Get current trigger value and increment it
+            const currentTrigger = snapshot.getLoadable(filterResetTriggerState);
+            const currentValue = currentTrigger.state === 'hasValue' ? currentTrigger.contents : 0;
+            set(filterResetTriggerState, currentValue + 1);
+            console.log(`🔄 [Data Initializer] Triggered filter reset recalculation (trigger: ${currentValue} -> ${currentValue + 1})`);
+          }
+          
+          console.log(`✅ [Data Initializer] Loaded all filter configs and reset values to defaults`);
         }
       } catch (err) {
         console.warn('⚠️ [Data Initializer] Failed to load filters:', err);
@@ -258,22 +290,28 @@ export const DataInitializer: React.FC = () => {
         console.warn('⚠️ [Data Initializer] Failed to load card dimension conditions:', err);
       }
 
-      // 8. Load filter panel state (VIEW-SCOPED)
-      console.log('📊 [Data Initializer] Loading filter panel state...');
-      try {
-        const filterPanelResponse = await axios.get(`${API_BASE_URL}/api/filter-panel-state${viewIdParam}`);
-        if (filterPanelResponse.data.success) {
-          if (filterPanelResponse.data.positions) {
-            set(filterPositionsState, filterPanelResponse.data.positions);
-            console.log(`✅ [Data Initializer] Loaded filter positions`);
+      // 8. Load filter panel state (DASHBOARD-SCOPED - shared across all views in dashboard)
+      // Only load when switching to a NEW dashboard (not when switching views within same dashboard)
+      if (isNewDashboard || lastLoadedDashboardRef.current === null) {
+        console.log('📊 [Data Initializer] Loading filter panel state (new dashboard)...');
+        try {
+          // Use dashboardId (not viewId) - filter panel state is shared across all views in a dashboard
+          const filterPanelResponse = await axios.get(`${API_BASE_URL}/api/filter-panel-state${dashboardIdParam}`);
+          if (filterPanelResponse.data.success) {
+            if (filterPanelResponse.data.positions) {
+              set(filterPositionsState, filterPanelResponse.data.positions);
+              console.log(`✅ [Data Initializer] Loaded filter positions for dashboard ${dashboardId}`);
+            }
+            if (filterPanelResponse.data.activeFilterIds) {
+              set(activeFilterIdsState, filterPanelResponse.data.activeFilterIds);
+              console.log(`✅ [Data Initializer] Loaded ${filterPanelResponse.data.activeFilterIds.length} active filter IDs`);
+            }
           }
-          if (filterPanelResponse.data.activeFilterIds) {
-            set(activeFilterIdsState, filterPanelResponse.data.activeFilterIds);
-            console.log(`✅ [Data Initializer] Loaded ${filterPanelResponse.data.activeFilterIds.length} active filter IDs`);
-          }
+        } catch (err) {
+          console.warn('⚠️ [Data Initializer] Failed to load filter panel state:', err);
         }
-      } catch (err) {
-        console.warn('⚠️ [Data Initializer] Failed to load filter panel state:', err);
+      } else {
+        console.log('⏭️ [Data Initializer] Skipping filter panel load - same dashboard, preserving state');
       }
 
       // 9. Load tooltip configs (VIEW-SCOPED)
@@ -307,6 +345,9 @@ export const DataInitializer: React.FC = () => {
       // Signal that initialization is complete - allow saves
       completeDataInitialization();
       
+      // Update the last loaded dashboard ref
+      lastLoadedDashboardRef.current = dashboardId;
+      
       // Mark data as loaded for UI
       setDataLoaded(true);
       console.log('✅ [Data Initializer] All data preloaded successfully!');
@@ -321,17 +362,19 @@ export const DataInitializer: React.FC = () => {
 
   useEffect(() => {
     const initialize = async () => {
-      // Create a unique key for this view
       const viewKey = `${dashboardSlug || 'none'}/${viewSlug || 'none'}`;
       
       console.log(`🔍 [DataInitializer] Route params: dashboardSlug="${dashboardSlug}", viewSlug="${viewSlug}"`);
-      console.log(`🔍 [DataInitializer] View key: "${viewKey}", lastLoaded: "${lastLoadedViewRef.current}"`);
+      console.log(`🔍 [DataInitializer] View key: "${viewKey}"`);
       
-      // Skip if we already loaded this view
-      if (lastLoadedViewRef.current === viewKey) {
-        console.log(`⏭️ [DataInitializer] Skipping - already loaded this view`);
-        return;
-      }
+      // 🔥 ALWAYS reload data when visiting a view to ensure:
+      // 1. Filter values are reset to defaults
+      // 2. Charts show fresh data based on default filter values
+      // NO CACHING - fresh data every time for consistency
+      
+      // 🔥 Set dataLoaded to false BEFORE starting to load
+      // This shows loading indicator in the UI
+      setDataLoaded(false);
       
       // Fetch view context (dashboard/view IDs from slugs)
       console.log(`📡 [DataInitializer] Fetching view context...`);
@@ -357,9 +400,9 @@ export const DataInitializer: React.FC = () => {
       // Initialize data with the current view context
       await initializeAllData(viewId, dashboardId);
       
-      // Mark this view as loaded
+      // Update refs for dashboard-level optimizations (filter panel state)
       lastLoadedViewRef.current = viewKey;
-      console.log(`✅ [DataInitializer] Marked "${viewKey}" as loaded`);
+      console.log(`✅ [DataInitializer] Loaded view "${viewKey}"`);
     };
 
     initialize();

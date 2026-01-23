@@ -455,18 +455,69 @@ const buildChartData = (chart: Highcharts.Chart): ChartDataResult | null => {
 };
 
 // Load pptxgenjs via CDN only (avoid bundling node:fs deps)
+// Track loading state to prevent multiple simultaneous loads
+let pptxLoadPromise: Promise<any> | null = null;
+
 const loadPptx = async (): Promise<any> => {
+  // Return immediately if already loaded
   if ((window as any).PptxGenJS) return (window as any).PptxGenJS;
-  const script = document.createElement('script');
-  script.src = 'https://unpkg.com/pptxgenjs@4.0.1/dist/pptxgen.bundle.js';
-  script.async = true;
-  await new Promise((resolve, reject) => {
-    script.onload = resolve;
-    script.onerror = reject;
+  
+  // If already loading, wait for existing promise
+  if (pptxLoadPromise) return pptxLoadPromise;
+  
+  // Check if script tag already exists (from previous attempt)
+  const existingScript = document.querySelector('script[src*="pptxgen"]');
+  if (existingScript) {
+    // Script exists but PptxGenJS not ready - wait for it
+    pptxLoadPromise = new Promise((resolve, reject) => {
+      const checkReady = (attempts = 0) => {
+        if ((window as any).PptxGenJS) {
+          pptxLoadPromise = null;
+          resolve((window as any).PptxGenJS);
+        } else if (attempts < 50) { // Wait up to 5 seconds
+          setTimeout(() => checkReady(attempts + 1), 100);
+        } else {
+          pptxLoadPromise = null;
+          reject(new Error('PptxGenJS not available after waiting'));
+        }
+      };
+      checkReady();
+    });
+    return pptxLoadPromise;
+  }
+  
+  // Load fresh script
+  pptxLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/pptxgenjs@4.0.1/dist/pptxgen.bundle.js';
+    script.async = true;
+    script.id = 'pptxgenjs-script';
+    
+    script.onload = () => {
+      // Wait a bit for script to initialize
+      const checkReady = (attempts = 0) => {
+        if ((window as any).PptxGenJS) {
+          pptxLoadPromise = null;
+          resolve((window as any).PptxGenJS);
+        } else if (attempts < 20) {
+          setTimeout(() => checkReady(attempts + 1), 100);
+        } else {
+          pptxLoadPromise = null;
+          reject(new Error('PptxGenJS not available after load'));
+        }
+      };
+      checkReady();
+    };
+    
+    script.onerror = () => {
+      pptxLoadPromise = null;
+      reject(new Error('Failed to load pptxgenjs from CDN'));
+    };
+    
     document.body.appendChild(script);
   });
-  if ((window as any).PptxGenJS) return (window as any).PptxGenJS;
-  throw new Error('PptxGenJS not available after CDN load');
+  
+  return pptxLoadPromise;
 };
 
 export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileName = 'Dashboard') => {

@@ -690,28 +690,71 @@ export const exportAllAsExcel = async (chartRefs: ChartRef[], fileName = 'Dashbo
  * Export all charts/HTML/table as PPTX (one slide per card)
  * Requires `pptxgenjs` dependency. If not installed, user will be prompted.
  */
+// Track loading state to prevent multiple simultaneous loads
+let pptxLoadPromiseUtil: Promise<any> | null = null;
+
 // Load pptxgenjs via CDN at runtime to avoid bundling node:fs
 const loadPptxFromCdn = (): Promise<any> => {
   return new Promise((resolve, reject) => {
+    // Return immediately if already loaded
     if ((window as any).PptxGenJS) return resolve((window as any).PptxGenJS);
+    
+    // Check if script tag already exists (from previous attempt)
+    const existingScript = document.querySelector('script[src*="pptxgen"]');
+    if (existingScript) {
+      // Script exists but PptxGenJS not ready - wait for it
+      const checkReady = (attempts = 0) => {
+        if ((window as any).PptxGenJS) {
+          resolve((window as any).PptxGenJS);
+        } else if (attempts < 50) { // Wait up to 5 seconds
+          setTimeout(() => checkReady(attempts + 1), 100);
+        } else {
+          reject(new Error('PptxGenJS not available after waiting'));
+        }
+      };
+      checkReady();
+      return;
+    }
+    
+    // Load fresh script
     const script = document.createElement('script');
     script.src = 'https://unpkg.com/pptxgenjs@4.0.1/dist/pptxgen.bundle.js';
     script.async = true;
+    script.id = 'pptxgenjs-script-util';
+    
     script.onload = () => {
-      if ((window as any).PptxGenJS) resolve((window as any).PptxGenJS);
-      else reject(new Error('PptxGenJS not available after load'));
+      // Wait a bit for script to initialize
+      const checkReady = (attempts = 0) => {
+        if ((window as any).PptxGenJS) {
+          resolve((window as any).PptxGenJS);
+        } else if (attempts < 20) {
+          setTimeout(() => checkReady(attempts + 1), 100);
+        } else {
+          reject(new Error('PptxGenJS not available after load'));
+        }
+      };
+      checkReady();
     };
-    script.onerror = reject;
+    
+    script.onerror = () => reject(new Error('Failed to load pptxgenjs from CDN'));
     document.body.appendChild(script);
   });
 };
 
 const loadPptx = async (): Promise<any> => {
-  // CDN-only to avoid bundling node:fs dependencies
+  // Return immediately if already loaded
   if ((window as any).PptxGenJS) return (window as any).PptxGenJS;
+  
+  // If already loading, wait for existing promise
+  if (pptxLoadPromiseUtil) return pptxLoadPromiseUtil;
+  
   try {
-    return await loadPptxFromCdn();
+    pptxLoadPromiseUtil = loadPptxFromCdn();
+    const result = await pptxLoadPromiseUtil;
+    pptxLoadPromiseUtil = null;
+    return result;
   } catch (err) {
+    pptxLoadPromiseUtil = null;
     throw err;
   }
 };

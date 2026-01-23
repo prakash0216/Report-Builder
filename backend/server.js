@@ -3483,16 +3483,22 @@ app.put('/api/chart-visibility/:chartId', async (req, res) => {
 /**
  * Get filter panel state (positions and active filters)
  * GET /api/filter-panel-state
+ * 
+ * Filter panel state is DASHBOARD-SCOPED - shared across all views in a dashboard
+ * This ensures filters persist when navigating between views
  */
 app.get('/api/filter-panel-state', async (req, res) => {
   try {
-    const { viewId } = req.query;
+    const { dashboardId } = req.query;
     
     let query = 'SELECT * FROM filter_panel_state WHERE is_active = true';
-    if (viewId) {
-      query += ` AND view_id = ${parseInt(viewId)}`;
+    if (dashboardId) {
+      // Use dashboard_id for scoping (stored in view_id column for compatibility)
+      query += ` AND view_id = ${parseInt(dashboardId)}`;
     }
     query += ' ORDER BY COALESCE(display_order, 0), last_modified DESC';
+    
+    console.log(`📥 [GET /api/filter-panel-state] dashboardId=${dashboardId}, query=${query}`);
     
     const states = await dbClient.query(query);
     const positions = {};
@@ -3508,6 +3514,8 @@ app.get('/api/filter-panel-state', async (req, res) => {
       });
     }
     
+    console.log(`📥 [GET /api/filter-panel-state] Found ${activeFilterIds.length} active filters`);
+    
     res.json({ 
       success: true, 
       positions,
@@ -3522,15 +3530,21 @@ app.get('/api/filter-panel-state', async (req, res) => {
 /**
  * Save filter panel state (positions and active filters)
  * POST /api/filter-panel-state
+ * 
+ * Filter panel state is DASHBOARD-SCOPED - shared across all views in a dashboard
  */
-// Debounce/lock mechanism for filter panel state saves
-let filterPanelSaveInProgress = false;
-let pendingFilterPanelSave = null;
+// Debounce/lock mechanism for filter panel state saves - per dashboard
+const filterPanelSaveLocks = new Map();
+const pendingFilterPanelSaves = new Map();
 
-async function saveFilterPanelStateToDb(positions, activeFilterIds) {
-  // Mark all existing filters as inactive first
+async function saveFilterPanelStateToDb(dashboardId, positions, activeFilterIds) {
+  const scopeClause = dashboardId ? `view_id = ${dashboardId}` : 'view_id IS NULL';
+  
+  console.log(`💾 [saveFilterPanelStateToDb] dashboardId=${dashboardId}, activeFilters=${activeFilterIds.length}`);
+  
+  // Mark existing filters for THIS DASHBOARD as inactive first
   try {
-    await dbClient.run('UPDATE filter_panel_state SET is_active = false');
+    await dbClient.run(`UPDATE filter_panel_state SET is_active = false WHERE ${scopeClause}`);
   } catch (err) {
     // Ignore if no rows exist
     console.log('Note: Could not update existing filters (may not exist yet)');
@@ -3543,54 +3557,58 @@ async function saveFilterPanelStateToDb(positions, activeFilterIds) {
     const escapedFilterId = filterId.replace(/'/g, "''");
     
     try {
-      // First try to delete if exists
-      await dbClient.run(`DELETE FROM filter_panel_state WHERE filter_id = '${escapedFilterId}'`);
+      // First try to delete if exists FOR THIS DASHBOARD
+      await dbClient.run(`DELETE FROM filter_panel_state WHERE filter_id = '${escapedFilterId}' AND ${scopeClause}`);
     } catch (delErr) {
       // Ignore delete errors
     }
     
-    // Then insert
+    // Then insert with dashboard scope
     try {
       await dbClient.run(`
-        INSERT INTO filter_panel_state (filter_id, x_position, y_position, is_active, display_order, last_modified)
-        VALUES ('${escapedFilterId}', ${Math.round(position.x)}, ${Math.round(position.y)}, true, ${i}, CURRENT_TIMESTAMP)
+        INSERT INTO filter_panel_state (view_id, filter_id, x_position, y_position, is_active, display_order, last_modified)
+        VALUES (${dashboardId || 'NULL'}, '${escapedFilterId}', ${Math.round(position.x)}, ${Math.round(position.y)}, true, ${i}, CURRENT_TIMESTAMP)
       `);
     } catch (insertErr) {
       console.warn(`Warning: Could not save filter state for ${filterId}:`, insertErr.message);
     }
   }
+  
+  console.log(`✅ [saveFilterPanelStateToDb] Saved ${activeFilterIds.length} filters for dashboard ${dashboardId}`);
 }
 
 app.post('/api/filter-panel-state', async (req, res) => {
   try {
-    const { positions, activeFilterIds } = req.body;
+    const { positions, activeFilterIds, dashboardId } = req.body;
     if (!positions || !activeFilterIds || !Array.isArray(activeFilterIds)) {
       return res.status(400).json({ success: false, error: 'positions object and activeFilterIds array are required' });
     }
 
-    // If a save is in progress, queue this one and respond immediately
-    if (filterPanelSaveInProgress) {
-      pendingFilterPanelSave = { positions, activeFilterIds };
+    const lockKey = dashboardId || 'global';
+    
+    // If a save is in progress for this dashboard, queue this one and respond immediately
+    if (filterPanelSaveLocks.get(lockKey)) {
+      pendingFilterPanelSaves.set(lockKey, { dashboardId, positions, activeFilterIds });
       return res.json({ success: true, message: 'Filter panel state queued for save' });
     }
 
-    filterPanelSaveInProgress = true;
+    filterPanelSaveLocks.set(lockKey, true);
 
     try {
-      await saveFilterPanelStateToDb(positions, activeFilterIds);
+      await saveFilterPanelStateToDb(dashboardId, positions, activeFilterIds);
       res.json({ success: true, message: 'Filter panel state saved successfully' });
     } finally {
-      filterPanelSaveInProgress = false;
+      filterPanelSaveLocks.set(lockKey, false);
 
-      // Process any pending save
-      if (pendingFilterPanelSave) {
-        const pending = pendingFilterPanelSave;
-        pendingFilterPanelSave = null;
+      // Process any pending save for this dashboard
+      const pending = pendingFilterPanelSaves.get(lockKey);
+      if (pending) {
+        pendingFilterPanelSaves.delete(lockKey);
         // Process asynchronously
         setImmediate(async () => {
           try {
-            await saveFilterPanelStateToDb(pending.positions, pending.activeFilterIds);
-            console.log('✅ Pending filter panel state saved');
+            await saveFilterPanelStateToDb(pending.dashboardId, pending.positions, pending.activeFilterIds);
+            console.log(`✅ Pending filter panel state saved for dashboard ${pending.dashboardId}`);
           } catch (err) {
             console.error('Error processing pending filter panel save:', err.message);
           }
@@ -3673,6 +3691,7 @@ async function saveCardFilterPanelStateToDb(cardId, positions, activeFilterIds) 
   // Deduplicate incoming ids to avoid unique constraint issues
   const uniqueActiveIds = Array.from(new Set(activeFilterIds || []));
 
+  // First, mark all existing filters for this card as inactive
   try {
     await dbClient.run(
       `UPDATE card_filter_panel_state SET is_active = false WHERE card_id='${escapedCardId}'`
@@ -3681,6 +3700,7 @@ async function saveCardFilterPanelStateToDb(cardId, positions, activeFilterIds) 
     console.log('Note: Could not update existing card filters (may not exist yet)');
   }
 
+  // Use DELETE + INSERT pattern to avoid unique constraint issues
   for (let i = 0; i < uniqueActiveIds.length; i++) {
     const filterId = uniqueActiveIds[i];
     const rawPos = positions[filterId];
@@ -3689,22 +3709,28 @@ async function saveCardFilterPanelStateToDb(cardId, positions, activeFilterIds) 
     const position = hasPosition ? { x: Math.round(rawPos.x), y: Math.round(rawPos.y) } : { x: -1, y: -1 };
     const escapedFilterId = filterId.replace(/'/g, "''");
 
+    // Delete existing record first
+    try {
+      await dbClient.run(`
+        DELETE FROM card_filter_panel_state 
+        WHERE card_id = '${escapedCardId}' AND filter_id = '${escapedFilterId}'
+      `);
+    } catch (delErr) {
+      // Ignore delete errors
+    }
+
+    // Then insert new record
     try {
       await dbClient.run(`
         INSERT INTO card_filter_panel_state (card_id, filter_id, x_position, y_position, is_active, display_order, last_modified)
         VALUES ('${escapedCardId}', '${escapedFilterId}', ${position.x}, ${position.y}, true, ${i}, CURRENT_TIMESTAMP)
-        ON CONFLICT (card_id, filter_id)
-        DO UPDATE SET 
-          x_position = EXCLUDED.x_position,
-          y_position = EXCLUDED.y_position,
-          is_active = EXCLUDED.is_active,
-          display_order = EXCLUDED.display_order,
-          last_modified = EXCLUDED.last_modified
       `);
     } catch (insertErr) {
       console.warn(`Warning: Could not save card filter state for card ${cardId} filter ${filterId}:`, insertErr.message);
     }
   }
+  
+  console.log(`✅ Saved card filter state for card ${cardId}: ${uniqueActiveIds.length} filters`);
 }
 
 app.get('/api/cards/:cardId/filter-panel-state', async (req, res) => {

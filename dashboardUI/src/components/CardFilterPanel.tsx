@@ -153,6 +153,7 @@ const CardFilterPanel: React.FC<CardFilterPanelProps> = ({ cardId, onClose }) =>
   return (
     <Paper
       elevation={0}
+      className="card-filter-panel"
       sx={{
         width: "100%",
         maxWidth: "100%", // Ensure it doesn't exceed parent width
