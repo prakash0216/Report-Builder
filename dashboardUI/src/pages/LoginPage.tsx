@@ -1,5 +1,4 @@
 // pages/LoginPage.tsx
-// Simple login page with email only for flow purposes
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRecoilState } from 'recoil';
@@ -76,7 +75,7 @@ const LoginPage: React.FC = () => {
         p: 3,
       }}
     >
-      {/* Background decorations */}
+      {/* Background decorations - Data Visualization Theme */}
       <Box
         sx={{
           position: 'absolute',
@@ -88,26 +87,217 @@ const LoginPage: React.FC = () => {
           pointerEvents: 'none',
         }}
       >
+        {/* Grid pattern overlay */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundImage: `
+              linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
+            `,
+            backgroundSize: '60px 60px',
+          }}
+        />
+
+        {/* Floating chart elements - Bar Chart */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '15%',
+            left: '8%',
+            display: 'flex',
+            alignItems: 'flex-end',
+            gap: '6px',
+            opacity: 0.15,
+            transform: 'rotate(-5deg)',
+          }}
+        >
+          {[40, 65, 45, 80, 55, 70].map((h, i) => (
+            <Box
+              key={i}
+              sx={{
+                width: 12,
+                height: h,
+                borderRadius: '4px 4px 0 0',
+                background: 'white',
+              }}
+            />
+          ))}
+        </Box>
+
+        {/* Floating chart elements - Line Chart */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '25%',
+            right: '10%',
+            opacity: 0.12,
+            transform: 'rotate(3deg)',
+          }}
+        >
+          <svg width="180" height="80" viewBox="0 0 180 80">
+            <polyline
+              points="0,60 30,45 60,55 90,25 120,35 150,15 180,30"
+              fill="none"
+              stroke="white"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            {[0, 30, 60, 90, 120, 150, 180].map((x, i) => (
+              <circle key={i} cx={x} cy={[60, 45, 55, 25, 35, 15, 30][i]} r="4" fill="white" />
+            ))}
+          </svg>
+        </Box>
+
+        {/* Pie Chart */}
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: '20%',
+            left: '12%',
+            opacity: 0.1,
+            transform: 'rotate(15deg)',
+          }}
+        >
+          <svg width="100" height="100" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="40" fill="none" stroke="white" strokeWidth="20" strokeDasharray="75 251.2" />
+            <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="20" strokeDasharray="100 251.2" strokeDashoffset="-75" />
+            <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="20" strokeDasharray="76.2 251.2" strokeDashoffset="-175" />
+          </svg>
+        </Box>
+
+        {/* Floating data cards */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '60%',
+            right: '8%',
+            width: 120,
+            height: 70,
+            borderRadius: 2,
+            border: '1px solid rgba(255,255,255,0.15)',
+            background: 'rgba(255,255,255,0.05)',
+            backdropFilter: 'blur(5px)',
+            opacity: 0.6,
+            transform: 'rotate(8deg)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 0.5,
+          }}
+        >
+          <Box sx={{ fontSize: 24, fontWeight: 700, color: 'rgba(255,255,255,0.8)' }}>↑ 24%</Box>
+          <Box sx={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', letterSpacing: 1 }}>GROWTH</Box>
+        </Box>
+
+        {/* Mini bar chart card */}
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: '30%',
+            right: '25%',
+            width: 100,
+            height: 60,
+            borderRadius: 2,
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: 'rgba(255,255,255,0.04)',
+            opacity: 0.5,
+            transform: 'rotate(-6deg)',
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'center',
+            gap: '4px',
+            p: 1,
+          }}
+        >
+          {[20, 35, 25, 45, 30, 40, 35].map((h, i) => (
+            <Box
+              key={i}
+              sx={{
+                width: 8,
+                height: `${h}%`,
+                borderRadius: '2px 2px 0 0',
+                background: 'rgba(255,255,255,0.6)',
+              }}
+            />
+          ))}
+        </Box>
+
+        {/* Scattered data points */}
+        {[
+          { top: '10%', left: '30%', size: 6 },
+          { top: '20%', left: '45%', size: 4 },
+          { top: '35%', left: '15%', size: 5 },
+          { top: '45%', right: '30%', size: 4 },
+          { top: '70%', left: '35%', size: 6 },
+          { top: '80%', right: '40%', size: 5 },
+          { top: '15%', right: '35%', size: 4 },
+          { bottom: '15%', left: '45%', size: 5 },
+        ].map((dot, i) => (
+          <Box
+            key={i}
+            sx={{
+              position: 'absolute',
+              ...dot,
+              width: dot.size,
+              height: dot.size,
+              borderRadius: '50%',
+              background: 'rgba(255,255,255,0.2)',
+            }}
+          />
+        ))}
+
+        {/* Glowing orbs */}
+        <Box
+          sx={{
+            position: 'absolute',
+            width: '600px',
+            height: '600px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(79, 172, 254, 0.15) 0%, transparent 60%)',
+            top: '-200px',
+            right: '-200px',
+          }}
+        />
         <Box
           sx={{
             position: 'absolute',
             width: '500px',
             height: '500px',
             borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%)',
-            top: '-150px',
-            right: '-150px',
+            background: 'radial-gradient(circle, rgba(167, 139, 250, 0.12) 0%, transparent 60%)',
+            bottom: '-150px',
+            left: '-150px',
+          }}
+        />
+
+        {/* Diagonal accent lines */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '40%',
+            left: '5%',
+            width: 80,
+            height: 2,
+            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)',
+            transform: 'rotate(-45deg)',
           }}
         />
         <Box
           sx={{
             position: 'absolute',
-            width: '400px',
-            height: '400px',
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(255, 255, 255, 0.08) 0%, transparent 70%)',
-            bottom: '-100px',
-            left: '-100px',
+            bottom: '25%',
+            right: '15%',
+            width: 60,
+            height: 2,
+            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)',
+            transform: 'rotate(45deg)',
           }}
         />
       </Box>
