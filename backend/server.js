@@ -651,6 +651,316 @@ app.delete('/api/calculations/:id', async (req, res) => {
 
 
 // ============================================
+// PREDEFINED FUNCTIONS ENDPOINTS
+// ============================================
+
+/**
+ * Get all predefined functions
+ * GET /api/predefined-functions
+ * Supports optional dashboardId query param for dashboard-scoped filtering
+ * If global=true, returns only global functions (dashboard_id IS NULL)
+ */
+app.get('/api/predefined-functions', async (req, res) => {
+  try {
+    const { dashboardId, global: isGlobal } = req.query;
+    
+    let query = 'SELECT * FROM predefined_functions';
+    if (isGlobal === 'true') {
+      query += ' WHERE dashboard_id IS NULL';
+    } else if (dashboardId) {
+      // Return both global and dashboard-specific functions
+      query += ` WHERE dashboard_id IS NULL OR dashboard_id = ${parseInt(dashboardId)}`;
+    }
+    query += ' ORDER BY category ASC, name ASC';
+    
+    const result = await dbClient.query(query);
+    
+    // Parse JSON fields
+    const functions = result.map(row => ({
+      id: row.function_id,
+      dbId: row.id,
+      name: row.name,
+      description: row.description || '',
+      parameters: row.parameters_json ? JSON.parse(row.parameters_json) : [],
+      body: row.body,
+      returnType: row.return_type || 'any',
+      category: row.category || 'Custom',
+      example: row.example || '',
+      isEnabled: row.is_enabled !== false,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+    
+    res.json({ success: true, functions });
+  } catch (err) {
+    console.error('❌ Error fetching predefined functions:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get predefined functions for a specific dashboard
+ * GET /api/dashboards/:dashboardId/predefined-functions
+ */
+app.get('/api/dashboards/:dashboardId/predefined-functions', async (req, res) => {
+  const { dashboardId } = req.params;
+  
+  try {
+    // Resolve dashboard ID if it's a slug
+    const isNumeric = /^\d+$/.test(dashboardId);
+    let actualDashboardId = dashboardId;
+    
+    if (!isNumeric) {
+      const dashboardResult = await dbClient.query(
+        `SELECT id FROM dashboards WHERE slug = '${dashboardId.replace(/'/g, "''")}'`
+      );
+      if (dashboardResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Dashboard not found' });
+      }
+      actualDashboardId = dashboardResult[0].id;
+    }
+    
+    const query = `SELECT * FROM predefined_functions WHERE dashboard_id = ${actualDashboardId} ORDER BY category ASC, name ASC`;
+    const result = await dbClient.query(query);
+    
+    // Parse JSON fields
+    const functions = result.map(row => ({
+      id: row.function_id,
+      dbId: row.id,
+      name: row.name,
+      description: row.description || '',
+      parameters: row.parameters_json ? JSON.parse(row.parameters_json) : [],
+      body: row.body,
+      returnType: row.return_type || 'any',
+      category: row.category || 'Custom',
+      example: row.example || '',
+      isEnabled: row.is_enabled !== false,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+    
+    res.json({ success: true, functions });
+  } catch (err) {
+    console.error('❌ Error fetching predefined functions:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Add new predefined function
+ * POST /api/predefined-functions
+ */
+app.post('/api/predefined-functions', async (req, res) => {
+  const { id, name, description, parameters, body, returnType, category, isEnabled, dashboardId } = req.body;
+  
+  if (!name || !body) {
+    return res.status(400).json({ success: false, error: 'name and body are required' });
+  }
+  
+  // Validate function name (must be valid JS identifier)
+  const validIdentifier = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
+  if (!validIdentifier.test(name)) {
+    return res.status(400).json({ success: false, error: 'Invalid function name. Must be a valid JavaScript identifier.' });
+  }
+
+  try {
+    const functionId = id || `func-${Date.now()}`;
+    const escapedName = name.replace(/'/g, "''");
+    const escapedDescription = (description || '').replace(/'/g, "''");
+    const escapedBody = body.replace(/'/g, "''");
+    const escapedReturnType = (returnType || 'any').replace(/'/g, "''");
+    const escapedCategory = (category || 'Custom').replace(/'/g, "''");
+    const parametersJson = JSON.stringify(parameters || []).replace(/'/g, "''");
+    const enabled = isEnabled !== false ? 'true' : 'false';
+    
+    // Check if function name already exists for this dashboard
+    let existingQuery = `SELECT id FROM predefined_functions WHERE name='${escapedName}'`;
+    if (dashboardId) {
+      existingQuery += ` AND dashboard_id=${parseInt(dashboardId)}`;
+    }
+    const existing = await dbClient.query(existingQuery);
+    
+    if (existing.length > 0) {
+      // Update existing function
+      const updateQuery = `UPDATE predefined_functions SET
+        description='${escapedDescription}',
+        parameters_json='${parametersJson}',
+        body='${escapedBody}',
+        return_type='${escapedReturnType}',
+        category='${escapedCategory}',
+        is_enabled=${enabled},
+        updated_at=CURRENT_TIMESTAMP
+        WHERE name='${escapedName}'${dashboardId ? ` AND dashboard_id=${parseInt(dashboardId)}` : ''}`;
+      await dbClient.run(updateQuery);
+      console.log(`✅ Predefined function updated: ${name}`);
+      res.json({ success: true, message: 'Function updated successfully', id: functionId });
+    } else {
+      // Insert new function
+      const insertQuery = `INSERT INTO predefined_functions 
+        (function_id, dashboard_id, name, description, parameters_json, body, return_type, category, is_enabled, created_at, updated_at)
+        VALUES 
+        ('${functionId}', ${dashboardId ? parseInt(dashboardId) : 'NULL'}, '${escapedName}', '${escapedDescription}', 
+         '${parametersJson}', '${escapedBody}', '${escapedReturnType}', '${escapedCategory}', ${enabled}, 
+         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
+      await dbClient.run(insertQuery);
+      console.log(`✅ Predefined function added: ${name} (dashboardId: ${dashboardId || 'global'})`);
+      res.json({ success: true, message: 'Function added successfully', id: functionId });
+    }
+  } catch (err) {
+    console.error('❌ Error adding predefined function:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Bulk save predefined functions
+ * POST /api/predefined-functions/bulk
+ * Used by frontend to save all functions at once
+ * If global: true, saves as global functions (dashboard_id IS NULL)
+ */
+app.post('/api/predefined-functions/bulk', async (req, res) => {
+  const { functions, dashboardId, viewId, global: isGlobal } = req.body;
+  
+  if (!Array.isArray(functions)) {
+    return res.status(400).json({ success: false, error: 'functions array is required' });
+  }
+
+  try {
+    let actualDashboardId = null;
+    
+    // If not global, resolve dashboard ID from viewId if needed
+    if (!isGlobal) {
+      actualDashboardId = dashboardId;
+      if (!actualDashboardId && viewId) {
+        const viewResult = await dbClient.query(`SELECT dashboard_id FROM views WHERE id = ${parseInt(viewId)}`);
+        if (viewResult.length > 0) {
+          actualDashboardId = viewResult[0].dashboard_id;
+        }
+      }
+    }
+    
+    // Delete existing functions (global if isGlobal, otherwise dashboard-scoped)
+    if (isGlobal) {
+      await dbClient.run(`DELETE FROM predefined_functions WHERE dashboard_id IS NULL`);
+    } else if (actualDashboardId) {
+      await dbClient.run(`DELETE FROM predefined_functions WHERE dashboard_id = ${actualDashboardId}`);
+    }
+    
+    // Insert all functions
+    console.log(`📥 [Predefined Functions Bulk] Received ${functions.length} functions to save (isGlobal: ${isGlobal})`);
+    let savedCount = 0;
+    for (const fn of functions) {
+      if (!fn.name || !fn.body) {
+        console.log(`⏭️ [Predefined Functions] Skipping function without name or body:`, fn);
+        continue;
+      }
+      
+      const functionId = fn.id || `func-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const escapedName = fn.name.replace(/'/g, "''");
+      const escapedDescription = (fn.description || '').replace(/'/g, "''");
+      const escapedBody = fn.body.replace(/'/g, "''");
+      const escapedReturnType = (fn.returnType || 'any').replace(/'/g, "''");
+      const escapedCategory = (fn.category || 'Custom').replace(/'/g, "''");
+      const escapedExample = (fn.example || '').replace(/'/g, "''");
+      const parametersJson = JSON.stringify(fn.parameters || []).replace(/'/g, "''");
+      const enabled = fn.isEnabled !== false ? 'true' : 'false';
+      
+      console.log(`💾 [Predefined Functions] Inserting: ${fn.name} (id: ${functionId})`);
+      const insertQuery = `INSERT INTO predefined_functions 
+        (function_id, dashboard_id, name, description, parameters_json, body, return_type, category, example, is_enabled, created_at, updated_at)
+        VALUES 
+        ('${functionId}', ${actualDashboardId ? parseInt(actualDashboardId) : 'NULL'}, '${escapedName}', '${escapedDescription}', 
+         '${parametersJson}', '${escapedBody}', '${escapedReturnType}', '${escapedCategory}', '${escapedExample}', ${enabled}, 
+         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
+      await dbClient.run(insertQuery);
+      savedCount++;
+    }
+    
+    console.log(`✅ Predefined functions bulk saved: ${savedCount}/${functions.length} functions (${isGlobal ? 'GLOBAL' : `dashboardId: ${actualDashboardId}`})`);
+    res.json({ success: true, message: `${functions.length} functions saved successfully` });
+  } catch (err) {
+    console.error('❌ Error bulk saving predefined functions:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Update predefined function
+ * PUT /api/predefined-functions/:id
+ */
+app.put('/api/predefined-functions/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, description, parameters, body, returnType, category, isEnabled } = req.body;
+  
+  if (!body) {
+    return res.status(400).json({ success: false, error: 'body is required' });
+  }
+
+  try {
+    // Check if function exists
+    const existing = await dbClient.query(`SELECT id FROM predefined_functions WHERE function_id='${id.replace(/'/g, "''")}'`);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, error: 'Function not found' });
+    }
+
+    const escapedName = name ? name.replace(/'/g, "''") : null;
+    const escapedDescription = (description || '').replace(/'/g, "''");
+    const escapedBody = body.replace(/'/g, "''");
+    const escapedReturnType = (returnType || 'any').replace(/'/g, "''");
+    const escapedCategory = (category || 'Custom').replace(/'/g, "''");
+    const parametersJson = JSON.stringify(parameters || []).replace(/'/g, "''");
+    const enabled = isEnabled !== false ? 'true' : 'false';
+
+    let updateQuery = `UPDATE predefined_functions SET
+      description='${escapedDescription}',
+      parameters_json='${parametersJson}',
+      body='${escapedBody}',
+      return_type='${escapedReturnType}',
+      category='${escapedCategory}',
+      is_enabled=${enabled},
+      updated_at=CURRENT_TIMESTAMP`;
+    
+    if (escapedName) {
+      updateQuery += `, name='${escapedName}'`;
+    }
+    
+    updateQuery += ` WHERE function_id='${id.replace(/'/g, "''")}'`;
+    
+    await dbClient.run(updateQuery);
+    console.log(`✅ Predefined function updated: id=${id}`);
+    res.json({ success: true, message: 'Function updated successfully' });
+  } catch (err) {
+    console.error('❌ Error updating predefined function:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Delete predefined function
+ * DELETE /api/predefined-functions/:id
+ */
+app.delete('/api/predefined-functions/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Check if function exists
+    const existing = await dbClient.query(`SELECT id FROM predefined_functions WHERE function_id='${id.replace(/'/g, "''")}'`);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, error: 'Function not found' });
+    }
+
+    const deleteQuery = `DELETE FROM predefined_functions WHERE function_id='${id.replace(/'/g, "''")}'`;
+    await dbClient.run(deleteQuery);
+    console.log(`✅ Predefined function deleted: id=${id}`);
+    res.json({ success: true, message: 'Function deleted successfully' });
+  } catch (err) {
+    console.error('❌ Error deleting predefined function:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
+// ============================================
 // FILTER ENDPOINTS
 // ============================================
 
@@ -2074,7 +2384,7 @@ async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
 }
 
 app.post('/api/calculate', async (req, res) => {
-  const { logic, existingVariables, existingParameters, variableName, existingFilters } = req.body;
+  const { logic, existingVariables, existingParameters, variableName, existingFilters, dashboardId } = req.body;
   if (!logic || !variableName) {
     return res.status(400).json({ message: 'Missing logic or variableName' });
   }
@@ -2082,6 +2392,139 @@ app.post('/api/calculate', async (req, res) => {
   const allAvailableVariables = { ...existingVariables, ...existingParameters, ...existingFilters };
 
   try {
+    // 🔥 Fetch predefined functions (global + dashboard-specific if provided)
+    let predefinedFunctionsCode = '';
+    try {
+      // Load all global functions + dashboard-specific if dashboardId is provided
+      let functionsQuery = 'SELECT * FROM predefined_functions WHERE is_enabled = true AND (dashboard_id IS NULL';
+      if (dashboardId) {
+        functionsQuery += ` OR dashboard_id = ${parseInt(dashboardId)}`;
+      }
+      functionsQuery += ')';
+      const functions = await dbClient.query(functionsQuery);
+      
+      if (functions && functions.length > 0) {
+        predefinedFunctionsCode = functions.map(fn => {
+          const params = fn.parameters_json ? JSON.parse(fn.parameters_json) : [];
+          const paramNames = params.map(p => p.name).join(', ');
+          return `function ${fn.name}(${paramNames}) {\n${fn.body}\n}`;
+        }).join('\n\n');
+        console.log(`📦 [Calculate] Loaded ${functions.length} predefined functions (global + dashboard-specific)`);
+      }
+    } catch (fnErr) {
+      console.warn('[Calculate] Could not load predefined functions:', fnErr.message);
+      // Continue without predefined functions
+    }
+
+    // 🔥 Built-in utility functions (always available)
+    const builtInFunctions = `
+// Built-in: Format currency
+function formatCurrency(value, symbol, decimals) {
+  const sym = symbol || '$';
+  const dec = decimals !== undefined ? decimals : 2;
+  if (value === null || value === undefined || isNaN(value)) return sym + '0.00';
+  const num = Number(value);
+  const formatted = Math.abs(num).toFixed(dec).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');
+  return num < 0 ? '-' + sym + formatted : sym + formatted;
+}
+
+// Built-in: Format percentage
+function formatPercentage(value, decimals, multiply) {
+  const dec = decimals !== undefined ? decimals : 1;
+  const mult = multiply !== false;
+  if (value === null || value === undefined || isNaN(value)) return '0%';
+  const num = mult ? Number(value) * 100 : Number(value);
+  return num.toFixed(dec) + '%';
+}
+
+// Built-in: Format number with commas
+function formatNumber(value, decimals) {
+  const dec = decimals !== undefined ? decimals : 0;
+  if (value === null || value === undefined || isNaN(value)) return '0';
+  const num = Number(value);
+  return num.toFixed(dec).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');
+}
+
+// Built-in: Calculate growth percentage
+function calculateGrowth(current, previous) {
+  if (previous === 0 || previous === null || previous === undefined) return 0;
+  if (current === null || current === undefined) return 0;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+
+// Built-in: Safe number conversion
+function safeNumber(value, defaultValue) {
+  const def = defaultValue !== undefined ? defaultValue : 0;
+  if (value === null || value === undefined || value === '') return def;
+  const num = Number(value);
+  return isNaN(num) ? def : num;
+}
+
+// Built-in: Sum array values
+function sumArray(arr, key) {
+  if (!Array.isArray(arr)) return 0;
+  if (key) {
+    return arr.reduce((sum, item) => sum + (Number(item[key]) || 0), 0);
+  }
+  return arr.reduce((sum, val) => sum + (Number(val) || 0), 0);
+}
+
+// Built-in: Average array values
+function avgArray(arr, key) {
+  if (!Array.isArray(arr) || arr.length === 0) return 0;
+  const sum = key 
+    ? arr.reduce((s, item) => s + (Number(item[key]) || 0), 0)
+    : arr.reduce((s, val) => s + (Number(val) || 0), 0);
+  return sum / arr.length;
+}
+
+// Built-in: Filter array by key-value
+function filterArray(arr, key, value) {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter(item => item[key] === value);
+}
+
+// Built-in: Group array by key
+function groupBy(arr, key) {
+  if (!Array.isArray(arr)) return {};
+  return arr.reduce((groups, item) => {
+    const groupKey = item[key];
+    if (!groups[groupKey]) groups[groupKey] = [];
+    groups[groupKey].push(item);
+    return groups;
+  }, {});
+}
+
+// Built-in: Truncate text
+function truncateText(text, maxLength, suffix) {
+  const max = maxLength || 50;
+  const suf = suffix !== undefined ? suffix : '...';
+  if (!text || typeof text !== 'string') return '';
+  if (text.length <= max) return text;
+  return text.substring(0, max - suf.length) + suf;
+}
+
+// Built-in: Format date
+function formatDate(dateValue, format) {
+  if (!dateValue) return '';
+  const date = new Date(dateValue);
+  if (isNaN(date.getTime())) return '';
+  const fmt = format || 'short';
+  if (fmt === 'iso') return date.toISOString().split('T')[0];
+  if (fmt === 'long') return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  if (fmt === 'short') return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return date.toLocaleDateString();
+}
+
+// Built-in: Check if value is valid (not null/undefined/empty)
+function isValidValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string' && value.trim() === '') return false;
+  if (Array.isArray(value) && value.length === 0) return false;
+  return true;
+}
+`;
+
     const variableDeclarations = Object.entries(allAvailableVariables)
     .map(([name, value]) => {
       let serialized;
@@ -2110,7 +2553,10 @@ app.post('/api/calculate', async (req, res) => {
     })
     .join('\n');
 
+    // 🔥 Combine: built-in functions + user predefined functions + variables + user logic
     const funcString = `(async function(dsConnect) {
+      ${builtInFunctions}
+      ${predefinedFunctionsCode}
       ${variableDeclarations}
       return (async () => {
         ${logic}

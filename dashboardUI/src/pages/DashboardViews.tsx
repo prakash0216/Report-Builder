@@ -68,6 +68,9 @@ import {
 } from '@mui/icons-material';
 import AddDataSource from '../components/AddDataSource';
 import SnowflakeConnector from '../components/SnowflakeConnector';
+import PredefinedFunctions from '../components/PredefinedFunctions';
+import { Functions as FunctionsIcon } from '@mui/icons-material';
+import { predefinedFunctionsState } from '../recoil/PredefinedFunctionsState';
 
 // API base URL
 const API_BASE = 'http://localhost:3002/api';
@@ -132,9 +135,11 @@ const DashboardViews: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [menuView, setMenuView] = useState<View | null>(null);
-  const [activeNav, setActiveNav] = useState<'all' | 'favorites' | 'recent' | 'dataConnections'>('all');
+  const [activeNav, setActiveNav] = useState<'all' | 'favorites' | 'recent' | 'dataConnections' | 'functions'>('all');
   const [dataTabIndex, setDataTabIndex] = useState<number>(0);
   const viewIdRef = useRef(3);
+  const [, setPredefinedFunctions] = useRecoilState(predefinedFunctionsState);
+  const [functionsLoaded, setFunctionsLoaded] = useState(false);
 
   const closeMenu = () => {
     setAnchorEl(null);
@@ -225,6 +230,29 @@ const DashboardViews: React.FC = () => {
   useEffect(() => {
     fetchDashboardAndViews();
   }, [fetchDashboardAndViews]);
+
+  // Load predefined functions when functions nav is selected
+  useEffect(() => {
+    const loadPredefinedFunctions = async () => {
+      if (functionsLoaded || activeNav !== 'functions') return;
+      
+      try {
+        console.log('📊 [DashboardViews] Loading global predefined functions...');
+        const response = await fetch(`${API_BASE}/predefined-functions?global=true`);
+        const data = await response.json();
+        
+        if (data.success && data.functions) {
+          setPredefinedFunctions(data.functions);
+          setFunctionsLoaded(true);
+          console.log(`✅ [DashboardViews] Loaded ${data.functions.length} predefined functions`);
+        }
+      } catch (err) {
+        console.error('❌ [DashboardViews] Failed to load predefined functions:', err);
+      }
+    };
+    
+    loadPredefinedFunctions();
+  }, [activeNav, functionsLoaded, setPredefinedFunctions]);
 
   // Filter and sort views
   const filteredViews = useMemo(() => {
@@ -963,29 +991,7 @@ const DashboardViews: React.FC = () => {
 
           {/* Nav Items */}
           <List sx={{ flex: 1, p: 1.5, mt:1.5 }}>
-            {/* Back to Dashboards */}
-            <ListItem disablePadding sx={{ mb: 1.5 }}>
-              <ListItemButton
-                onClick={() => navigate('/')}
-                sx={{
-                  borderRadius: 2,
-                  py: 1.25,
-                  bgcolor: alpha('#64748b', 0.05),
-                  '&:hover': { bgcolor: alpha('#64748b', 0.1) },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 40 }}>
-                  <ArrowBackIcon sx={{ fontSize: 20, color: '#64748b' }} />
-                </ListItemIcon>
-                <ListItemText 
-                  primary="All Dashboards" 
-                  primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b' }}
-                />
-              </ListItemButton>
-            </ListItem>
-
-            <Divider sx={{ my: 1.5 }} />
-
+          
             <ListItem disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton
                 selected={activeNav === 'all'}
@@ -1139,6 +1145,46 @@ const DashboardViews: React.FC = () => {
                 />
               </ListItemButton>
             </ListItem>
+
+            {/* Predefined Functions */}
+            <ListItem disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                selected={activeNav === 'functions'}
+                onClick={() => setActiveNav('functions')}
+                sx={{
+                  borderRadius: 2,
+                  py: 1.25,
+                  bgcolor: activeNav === 'functions' 
+                    ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(167, 139, 250, 0.15) 100%)'
+                    : alpha('#8b5cf6', 0.06),
+                  border: `1px solid ${activeNav === 'functions' ? alpha('#8b5cf6', 0.3) : alpha('#8b5cf6', 0.1)}`,
+                  '&.Mui-selected': {
+                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(167, 139, 250, 0.15) 100%)',
+                    '& .MuiListItemIcon-root': { color: '#8b5cf6' },
+                    '& .MuiListItemText-primary': { color: '#8b5cf6', fontWeight: 700 },
+                    '&:hover': { 
+                      background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(167, 139, 250, 0.2) 100%)',
+                    },
+                  },
+                  '&:hover': { 
+                    bgcolor: alpha('#8b5cf6', 0.1),
+                    borderColor: alpha('#8b5cf6', 0.2),
+                  },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 40, color: activeNav === 'functions' ? '#8b5cf6' : '#64748b' }}>
+                  <FunctionsIcon sx={{ fontSize: 20 }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="Predefined Functions" 
+                  primaryTypographyProps={{ 
+                    fontSize: '0.875rem', 
+                    fontWeight: 600,
+                    color: activeNav === 'functions' ? '#8b5cf6' : 'inherit',
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
           </List>
 
           {/* Help Section */}
@@ -1271,6 +1317,25 @@ const DashboardViews: React.FC = () => {
                   {dataTabIndex === 0 && <AddDataSource />}
                   {dataTabIndex === 1 && <SnowflakeConnector />}
                 </Box>
+              </Paper>
+            </Box>
+          ) : activeNav === 'functions' ? (
+            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  flex: 1,
+                  borderRadius: 4,
+                  background: 'rgba(255,255,255,0.98)',
+                  backdropFilter: 'blur(20px)',
+                  border: `1px solid ${alpha('#8b5cf6', 0.12)}`,
+                  boxShadow: '0 8px 40px rgba(139, 92, 246, 0.08)',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <PredefinedFunctions />
               </Paper>
             </Box>
           ) : (

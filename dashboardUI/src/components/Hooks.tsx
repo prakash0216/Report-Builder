@@ -822,6 +822,7 @@ export default function Hooks() {
                     console.log(`📦 [Hooks] Fresh parameters:`, Object.keys(allParameters));
                     console.log(`📦 [Hooks] Fresh filters:`, Object.keys(allFilters));
 
+                    const dashboardId = getCurrentDashboardId();
                     const response = await fetch('http://localhost:3002/api/calculate', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -831,6 +832,7 @@ export default function Hooks() {
                             existingParameters: allParameters,
                             existingFilters: allFilters,
                             variableName: logic.variableName,
+                            dashboardId, // 🔥 Include dashboardId for predefined functions
                         }),
                     });
 
@@ -992,6 +994,7 @@ export default function Hooks() {
                         }
                       });
 
+                    const calcDashboardId = getCurrentDashboardId();
                     const response = await fetch('http://localhost:3002/api/calculate', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1001,6 +1004,7 @@ export default function Hooks() {
                             existingParameters: allParameters,
                             existingFilters: allFilters,
                             variableName,
+                            dashboardId: calcDashboardId, // 🔥 Include dashboardId for predefined functions
                         }),
                     });
 

@@ -5,6 +5,7 @@ import { useRecoilValue } from 'recoil';
 import { filterNamesState } from '../recoil/FiltersFamily';
 import { parameterNamesState } from '../recoil/ParameterTracker';
 import { variableNamesState } from '../recoil/Variabletracker';
+import { allFunctionsSelector } from '../recoil/PredefinedFunctionsState';
 import type { editor, IDisposable, languages } from 'monaco-editor';
 
 interface CalculationEditorProps {
@@ -25,6 +26,7 @@ export function CalculationEditor({
   const filterNames = useRecoilValue(filterNamesState);
   const parameterNames = useRecoilValue(parameterNamesState);
   const variableNames = useRecoilValue(variableNamesState);
+  const predefinedFunctions = useRecoilValue(allFunctionsSelector);
   
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
@@ -229,6 +231,35 @@ export function CalculationEditor({
                 range,
                 sortText: `4_${name}`,
                 filterText: `@${name} @${shortName}`,
+              });
+            }
+          });
+
+          // Add Predefined Functions (🔥 NEW)
+          predefinedFunctions.forEach((fn) => {
+            if (fn.name.toLowerCase().includes(searchTerm) || 
+                (fn.description && fn.description.toLowerCase().includes(searchTerm)) ||
+                (fn.category && fn.category.toLowerCase().includes(searchTerm))) {
+              const params = fn.parameters.map(p => p.name).join(', ');
+              const signature = `${fn.name}(${params})`;
+              const paramSnippet = fn.parameters.map((p, i) => `\${${i + 1}:${p.name}}`).join(', ');
+              const isBuiltIn = fn.id.startsWith('builtin-');
+              
+              suggestions.push({
+                label: `fn: ${fn.name}`,
+                kind: monaco.languages.CompletionItemKind.Function,
+                insertText: `${fn.name}(${paramSnippet})`,
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                detail: `${isBuiltIn ? '⚡' : '🔧'} ${fn.category || 'Function'} → ${fn.returnType || 'any'}`,
+                documentation: {
+                  value: `**${fn.name}**${isBuiltIn ? ' *(Built-in)*' : ''}\n\n${fn.description || 'No description'}\n\n**Signature:**\n\`\`\`javascript\n${signature}\n\`\`\`\n\n**Parameters:**\n${fn.parameters.length > 0 
+                    ? fn.parameters.map(p => `- \`${p.name}\`: ${p.type}${p.description ? ` - ${p.description}` : ''}${p.defaultValue ? ` (default: ${p.defaultValue})` : ''}`).join('\n')
+                    : '- No parameters'}\n\n**Returns:** \`${fn.returnType || 'any'}\``,
+                  isTrusted: true
+                },
+                range,
+                sortText: isBuiltIn ? `5a_${fn.name}` : `5b_${fn.name}`,
+                filterText: `@${fn.name} @fn @function @${fn.category}`,
               });
             }
           });
@@ -579,7 +610,7 @@ export function CalculationEditor({
     if (monacoRef.current) {
       registerCompletionProvider(monacoRef.current);
     }
-  }, [filterNames, parameterNames, variableNames, paramFilters, dataSourceFilters, hookFilters]);
+  }, [filterNames, parameterNames, variableNames, paramFilters, dataSourceFilters, hookFilters, predefinedFunctions]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -666,7 +697,7 @@ export function CalculationEditor({
               }}>@</code> for autocomplete
             </span>
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ 
               fontSize: 10, 
               color: 'rgba(255,255,255,0.9)', 
@@ -693,6 +724,15 @@ export function CalculationEditor({
               borderRadius: 10,
             }}>
               🔽 Filters: {filterNames.length}
+            </span>
+            <span style={{ 
+              fontSize: 10, 
+              color: 'rgba(255,255,255,0.9)', 
+              background: 'rgba(255,255,255,0.2)',
+              padding: '2px 8px',
+              borderRadius: 10,
+            }}>
+              ⚡ Functions: {predefinedFunctions.length}
             </span>
           </div>
         </div>

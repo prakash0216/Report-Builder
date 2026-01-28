@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useRecoilState, useSetRecoilState } from 'recoil';
 import { dashboardsManager, Dashboard } from '../recoil/Dashboards';
 import { authState, authAPI } from '../recoil/AuthState';
+import { predefinedFunctionsState } from '../recoil/PredefinedFunctionsState';
 import {
   Box,
   Paper,
@@ -67,6 +68,8 @@ import {
 } from '@mui/icons-material';
 import AddDataSource from '../components/AddDataSource';
 import SnowflakeConnector from '../components/SnowflakeConnector';
+import PredefinedFunctions from '../components/PredefinedFunctions';
+import { Functions as FunctionsIcon } from '@mui/icons-material';
 
 // API base URL
 const API_BASE = 'http://localhost:3002/api';
@@ -95,11 +98,13 @@ const DashboardManagement: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [menuDashboard, setMenuDashboard] = useState<Dashboard | null>(null);
-  const [activeNav, setActiveNav] = useState<'all' | 'favorites' | 'recent' | 'dataConnections'>('all');
+  const [activeNav, setActiveNav] = useState<'all' | 'favorites' | 'recent' | 'dataConnections' | 'functions'>('all');
   const [dataTabIndex, setDataTabIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
   const dashIdRef = useRef(1);
+  const [, setPredefinedFunctions] = useRecoilState(predefinedFunctionsState);
+  const [functionsLoaded, setFunctionsLoaded] = useState(false);
 
   // Handle logout
   const handleLogout = () => {
@@ -189,6 +194,29 @@ const DashboardManagement: React.FC = () => {
     fetchDashboards();
     fetchFavorites();
   }, [fetchDashboards, fetchFavorites]);
+
+  // Load predefined functions on mount (GLOBAL - not dashboard-specific)
+  useEffect(() => {
+    const loadPredefinedFunctions = async () => {
+      if (functionsLoaded) return; // Only load once
+      
+      try {
+        console.log('📊 [DashboardManagement] Loading global predefined functions...');
+        const response = await fetch(`${API_BASE}/predefined-functions?global=true`);
+        const data = await response.json();
+        
+        if (data.success && data.functions) {
+          setPredefinedFunctions(data.functions);
+          setFunctionsLoaded(true);
+          console.log(`✅ [DashboardManagement] Loaded ${data.functions.length} predefined functions`);
+        }
+      } catch (err) {
+        console.error('❌ [DashboardManagement] Failed to load predefined functions:', err);
+      }
+    };
+    
+    loadPredefinedFunctions();
+  }, [setPredefinedFunctions, functionsLoaded]);
 
   // Filter and sort dashboards
   const filteredDashboards = useMemo(() => {
@@ -749,9 +777,6 @@ const DashboardManagement: React.FC = () => {
               <Typography variant="h6" fontWeight={700} sx={{ color: 'white', letterSpacing: '-0.3px' }}>
                 Report Builder Intelligence
               </Typography>
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
-                Enterprise Analytics Platform
-              </Typography>
             </Box>
           </Box>
 
@@ -1014,6 +1039,46 @@ const DashboardManagement: React.FC = () => {
                 />
               </ListItemButton>
             </ListItem>
+
+            {/* Predefined Functions - Below Data & Connections */}
+            <ListItem disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                selected={activeNav === 'functions'}
+                onClick={() => setActiveNav('functions')}
+                sx={{
+                  borderRadius: 2,
+                  py: 1.25,
+                  bgcolor: activeNav === 'functions' 
+                    ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(167, 139, 250, 0.15) 100%)'
+                    : alpha('#8b5cf6', 0.06),
+                  border: `1px solid ${activeNav === 'functions' ? alpha('#8b5cf6', 0.3) : alpha('#8b5cf6', 0.1)}`,
+                  '&.Mui-selected': {
+                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(167, 139, 250, 0.15) 100%)',
+                    '& .MuiListItemIcon-root': { color: '#8b5cf6' },
+                    '& .MuiListItemText-primary': { color: '#8b5cf6', fontWeight: 700 },
+                    '&:hover': { 
+                      background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(167, 139, 250, 0.2) 100%)',
+                    },
+                  },
+                  '&:hover': { 
+                    bgcolor: alpha('#8b5cf6', 0.1),
+                    borderColor: alpha('#8b5cf6', 0.2),
+                  },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 40, color: activeNav === 'functions' ? '#8b5cf6' : '#64748b' }}>
+                  <FunctionsIcon sx={{ fontSize: 20 }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="Predefined Functions" 
+                  primaryTypographyProps={{ 
+                    fontSize: '0.875rem', 
+                    fontWeight: 600,
+                    color: activeNav === 'functions' ? '#8b5cf6' : 'inherit',
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
           </List>
 
           {/* Help Section */}
@@ -1042,8 +1107,27 @@ const DashboardManagement: React.FC = () => {
         {/* Right Content Area */}
         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', p: 3, gap: 3 }}>
           
-          {/* Data & Connections Panel */}
-          {activeNav === 'dataConnections' ? (
+          {/* Predefined Functions Panel */}
+          {activeNav === 'functions' ? (
+            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  flex: 1,
+                  borderRadius: 4,
+                  background: 'rgba(255,255,255,0.98)',
+                  backdropFilter: 'blur(20px)',
+                  border: `1px solid ${alpha('#8b5cf6', 0.12)}`,
+                  boxShadow: '0 8px 40px rgba(139, 92, 246, 0.08)',
+                  overflow: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <PredefinedFunctions />
+              </Paper>
+            </Box>
+          ) : activeNav === 'dataConnections' ? (
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               {/* Tabs Card */}
               <Paper

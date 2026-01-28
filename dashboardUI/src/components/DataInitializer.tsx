@@ -13,6 +13,7 @@ import { cardDimensionConditionsState } from '../recoil/Carddimensionstate ';
 import { filterPositionsState, activeFilterIdsState } from './FilterPanel';
 import { tooltipConfigState } from '../recoil/TooltipConfigState';
 import { childCardConfigState } from '../recoil/ChildCardState';
+import { predefinedFunctionsState } from '../recoil/PredefinedFunctionsState';
 import { 
   dataLoadedState,
   startDataInitialization, 
@@ -145,6 +146,21 @@ export const DataInitializer: React.FC = () => {
         }
       } catch (err) {
         console.warn('⚠️ [Data Initializer] Failed to load calculations:', err);
+      }
+
+      // 1b. Load predefined functions (GLOBAL - shared across all dashboards)
+      console.log('📊 [Data Initializer] Loading global predefined functions...');
+      try {
+        const functionsResponse = await axios.get(`${API_BASE_URL}/api/predefined-functions?global=true`);
+        if (functionsResponse.data.success && functionsResponse.data.functions) {
+          const loadedFunctions = functionsResponse.data.functions;
+          set(predefinedFunctionsState, loadedFunctions);
+          // Update last value to prevent duplicate saves on first edit
+          updateLastValue('predefinedFunctionsState', loadedFunctions);
+          console.log(`✅ [Data Initializer] Loaded ${loadedFunctions.length} global predefined functions`);
+        }
+      } catch (err) {
+        console.warn('⚠️ [Data Initializer] Failed to load predefined functions:', err);
       }
 
       // 2. Load all parameter names and values (dashboard-scoped)

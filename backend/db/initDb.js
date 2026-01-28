@@ -246,6 +246,44 @@ async function createCalculationsTable(){
   }
 }
 
+// Predefined Functions table definition (scoped to dashboard - common resource)
+// These are reusable functions that can be called from any calculation
+const predefinedFunctionsTable = `
+CREATE TABLE IF NOT EXISTS predefined_functions (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('predefined_functions_seq'),
+  dashboard_id INTEGER,
+  function_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  parameters_json TEXT,
+  body TEXT NOT NULL,
+  return_type TEXT DEFAULT 'any',
+  category TEXT DEFAULT 'Custom',
+  example TEXT,
+  is_enabled BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(dashboard_id, function_id)
+);
+`;
+
+async function createPredefinedFunctionsTable() {
+  try {
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS predefined_functions_seq START 1;`);
+    await dbClient.run(predefinedFunctionsTable);
+    // Migration: add example column if it doesn't exist
+    try {
+      await dbClient.run(`ALTER TABLE predefined_functions ADD COLUMN IF NOT EXISTS example TEXT`);
+      console.log("✅ Migration: Added example column to predefined_functions");
+    } catch (e) {
+      console.log("ℹ️ predefined_functions example column migration skipped");
+    }
+    console.log("✅ Table 'predefined_functions' created successfully.");
+  } catch (err) {
+    console.error("❌ Error creating table 'predefined_functions':", err.message);
+  }
+}
+
 // Filters table definition (scoped to dashboard - common resource)
 const filtersTable=`
 CREATE TABLE IF NOT EXISTS filters (
@@ -898,6 +936,7 @@ const createTables = async () => {
   await createDataSourceRegistry();
   await createParametersTable();
   await createCalculationsTable();
+  await createPredefinedFunctionsTable();
   await createFiltersTable();
   
   // Create view-specific tables
@@ -941,6 +980,7 @@ export {
   createDataSourceRegistry,
   createParametersTable,
   createCalculationsTable,
+  createPredefinedFunctionsTable,
   createFiltersTable,
   // View-specific tables
   createChartConfigsTable,

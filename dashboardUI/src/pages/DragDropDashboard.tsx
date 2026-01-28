@@ -215,6 +215,7 @@ export default function DropDragDashboard() {
 
   const [availableVariables, setAvailableVariables] = useState<Record<string, any>>({});
   const [chartVisibility, setChartVisibility] = useState<Record<string, boolean>>({});
+  
   const [chartDimensions, setChartDimensions] = useState<Record<string, { width: number; height: number } | null>>({});
 
   const [compactType, setCompactType] = useState<"vertical" | "horizontal" | null>("vertical");
