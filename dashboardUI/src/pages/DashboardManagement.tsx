@@ -526,49 +526,16 @@ const DashboardManagement: React.FC = () => {
     }
   };
 
-  // Library Menu Item Component with Views Sub-menu (for sidebar)
+  // Library Menu Item Component (dashboards only)
   const LibraryMenuItem = ({ dashboard }: { dashboard: Dashboard }) => {
-    const [showViews, setShowViews] = useState(false);
-    const [views, setViews] = useState<Array<{ id: string; name: string; slug: string }>>([]);
-    const [loadingViews, setLoadingViews] = useState(false);
-    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-    const handleMouseEnter = async () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      setShowViews(true);
-      if (views.length === 0 && !loadingViews) {
-        setLoadingViews(true);
-        try {
-          const slug = (dashboard as any).slug || dashboard.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
-          const response = await fetch(`${API_BASE}/dashboards/${slug}/views`);
-          const data = await response.json();
-          if (data.success && data.views) {
-            setViews(data.views.map((v: any) => ({ id: v.id.toString(), name: v.name, slug: v.slug })));
-          }
-        } catch (err) {
-          console.error('Error fetching views:', err);
-        } finally {
-          setLoadingViews(false);
-        }
-      }
-    };
-
-    const handleMouseLeave = () => {
-      timeoutRef.current = setTimeout(() => {
-        setShowViews(false);
-      }, 350);
-    };
-
-    const handleViewClick = (viewSlug: string) => {
-      const dashboardSlug = (dashboard as any).slug || dashboard.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
-      navigate(`/${dashboardSlug}/${viewSlug}`);
-      setLibraryMenuAnchor(null);
-    };
-
     return (
       <Box
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
+        onMouseEnter={() => {
+          if (libraryMenuTimeoutRef.current) clearTimeout(libraryMenuTimeoutRef.current);
+        }}
+        onMouseLeave={() => {
+          libraryMenuTimeoutRef.current = setTimeout(() => setLibraryMenuAnchor(null), 250);
+        }}
         sx={{ position: 'relative' }}
       >
         <MenuItem
@@ -582,7 +549,6 @@ const DashboardManagement: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            bgcolor: showViews ? alpha('#3B82F6', 0.08) : 'transparent',
             '&:hover': { bgcolor: alpha('#3B82F6', 0.08) },
           }}
         >
@@ -593,60 +559,6 @@ const DashboardManagement: React.FC = () => {
             </Typography>
           </Box>
         </MenuItem>
-
-        {/* Sub-menu for Views */}
-        {showViews && (
-    <Paper
-            elevation={8}
-            onMouseEnter={() => {
-              if (timeoutRef.current) clearTimeout(timeoutRef.current);
-            }}
-            onMouseLeave={handleMouseLeave}
-      sx={{
-              position: 'absolute',
-              left: '100%',
-              top: 0,
-              ml: 0.5,
-              minWidth: 180,
-              borderRadius: 2,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
-              zIndex: 1400,
-              bgcolor: 'white',
-            }}
-          >
-            <Box sx={{ px: 2, py: 1, borderBottom: '1px solid #E5E7EB' }}>
-              <Typography variant="caption" sx={{ color: '#9CA3AF', fontWeight: 600 }}>
-                Views
-              </Typography>
-            </Box>
-            {loadingViews ? (
-              <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <CircularProgress size={16} />
-              </Box>
-            ) : views.length > 0 ? (
-              views.map((view) => (
-                <MenuItem
-                  key={view.id}
-                  onClick={() => handleViewClick(view.slug)}
-                  sx={{ py: 1, px: 2, '&:hover': { bgcolor: alpha('#3B82F6', 0.08) } }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <LayersIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
-                    <Typography variant="body2" sx={{ color: '#374151' }}>
-                      {view.name}
-                    </Typography>
-                  </Box>
-                </MenuItem>
-              ))
-            ) : (
-              <Box sx={{ p: 2 }}>
-                <Typography variant="caption" color="text.secondary">
-                  No views available
-                </Typography>
-              </Box>
-            )}
-          </Paper>
-        )}
       </Box>
     );
   };
@@ -1154,32 +1066,118 @@ const DashboardManagement: React.FC = () => {
           <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Home</Typography>
           </Box>
 
-        {/* Libraries with Hover Menu (with delay to prevent flicker) */}
+        {/* Libraries with Hover Menu - Pure CSS hover for stability */}
         <Box
-          onMouseEnter={(e) => {
-            if (libraryMenuTimeoutRef.current) clearTimeout(libraryMenuTimeoutRef.current);
-            setLibraryMenuAnchor(e.currentTarget);
-          }}
-          onMouseLeave={() => {
-            libraryMenuTimeoutRef.current = setTimeout(() => setLibraryMenuAnchor(null), 350);
-          }}
-            sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            cursor: 'pointer',
-              py: 1,
-            px: 0.5,
-            borderRadius: 2,
-            color: activeNav === 'libraries' || libraryMenuAnchor ? '#3B82F6' : '#6B7280',
-            bgcolor: activeNav === 'libraries' || libraryMenuAnchor ? alpha('#3B82F6', 0.1) : 'transparent',
-            '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
-            transition: 'all 0.2s',
+          sx={{
             position: 'relative',
+            '&:hover .library-hover-menu': {
+              display: 'block',
+            },
+          }}
+        >
+          <Box
+            onClick={() => setActiveNav('libraries')}
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              cursor: 'pointer',
+              py: 1,
+              px: 0.5,
+              borderRadius: 2,
+              color: activeNav === 'libraries' ? '#3B82F6' : '#6B7280',
+              bgcolor: activeNav === 'libraries' ? alpha('#3B82F6', 0.1) : 'transparent',
+              '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+              transition: 'all 0.2s',
             }}
           >
-          <LibraryBooksIcon sx={{ fontSize: 22 }} />
-          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Libraries</Typography>
+            <LibraryBooksIcon sx={{ fontSize: 22 }} />
+            <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Libraries</Typography>
+          </Box>
+          
+          {/* Hover Menu - Pure CSS controlled, no JS state flickering */}
+          <Paper
+            className="library-hover-menu"
+            elevation={8}
+            sx={{
+              display: 'none',
+              position: 'absolute',
+              left: '100%',
+              top: 0,
+              ml: 0.5,
+              minWidth: 240,
+              maxHeight: 450,
+              borderRadius: 2,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+              overflow: 'auto',
+              zIndex: 1300,
+              bgcolor: 'white',
+            }}
+          >
+            <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #E5E7EB' }}>
+              <Typography variant="subtitle2" fontWeight={700} color="#1F2937">
+                Your libraries
+              </Typography>
+            </Box>
+            
+            {/* Favourites Section */}
+            {bookmarkedDashboards.length > 0 && (
+              <>
+                <Box sx={{ px: 2, py: 1 }}>
+                  <Typography variant="caption" sx={{ color: '#9CA3AF', fontWeight: 600, fontSize: '0.7rem' }}>
+                    Favourites
+                  </Typography>
+                </Box>
+                {bookmarkedDashboards.slice(0, 4).map((dashboard) => (
+                  <Box
+                    key={dashboard.id}
+                    onClick={() => handleDashboardClick(dashboard)}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      px: 2,
+                      py: 1,
+                      cursor: 'pointer',
+                      '&:hover': { bgcolor: alpha('#3B82F6', 0.08) },
+                    }}
+                  >
+                    <ChevronRightIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+                    <Typography variant="body2" sx={{ color: '#374151', fontWeight: 500 }}>
+                      {dashboard.name}
+                    </Typography>
+                  </Box>
+                ))}
+              </>
+            )}
+            
+            {/* Other Libraries Section */}
+            <Box sx={{ px: 2, py: 1, mt: 1 }}>
+              <Typography variant="caption" sx={{ color: '#9CA3AF', fontWeight: 600, fontSize: '0.7rem' }}>
+                Other Libraries
+              </Typography>
+            </Box>
+            {regularDashboards.slice(0, 8).map((dashboard) => (
+              <Box
+                key={dashboard.id}
+                onClick={() => handleDashboardClick(dashboard)}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  px: 2,
+                  py: 1,
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: alpha('#3B82F6', 0.08) },
+                }}
+              >
+                <ChevronRightIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+                <Typography variant="body2" sx={{ color: '#374151', fontWeight: 500 }}>
+                  {dashboard.name}
+                </Typography>
+              </Box>
+            ))}
+          </Paper>
         </Box>
 
         {/* Data */}
@@ -1203,25 +1201,25 @@ const DashboardManagement: React.FC = () => {
           <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Data</Typography>
         </Box>
 
-        {/* Charts (placeholder for projects/charts) */}
+        {/* Predefined Functions */}
         <Box
           onClick={() => setActiveNav('functions')}
-                sx={{
+          sx={{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             cursor: 'pointer',
             py: 1,
             px: 0.5,
-                  borderRadius: 2,
+            borderRadius: 2,
             color: activeNav === 'functions' ? '#3B82F6' : '#6B7280',
             bgcolor: activeNav === 'functions' ? alpha('#3B82F6', 0.1) : 'transparent',
             '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
             transition: 'all 0.2s',
           }}
         >
-          <BarChartIcon sx={{ fontSize: 22 }} />
-          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Charts</Typography>
+          <FunctionsIcon sx={{ fontSize: 22 }} />
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Functions</Typography>
         </Box>
 
         <Box sx={{ flex: 1 }} />
@@ -1297,67 +1295,6 @@ const DashboardManagement: React.FC = () => {
         </Box>
       </Box>
 
-      {/* Libraries Hover Menu */}
-      <Menu
-        anchorEl={libraryMenuAnchor}
-        open={Boolean(libraryMenuAnchor)}
-        onClose={() => setLibraryMenuAnchor(null)}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-        disableAutoFocusItem
-        disableRestoreFocus
-        autoFocus={false}
-        TransitionProps={{ timeout: 0 }}
-        PaperProps={{
-          sx: {
-            ml: 1,
-            minWidth: 240,
-            maxHeight: 450,
-                  borderRadius: 2,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-            overflow: 'visible',
-          },
-        }}
-        MenuListProps={{
-          onMouseEnter: () => {
-            if (libraryMenuTimeoutRef.current) clearTimeout(libraryMenuTimeoutRef.current);
-          },
-          onMouseLeave: () => {
-            libraryMenuTimeoutRef.current = setTimeout(() => setLibraryMenuAnchor(null), 350);
-                  },
-                }}
-              >
-        <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #E5E7EB' }}>
-          <Typography variant="subtitle2" fontWeight={700} color="#1F2937">
-            Your libraries
-          </Typography>
-        </Box>
-        
-        {/* Favourites Section */}
-        {bookmarkedDashboards.length > 0 && (
-          <>
-            <Box sx={{ px: 2, py: 1 }}>
-              <Typography variant="caption" sx={{ color: '#9CA3AF', fontWeight: 600, fontSize: '0.7rem' }}>
-                Favourites
-              </Typography>
-            </Box>
-            {bookmarkedDashboards.slice(0, 4).map((dashboard) => (
-              <LibraryMenuItem key={dashboard.id} dashboard={dashboard} />
-            ))}
-          </>
-        )}
-        
-        {/* Other Libraries Section */}
-        <Box sx={{ px: 2, py: 1, mt: 1 }}>
-          <Typography variant="caption" sx={{ color: '#9CA3AF', fontWeight: 600, fontSize: '0.7rem' }}>
-            Other Libraries
-          </Typography>
-        </Box>
-        {regularDashboards.slice(0, 8).map((dashboard) => (
-          <LibraryMenuItem key={dashboard.id} dashboard={dashboard} />
-        ))}
-        
-      </Menu>
 
       {/* Main Content */}
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
