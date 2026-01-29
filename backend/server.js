@@ -4653,7 +4653,20 @@ app.get('/api/dashboards/:identifier', async (req, res) => {
  * POST /api/dashboards
  */
 app.post('/api/dashboards', async (req, res) => {
-  const { name, description, icon, color } = req.body;
+  const { 
+    name, 
+    description, 
+    icon, 
+    color,
+    dataSource,
+    timePeriodStart,
+    timePeriodEnd,
+    libraryType,
+    iconType,
+    iconText,
+    iconColor,
+    iconImageUrl
+  } = req.body;
   
   if (!name || name.trim() === '') {
     return res.status(400).json({ success: false, error: 'Dashboard name is required' });
@@ -4669,13 +4682,26 @@ app.post('/api/dashboards', async (req, res) => {
     }
     
     await dbClient.run(`
-      INSERT INTO dashboards (name, slug, description, icon, color, created_at, updated_at)
+      INSERT INTO dashboards (
+        name, slug, description, icon, color,
+        data_source, time_period_start, time_period_end,
+        library_type, icon_type, icon_text, icon_color, icon_image_url,
+        created_at, updated_at
+      )
       VALUES (
         '${name.replace(/'/g, "''")}',
         '${slug}',
         ${description ? `'${description.replace(/'/g, "''")}'` : 'NULL'},
         '${icon || 'dashboard'}',
         '${color || '#667eea'}',
+        ${dataSource ? `'${dataSource.replace(/'/g, "''")}'` : 'NULL'},
+        ${timePeriodStart ? parseInt(timePeriodStart) : 'NULL'},
+        ${timePeriodEnd ? parseInt(timePeriodEnd) : 'NULL'},
+        '${libraryType || 'Core libraries'}',
+        '${iconType || 'text'}',
+        ${iconText ? `'${iconText.replace(/'/g, "''").substring(0, 5)}'` : 'NULL'},
+        '${iconColor || '#3B82F6'}',
+        ${iconImageUrl ? `'${iconImageUrl.replace(/'/g, "''")}'` : 'NULL'},
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
       )
@@ -4698,7 +4724,20 @@ app.post('/api/dashboards', async (req, res) => {
  */
 app.put('/api/dashboards/:id', async (req, res) => {
   const { id } = req.params;
-  const { name, description, icon, color } = req.body;
+  const { 
+    name, 
+    description, 
+    icon, 
+    color,
+    dataSource,
+    timePeriodStart,
+    timePeriodEnd,
+    libraryType,
+    iconType,
+    iconText,
+    iconColor,
+    iconImageUrl
+  } = req.body;
   
   try {
     const updates = [];
@@ -4711,6 +4750,33 @@ app.put('/api/dashboards/:id', async (req, res) => {
     }
     if (icon) updates.push(`icon='${icon}'`);
     if (color) updates.push(`color='${color}'`);
+    
+    // New fields
+    if (dataSource !== undefined) {
+      updates.push(dataSource ? `data_source='${dataSource.replace(/'/g, "''")}'` : `data_source=NULL`);
+    }
+    if (timePeriodStart !== undefined) {
+      updates.push(timePeriodStart ? `time_period_start=${parseInt(timePeriodStart)}` : `time_period_start=NULL`);
+    }
+    if (timePeriodEnd !== undefined) {
+      updates.push(timePeriodEnd ? `time_period_end=${parseInt(timePeriodEnd)}` : `time_period_end=NULL`);
+    }
+    if (libraryType !== undefined) {
+      updates.push(`library_type='${libraryType || 'Core libraries'}'`);
+    }
+    if (iconType !== undefined) {
+      updates.push(`icon_type='${iconType || 'text'}'`);
+    }
+    if (iconText !== undefined) {
+      updates.push(iconText ? `icon_text='${iconText.replace(/'/g, "''").substring(0, 5)}'` : `icon_text=NULL`);
+    }
+    if (iconColor !== undefined) {
+      updates.push(`icon_color='${iconColor || '#3B82F6'}'`);
+    }
+    if (iconImageUrl !== undefined) {
+      updates.push(iconImageUrl ? `icon_image_url='${iconImageUrl.replace(/'/g, "''")}'` : `icon_image_url=NULL`);
+    }
+    
     updates.push(`updated_at=CURRENT_TIMESTAMP`);
     
     await dbClient.run(`UPDATE dashboards SET ${updates.join(', ')} WHERE id=${id}`);

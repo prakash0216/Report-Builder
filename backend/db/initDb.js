@@ -13,6 +13,14 @@ CREATE TABLE IF NOT EXISTS dashboards (
   description TEXT,
   icon TEXT DEFAULT 'dashboard',
   color TEXT DEFAULT '#667eea',
+  data_source TEXT,
+  time_period_start INTEGER,
+  time_period_end INTEGER,
+  library_type VARCHAR DEFAULT 'Core libraries',
+  icon_type VARCHAR DEFAULT 'text' CHECK (icon_type IN ('text', 'upload')),
+  icon_text VARCHAR(5),
+  icon_color VARCHAR DEFAULT '#3B82F6',
+  icon_image_url TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -40,6 +48,21 @@ async function createDashboardsTable() {
     await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS dashboards_seq START 1;`);
     await dbClient.run(dashboardsTable);
     console.log("✅ Table 'dashboards' created successfully.");
+    
+    // Migration: Add new columns if they don't exist
+    try {
+      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS data_source TEXT`);
+      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS time_period_start INTEGER`);
+      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS time_period_end INTEGER`);
+      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS library_type VARCHAR DEFAULT 'Core libraries'`);
+      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS icon_type VARCHAR DEFAULT 'text'`);
+      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS icon_text VARCHAR(5)`);
+      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS icon_color VARCHAR DEFAULT '#3B82F6'`);
+      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS icon_image_url TEXT`);
+      console.log("✅ Migration: Added new columns to dashboards table");
+    } catch (migrationErr) {
+      console.log("ℹ️ Dashboard columns migration skipped (may already exist)");
+    }
   } catch (err) {
     console.error("❌ Error creating table 'dashboards':", err.message);
   }
