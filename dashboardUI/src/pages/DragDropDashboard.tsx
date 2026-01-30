@@ -2135,7 +2135,7 @@ export default function DropDragDashboard() {
       </Menu>
 
       {/* Main Content Area */}
-      <Box sx={{ flex: 1, ml: '72px', display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: '#E5E7EB' }}>
+      <Box sx={{ flex: 1, ml: '72px', display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: '#E5E7EB', minHeight: 0 }}>
         {/* Top Header Bar - White rounded card */}
         <Box 
           sx={{ 
@@ -2238,9 +2238,10 @@ export default function DropDragDashboard() {
             pr: 4,
             pt: 2, 
             pb: 2, 
-            flex: 1, 
             display: 'flex', 
             flexDirection: 'column',
+            flex: 1,
+            minHeight: 0,
             mr: isFilterPanelExpanded ? '306px' : '34px',
             transition: 'margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           }}
@@ -2252,130 +2253,141 @@ export default function DropDragDashboard() {
               borderRadius: 3,
               border: '1px solid #E5E7EB',
               overflow: 'hidden',
-              flex: 1,
               display: 'flex',
               flexDirection: 'column',
+              flex: 1,
+              minHeight: 0,
             }}
           >
-            {/* Edit Mode Toolbar */}
-            {isEditMode && (
+            {/* Fixed Header Section - Edit Mode Toolbar + Views Tabs */}
+            <Box sx={{ flexShrink: 0 }}>
+              {/* Edit Mode Toolbar */}
+              {isEditMode && (
+                <Box
+                  sx={{
+                    bgcolor: '#F8FAFC',
+                    borderBottom: '1px solid #E5E7EB',
+                    px: 3,
+                    py: 1.5,
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box
+                      className="droppable-element"
+                      draggable={true}
+                      unselectable="on"
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", "");
+                        e.dataTransfer.effectAllowed = "move";
+                        setTimeout(() => { e.dataTransfer.dropEffect = "move"; }, 0);
+                      }}
+                      onDragEnd={(e) => { e.preventDefault(); }}
+                      sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        bgcolor: 'white',
+                        border: '2px dashed #3B82F6',
+                        borderRadius: 2,
+                        px: 2,
+                        py: 1,
+                        cursor: 'grab',
+                        '&:active': { cursor: 'grabbing' },
+                        '&:hover': { 
+                          bgcolor: '#3B82F6',
+                          borderStyle: 'solid',
+                          '& .drag-icon': { color: 'white' },
+                          '& .drag-text': { color: 'white' },
+                        },
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      <AddIcon className="drag-icon" sx={{ fontSize: 18, color: '#3B82F6', transition: 'color 0.2s' }} />
+                      <Typography className="drag-text" sx={{ fontSize: '0.8rem', fontWeight: 600, color: '#3B82F6', transition: 'color 0.2s' }}>
+                        Drag to Add Content
+                      </Typography>
+                    </Box>
+                    
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: '#EFF6FF', px: 2, py: 0.75, borderRadius: 1.5, border: '1px solid #BFDBFE' }}>
+                      <Typography sx={{ fontSize: '0.75rem', color: '#3B82F6', fontWeight: 500 }}>
+                        Drag and drop to position charts, tables, or HTML cards
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              )}
+
+              {/* Views Tabs Bar */}
               <Box
                 sx={{
-                  bgcolor: '#F8FAFC',
+                  px: 2,
+                  py: 1,
+                  display: 'flex',
+                  alignItems: 'center',
                   borderBottom: '1px solid #E5E7EB',
-                  px: 3,
-                  py: 1.5,
+                  bgcolor: '#FFFFFF',
                 }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {dynamicViews.map((view) => (
                   <Box
-                    className="droppable-element"
-                    draggable={true}
-                    unselectable="on"
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData("text/plain", "");
-                      e.dataTransfer.effectAllowed = "move";
-                      setTimeout(() => { e.dataTransfer.dropEffect = "move"; }, 0);
-                    }}
-                    onDragEnd={(e) => { e.preventDefault(); }}
+                    key={view.id}
+                    onClick={() => handleViewTabClick(view)}
                     sx={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      bgcolor: 'white',
-                      border: '2px dashed #3B82F6',
-                      borderRadius: 2,
                       px: 2,
                       py: 1,
-                      cursor: 'grab',
-                      '&:active': { cursor: 'grabbing' },
-                      '&:hover': { 
-                        bgcolor: '#3B82F6',
-                        borderStyle: 'solid',
-                        '& .drag-icon': { color: 'white' },
-                        '& .drag-text': { color: 'white' },
-                      },
+                      mr: 1,
+                      cursor: 'pointer',
+                      borderRadius: 2,
+                      bgcolor: viewSlug === view.slug ? alpha('#3B82F6', 0.1) : 'transparent',
+                      color: viewSlug === view.slug ? '#3B82F6' : '#6B7280',
+                      fontWeight: viewSlug === view.slug ? 600 : 500,
+                      fontSize: '0.875rem',
+                      borderBottom: viewSlug === view.slug ? '3px solid #3B82F6' : '3px solid transparent',
                       transition: 'all 0.2s',
+                      '&:hover': {
+                        color: '#3B82F6',
+                        bgcolor: alpha('#3B82F6', 0.05),
+                      },
                     }}
                   >
-                    <AddIcon className="drag-icon" sx={{ fontSize: 18, color: '#3B82F6', transition: 'color 0.2s' }} />
-                    <Typography className="drag-text" sx={{ fontSize: '0.8rem', fontWeight: 600, color: '#3B82F6', transition: 'color 0.2s' }}>
-                      Drag to Add Content
-                    </Typography>
+                    {view.name}
                   </Box>
-                  
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: '#EFF6FF', px: 2, py: 0.75, borderRadius: 1.5, border: '1px solid #BFDBFE' }}>
-                    <Typography sx={{ fontSize: '0.75rem', color: '#3B82F6', fontWeight: 500 }}>
-                      Drag and drop to position charts, tables, or HTML cards
-                    </Typography>
-                  </Box>
-                </Box>
+                ))}
+                
+                {/* Add View Button */}
+                <Tooltip title="Add View">
+                  <IconButton
+                    onClick={() => setOpenCreateViewDialog(true)}
+                    size="small"
+                    sx={{
+                      ml: 0.5,
+                      color: '#9CA3AF',
+                      '&:hover': { color: '#3B82F6', bgcolor: alpha('#3B82F6', 0.1) },
+                    }}
+                  >
+                    <AddIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
               </Box>
-            )}
-
-            {/* Views Tabs Bar */}
-            <Box
-              sx={{
-                px: 2,
-                py: 1,
-                display: 'flex',
-                alignItems: 'center',
-                borderBottom: '1px solid #E5E7EB',
-              }}
-            >
-              {dynamicViews.map((view) => (
-                <Box
-                  key={view.id}
-                  onClick={() => handleViewTabClick(view)}
-                  sx={{
-                    px: 2,
-                    py: 1,
-                    mr: 1,
-                    cursor: 'pointer',
-                    borderRadius: 2,
-                    bgcolor: viewSlug === view.slug ? alpha('#3B82F6', 0.1) : 'transparent',
-                    color: viewSlug === view.slug ? '#3B82F6' : '#6B7280',
-                    fontWeight: viewSlug === view.slug ? 600 : 500,
-                    fontSize: '0.875rem',
-                    borderBottom: viewSlug === view.slug ? '3px solid #3B82F6' : '3px solid transparent',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      color: '#3B82F6',
-                      bgcolor: alpha('#3B82F6', 0.05),
-                    },
-                  }}
-                >
-                  {view.name}
-                </Box>
-              ))}
-              
-              {/* Add View Button */}
-              <Tooltip title="Add View">
-                <IconButton
-                  onClick={() => setOpenCreateViewDialog(true)}
-                  size="small"
-                  sx={{
-                    ml: 0.5,
-                    color: '#9CA3AF',
-                    '&:hover': { color: '#3B82F6', bgcolor: alpha('#3B82F6', 0.1) },
-                  }}
-                >
-                  <AddIcon sx={{ fontSize: 18 }} />
-                </IconButton>
-              </Tooltip>
             </Box>
 
-            {/* Main Content - Inside the rounded card */}
+            {/* Scrollable Main Content - Inside the rounded card */}
             <Box
               ref={dashboardGridRef}
               sx={{
+                p: 2,
                 flex: 1,
                 overflow: 'auto',
-                p: 2,
                 backgroundImage: isEditMode ? `radial-gradient(circle, #CBD5E1 1.5px, transparent 1.5px)` : 'none',
                 backgroundSize: isEditMode ? '24px 24px' : 'auto',
                 backgroundPosition: isEditMode ? '0 0' : 'initial',
-                minHeight: 'calc(100vh - 200px)',
+                minHeight: 0,
+                // Hide scrollbar but allow scrolling
+                '&::-webkit-scrollbar': {
+                  display: 'none',
+                },
+                msOverflowStyle: 'none',  // IE and Edge
+                scrollbarWidth: 'none',  // Firefox
               }}
             >
         <ResponsiveGridLayout
