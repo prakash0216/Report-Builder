@@ -23,7 +23,6 @@ import {
   Chip,
   Tooltip,
   alpha,
-  Zoom,
   Avatar,
   Divider,
   Menu,
@@ -75,6 +74,13 @@ import {
   Palette as PaletteIcon,
   Image as ImageIcon,
   CalendarToday as CalendarTodayIcon,
+  Home as HomeIcon,
+  LibraryBooks as LibraryBooksIcon,
+  Description as DocsIcon,
+  Bookmark as BookmarkIcon,
+  BookmarkBorder as BookmarkBorderIcon,
+  Apps as AppsIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import AddDataSource from '../components/AddDataSource';
 import SnowflakeConnector from '../components/SnowflakeConnector';
@@ -174,7 +180,7 @@ const DashboardViews: React.FC = () => {
   const [deletingView, setDeletingView] = useState<View | null>(null);
   const [editingView, setEditingView] = useState<View | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'compact' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'name' | 'updated' | 'created'>('updated');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [dashboardIdForFavorites, setDashboardIdForFavorites] = useState<number | null>(null);
@@ -187,6 +193,10 @@ const DashboardViews: React.FC = () => {
   const viewIdRef = useRef(3);
   const [, setPredefinedFunctions] = useRecoilState(predefinedFunctionsState);
   const [functionsLoaded, setFunctionsLoaded] = useState(false);
+  
+  // All dashboards for hover menu
+  const [allDashboards, setAllDashboards] = useState<Array<{ id: string; name: string; slug: string; iconText?: string; iconColor?: string }>>([]);
+  const [bookmarkedDashboardIds, setBookmarkedDashboardIds] = useState<Set<string>>(new Set());
 
   const closeMenu = () => {
     setAnchorEl(null);
@@ -287,6 +297,37 @@ const DashboardViews: React.FC = () => {
     fetchDashboardAndViews();
   }, [fetchDashboardAndViews]);
 
+  // Fetch all dashboards for Libraries hover menu
+  const fetchAllDashboards = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/dashboards`);
+      const data = await response.json();
+      if (data.success && data.dashboards) {
+        const mapped = data.dashboards.map((d: any) => ({
+          id: d.id.toString(),
+          name: d.name,
+          slug: d.slug || d.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-'),
+          iconText: d.iconText || d.icon_text || d.name.replace(/\s+/g, '').substring(0, 5).toUpperCase(),
+          iconColor: d.iconColor || d.icon_color || '#3B82F6',
+        }));
+        setAllDashboards(mapped);
+        
+        // Also fetch bookmarked dashboard IDs
+        const bookmarksResponse = await fetch(`${API_BASE}/bookmarks`);
+        const bookmarksData = await bookmarksResponse.json();
+        if (bookmarksData.success && bookmarksData.dashboardIds) {
+          setBookmarkedDashboardIds(new Set(bookmarksData.dashboardIds.map((id: number) => id.toString())));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching dashboards:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAllDashboards();
+  }, [fetchAllDashboards]);
+
   // Load predefined functions when functions nav is selected
   useEffect(() => {
     const loadPredefinedFunctions = async () => {
@@ -345,6 +386,40 @@ const DashboardViews: React.FC = () => {
     
     return result;
   }, [views, searchQuery, sortBy, favorites, activeNav]);
+
+  // Favorite views (for separate section)
+  const favoriteViews = useMemo(() => {
+    return views.filter(v => favorites.has(v.id));
+  }, [views, favorites]);
+
+  // Regular views (non-favorites for the Views section when favorites are shown separately)
+  const regularViews = useMemo(() => {
+    let result = views.filter(v => !favorites.has(v.id));
+    
+    if (searchQuery) {
+      result = result.filter(v => 
+        v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (v.description && v.description.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+    }
+    
+    result.sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      if (sortBy === 'updated') return b.updatedAt - a.updatedAt;
+      return b.createdAt - a.createdAt;
+    });
+    
+    return result;
+  }, [views, searchQuery, sortBy, favorites]);
+
+  // Bookmarked and regular dashboards for hover menu
+  const bookmarkedDashboards = useMemo(() => {
+    return allDashboards.filter(d => bookmarkedDashboardIds.has(d.id));
+  }, [allDashboards, bookmarkedDashboardIds]);
+
+  const otherDashboards = useMemo(() => {
+    return allDashboards.filter(d => !bookmarkedDashboardIds.has(d.id));
+  }, [allDashboards, bookmarkedDashboardIds]);
 
   // Stats
   const stats = useMemo(() => ({
@@ -588,7 +663,14 @@ const DashboardViews: React.FC = () => {
   const handleViewClick = (view: View) => {
     // Use slug from view if available, otherwise generate from name
     const viewSlug = view.slug || toSlug(view.name);
-    navigate(`/${dashboardSlug}/${viewSlug}`);
+    
+    // Check if view has an embed link - if so, route to embed view
+    if (view.embedType && view.embedLink) {
+      navigate(`/${dashboardSlug}/${viewSlug}/embed`);
+    } else {
+      // Normal drag-drop dashboard flow
+      navigate(`/${dashboardSlug}/${viewSlug}`);
+    }
   };
 
   const toggleFavorite = async (id: string) => {
@@ -617,16 +699,15 @@ const DashboardViews: React.FC = () => {
     <Paper
       elevation={0}
       sx={{
-        p: 2.5,
-        borderRadius: 3,
-        background: `linear-gradient(135deg, ${alpha(color, 0.08)} 0%, ${alpha(color, 0.03)} 100%)`,
-        border: `1px solid ${alpha(color, 0.15)}`,
-        transition: 'all 0.3s ease',
+        p: 2,
+        borderRadius: 2,
+        bgcolor: 'white',
+        border: '1px solid #E5E7EB',
+        transition: 'all 0.2s ease',
         cursor: 'default',
         '&:hover': {
           transform: 'translateY(-2px)',
-          boxShadow: `0 8px 24px ${alpha(color, 0.15)}`,
-          border: `1px solid ${alpha(color, 0.3)}`,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
         },
       }}
     >
@@ -635,7 +716,7 @@ const DashboardViews: React.FC = () => {
           sx={{
             width: 48,
             height: 48,
-            borderRadius: 2.5,
+            borderRadius: 2,
             background: gradient,
             display: 'flex',
             alignItems: 'center',
@@ -646,10 +727,10 @@ const DashboardViews: React.FC = () => {
           {icon}
         </Box>
         <Box>
-          <Typography variant="h4" fontWeight={700} sx={{ color, lineHeight: 1.2 }}>
+          <Typography variant="h4" fontWeight={700} sx={{ color: '#1F2937', lineHeight: 1.2 }}>
             {value}
           </Typography>
-          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+          <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 500 }}>
             {label}
           </Typography>
         </Box>
@@ -657,219 +738,403 @@ const DashboardViews: React.FC = () => {
     </Paper>
   );
 
+  // Library Menu Item Component with Views Submenu - For hover menu
+  const LibraryMenuItemWithViews = ({ dashboard }: { dashboard: { id: string; name: string; slug: string; iconText?: string; iconColor?: string } }) => {
+    const [menuViews, setMenuViews] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+    const [loadingMenuViews, setLoadingMenuViews] = useState(false);
+    const [menuViewsLoaded, setMenuViewsLoaded] = useState(false);
+
+    const handleMouseEnter = async () => {
+      if (menuViewsLoaded) return;
+      setLoadingMenuViews(true);
+      try {
+        const response = await fetch(`${API_BASE}/dashboards/${dashboard.slug}/views`);
+        const data = await response.json();
+        if (data.success && data.views) {
+          setMenuViews(data.views.map((v: any) => ({ id: v.id.toString(), name: v.name, slug: v.slug })));
+        }
+        setMenuViewsLoaded(true);
+      } catch (err) {
+        console.error('Error fetching views:', err);
+      } finally {
+        setLoadingMenuViews(false);
+      }
+    };
+
+    const handleMenuViewClick = (e: React.MouseEvent, viewSlug: string) => {
+      e.stopPropagation();
+      navigate(`/${dashboard.slug}/${viewSlug}`);
+    };
+
+    return (
+      <Box
+        onMouseEnter={handleMouseEnter}
+        sx={{ 
+          position: 'relative',
+          '&:hover .views-submenu': {
+            display: 'block',
+          },
+        }}
+      >
+        <Box
+          onClick={() => navigate(`/${dashboard.slug}`)}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1.5,
+            px: 2,
+            py: 1,
+            cursor: 'pointer',
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.08) },
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <ChevronRightIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+            <Typography variant="body2" sx={{ color: '#374151', fontWeight: 500 }}>
+              {dashboard.name}
+            </Typography>
+          </Box>
+          <ChevronRightIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+        </Box>
+        
+        {/* Views Submenu */}
+        <Paper
+          className="views-submenu"
+          elevation={8}
+          sx={{
+            display: 'none',
+            position: 'absolute',
+            left: '100%',
+            top: 0,
+            ml: 0.5,
+            minWidth: 200,
+            maxHeight: 300,
+            borderRadius: 2,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            overflowY: 'auto',
+            zIndex: 1400,
+            bgcolor: 'white',
+          }}
+        >
+          <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #E5E7EB' }}>
+            <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 600 }}>
+              Views in {dashboard.iconText || dashboard.name}
+            </Typography>
+          </Box>
+          
+          {loadingMenuViews ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 2 }}>
+              <CircularProgress size={20} sx={{ color: '#3B82F6' }} />
+            </Box>
+          ) : menuViews.length > 0 ? (
+            menuViews.map((view) => (
+              <Box
+                key={view.id}
+                onClick={(e) => handleMenuViewClick(e, view.slug)}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  px: 2,
+                  py: 1,
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: alpha('#3B82F6', 0.08) },
+                }}
+              >
+                <LayersIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+                <Typography variant="body2" sx={{ color: '#374151', fontWeight: 500 }}>
+                  {view.name}
+                </Typography>
+              </Box>
+            ))
+          ) : (
+            <Box sx={{ px: 2, py: 1.5 }}>
+              <Typography variant="caption" sx={{ color: '#9CA3AF', fontStyle: 'italic' }}>
+                No views available
+              </Typography>
+            </Box>
+          )}
+        </Paper>
+      </Box>
+    );
+  };
+
   const ViewCard = ({ view, index }: { view: View; index: number }) => {
-    const iconColors = ['#667eea', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-    const iconColor = iconColors[index % iconColors.length];
+    const iconColors = ['#3B82F6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+    const iconColor = view.iconColor || iconColors[index % iconColors.length];
+    const iconText = view.iconText || getShortCode(view.name);
+    const isBookmarked = favorites.has(view.id);
+    
+    // Info tooltip content - Details section only (no "Open specific page" since we're in views)
+    const infoTooltipContent = (
+      <Box
+        sx={{
+          width: 300,
+          bgcolor: 'white',
+          borderRadius: 3,
+          boxShadow: '0 12px 40px rgba(0,0,0,0.16)',
+          border: '1px solid #E5E7EB',
+          overflow: 'hidden',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Details Section */}
+        <Box sx={{ px: 2.5, py: 2 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1F2937', mb: 1 }}>
+            Details
+          </Typography>
+          {view.description && (
+            <Typography variant="body2" sx={{ color: '#4B5563', lineHeight: 1.6, mb: 2 }}>
+              {view.description}
+            </Typography>
+          )}
+          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+            <Chip
+              label={`${view.chartsCount} charts`}
+              size="small"
+              icon={<BarChartIcon sx={{ fontSize: 14 }} />}
+              sx={{
+                bgcolor: '#F3F4F6',
+                color: '#374151',
+                borderRadius: 1.5,
+                height: 28,
+                '& .MuiChip-icon': { color: '#6B7280' },
+                '& .MuiChip-label': { fontWeight: 500 },
+              }}
+            />
+            <Chip
+              label={getTimeAgo(view.updatedAt)}
+              size="small"
+              icon={<CalendarTodayIcon sx={{ fontSize: 14 }} />}
+              sx={{
+                bgcolor: '#F3F4F6',
+                color: '#374151',
+                borderRadius: 1.5,
+                height: 28,
+                '& .MuiChip-icon': { color: '#6B7280' },
+                '& .MuiChip-label': { fontWeight: 500 },
+              }}
+            />
+          </Box>
+        </Box>
+      </Box>
+    );
     
     return (
-      <Zoom in={true} style={{ transitionDelay: `${index * 50}ms` }}>
-        <Card
-          sx={{
-            height: '100%',
-            borderRadius: 3,
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.92) 100%)',
-            border: `1px solid ${alpha('#667eea', selectedView?.id === view.id ? 0.4 : 0.12)}`,
-            boxShadow: selectedView?.id === view.id 
-              ? `0 8px 32px ${alpha('#667eea', 0.2)}`
-              : '0 2px 12px rgba(0,0,0,0.04)',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            overflow: 'hidden',
-            position: 'relative',
-            cursor: 'pointer',
-            '&:hover': {
-              transform: 'translateY(-4px)',
-              boxShadow: `0 12px 40px ${alpha('#667eea', 0.18)}`,
-              border: `1px solid ${alpha('#667eea', 0.3)}`,
-              '& .card-actions': {
-                opacity: 1,
-              },
-              '& .card-icon': {
-                transform: 'scale(1.1) rotate(5deg)',
-              },
-            },
-          }}
-          onClick={() => handleViewClick(view)}
-        >
-          {/* Top gradient bar */}
-          <Box
-            sx={{
-              height: 4,
-              background: favorites.has(view.id)
-                ? 'linear-gradient(90deg, #f59e0b 0%, #ef4444 100%)'
-                : `linear-gradient(90deg, ${iconColor} 0%, ${alpha(iconColor, 0.7)} 100%)`,
-            }}
-          />
-
-          {/* Icon Section */}
-          <Box
-            sx={{
-              height: 120,
-              background: `linear-gradient(135deg, ${alpha(iconColor, 0.08)} 0%, ${alpha(iconColor, 0.03)} 100%)`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'relative',
-              overflow: 'hidden',
-            }}
-          >
-            <ViewModuleIcon 
-              className="card-icon"
-              sx={{ 
-                fontSize: 56, 
-                color: iconColor, 
-                opacity: 0.6,
-                transition: 'all 0.4s ease',
-              }} 
-            />
-            
-            {/* Action buttons */}
+      <Card
+        sx={{
+          borderRadius: 2,
+          background: '#FFFFFF',
+          border: '1px solid #E5E7EB',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+          transition: 'all 0.2s ease',
+          cursor: 'pointer',
+          height: 200,
+          display: 'flex',
+          flexDirection: 'column',
+          '&:hover': {
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            transform: 'translateY(-2px)',
+          },
+        }}
+        onClick={() => handleViewClick(view)}
+      >
+        <CardContent sx={{ p: 2, pb: '12px !important', flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {/* Header with icon and actions */}
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1.5 }}>
+            {/* Icon Box with abbreviation */}
             <Box
-              className="card-actions"
               sx={{
-                position: 'absolute',
-                top: 12,
-                right: 12,
-                opacity: 0,
-                transition: 'opacity 0.2s ease',
+                minWidth: 48,
+                height: 48,
+                px: 1,
+                borderRadius: 1.5,
+                bgcolor: iconColor,
                 display: 'flex',
-                gap: 0.5,
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontWeight: 700,
+                fontSize: iconText.length > 3 ? '0.7rem' : '0.85rem',
+                flexShrink: 0,
               }}
             >
-              <Tooltip title={favorites.has(view.id) ? "Remove from favorites" : "Add to favorites"}>
+              {iconText}
+            </Box>
+            
+            {/* Action buttons */}
+            <Box sx={{ display: 'flex', gap: 0.5 }}>
+              <Tooltip title={isBookmarked ? "Remove bookmark" : "Add bookmark"}>
                 <IconButton
                   size="small"
                   onClick={(e) => { e.stopPropagation(); toggleFavorite(view.id); }}
-                  sx={{ 
-                    bgcolor: 'rgba(255,255,255,0.9)',
-                    color: favorites.has(view.id) ? '#f59e0b' : alpha('#667eea', 0.5),
-                    '&:hover': { bgcolor: 'white' },
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                  }}
+                  sx={{ color: isBookmarked ? '#F59E0B' : '#9CA3AF' }}
                 >
-                  {favorites.has(view.id) ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
+                  {isBookmarked ? <BookmarkIcon fontSize="small" /> : <BookmarkBorderIcon fontSize="small" />}
                 </IconButton>
               </Tooltip>
-              <Tooltip title="More options">
+              {/* Info icon with full details tooltip */}
+              <Tooltip 
+                title={infoTooltipContent}
+                arrow
+                placement="right-start"
+                componentsProps={{
+                  tooltip: {
+                    sx: {
+                      bgcolor: 'transparent',
+                      p: 0,
+                      maxWidth: 360,
+                      boxShadow: '0 16px 48px rgba(0,0,0,0.18)',
+                      '& .MuiTooltip-arrow': {
+                        color: '#ffffff',
+                        '&::before': {
+                          background: '#ffffff',
+                        }
+                      }
+                    },
+                  },
+                }}
+              >
                 <IconButton
                   size="small"
-                  onClick={(e) => { 
-                    e.stopPropagation(); 
-                    setMenuView(view); 
-                    setAnchorEl(e.currentTarget); 
-                    setMenuPosition({ top: e.clientY, left: e.clientX });
-                  }}
-                  sx={{ 
-                    bgcolor: 'rgba(255,255,255,0.9)',
-                    color: alpha('#667eea', 0.6),
-                    '&:hover': { bgcolor: 'white' },
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  onClick={(e) => e.stopPropagation()}
+                  sx={{
+                    color: '#3B82F6', 
+                    bgcolor: alpha('#3B82F6', 0.1),
+                    '&:hover': { bgcolor: alpha('#3B82F6', 0.2) } 
                   }}
                 >
-                  <MoreVertIcon fontSize="small" />
+                  <InfoIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
-            </Box>
-
-            {/* Open badge on hover */}
-            <Box
-              sx={{
-                position: 'absolute',
-                bottom: 12,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                bgcolor: 'white',
-                borderRadius: 2,
-                px: 2,
-                py: 0.75,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.5,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                border: `1px solid ${alpha('#667eea', 0.15)}`,
-                opacity: 0,
-                transition: 'opacity 0.2s ease',
-                '.MuiCard-root:hover &': {
-                  opacity: 1,
-                },
-              }}
-            >
-              <Typography variant="caption" fontWeight={700} sx={{ color: '#667eea' }}>
-                Click to open
-              </Typography>
-              <ChevronRightIcon sx={{ fontSize: 14, color: '#667eea' }} />
+              <IconButton 
+                size="small" 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  setMenuView(view); 
+                  setMenuPosition({ top: e.clientY, left: e.clientX }); 
+                }}
+                sx={{ color: '#9CA3AF' }}
+              >
+                <MoreVertIcon fontSize="small" />
+              </IconButton>
             </Box>
           </Box>
+          
+          {/* Name with dropdown arrow */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#1F2937' }}>
+              {view.name}
+            </Typography>
+            <ChevronRightIcon sx={{ fontSize: 16, color: '#9CA3AF', transform: 'rotate(90deg)' }} />
+          </Box>
+          
+          {/* Chips */}
+          <Box sx={{ display: 'flex', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
+            <Chip
+              label={`${view.chartsCount} charts`}
+              size="small"
+              icon={<BarChartIcon sx={{ fontSize: 14 }} />}
+              sx={{
+                bgcolor: '#F3F4F6',
+                color: '#374151',
+                borderRadius: 1.5,
+                height: 24,
+                '& .MuiChip-icon': { color: '#6B7280' },
+                '& .MuiChip-label': { fontWeight: 500, fontSize: '0.7rem' },
+              }}
+            />
+            <Chip
+              label={getTimeAgo(view.updatedAt)}
+              size="small"
+              icon={<AccessTimeIcon sx={{ fontSize: 14 }} />}
+              sx={{
+                bgcolor: '#F3F4F6',
+                color: '#374151',
+                borderRadius: 1.5,
+                height: 24,
+                '& .MuiChip-icon': { color: '#6B7280' },
+                '& .MuiChip-label': { fontWeight: 500, fontSize: '0.7rem' },
+              }}
+            />
+          </Box>
+          
+          {/* Description */}
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              color: '#6B7280',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              lineHeight: 1.5,
+              fontSize: '0.8rem',
+            }}
+          >
+            {view.description || 'No description'}
+          </Typography>
+        </CardContent>
+      </Card>
+    );
+  };
 
-          <CardContent sx={{ p: 2.5, pb: '16px !important' }}>
-            <Box display="flex" alignItems="start" justifyContent="space-between" mb={1}>
-              <Typography 
-                variant="subtitle1" 
-                fontWeight={700} 
-                sx={{ 
-                  color: '#1e293b',
-                  lineHeight: 1.3,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                }}
-              >
-                {view.name}
-                {favorites.has(view.id) && (
-                  <StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
-                )}
-              </Typography>
-            </Box>
-
-            {view.description && (
-              <Typography 
-                variant="body2" 
-                sx={{ 
-                  color: 'text.secondary',
-                  mb: 2,
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                  lineHeight: 1.5,
-                  minHeight: 42,
-                }}
-              >
-                {view.description}
-              </Typography>
-            )}
-
-            <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
-              <Chip
-                size="small"
-                icon={<BarChartIcon sx={{ fontSize: 14 }} />}
-                label={`${view.chartsCount} charts`}
-                sx={{
-                  height: 24,
-                  fontSize: '0.7rem',
-                  fontWeight: 600,
-                  bgcolor: alpha('#667eea', 0.08),
-                  color: '#667eea',
-                  border: `1px solid ${alpha('#667eea', 0.15)}`,
-                  '& .MuiChip-icon': { color: '#667eea' },
-                }}
-              />
-              <Chip
-                size="small"
-                icon={<AccessTimeIcon sx={{ fontSize: 12 }} />}
-                label={getTimeAgo(view.updatedAt)}
-                sx={{
-                  height: 24,
-                  fontSize: '0.7rem',
-                  fontWeight: 500,
-                  bgcolor: alpha('#64748b', 0.06),
-                  color: '#64748b',
-                  '& .MuiChip-icon': { color: '#94a3b8' },
-                }}
-              />
-            </Box>
-          </CardContent>
-        </Card>
-      </Zoom>
+  // Compact view card - just icon with bookmark
+  const CompactViewCard = ({ view, index }: { view: View; index: number }) => {
+    const iconColors = ['#3B82F6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+    const iconColor = view.iconColor || iconColors[index % iconColors.length];
+    const iconText = view.iconText || getShortCode(view.name);
+    const isBookmarked = favorites.has(view.id);
+    
+    return (
+      <Tooltip title={view.name}>
+        <Box
+          onClick={() => handleViewClick(view)}
+          sx={{
+            position: 'relative',
+            minWidth: 56,
+            height: 56,
+            px: 1,
+            borderRadius: 2,
+            bgcolor: iconColor,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontWeight: 700,
+            fontSize: iconText.length > 3 ? '0.7rem' : '0.9rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            '&:hover': { 
+              transform: 'scale(1.05)', 
+              boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            },
+          }}
+        >
+          {iconText}
+          {/* Bookmark icon */}
+          <IconButton
+            size="small"
+            onClick={(e) => { e.stopPropagation(); toggleFavorite(view.id); }}
+            sx={{ 
+              position: 'absolute', 
+              top: -6, 
+              right: -6,
+              p: 0.25,
+              bgcolor: 'white',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+              color: isBookmarked ? '#F59E0B' : '#D1D5DB',
+              '&:hover': { 
+                bgcolor: 'white',
+                color: isBookmarked ? '#D97706' : '#9CA3AF',
+              },
+            }}
+          >
+            {isBookmarked ? <BookmarkIcon sx={{ fontSize: 12 }} /> : <BookmarkBorderIcon sx={{ fontSize: 12 }} />}
+          </IconButton>
+        </Box>
+      </Tooltip>
     );
   };
 
@@ -889,11 +1154,11 @@ const DashboardViews: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'center',
           minHeight: '100vh',
-          background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+          bgcolor: '#F8FAFC',
         }}
       >
-        <CircularProgress size={60} sx={{ mb: 2, color: '#667eea' }} />
-        <Typography variant="h6" color="text.secondary">
+        <CircularProgress size={60} sx={{ mb: 2, color: '#3B82F6' }} />
+        <Typography variant="h6" sx={{ color: '#6B7280' }}>
           Loading dashboard...
         </Typography>
       </Box>
@@ -904,892 +1169,663 @@ const DashboardViews: React.FC = () => {
     <Box 
       sx={{ 
         display: 'flex', 
-        flexDirection: 'column', 
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
-        position: 'relative',
+        height: '100vh',
+        background: '#F8FAFC',
         overflow: 'hidden',
       }}
     >
-      {/* Decorative background elements */}
+      {/* Left Icon Sidebar with Text Labels - Same as DashboardManagement */}
       <Box
         sx={{
-          position: 'absolute',
-          width: 500,
-          height: 500,
-          borderRadius: '50%',
-          background: `radial-gradient(circle, ${alpha('#667eea', 0.08)} 0%, transparent 70%)`,
-          top: -150,
-          right: -150,
-          pointerEvents: 'none',
-        }}
-      />
-      <Box
-        sx={{
-          position: 'absolute',
-          width: 400,
-          height: 400,
-          borderRadius: '50%',
-          background: `radial-gradient(circle, ${alpha('#764ba2', 0.06)} 0%, transparent 70%)`,
-          bottom: -100,
-          left: -100,
-          pointerEvents: 'none',
-        }}
-      />
-
-      {/* Top Navigation Bar */}
-      <AppBar 
-        position="static" 
-        elevation={0}
-        sx={{ 
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          boxShadow: '0 4px 20px 0 rgba(102, 126, 234, 0.25)',
+          width: 72,
+          bgcolor: '#F3F4F6',
+          borderRight: '1px solid #E5E7EB',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          py: 2,
+          gap: 0.5,
         }}
       >
-        <Toolbar sx={{ py: 1.5, px: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-            <Tooltip title="Back to Dashboards" arrow>
-              <IconButton 
-                onClick={() => navigate('/')} 
-                sx={{ 
-                  color: 'white',
-                  bgcolor: 'rgba(255, 255, 255, 0.15)',
-                  backdropFilter: 'blur(10px)',
-                  '&:hover': {
-                    bgcolor: 'rgba(255, 255, 255, 0.25)',
-                  },
-                }}
-              >
-                <ArrowBackIcon />
-              </IconButton>
-            </Tooltip>
-            
-            <Box
-              sx={{
-                background: 'rgba(255,255,255,0.2)',
-                borderRadius: 2.5,
-                p: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backdropFilter: 'blur(10px)',
-              }}
-            >
-              <LayersIcon sx={{ color: 'white', fontSize: 24 }} />
-            </Box>
-            
-            <Box>
-              <Breadcrumbs 
-                separator={<ChevronRightIcon sx={{ fontSize: 16, color: 'rgba(255,255,255,0.6)' }} />}
-              >
-                <Link
-                  underline="hover"
-                  onClick={() => navigate('/')}
-                  sx={{ 
-                    cursor: 'pointer', 
-                    fontWeight: 600,
-                    color: 'rgba(255,255,255,0.8)',
-                    fontSize: '0.875rem',
-                    '&:hover': { color: 'white' },
-                  }}
-                >
-                  Dashboards
-                </Link>
-                <Typography fontWeight={700} sx={{ color: 'white', fontSize: '0.875rem' }}>
-                  {dashboardName}
-                </Typography>
-              </Breadcrumbs>
-              <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.8)', fontWeight: 500 }}>
-                Manage views and analytics
-              </Typography>
-            </Box>
-          </Box>
-
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => { setEditingView(null); resetCreateForm(); fetchCalculations(); setOpenCreateDialog(true); }}
-            sx={{
-              background: 'rgba(255,255,255,0.95)',
-              color: '#667eea',
-              textTransform: 'none',
-              fontWeight: 700,
-              px: 3,
-              py: 1,
-              borderRadius: 2.5,
-              boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-              '&:hover': {
-                background: 'white',
-                transform: 'translateY(-2px)',
-                boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
-              },
-              transition: 'all 0.3s ease',
-            }}
-          >
-            New View
-          </Button>
-
-          {/* User Menu */}
-          <Box sx={{ ml: 2 }}>
-            <Tooltip title={auth.email || 'User'}>
-              <IconButton
-                onClick={(e) => setUserMenuAnchor(e.currentTarget)}
-                sx={{
-                  p: 0.5,
-                  background: 'rgba(255,255,255,0.15)',
-                  border: '2px solid rgba(255,255,255,0.3)',
-                  '&:hover': {
-                    background: 'rgba(255,255,255,0.25)',
-                    border: '2px solid rgba(255,255,255,0.5)',
-                  },
-                }}
-              >
-                <Avatar
-                  sx={{
-                    width: 36,
-                    height: 36,
-                    bgcolor: 'rgba(255,255,255,0.2)',
-                    color: 'white',
-                    fontWeight: 700,
-                    fontSize: '0.875rem',
-                  }}
-                >
-                  {auth.email ? auth.email[0].toUpperCase() : 'U'}
-                </Avatar>
-              </IconButton>
-            </Tooltip>
-            <Menu
-              anchorEl={userMenuAnchor}
-              open={Boolean(userMenuAnchor)}
-              onClose={() => setUserMenuAnchor(null)}
-              PaperProps={{
-                sx: {
-                  mt: 1,
-                  minWidth: 220,
-                  borderRadius: 2,
-                  boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
-                  border: '1px solid rgba(102, 126, 234, 0.1)',
-                },
-              }}
-              transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-            >
-              <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                  <EmailIcon sx={{ fontSize: 16, color: '#667eea' }} />
-                  <Typography variant="body2" fontWeight={600} color="text.primary">
-                    {auth.email || 'User'}
-                  </Typography>
-                </Box>
-              </Box>
-              <MenuItem onClick={handleLogout} sx={{ py: 1.5, color: '#ef4444' }}>
-                <ListItemIcon>
-                  <LogoutIcon fontSize="small" sx={{ color: '#ef4444' }} />
-                </ListItemIcon>
-                <ListItemText primary="Logout" />
-              </MenuItem>
-            </Menu>
-          </Box>
-        </Toolbar>
-      </AppBar>
-
-      {/* Main Content with Sidebar */}
-      <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', position: 'relative', zIndex: 1 }}>
-        {/* Left Navigation Sidebar */}
-        <Paper
-          elevation={0}
+        {/* Logo */}
+        <Box
           sx={{
-            width: 240,
-            flexShrink: 0,
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.92) 100%)',
-            borderRight: `1px solid ${alpha('#667eea', 0.1)}`,
+            width: 60,
+            height: 60,
+            mb: 2,
             display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
+          <img src="/RBI.png" alt="IQVIA" style={{ height: 48, width: 48, objectFit: 'contain' }} />
+        </Box>
+
+        {/* Nav Icons with Labels */}
+        {/* Home */}
+        <Box
+          onClick={() => navigate('/')}
+          sx={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            cursor: 'pointer',
+            py: 1,
+            px: 0.5,
+            borderRadius: 2,
+            color: '#6B7280',
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+            transition: 'all 0.2s',
+          }}
+        >
+          <HomeIcon sx={{ fontSize: 22 }} />
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Home</Typography>
+        </Box>
+
+        {/* Libraries with Hover Menu - Pure CSS hover for stability */}
+        <Box
+          sx={{
+            position: 'relative',
+            '&:hover .library-hover-menu': {
+              display: 'block',
+            },
+          }}
+        >
+          <Box
+            onClick={() => navigate('/')}
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              cursor: 'pointer',
+              py: 1,
+              px: 0.5,
+              borderRadius: 2,
+              color: '#6B7280',
+              '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+              transition: 'all 0.2s',
+            }}
+          >
+            <LibraryBooksIcon sx={{ fontSize: 22 }} />
+            <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Libraries</Typography>
+          </Box>
           
-
-          {/* Nav Items */}
-          <List sx={{ flex: 1, p: 1.5, mt:1.5 }}>
-          
-            <ListItem disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton
-                selected={activeNav === 'all'}
-                onClick={() => setActiveNav('all')}
-                sx={{
-                  borderRadius: 2,
-                  py: 1.25,
-                  '&.Mui-selected': {
-                    bgcolor: alpha('#667eea', 0.1),
-                    '& .MuiListItemIcon-root': { color: '#667eea' },
-                    '& .MuiListItemText-primary': { color: '#667eea', fontWeight: 700 },
-                    '&:hover': { bgcolor: alpha('#667eea', 0.15) },
-                  },
-                  '&:hover': { bgcolor: alpha('#667eea', 0.05) },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 40 }}>
-                  <ViewModuleIcon sx={{ fontSize: 20 }} />
-                </ListItemIcon>
-                <ListItemText 
-                  primary="All Views" 
-                  primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 600 }}
-                />
-                <Chip 
-                  label={views.length} 
-                  size="small" 
-                  sx={{ 
-                    height: 20, 
-                    fontSize: '0.7rem', 
-                    fontWeight: 700,
-                    bgcolor: activeNav === 'all' ? alpha('#667eea', 0.15) : alpha('#64748b', 0.1),
-                    color: activeNav === 'all' ? '#667eea' : '#64748b',
-                  }} 
-                />
-              </ListItemButton>
-            </ListItem>
-
-            <ListItem disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton
-                selected={activeNav === 'favorites'}
-                onClick={() => setActiveNav('favorites')}
-                sx={{
-                  borderRadius: 2,
-                  py: 1.25,
-                  '&.Mui-selected': {
-                    bgcolor: alpha('#f59e0b', 0.1),
-                    '& .MuiListItemIcon-root': { color: '#f59e0b' },
-                    '& .MuiListItemText-primary': { color: '#f59e0b', fontWeight: 700 },
-                    '&:hover': { bgcolor: alpha('#f59e0b', 0.15) },
-                  },
-                  '&:hover': { bgcolor: alpha('#f59e0b', 0.05) },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 40 }}>
-                  <StarIcon sx={{ fontSize: 20 }} />
-                </ListItemIcon>
-                <ListItemText 
-                  primary="Favorites" 
-                  primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 600 }}
-                />
-                <Chip 
-                  label={favorites.size} 
-                  size="small" 
-                  sx={{ 
-                    height: 20, 
-                    fontSize: '0.7rem', 
-                    fontWeight: 700,
-                    bgcolor: activeNav === 'favorites' ? alpha('#f59e0b', 0.15) : alpha('#64748b', 0.1),
-                    color: activeNav === 'favorites' ? '#f59e0b' : '#64748b',
-                  }} 
-                />
-              </ListItemButton>
-            </ListItem>
-
-            <ListItem disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton
-                selected={activeNav === 'recent'}
-                onClick={() => setActiveNav('recent')}
-                sx={{
-                  borderRadius: 2,
-                  py: 1.25,
-                  '&.Mui-selected': {
-                    bgcolor: alpha('#10b981', 0.1),
-                    '& .MuiListItemIcon-root': { color: '#10b981' },
-                    '& .MuiListItemText-primary': { color: '#10b981', fontWeight: 700 },
-                    '&:hover': { bgcolor: alpha('#10b981', 0.15) },
-                  },
-                  '&:hover': { bgcolor: alpha('#10b981', 0.05) },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 40 }}>
-                  <HistoryIcon sx={{ fontSize: 20 }} />
-                </ListItemIcon>
-                <ListItemText 
-                  primary="Recent" 
-                  primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 600 }}
-                />
-                <Chip 
-                  label={stats.recentlyUpdated} 
-                  size="small" 
-                  sx={{ 
-                    height: 20, 
-                    fontSize: '0.7rem', 
-                    fontWeight: 700,
-                    bgcolor: activeNav === 'recent' ? alpha('#10b981', 0.15) : alpha('#64748b', 0.1),
-                    color: activeNav === 'recent' ? '#10b981' : '#64748b',
-                  }} 
-                />
-              </ListItemButton>
-            </ListItem>
-
-            {/* Divider */}
-            <Divider sx={{ my: 2, mx: 1, borderColor: alpha('#667eea', 0.1) }} />
-
-            {/* Data & Connections */}
-            <ListItem disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton
-                selected={activeNav === 'dataConnections'}
-                onClick={() => setActiveNav('dataConnections')}
-                sx={{
-                  borderRadius: 2,
-                  py: 1.25,
-                  bgcolor: activeNav === 'dataConnections' 
-                    ? 'linear-gradient(135deg, rgba(79, 172, 254, 0.15) 0%, rgba(102, 126, 234, 0.15) 100%)'
-                    : alpha('#4facfe', 0.06),
-                  border: `1px solid ${activeNav === 'dataConnections' ? alpha('#4facfe', 0.3) : alpha('#4facfe', 0.1)}`,
-                  '&.Mui-selected': {
-                    background: 'linear-gradient(135deg, rgba(79, 172, 254, 0.15) 0%, rgba(102, 126, 234, 0.15) 100%)',
-                    '& .MuiListItemIcon-root': { color: '#4facfe' },
-                    '& .MuiListItemText-primary': { color: '#4facfe', fontWeight: 700 },
-                    '&:hover': { 
-                      background: 'linear-gradient(135deg, rgba(79, 172, 254, 0.2) 0%, rgba(102, 126, 234, 0.2) 100%)',
-                    },
-                  },
-                  '&:hover': { 
-                    bgcolor: alpha('#4facfe', 0.1),
-                    borderColor: alpha('#4facfe', 0.2),
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 40, color: activeNav === 'dataConnections' ? '#4facfe' : '#64748b' }}>
-                  <StorageIcon sx={{ fontSize: 20 }} />
-                </ListItemIcon>
-                <ListItemText 
-                  primary="Data & Connections" 
-                  primaryTypographyProps={{ 
-                    fontSize: '0.875rem', 
-                    fontWeight: 600,
-                    color: activeNav === 'dataConnections' ? '#4facfe' : 'inherit',
-                  }}
-                />
-              </ListItemButton>
-            </ListItem>
-
-            {/* Predefined Functions */}
-            <ListItem disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton
-                selected={activeNav === 'functions'}
-                onClick={() => setActiveNav('functions')}
-                sx={{
-                  borderRadius: 2,
-                  py: 1.25,
-                  bgcolor: activeNav === 'functions' 
-                    ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(167, 139, 250, 0.15) 100%)'
-                    : alpha('#8b5cf6', 0.06),
-                  border: `1px solid ${activeNav === 'functions' ? alpha('#8b5cf6', 0.3) : alpha('#8b5cf6', 0.1)}`,
-                  '&.Mui-selected': {
-                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(167, 139, 250, 0.15) 100%)',
-                    '& .MuiListItemIcon-root': { color: '#8b5cf6' },
-                    '& .MuiListItemText-primary': { color: '#8b5cf6', fontWeight: 700 },
-                    '&:hover': { 
-                      background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(167, 139, 250, 0.2) 100%)',
-                    },
-                  },
-                  '&:hover': { 
-                    bgcolor: alpha('#8b5cf6', 0.1),
-                    borderColor: alpha('#8b5cf6', 0.2),
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 40, color: activeNav === 'functions' ? '#8b5cf6' : '#64748b' }}>
-                  <FunctionsIcon sx={{ fontSize: 20 }} />
-                </ListItemIcon>
-                <ListItemText 
-                  primary="Predefined Functions" 
-                  primaryTypographyProps={{ 
-                    fontSize: '0.875rem', 
-                    fontWeight: 600,
-                    color: activeNav === 'functions' ? '#8b5cf6' : 'inherit',
-                  }}
-                />
-              </ListItemButton>
-            </ListItem>
-          </List>
-
-          {/* Help Section */}
-          <Box sx={{ p: 2, borderTop: `1px solid ${alpha('#667eea', 0.08)}`, mt: 'auto' }}>
-            <Box 
-              sx={{ 
-                p: 2, 
-                borderRadius: 2, 
-                background: `linear-gradient(135deg, ${alpha('#667eea', 0.05)} 0%, ${alpha('#764ba2', 0.05)} 100%)`,
-                border: `1px solid ${alpha('#667eea', 0.1)}`,
-              }}
-            >
-              <Box display="flex" alignItems="center" gap={1} mb={1}>
-                <HelpIcon sx={{ fontSize: 18, color: '#667eea' }} />
-                <Typography variant="caption" fontWeight={700} sx={{ color: '#667eea' }}>
-                  Quick Tip
-                </Typography>
-              </Box>
-              <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
-                Click on any view card to open the chart editor.
+          {/* Hover Menu - Pure CSS controlled, no JS state flickering */}
+          <Paper
+            className="library-hover-menu"
+            elevation={8}
+            sx={{
+              display: 'none',
+              position: 'absolute',
+              left: '100%',
+              top: 0,
+              ml: 0.5,
+              minWidth: 240,
+              maxHeight: 450,
+              borderRadius: 2,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+              overflow: 'visible',
+              zIndex: 1300,
+              bgcolor: 'white',
+            }}
+          >
+            <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #E5E7EB' }}>
+              <Typography variant="subtitle2" fontWeight={700} color="#1F2937">
+                Your libraries
               </Typography>
             </Box>
-          </Box>
-        </Paper>
+            
+            {/* Favourites Section */}
+            {bookmarkedDashboards.length > 0 && (
+              <>
+                <Box sx={{ px: 2, py: 1 }}>
+                  <Typography variant="caption" sx={{ color: '#9CA3AF', fontWeight: 600, fontSize: '0.7rem' }}>
+                    Favourites
+                  </Typography>
+                </Box>
+                {bookmarkedDashboards.slice(0, 4).map((dashboard) => (
+                  <LibraryMenuItemWithViews key={dashboard.id} dashboard={dashboard} />
+                ))}
+              </>
+            )}
+            
+            {/* Other Libraries Section */}
+            <Box sx={{ px: 2, py: 1, mt: 1 }}>
+              <Typography variant="caption" sx={{ color: '#9CA3AF', fontWeight: 600, fontSize: '0.7rem' }}>
+                Other Libraries
+              </Typography>
+            </Box>
+            {otherDashboards.slice(0, 8).map((dashboard) => (
+              <LibraryMenuItemWithViews key={dashboard.id} dashboard={dashboard} />
+            ))}
+          </Paper>
+        </Box>
 
-        {/* Right Content Area */}
-        <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', p: 3, gap: 3 }}>
-          
-          {/* Data & Connections Panel */}
-          {activeNav === 'dataConnections' ? (
-            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              {/* Tabs Card */}
-              <Paper
-                elevation={0}
-                sx={{
-                  flex: 1,
-                  borderRadius: 4,
-                  background: 'rgba(255,255,255,0.98)',
-                  backdropFilter: 'blur(20px)',
-                  border: `1px solid ${alpha('#667eea', 0.12)}`,
-                  boxShadow: '0 8px 40px rgba(102, 126, 234, 0.08)',
-                  overflow: 'hidden',
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                {/* Centered Tab Headers with Underline Style */}
-                <Box 
-                  sx={{ 
-                    borderBottom: `1px solid ${alpha('#667eea', 0.1)}`,
-                    background: 'rgba(255,255,255,1)',
-                  }}
-                >
-                  <Box sx={{ display: 'flex', justifyContent: 'center', gap: 4, pt: 2 }}>
+        {/* Data */}
+        <Box
+          onClick={() => setActiveNav('dataConnections')}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            cursor: 'pointer',
+            py: 1,
+            px: 0.5,
+            borderRadius: 2,
+            color: activeNav === 'dataConnections' ? '#3B82F6' : '#6B7280',
+            bgcolor: activeNav === 'dataConnections' ? alpha('#3B82F6', 0.1) : 'transparent',
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+            transition: 'all 0.2s',
+          }}
+        >
+          <StorageIcon sx={{ fontSize: 22 }} />
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Data</Typography>
+        </Box>
+
+        {/* Predefined Functions */}
+        <Box
+          onClick={() => setActiveNav('functions')}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            cursor: 'pointer',
+            py: 1,
+            px: 0.5,
+            borderRadius: 2,
+            color: activeNav === 'functions' ? '#3B82F6' : '#6B7280',
+            bgcolor: activeNav === 'functions' ? alpha('#3B82F6', 0.1) : 'transparent',
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+            transition: 'all 0.2s',
+          }}
+        >
+          <FunctionsIcon sx={{ fontSize: 22 }} />
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Functions</Typography>
+        </Box>
+
+        <Box sx={{ flex: 1 }} />
+
+        {/* Docs */}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            cursor: 'pointer',
+            py: 1,
+            px: 0.5,
+            borderRadius: 2,
+            color: '#6B7280',
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+            transition: 'all 0.2s',
+          }}
+        >
+          <DocsIcon sx={{ fontSize: 22 }} />
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Docs</Typography>
+        </Box>
+
+        {/* Help */}
+        <Box
+          sx={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            cursor: 'pointer',
+            py: 1,
+            px: 0.5,
+            borderRadius: 2,
+            color: '#6B7280',
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+            transition: 'all 0.2s',
+          }} 
+        >
+          <HelpIcon sx={{ fontSize: 22 }} />
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Help</Typography>
+        </Box>
+
+        {/* User Avatar */}
+        <Box
+          onClick={(e) => setUserMenuAnchor(e.currentTarget)}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            cursor: 'pointer',
+            py: 1,
+            px: 0.5,
+            borderRadius: 2,
+            mt: 1,
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.1) },
+            transition: 'all 0.2s',
+          }}
+        >
+          <Avatar
+            sx={{ 
+              width: 28,
+              height: 28,
+              bgcolor: '#3B82F6',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+            }}
+          >
+            {auth.email ? auth.email[0].toUpperCase() : 'U'}
+          </Avatar>
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25, color: '#6B7280' }}>Account</Typography>
+        </Box>
+      </Box>
+
+      {/* User Menu */}
+      <Menu
+        anchorEl={userMenuAnchor}
+        open={Boolean(userMenuAnchor)}
+        onClose={() => setUserMenuAnchor(null)}
+        PaperProps={{
+          sx: {
+            mt: 1,
+            minWidth: 220,
+            borderRadius: 2,
+            boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+            border: '1px solid #E5E7EB',
+          },
+        }}
+        transformOrigin={{ horizontal: 'left', vertical: 'bottom' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+      >
+        <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #E5E7EB' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+            <EmailIcon sx={{ fontSize: 16, color: '#3B82F6' }} />
+            <Typography variant="body2" fontWeight={600} color="text.primary">
+              {auth.email || 'User'}
+            </Typography>
+          </Box>
+        </Box>
+        <MenuItem onClick={handleLogout} sx={{ py: 1.5, color: '#ef4444' }}>
+          <ListItemIcon>
+            <LogoutIcon fontSize="small" sx={{ color: '#ef4444' }} />
+          </ListItemIcon>
+          <ListItemText primary="Logout" />
+        </MenuItem>
+      </Menu>
+
+      {/* Main Content */}
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Conditional Content Based on Active Nav */}
+        {activeNav === 'dataConnections' ? (
+          /* Data & Connections Content */
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+              <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
+                {/* Tabs */}
+                <Box sx={{ borderBottom: '1px solid #E5E7EB', px: 2 }}>
+                  <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
                     <Box
                       onClick={() => setDataTabIndex(0)}
                       sx={{
-                        position: 'relative',
-                        pb: 1.5,
-                        px: 2,
+                        py: 2,
+                        px: 1,
                         cursor: 'pointer',
+                        borderBottom: dataTabIndex === 0 ? '2px solid #06B6D4' : '2px solid transparent',
+                        color: dataTabIndex === 0 ? '#06B6D4' : '#6B7280',
+                        fontWeight: 600,
+                        fontSize: '0.9rem',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 1,
-                        color: dataTabIndex === 0 ? '#667eea' : '#64748b',
-                        fontWeight: 600,
-                        fontSize: '0.95rem',
-                        transition: 'all 0.3s ease',
-                        '&:hover': {
-                          color: dataTabIndex === 0 ? '#667eea' : '#4facfe',
-                        },
-                        '&::after': {
-                          content: '""',
-                          position: 'absolute',
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          height: 3,
-                          borderRadius: '3px 3px 0 0',
-                          background: dataTabIndex === 0 
-                            ? 'linear-gradient(90deg, #4facfe 0%, #00f2fe 100%)'
-                            : 'transparent',
-                          transition: 'all 0.3s ease',
-                        },
                       }}
                     >
-                      <CloudQueueIcon sx={{ fontSize: 20 }} />
+                      <CloudQueueIcon sx={{ fontSize: 18 }} />
                       Data Sources
                     </Box>
-                    <Box
+                    <Box 
                       onClick={() => setDataTabIndex(1)}
-                      sx={{
-                        position: 'relative',
-                        pb: 1.5,
-                        px: 2,
+                      sx={{ 
+                        py: 2,
+                        px: 1,
                         cursor: 'pointer',
+                        borderBottom: dataTabIndex === 1 ? '2px solid #06B6D4' : '2px solid transparent',
+                        color: dataTabIndex === 1 ? '#06B6D4' : '#6B7280',
+                        fontWeight: 600,
+                        fontSize: '0.9rem',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 1,
-                        color: dataTabIndex === 1 ? '#667eea' : '#64748b',
-                        fontWeight: 600,
-                        fontSize: '0.95rem',
-                        transition: 'all 0.3s ease',
-                        '&:hover': {
-                          color: dataTabIndex === 1 ? '#667eea' : '#764ba2',
-                        },
-                        '&::after': {
-                          content: '""',
-                          position: 'absolute',
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          height: 3,
-                          borderRadius: '3px 3px 0 0',
-                          background: dataTabIndex === 1 
-                            ? 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)'
-                            : 'transparent',
-                          transition: 'all 0.3s ease',
-                        },
                       }}
                     >
-                      <SnowflakeIcon sx={{ fontSize: 20 }} />
+                      <SnowflakeIcon sx={{ fontSize: 18 }} />
                       Connections
                     </Box>
                   </Box>
                 </Box>
-
-                {/* Tab Content */}
-                <Box sx={{ flex: 1, overflow: 'auto', p: 0 }}>
+                <Box sx={{ p: 0 }}>
                   {dataTabIndex === 0 && <AddDataSource />}
                   {dataTabIndex === 1 && <SnowflakeConnector />}
                 </Box>
               </Paper>
             </Box>
-          ) : activeNav === 'functions' ? (
-            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          </Box>
+        ) : activeNav === 'functions' ? (
+          /* Predefined Functions Content */
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <Box sx={{ flex: 1, overflow: 'auto' }}>
+              <PredefinedFunctions />
+            </Box>
+          </Box>
+        ) : (
+          /* Views Content - Matching Libraries Page Layout */
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: '#E5E7EB' }}>
+            {/* Top Header Card */}
+            <Box sx={{ p: 2, pb: 0 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  bgcolor: '#FFFFFF',
+                  borderRadius: 3,
+                  px: 3,
+                  py: 2,
+                  border: '1px solid #E5E7EB',
+                }}
+              >
+                {/* Title and Actions Row */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  {/* Title with blue vertical line and back button */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box sx={{ width: 4, height: 24, bgcolor: '#3B82F6', borderRadius: 1 }} />
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#1F2937' }}>
+                      {dashboardName}
+                    </Typography>
+                  </Box>
+
+                  {/* Right side actions */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    {/* Sort dropdown */}
+                    <Button
+                      onClick={(e) => setAnchorEl(e.currentTarget)}
+                      endIcon={<ChevronRightIcon sx={{ transform: 'rotate(90deg)' }} />}
+                      sx={{
+                        textTransform: 'none',
+                        color: '#6B7280',
+                        fontWeight: 500,
+                        '&:hover': { bgcolor: '#F3F4F6' },
+                      }}
+                    >
+                      Sort by {sortBy === 'name' ? 'name' : sortBy === 'updated' ? 'updated' : 'created'}
+                    </Button>
+
+                    {/* Search */}
+                    <TextField
+                      placeholder="Search views..."
+                      size="small"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      sx={{
+                        width: 220,
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 2,
+                          bgcolor: '#F3F4F6',
+                          '& fieldset': { borderColor: 'transparent' },
+                          '&:hover fieldset': { borderColor: '#D1D5DB' },
+                          '&.Mui-focused fieldset': { borderColor: '#3B82F6' },
+                        },
+                      }}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+
+                    {/* View toggles */}
+                    <ToggleButtonGroup
+                      value={viewMode}
+                      exclusive
+                      onChange={(_, value) => value && setViewMode(value)}
+                      size="small"
+                      sx={{
+                        '& .MuiToggleButton-root': {
+                          border: '1px solid #E5E7EB',
+                          color: '#6B7280',
+                          px: 1,
+                          '&.Mui-selected': {
+                            bgcolor: '#3B82F6',
+                            color: 'white',
+                            '&:hover': { bgcolor: '#2563EB' },
+                          },
+                        },
+                      }}
+                    >
+                      <ToggleButton value="grid"><GridViewIcon fontSize="small" /></ToggleButton>
+                      <ToggleButton value="compact"><AppsIcon fontSize="small" /></ToggleButton>
+                      <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
+                    </ToggleButtonGroup>
+                  </Box>
+                </Box>
+              </Paper>
+            </Box>
+
+            {/* Content Card */}
+            <Box sx={{ flex: 1, p: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <Paper
                 elevation={0}
                 sx={{
                   flex: 1,
-                  borderRadius: 4,
-                  background: 'rgba(255,255,255,0.98)',
-                  backdropFilter: 'blur(20px)',
-                  border: `1px solid ${alpha('#8b5cf6', 0.12)}`,
-                  boxShadow: '0 8px 40px rgba(139, 92, 246, 0.08)',
+                  bgcolor: '#FFFFFF',
+                  borderRadius: 3,
+                  border: '1px solid #E5E7EB',
                   overflow: 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
                 }}
               >
-                <PredefinedFunctions />
-              </Paper>
-            </Box>
-          ) : (
-          <>
-          {/* Stats Row */}
-          <Grid container spacing={2}>
-          <Grid item xs={6} sm={3}>
-            <StatCard
-              icon={<ViewModuleIcon sx={{ color: 'white', fontSize: 24 }} />}
-              label="Total Views"
-              value={stats.total}
-              color="#667eea"
-              gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-            />
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <StatCard
-              icon={<BarChartIcon sx={{ color: 'white', fontSize: 24 }} />}
-              label="Total Charts"
-              value={stats.totalCharts}
-              color="#10b981"
-              gradient="linear-gradient(135deg, #10b981 0%, #059669 100%)"
-            />
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <StatCard
-              icon={<TrendingUpIcon sx={{ color: 'white', fontSize: 24 }} />}
-              label="Recently Updated"
-              value={stats.recentlyUpdated}
-              color="#f59e0b"
-              gradient="linear-gradient(135deg, #f59e0b 0%, #d97706 100%)"
-            />
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <StatCard
-              icon={<StarIcon sx={{ color: 'white', fontSize: 24 }} />}
-              label="Favorites"
-              value={stats.favorites}
-              color="#ef4444"
-              gradient="linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
-            />
-          </Grid>
-        </Grid>
-
-        {/* Search and Filters Bar */}
-        <Paper
-          elevation={0}
-          sx={{
-            p: 2,
-            borderRadius: 3,
-            background: 'rgba(255,255,255,0.9)',
-            backdropFilter: 'blur(20px)',
-            border: `1px solid ${alpha('#667eea', 0.1)}`,
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-          }}
-        >
-          <Box display="flex" alignItems="center" gap={2} flexWrap="wrap">
-            <TextField
-              placeholder="Search views..."
-              size="small"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              sx={{
-                flex: 1,
-                minWidth: 250,
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                  bgcolor: alpha('#667eea', 0.03),
-                  '& fieldset': { borderColor: alpha('#667eea', 0.15) },
-                  '&:hover fieldset': { borderColor: alpha('#667eea', 0.3) },
-                  '&.Mui-focused fieldset': { borderColor: '#667eea' },
-                },
-              }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ color: alpha('#667eea', 0.5), fontSize: 20 }} />
-                  </InputAdornment>
-                ),
-              }}
-            />
-
-            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
-
-            <Box display="flex" alignItems="center" gap={1}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                Sort:
-              </Typography>
-              <ToggleButtonGroup
-                value={sortBy}
-                exclusive
-                onChange={(_, value) => value && setSortBy(value)}
-                size="small"
-                sx={{
-                  '& .MuiToggleButton-root': {
-                    border: `1px solid ${alpha('#667eea', 0.2)}`,
-                    color: '#64748b',
-                    textTransform: 'none',
-                    px: 1.5,
-                    py: 0.5,
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    '&.Mui-selected': {
-                      bgcolor: alpha('#667eea', 0.1),
-                      color: '#667eea',
-                      borderColor: alpha('#667eea', 0.3),
-                      '&:hover': {
-                        bgcolor: alpha('#667eea', 0.15),
-                      },
-                    },
-                  },
-                }}
-              >
-                <ToggleButton value="updated">Recent</ToggleButton>
-                <ToggleButton value="name">Name</ToggleButton>
-                <ToggleButton value="created">Created</ToggleButton>
-              </ToggleButtonGroup>
-            </Box>
-
-            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
-
-            <Box display="flex" alignItems="center" gap={1}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                View:
-              </Typography>
-              <ToggleButtonGroup
-                value={viewMode}
-                exclusive
-                onChange={(_, value) => value && setViewMode(value)}
-                size="small"
-                sx={{
-                  '& .MuiToggleButton-root': {
-                    border: `1px solid ${alpha('#667eea', 0.2)}`,
-                    color: '#64748b',
-                    px: 1,
-                    '&.Mui-selected': {
-                      bgcolor: alpha('#667eea', 0.1),
-                      color: '#667eea',
-                      borderColor: alpha('#667eea', 0.3),
-                    },
-                  },
-                }}
-              >
-                <ToggleButton value="grid"><GridViewIcon fontSize="small" /></ToggleButton>
-                <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
-              </ToggleButtonGroup>
-            </Box>
-
-            <Box sx={{ ml: 'auto' }}>
-              <Chip
-                label={`${filteredViews.length} view${filteredViews.length !== 1 ? 's' : ''}`}
-                size="small"
-                sx={{
-                  bgcolor: alpha('#667eea', 0.08),
-                  color: '#667eea',
-                  fontWeight: 600,
-                  border: `1px solid ${alpha('#667eea', 0.15)}`,
-                }}
-              />
-            </Box>
-          </Box>
-        </Paper>
-
-        {/* Views Grid/List */}
-        <Box sx={{ flex: 1, overflow: 'auto', pr: 1 }}>
-          {filteredViews.length === 0 ? (
-            <Paper
-              elevation={0}
-              sx={{
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 4,
-                background: 'rgba(255,255,255,0.6)',
-                border: `2px dashed ${alpha('#667eea', 0.2)}`,
-              }}
-            >
-              <Box sx={{ textAlign: 'center', maxWidth: 400, p: 4 }}>
-                <Box
-                  sx={{
-                    width: 100,
-                    height: 100,
-                    margin: '0 auto 24px',
-                    borderRadius: '50%',
-                    background: `linear-gradient(135deg, ${alpha('#667eea', 0.1)} 0%, ${alpha('#764ba2', 0.1)} 100%)`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {searchQuery ? (
-                    <SearchIcon sx={{ fontSize: 48, color: alpha('#667eea', 0.4) }} />
+                {/* Scrollable Content Area */}
+                <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+              {/* Favorites Section - only shows when there are favorites */}
+              {favoriteViews.length > 0 && activeNav === 'all' && (
+                <Box sx={{ mb: 4, pb: 3, borderBottom: '1px solid #E5E7EB' }}>
+                  <Box
+                    sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1.5 }}
+                  >
+                    <ChevronRightIcon sx={{ fontSize: 20, color: '#6B7280', transform: 'rotate(90deg)' }} />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem' }}>
+                      Bookmarks
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#9CA3AF' }}>
+                      ({favoriteViews.length})
+                    </Typography>
+                  </Box>
+                  
+                  {viewMode === 'grid' ? (
+                    <Grid container spacing={2}>
+                      {favoriteViews.map((view, idx) => (
+                        <Grid item xs={12} sm={6} md={4} lg={3} key={view.id}>
+                          <ViewCard view={view} index={idx} />
+                        </Grid>
+                      ))}
+                    </Grid>
+                  ) : viewMode === 'compact' ? (
+                    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                      {favoriteViews.map((view, idx) => (
+                        <CompactViewCard key={view.id} view={view} index={idx} />
+                      ))}
+                    </Box>
                   ) : (
-                    <ViewModuleIcon sx={{ fontSize: 48, color: alpha('#667eea', 0.4) }} />
+                    <Paper sx={{ borderRadius: 2, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
+                      <List disablePadding>
+                        {favoriteViews.map((view, index) => (
+                          <React.Fragment key={view.id}>
+                            {index > 0 && <Divider />}
+                            <ListItemButton onClick={() => handleViewClick(view)} sx={{ py: 2, px: 2 }}>
+                              <Box sx={{ minWidth: 48, height: 40, px: 1, borderRadius: 1.5, bgcolor: view.iconColor || '#3B82F6', display: 'flex', alignItems: 'center', justifyContent: 'center', mr: 2, color: 'white', fontWeight: 700, fontSize: '0.7rem' }}>
+                                {view.iconText || getShortCode(view.name)}
+                              </Box>
+                              <ListItemText
+                                primary={view.name}
+                                secondary={view.description || 'No description'}
+                                primaryTypographyProps={{ fontWeight: 600 }}
+                              />
+                              <Chip label={`${view.chartsCount} charts`} size="small" sx={{ mr: 1, bgcolor: '#F3F4F6', color: '#64748b' }} />
+                              <IconButton size="small" onClick={(e) => { e.stopPropagation(); toggleFavorite(view.id); }}>
+                                <BookmarkIcon sx={{ color: '#F59E0B' }} />
+                              </IconButton>
+                            </ListItemButton>
+                          </React.Fragment>
+                        ))}
+                      </List>
+                    </Paper>
                   )}
                 </Box>
-                <Typography variant="h5" fontWeight={700} gutterBottom sx={{ color: '#667eea' }}>
-                  {searchQuery ? 'No Results Found' : 
-                    activeNav === 'favorites' ? 'No Favorites Yet' :
-                    activeNav === 'recent' ? 'No Recent Views' : 'No Views Yet'}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  {searchQuery ? 'Try adjusting your search or filters' :
-                    activeNav === 'favorites' ? 'Star views to add them to favorites' :
-                    activeNav === 'recent' ? 'Views updated in the last 7 days will appear here' :
-                    'Create your first view to start building charts'}
-                </Typography>
-                {!searchQuery && activeNav === 'all' && (
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => { resetCreateForm(); fetchCalculations(); setOpenCreateDialog(true); }}
-                    sx={{
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      px: 4,
-                      py: 1.5,
-                      borderRadius: 2.5,
-                      boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
-                    }}
-                  >
-                    Create View
-                  </Button>
-                )}
-              </Box>
-            </Paper>
-          ) : viewMode === 'grid' ? (
-            <Grid container spacing={2.5}>
-              {filteredViews.map((view, index) => (
-                <Grid item xs={12} sm={6} md={4} lg={3} key={view.id}>
-                  <ViewCard view={view} index={index} />
-                </Grid>
-              ))}
-            </Grid>
-          ) : (
-            <Paper
-              elevation={0}
-              sx={{
-                borderRadius: 3,
-                background: 'rgba(255,255,255,0.95)',
-                border: `1px solid ${alpha('#667eea', 0.1)}`,
-                overflow: 'hidden',
-              }}
-            >
-              <List disablePadding>
-                {filteredViews.map((view, index) => (
-                  <React.Fragment key={view.id}>
-                    {index > 0 && <Divider />}
-                    <ListItemButton
-                      selected={selectedView?.id === view.id}
-                      onClick={() => handleViewClick(view)}
-                      sx={{
-                        py: 2,
-                        px: 3,
-                        '&.Mui-selected': {
-                          bgcolor: alpha('#667eea', 0.08),
-                          '&:hover': { bgcolor: alpha('#667eea', 0.12) },
-                        },
-                        '&:hover': { bgcolor: alpha('#667eea', 0.04) },
-                      }}
-                    >
-                      <Box display="flex" alignItems="center" gap={2} width="100%">
-                        <Avatar
+              )}
+
+              {/* Views Section - shows non-favorites when favorites section is visible */}
+              <Box sx={{ mb: 4 }}>
+                <Box
+                  sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1.5 }}
+                >
+                  <ChevronRightIcon sx={{ fontSize: 20, color: '#6B7280', transform: 'rotate(90deg)' }} />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem' }}>
+                    Views
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#9CA3AF' }}>
+                    ({activeNav === 'all' && favoriteViews.length > 0 ? regularViews.length : filteredViews.length})
+                  </Typography>
+                </Box>
+                
+                {/* Determine which views to display */}
+                {(() => {
+                  const displayViews = activeNav === 'all' && favoriteViews.length > 0 ? regularViews : filteredViews;
+                  
+                  if (displayViews.length === 0 && views.length === 0) {
+                    return (
+                      <Box
+                        sx={{
+                          py: 8,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <ViewModuleIcon sx={{ fontSize: 64, color: '#D1D5DB', mb: 2 }} />
+                        <Typography variant="h6" sx={{ color: '#6B7280', mb: 1 }}>
+                          No views found
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: '#9CA3AF', mb: 3 }}>
+                          Create your first view to get started
+                        </Typography>
+                        <Button
+                          variant="contained"
+                          startIcon={<AddIcon />}
+                          onClick={() => { resetCreateForm(); fetchCalculations(); setOpenCreateDialog(true); }}
                           sx={{
-                            width: 44,
-                            height: 44,
-                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                            fontSize: '1rem',
-                            fontWeight: 700,
+                            bgcolor: '#3B82F6',
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            borderRadius: 2,
+                            '&:hover': { bgcolor: '#2563EB' },
                           }}
                         >
-                          {view.name.charAt(0).toUpperCase()}
-                        </Avatar>
-                        <Box flex={1}>
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <Typography variant="subtitle1" fontWeight={600} sx={{ color: '#1e293b' }}>
-                              {view.name}
-                            </Typography>
-                            {favorites.has(view.id) && (
-                              <StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
-                            )}
-                          </Box>
-                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            {view.description || 'No description'}
-                          </Typography>
-                        </Box>
-                        <Box display="flex" alignItems="center" gap={2}>
-                          <Chip
-                            size="small"
-                            label={`${view.chartsCount} charts`}
-                            sx={{
-                              height: 24,
-                              fontSize: '0.7rem',
-                              bgcolor: alpha('#667eea', 0.08),
-                              color: '#667eea',
-                            }}
-                          />
-                          <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 80 }}>
-                            {getTimeAgo(view.updatedAt)}
-                          </Typography>
-                          <IconButton
-                            size="small"
-                            onClick={(e) => { e.stopPropagation(); toggleFavorite(view.id); }}
-                            sx={{ color: favorites.has(view.id) ? '#f59e0b' : '#94a3b8' }}
-                          >
-                            {favorites.has(view.id) ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              setMenuView(view); 
-                              setAnchorEl(e.currentTarget); 
-                              setMenuPosition({ top: e.clientY, left: e.clientX });
-                            }}
-                          >
-                            <MoreVertIcon fontSize="small" />
-                          </IconButton>
-                        </Box>
+                          Create View
+                        </Button>
                       </Box>
-                    </ListItemButton>
-                  </React.Fragment>
-                ))}
-              </List>
-            </Paper>
-          )}
-        </Box>
-        </>
-        )}
+                    );
+                  }
+                  
+                  if (displayViews.length === 0) {
+                    return (
+                      <Typography variant="body2" sx={{ color: '#9CA3AF', py: 2, textAlign: 'center' }}>
+                        No additional views to display
+                      </Typography>
+                    );
+                  }
+                  
+                  if (viewMode === 'grid') {
+                    return (
+                      <Grid container spacing={2}>
+                        {displayViews.map((view, index) => (
+                          <Grid item xs={12} sm={6} md={4} lg={3} key={view.id}>
+                            <ViewCard view={view} index={index} />
+                          </Grid>
+                        ))}
+                      </Grid>
+                    );
+                  }
+                  
+                  if (viewMode === 'compact') {
+                    return (
+                      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                        {displayViews.map((view, index) => (
+                          <CompactViewCard key={view.id} view={view} index={index} />
+                        ))}
+                      </Box>
+                    );
+                  }
+                  
+                  // List view
+                  return (
+                    <Paper sx={{ borderRadius: 2, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
+                      <List disablePadding>
+                        {displayViews.map((view, index) => (
+                          <React.Fragment key={view.id}>
+                            {index > 0 && <Divider />}
+                            <ListItemButton onClick={() => handleViewClick(view)} sx={{ py: 2, px: 2 }}>
+                              <Box sx={{ minWidth: 48, height: 40, px: 1, borderRadius: 1.5, bgcolor: view.iconColor || '#3B82F6', display: 'flex', alignItems: 'center', justifyContent: 'center', mr: 2, color: 'white', fontWeight: 700, fontSize: '0.7rem' }}>
+                                {view.iconText || getShortCode(view.name)}
+                              </Box>
+                              <ListItemText
+                                primary={view.name}
+                                secondary={view.description || 'No description'}
+                                primaryTypographyProps={{ fontWeight: 600 }}
+                              />
+                              <Chip label={`${view.chartsCount} charts`} size="small" sx={{ mr: 1, bgcolor: '#F3F4F6', color: '#64748b' }} />
+                              <IconButton size="small" onClick={(e) => { e.stopPropagation(); toggleFavorite(view.id); }}>
+                                {favorites.has(view.id) ? (
+                                  <BookmarkIcon sx={{ color: '#F59E0B' }} />
+                                ) : (
+                                  <BookmarkBorderIcon sx={{ color: '#9CA3AF' }} />
+                                )}
+                              </IconButton>
+                              <IconButton size="small" onClick={(e) => { e.stopPropagation(); setMenuView(view); setMenuPosition({ top: e.clientY, left: e.clientX }); }}>
+                                <MoreVertIcon sx={{ color: '#9CA3AF' }} />
+                              </IconButton>
+                            </ListItemButton>
+                          </React.Fragment>
+                        ))}
+                      </List>
+                    </Paper>
+                  );
+                })()}
+              </Box>
 
-        </Box>
+                </Box>
+              </Paper>
+            </Box>
+
+            {/* Floating Add Button */}
+            <Tooltip title="Create New View" placement="left">
+              <IconButton
+                onClick={() => { setEditingView(null); resetCreateForm(); fetchCalculations(); setOpenCreateDialog(true); }}
+                sx={{
+                  position: 'fixed',
+                  bottom: 32,
+                  right: 32,
+                  width: 56,
+                  height: 56,
+                  bgcolor: '#3B82F6',
+                  color: 'white',
+                  boxShadow: '0 4px 20px rgba(59, 130, 246, 0.4)',
+                  '&:hover': {
+                    bgcolor: '#2563EB',
+                    transform: 'scale(1.1)',
+                  },
+                  transition: 'all 0.2s',
+                }}
+              >
+                <AddIcon sx={{ fontSize: 28 }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
       </Box>
 
       {/* Context Menu */}
@@ -1811,28 +1847,28 @@ const DashboardViews: React.FC = () => {
           sx: {
             borderRadius: 2,
             boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-            border: `1px solid ${alpha('#667eea', 0.1)}`,
+            border: '1px solid #E5E7EB',
             minWidth: 160,
           },
         }}
       >
         <MenuItem onClick={() => { if (menuView) handleViewClick(menuView); closeMenu(); }}>
-          <OpenInNewIcon fontSize="small" sx={{ mr: 1.5, color: '#667eea' }} />
+          <OpenInNewIcon fontSize="small" sx={{ mr: 1.5, color: '#3B82F6' }} />
           Open
         </MenuItem>
         <MenuItem onClick={() => { if (menuView) handleEditStart(menuView); closeMenu(); }}>
-          <EditIcon fontSize="small" sx={{ mr: 1.5, color: '#667eea' }} />
+          <EditIcon fontSize="small" sx={{ mr: 1.5, color: '#3B82F6' }} />
           Edit
         </MenuItem>
         <MenuItem onClick={() => { if (menuView) toggleFavorite(menuView.id); closeMenu(); }}>
           {menuView && favorites.has(menuView.id) ? (
-            <StarIcon fontSize="small" sx={{ mr: 1.5, color: '#f59e0b' }} />
+            <BookmarkIcon fontSize="small" sx={{ mr: 1.5, color: '#f59e0b' }} />
           ) : (
-            <StarBorderIcon fontSize="small" sx={{ mr: 1.5, color: '#f59e0b' }} />
+            <BookmarkBorderIcon fontSize="small" sx={{ mr: 1.5, color: '#f59e0b' }} />
           )}
-          {menuView && favorites.has(menuView.id) ? 'Unfavorite' : 'Favorite'}
+          {menuView && favorites.has(menuView.id) ? 'Remove bookmark' : 'Add bookmark'}
         </MenuItem>
-        <Divider sx={{ my: 1 }} />
+        <Divider sx={{ my: 1, borderColor: '#E5E7EB' }} />
         <MenuItem onClick={() => { if (menuView) handleDeleteClick(menuView); closeMenu(); }} sx={{ color: '#ef4444' }}>
           <DeleteIcon fontSize="small" sx={{ mr: 1.5 }} />
           Delete
@@ -1847,34 +1883,34 @@ const DashboardViews: React.FC = () => {
         fullWidth
         PaperProps={{
           sx: {
-            borderRadius: 3,
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%)',
-            border: `1px solid ${alpha('#667eea', 0.15)}`,
+            borderRadius: 2,
+            bgcolor: 'white',
+            border: '1px solid #E5E7EB',
             boxShadow: '0 24px 48px rgba(0,0,0,0.12)',
           },
         }}
       >
-        <DialogTitle sx={{ pb: 1 }}>
+        <DialogTitle sx={{ pb: 1, borderBottom: '1px solid #E5E7EB' }}>
           <Box display="flex" alignItems="center" gap={2}>
             <Box
               sx={{
                 width: 48,
                 height: 48,
-                borderRadius: 2.5,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: 2,
+                bgcolor: '#3B82F6',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
+                boxShadow: '0 4px 16px rgba(59, 130, 246, 0.3)',
               }}
             >
               {editingView ? <EditIcon sx={{ color: 'white' }} /> : <AddIcon sx={{ color: 'white' }} />}
             </Box>
             <Box>
-              <Typography variant="h6" fontWeight={700}>
+              <Typography variant="h6" fontWeight={700} sx={{ color: '#1F2937' }}>
                 {editingView ? 'Edit View' : 'Create New View'}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: '#6B7280' }}>
                 {editingView ? 'Update view details' : 'Set up your new analytics view'}
               </Typography>
             </Box>

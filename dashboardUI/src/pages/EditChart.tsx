@@ -23,6 +23,7 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
+  alpha,
 } from '@mui/material';
 import {
   Dataset as DatabaseIcon,
@@ -36,6 +37,12 @@ import {
   MiscellaneousServices as MiscellaneousServicesIcon,
   Logout as LogoutIcon,
   Email as EmailIcon,
+  Home as HomeIcon,
+  LibraryBooks as LibraryBooksIcon,
+  Storage as StorageIcon,
+  Functions as FunctionsIcon,
+  Description as DocsIcon,
+  Help as HelpIcon,
 } from '@mui/icons-material';
 import JsCompiler from "../components/JsCompiler";
 import Hooks from '../components/Hooks';
@@ -68,177 +75,192 @@ interface ChartParams {
   [key: string]: string | undefined;
 }
 
-// Navigation Bar Component
-const NavBar: React.FC<{ chartId: string; dashboardSlug?: string; viewSlug?: string }> = ({ chartId, dashboardSlug, viewSlug }) => {
+// Left Icon Sidebar Component
+const LeftSidebar: React.FC<{ dashboardSlug?: string; viewSlug?: string }> = ({ dashboardSlug, viewSlug }) => {
   const navigate = useNavigate();
-  const [auth, setAuth] = useRecoilState(authState);
-  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
-
-  // Build back navigation URL
-  const backUrl = dashboardSlug && viewSlug ? `/${dashboardSlug}/${viewSlug}` : '/';
-
-  // Handle logout
-  const handleLogout = () => {
-    setUserMenuAnchor(null);
-    authAPI.logout();
-    setAuth({
-      isAuthenticated: false,
-      email: null,
-    });
-    navigate('/login');
-  };
+  const [auth] = useRecoilState(authState);
 
   return (
-    <AppBar 
-      position="sticky" 
-      elevation={0}
-      sx={{ 
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        boxShadow: '0 4px 20px 0 rgba(102, 126, 234, 0.3)',
+    <Box
+      sx={{
+        width: 72,
+        bgcolor: '#F8FAFC',
+        borderRight: '1px solid #E5E7EB',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        py: 2,
+        gap: 1,
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        zIndex: 50,
       }}
     >
-      <Toolbar sx={{ justifyContent: 'space-between', minHeight: { xs: 70, sm: 76 }, px: { xs: 2, sm: 4 } }}>
-        {/* Left section */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Button 
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate(backUrl)}
-            sx={{ 
-              color: 'white',
-              textTransform: 'none',
-              fontWeight: 500,
-              bgcolor: 'rgba(255, 255, 255, 0.1)',
-              backdropFilter: 'blur(10px)',
-              px: 2.5,
-              py: 1,
-              borderRadius: 2,
-              '&:hover': {
-                bgcolor: 'rgba(255, 255, 255, 0.2)',
-              }
-            }}
-          >
-            <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
-              Back to Dashboard
-            </Box>
-            <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
-              Back
-            </Box>
-          </Button>
-          
-          <Divider 
-            orientation="vertical" 
-            flexItem 
-            sx={{ 
-              height: 32, 
-              alignSelf: 'center',
-              bgcolor: 'rgba(255, 255, 255, 0.2)',
-              borderColor: 'rgba(255, 255, 255, 0.2)'
-            }} 
-          />
-          
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Box 
-              sx={{ 
-                background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-                p: 1.5,
-                borderRadius: 2,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 15px rgba(245, 87, 108, 0.3)',
-              }}
-            >
-              <BarChartIcon sx={{ color: 'white', fontSize: 24 }} />
-            </Box>
-            <Box>
-              <Typography 
-                variant="h6" 
-                fontWeight={700} 
-                sx={{ 
-                  color: 'white',
-                  letterSpacing: 0.5,
-                  fontSize: { xs: '1rem', sm: '1.25rem' }
-                }}
-              >
-                Chart Editor
-              </Typography>
-              <Typography 
-                variant="caption" 
-                sx={{ 
-                  color: 'rgba(255, 255, 255, 0.8)',
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                }}
-              >
-                ID: {chartId}
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
+      {/* RBI Logo */}
+      <Box
+        component="img"
+        src="/RBI.png"
+        alt="RBI"
+        sx={{
+          width: 50,
+          height: 50,
+          objectFit: 'contain',
+          mb: 2,
+        }}
+      />
 
-        {/* User Menu */}
-        <Box>
-          <Tooltip title={auth.email || 'User'}>
-            <IconButton
-              onClick={(e) => setUserMenuAnchor(e.currentTarget)}
-              sx={{
-                p: 0.5,
-                background: 'rgba(255,255,255,0.15)',
-                border: '2px solid rgba(255,255,255,0.3)',
-                '&:hover': {
-                  background: 'rgba(255,255,255,0.25)',
-                  border: '2px solid rgba(255,255,255,0.5)',
-                },
-              }}
-            >
-              <Avatar
-                sx={{
-                  width: 36,
-                  height: 36,
-                  bgcolor: 'rgba(255,255,255,0.2)',
-                  color: 'white',
-                  fontWeight: 700,
-                  fontSize: '0.875rem',
-                }}
-              >
-                {auth.email ? auth.email[0].toUpperCase() : 'U'}
-              </Avatar>
-            </IconButton>
-          </Tooltip>
-          <Menu
-            anchorEl={userMenuAnchor}
-            open={Boolean(userMenuAnchor)}
-            onClose={() => setUserMenuAnchor(null)}
-            PaperProps={{
-              sx: {
-                mt: 1,
-                minWidth: 220,
-                borderRadius: 2,
-                boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
-                border: '1px solid rgba(102, 126, 234, 0.1)',
-              },
-            }}
-            transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-            anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-          >
-            <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                <EmailIcon sx={{ fontSize: 16, color: '#667eea' }} />
-                <Typography variant="body2" fontWeight={600} color="text.primary">
-                  {auth.email || 'User'}
-                </Typography>
-              </Box>
-            </Box>
-            <MenuItem onClick={handleLogout} sx={{ py: 1.5, color: '#ef4444' }}>
-              <ListItemIcon>
-                <LogoutIcon fontSize="small" sx={{ color: '#ef4444' }} />
-              </ListItemIcon>
-              <ListItemText primary="Logout" />
-            </MenuItem>
-          </Menu>
+      {/* Home */}
+      <Tooltip title="Home" placement="right">
+        <Box
+          onClick={() => navigate('/')}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            cursor: 'pointer',
+            py: 1,
+            px: 0.5,
+            borderRadius: 2,
+            color: '#6B7280',
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+            transition: 'all 0.2s',
+          }}
+        >
+          <HomeIcon sx={{ fontSize: 22 }} />
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Home</Typography>
         </Box>
-      </Toolbar>
-    </AppBar>
+      </Tooltip>
+
+      {/* Libraries */}
+      <Tooltip title="Libraries" placement="right">
+        <Box
+          onClick={() => navigate('/')}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            cursor: 'pointer',
+            py: 1,
+            px: 0.5,
+            borderRadius: 2,
+            color: '#6B7280',
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+            transition: 'all 0.2s',
+          }}
+        >
+          <LibraryBooksIcon sx={{ fontSize: 22 }} />
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Libraries</Typography>
+        </Box>
+      </Tooltip>
+
+      {/* Data */}
+      <Tooltip title="Data & Connections" placement="right">
+        <Box
+          onClick={() => navigate('/?nav=data')}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            cursor: 'pointer',
+            py: 1,
+            px: 0.5,
+            borderRadius: 2,
+            color: '#6B7280',
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+            transition: 'all 0.2s',
+          }}
+        >
+          <StorageIcon sx={{ fontSize: 22 }} />
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Data</Typography>
+        </Box>
+      </Tooltip>
+
+      {/* Functions */}
+      <Tooltip title="Predefined Functions" placement="right">
+        <Box
+          onClick={() => navigate('/?nav=functions')}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            cursor: 'pointer',
+            py: 1,
+            px: 0.5,
+            borderRadius: 2,
+            color: '#6B7280',
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+            transition: 'all 0.2s',
+          }}
+        >
+          <FunctionsIcon sx={{ fontSize: 22 }} />
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Functions</Typography>
+        </Box>
+      </Tooltip>
+
+      {/* Spacer */}
+      <Box sx={{ flex: 1 }} />
+
+      {/* Docs */}
+      <Tooltip title="Documentation" placement="right">
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            cursor: 'pointer',
+            py: 1,
+            px: 0.5,
+            borderRadius: 2,
+            color: '#6B7280',
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+            transition: 'all 0.2s',
+          }}
+        >
+          <DocsIcon sx={{ fontSize: 22 }} />
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Docs</Typography>
+        </Box>
+      </Tooltip>
+
+      {/* Help */}
+      <Tooltip title="Help" placement="right">
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            cursor: 'pointer',
+            py: 1,
+            px: 0.5,
+            borderRadius: 2,
+            color: '#6B7280',
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+            transition: 'all 0.2s',
+          }}
+        >
+          <HelpIcon sx={{ fontSize: 22 }} />
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Help</Typography>
+        </Box>
+      </Tooltip>
+
+      {/* User Avatar */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 1 }}>
+        <Avatar
+          sx={{
+            width: 36,
+            height: 36,
+            bgcolor: '#3B82F6',
+            color: 'white',
+            fontSize: '0.75rem',
+            fontWeight: 600,
+          }}
+        >
+          {auth.email ? auth.email[0].toUpperCase() : 'U'}
+        </Avatar>
+        <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25, color: '#6B7280' }}>Account</Typography>
+      </Box>
+    </Box>
   );
 };
 
@@ -268,6 +290,7 @@ const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => {
 
 const EditChart: React.FC = () => {
   const { id, dashboardName: dashboardSlug, viewName: viewSlug } = useParams<ChartParams>();
+  const navigate = useNavigate();
   const [activeTabIndex, setActiveTabIndex] = useState<number>(0);
   
   // Get dashboard context for error handling
@@ -323,6 +346,23 @@ const EditChart: React.FC = () => {
     setActiveTabIndex(newValue);
   };
 
+  const [auth, setAuth] = useRecoilState(authState);
+  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
+
+  // Build back navigation URL
+  const backUrl = dashboardSlug && viewSlug ? `/${dashboardSlug}/${viewSlug}` : '/';
+
+  // Handle logout
+  const handleLogout = () => {
+    setUserMenuAnchor(null);
+    authAPI.logout();
+    setAuth({
+      isAuthenticated: false,
+      email: null,
+    });
+    navigate('/login');
+  };
+
   // 🔥 CRITICAL: Show 404 page if dashboard or view doesn't exist
   if (!contextLoading && errorType) {
     if (errorType === 'dashboard_not_found') {
@@ -334,140 +374,198 @@ const EditChart: React.FC = () => {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' }}>
-      {/* Navigation Bar */}
-      <NavBar chartId={id || 'No ID provided'} dashboardSlug={dashboardSlug} viewSlug={viewSlug} />
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#F8FAFC' }}>
+      {/* Left Icon Sidebar */}
+      <LeftSidebar dashboardSlug={dashboardSlug} viewSlug={viewSlug} />
       
-      {/* Main Content */}
-      <Container maxWidth={false} sx={{ py:4 }}>
-        {/* Header Section */}
-
-        {/* Tabs Container */}
-        <Box sx={{ width: '100%' }}>
-          {/* Tab Navigation */}
-          <Paper 
+      {/* Main Content Area */}
+      <Box sx={{ flex: 1, ml: '72px', display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: '#E5E7EB' }}>
+        {/* Top Header Card */}
+        <Box sx={{ p: 2, pb: 0 }}>
+          <Paper
             elevation={0}
-            sx={{ 
-              borderRadius: '16px 16px 0 0',
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              overflow: 'hidden',
+            sx={{
+              bgcolor: '#FFFFFF',
+              borderRadius: 3,
+              px: 3,
+              py: 1.5,
+              border: '1px solid #E5E7EB',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
             }}
           >
-            <Tabs
-              value={activeTabIndex}
-              onChange={handleTabChange}
-              centered
-              sx={{
-                px: 2,
-                py: 1.5,
-                minHeight: 64,
-                '& .MuiTabs-indicator': {
-                  height: 4,
-                  borderRadius: '4px 4px 0 0',
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                },
-                '& .MuiTabs-scrollButtons': {
-                  color: '#667eea',
-                  '&.Mui-disabled': {
-                    opacity: 0.3,
-                  }
-                },
-                '& .MuiTab-root': {
+            {/* Left - Back & Title */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Button 
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigate(backUrl)}
+                variant="outlined"
+                size="small"
+                sx={{ 
+                  color: '#6B7280',
+                  borderColor: '#E5E7EB',
                   textTransform: 'none',
-                  fontWeight: 600,
-                  fontSize: '0.9rem',
-                  minHeight: 64,
-                  px: 3,
-                  py: 2,
-                  color: '#6b7280',
-                  borderRadius: 2,
-                  transition: 'all 0.3s ease',
-                  '&.Mui-selected': {
-                    color: '#667eea',
-                    background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
-                    boxShadow: '0 4px 15px rgba(102, 126, 234, 0.2)',
-                  },
+                  fontWeight: 500,
                   '&:hover': {
-                    background: 'rgba(102, 126, 234, 0.05)',
-                    color: '#667eea',
-                  },
-                },
-              }}
-            >
-              {tabs.map((tab, index) => {
-                const IconComponent = tab.icon;
-                return (
-                  <Tab
-                    key={tab.key}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: 32,
-                            height: 32,
-                            borderRadius: '8px',
-                            background: activeTabIndex === index 
-                              ? `linear-gradient(135deg, ${tab.color} 0%, ${tab.color}dd 100%)`
-                              : 'rgba(102, 126, 234, 0.1)',
-                            transition: 'all 0.3s ease',
-                          }}
-                        >
-                          <IconComponent 
-                            sx={{ 
-                              fontSize: 18,
-                              color: activeTabIndex === index ? 'white' : tab.color,
-                            }} 
-                          />
-                        </Box>
-                        <Box 
-                          component="span" 
-                          sx={{ 
-                            display: { xs: 'none', sm: 'inline' },
-                            fontWeight: activeTabIndex === index ? 700 : 600,
-                          }}
-                        >
-                          {tab.label}
-                        </Box>
-                      </Box>
-                    }
-                    id={`chart-tab-${index}`}
-                    aria-controls={`chart-tabpanel-${index}`}
-                  />
-                );
-              })}
-            </Tabs>
-          </Paper>
+                    bgcolor: '#F3F4F6',
+                    borderColor: '#D1D5DB',
+                  }
+                }}
+              >
+                Back
+              </Button>
+              
+              <Divider orientation="vertical" flexItem sx={{ height: 32, alignSelf: 'center' }} />
+              
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Box sx={{ width: 4, height: 32, bgcolor: '#3B82F6', borderRadius: 1 }} />
+                <Box>
+                  <Typography variant="h6" fontWeight={700} sx={{ color: '#1F2937' }}>
+                    Chart Editor
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#6B7280' }}>
+                    Card ID: {id}
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
 
-          {/* Tab Content */}
-          <Paper 
-            elevation={0}
-            sx={{ 
-              borderRadius: '0 0 16px 16px',
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              borderTop: 0,
-              p: 4,
-              minHeight: 500,
-              boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
-            }}
-          >
-            {tabs.map((tab, index) => {
-              const Component = tab.component;
-              return (
-                <TabPanel key={tab.key} value={activeTabIndex} index={index}>
-                  <Component />
-                </TabPanel>
-              );
-            })}
+            {/* Right - Dashboard/View Info */}
+            {dashboardSlug && viewSlug && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Chip
+                  label={dashboardSlug}
+                  size="small"
+                  sx={{
+                    bgcolor: '#EEF2FF',
+                    color: '#4F46E5',
+                    fontWeight: 600,
+                    fontSize: '0.75rem',
+                    '& .MuiChip-label': { px: 1.5 },
+                  }}
+                />
+                <Typography sx={{ color: '#9CA3AF', fontSize: '0.875rem' }}>/</Typography>
+                <Chip
+                  label={viewSlug}
+                  size="small"
+                  sx={{
+                    bgcolor: '#ECFDF5',
+                    color: '#059669',
+                    fontWeight: 600,
+                    fontSize: '0.75rem',
+                    '& .MuiChip-label': { px: 1.5 },
+                  }}
+                />
+              </Box>
+            )}
           </Paper>
         </Box>
-      </Container>
+
+        {/* Content Card */}
+        <Box sx={{ flex: 1, p: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <Paper
+            elevation={0}
+            sx={{
+              flex: 1,
+              bgcolor: '#FFFFFF',
+              borderRadius: 3,
+              border: '1px solid #E5E7EB',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {/* Tab Navigation */}
+            <Box sx={{ borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'center' }}>
+              <Tabs
+                value={activeTabIndex}
+                onChange={handleTabChange}
+                centered
+                sx={{
+                  minHeight: 56,
+                  '& .MuiTabs-indicator': {
+                    height: 3,
+                    bgcolor: '#3B82F6',
+                    borderRadius: '3px 3px 0 0',
+                  },
+                  '& .MuiTab-root': {
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                    minHeight: 56,
+                    px: 2.5,
+                    color: '#6B7280',
+                    transition: 'all 0.2s',
+                    '&.Mui-selected': {
+                      color: '#3B82F6',
+                    },
+                    '&:hover': {
+                      bgcolor: alpha('#3B82F6', 0.05),
+                      color: '#3B82F6',
+                    },
+                  },
+                }}
+              >
+                {tabs.map((tab, index) => {
+                  const IconComponent = tab.icon;
+                  return (
+                    <Tab
+                      key={tab.key}
+                      label={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: 28,
+                              height: 28,
+                              borderRadius: 1.5,
+                              bgcolor: activeTabIndex === index ? alpha('#3B82F6', 0.1) : '#F3F4F6',
+                              transition: 'all 0.2s',
+                            }}
+                          >
+                            <IconComponent 
+                              sx={{ 
+                                fontSize: 16,
+                                color: activeTabIndex === index ? '#3B82F6' : '#6B7280',
+                              }} 
+                            />
+                          </Box>
+                          <Box 
+                            component="span" 
+                            sx={{ 
+                              display: { xs: 'none', md: 'inline' },
+                              fontWeight: activeTabIndex === index ? 600 : 500,
+                            }}
+                          >
+                            {tab.label}
+                          </Box>
+                        </Box>
+                      }
+                      id={`chart-tab-${index}`}
+                      aria-controls={`chart-tabpanel-${index}`}
+                    />
+                  );
+                })}
+              </Tabs>
+            </Box>
+
+            {/* Tab Content */}
+            <Box sx={{ flex: 1, overflow: 'auto', p: 3, bgcolor: '#F8FAFC' }}>
+              {tabs.map((tab, index) => {
+                const Component = tab.component;
+                return (
+                  <TabPanel key={tab.key} value={activeTabIndex} index={index}>
+                    <Component />
+                  </TabPanel>
+                );
+              })}
+            </Box>
+          </Paper>
+        </Box>
+      </Box>
     </Box>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useRecoilState, useSetRecoilState } from 'recoil';
 import { dashboardsManager, Dashboard } from '../recoil/Dashboards';
 import { authState, authAPI } from '../recoil/AuthState';
@@ -181,10 +181,21 @@ const DashboardManagement: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [menuDashboard, setMenuDashboard] = useState<Dashboard | null>(null);
+  const [searchParams] = useSearchParams();
   const [activeNav, setActiveNav] = useState<'libraries' | 'home' | 'projects' | 'charts' | 'docs' | 'dataConnections' | 'functions'>('libraries');
   const [activeLibraryTab, setActiveLibraryTab] = useState<number>(0);
   const [dataTabIndex, setDataTabIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Handle nav query parameter from URL
+  useEffect(() => {
+    const navParam = searchParams.get('nav');
+    if (navParam === 'data') {
+      setActiveNav('dataConnections');
+    } else if (navParam === 'functions') {
+      setActiveNav('functions');
+    }
+  }, [searchParams]);
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
   const [sortMenuAnchor, setSortMenuAnchor] = useState<null | HTMLElement>(null);
   const [libraryMenuAnchor, setLibraryMenuAnchor] = useState<null | HTMLElement>(null);
@@ -649,7 +660,14 @@ const DashboardManagement: React.FC = () => {
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '')
       .replace(/\s+/g, '-');
-    navigate(`/${slug}`);
+    
+    // Check if dashboard has an embed link - if so, route to embed view
+    if ((dashboard as any).embedType && (dashboard as any).embedLink) {
+      navigate(`/${slug}/embed`);
+    } else {
+      // Normal flow - go to views page
+      navigate(`/${slug}`);
+    }
   };
 
   const toggleFavorite = async (id: string) => {
@@ -1280,8 +1298,8 @@ const DashboardManagement: React.FC = () => {
         {/* Logo */}
       <Box
         sx={{
-            width: 40,
-            height: 40,
+            width: 60,
+            height: 60,
             mb: 2,
             display: 'flex',
             alignItems: 'center',
@@ -2057,25 +2075,28 @@ const DashboardManagement: React.FC = () => {
           </Box>
         ) : activeNav === 'libraries' ? (
           /* Libraries Content */
-          <>
-            {/* Top Header */}
-            <Box
-              sx={{
-                px: 3,
-                py: 2,
-                bgcolor: '#FFFFFF',
-                borderBottom: '1px solid #E5E7EB',
-              }}
-            >
-              {/* Title and Tabs Row */}
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                {/* Title with blue vertical line */}
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <Box sx={{ width: 4, height: 24, bgcolor: '#3B82F6', borderRadius: 1, mr: 1.5 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: '#1F2937' }}>
-                    Your Libraries
-                  </Typography>
-                </Box>
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: '#E5E7EB' }}>
+            {/* Top Header Card */}
+            <Box sx={{ p: 2, pb: 0 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  bgcolor: '#FFFFFF',
+                  borderRadius: 3,
+                  px: 3,
+                  py: 2,
+                  border: '1px solid #E5E7EB',
+                }}
+              >
+                {/* Title and Tabs Row */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  {/* Title with blue vertical line */}
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Box sx={{ width: 4, height: 24, bgcolor: '#3B82F6', borderRadius: 1, mr: 1.5 }} />
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#1F2937' }}>
+                      Your Libraries
+                    </Typography>
+                  </Box>
 
                 {/* Right side actions */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -2126,7 +2147,7 @@ const DashboardManagement: React.FC = () => {
                   {/* Search */}
                   <Box sx={{ position: 'relative' }}>
                     <TextField
-                      placeholder="Search libraries & views..."
+                      placeholder="Search libraries..."
                       size="small"
                       value={searchQuery}
                       onChange={(e) => handleSearchChange(e.target.value)}
@@ -2260,20 +2281,34 @@ const DashboardManagement: React.FC = () => {
                 <ToggleButton value="list"><ViewListIcon fontSize="small" /></ToggleButton>
               </ToggleButtonGroup>
 
+                </Box>
+              </Box>
+              </Paper>
             </Box>
-          </Box>
 
-            </Box>
-
-            {/* Scrollable Content Area */}
-            <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
-          {isLoading ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                  <CircularProgress sx={{ color: '#3B82F6' }} />
-            </Box>
-              ) : (
-                <>
-                  {/* Bookmarks Section */}
+            {/* Content Card */}
+            <Box sx={{ flex: 1, p: 2, pt: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  flex: 1,
+                  bgcolor: '#FFFFFF',
+                  borderRadius: 3,
+                  border: '1px solid #E5E7EB',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                {/* Scrollable Content Area */}
+                <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+                  {isLoading ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                      <CircularProgress sx={{ color: '#3B82F6' }} />
+                    </Box>
+                  ) : (
+                    <>
+                      {/* Bookmarks Section */}
                   {bookmarkedDashboards.length > 0 && (
                     <Box sx={{ mb: 4, pb: 3, borderBottom: '1px solid #E5E7EB' }}>
                       <SectionHeader
@@ -2312,7 +2347,7 @@ const DashboardManagement: React.FC = () => {
                             </List>
                           </Paper>
                         ) : viewMode === 'compact' ? (
-                          /* Compact/Icon View */
+                          /* Compact/Icon View - just icon with bookmark */
                           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                             {bookmarkedDashboards.map((dashboard) => {
                               const iconText = (dashboard as any).iconText || getShortCode(dashboard.name);
@@ -2321,24 +2356,48 @@ const DashboardManagement: React.FC = () => {
                                 <Tooltip key={dashboard.id} title={dashboard.name}>
                                   <Box
                                     onClick={() => handleDashboardClick(dashboard)}
-              sx={{
-                                      minWidth: 64,
-                                      height: 64,
+                                    sx={{
+                                      position: 'relative',
+                                      minWidth: 56,
+                                      height: 56,
                                       px: 1,
                                       borderRadius: 2,
                                       bgcolor: iconColor,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
                                       color: 'white',
                                       fontWeight: 700,
-                                      fontSize: iconText.length > 3 ? '0.75rem' : '1rem',
+                                      fontSize: iconText.length > 3 ? '0.7rem' : '0.9rem',
                                       cursor: 'pointer',
                                       transition: 'all 0.2s',
-                                      '&:hover': { transform: 'scale(1.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' },
+                                      '&:hover': { 
+                                        transform: 'scale(1.05)', 
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                                      },
                                     }}
                                   >
                                     {iconText}
+                                    {/* Bookmark icon */}
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => { e.stopPropagation(); toggleBookmark(dashboard.id); }}
+                                      sx={{ 
+                                        position: 'absolute', 
+                                        top: -6, 
+                                        right: -6,
+                                        p: 0.25,
+                                        bgcolor: 'white',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                                        color: '#F59E0B',
+                                        '&:hover': { 
+                                          bgcolor: 'white',
+                                          color: '#D97706',
+                                        },
+                                      }}
+                                    >
+                                      <BookmarkIcon sx={{ fontSize: 12 }} />
+                                    </IconButton>
                                   </Box>
                                 </Tooltip>
                               );
@@ -2445,18 +2504,20 @@ const DashboardManagement: React.FC = () => {
                           </List>
                         </Paper>
                       ) : viewMode === 'compact' ? (
-                        /* Compact/Icon View */
+                        /* Compact/Icon View - just icon with bookmark */
                         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                           {regularDashboards.map((dashboard) => {
                             const iconText = (dashboard as any).iconText || getShortCode(dashboard.name);
                             const iconColor = (dashboard as any).iconColor || (dashboard as any).color || getCardColor(dashboard.id);
+                            const isBookmarked = bookmarks.has(dashboard.id);
                             return (
                               <Tooltip key={dashboard.id} title={dashboard.name}>
                                 <Box
-                      onClick={() => handleDashboardClick(dashboard)}
-                      sx={{
-                                    minWidth: 64,
-                                    height: 64,
+                                  onClick={() => handleDashboardClick(dashboard)}
+                                  sx={{
+                                    position: 'relative',
+                                    minWidth: 56,
+                                    height: 56,
                                     px: 1,
                                     borderRadius: 2,
                                     bgcolor: iconColor,
@@ -2464,14 +2525,37 @@ const DashboardManagement: React.FC = () => {
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     color: 'white',
-                            fontWeight: 700,
-                                    fontSize: iconText.length > 3 ? '0.75rem' : '1rem',
+                                    fontWeight: 700,
+                                    fontSize: iconText.length > 3 ? '0.7rem' : '0.9rem',
                                     cursor: 'pointer',
                                     transition: 'all 0.2s',
-                                    '&:hover': { transform: 'scale(1.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' },
+                                    '&:hover': { 
+                                      transform: 'scale(1.05)', 
+                                      boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                                    },
                                   }}
                                 >
                                   {iconText}
+                                  {/* Bookmark icon */}
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => { e.stopPropagation(); toggleBookmark(dashboard.id); }}
+                                    sx={{ 
+                                      position: 'absolute', 
+                                      top: -6, 
+                                      right: -6,
+                                      p: 0.25,
+                                      bgcolor: 'white',
+                                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                                      color: isBookmarked ? '#F59E0B' : '#D1D5DB',
+                                      '&:hover': { 
+                                        bgcolor: 'white',
+                                        color: isBookmarked ? '#D97706' : '#9CA3AF',
+                                      },
+                                    }}
+                                  >
+                                    {isBookmarked ? <BookmarkIcon sx={{ fontSize: 12 }} /> : <BookmarkBorderIcon sx={{ fontSize: 12 }} />}
+                                  </IconButton>
                                 </Box>
                               </Tooltip>
                             );
@@ -2491,15 +2575,17 @@ const DashboardManagement: React.FC = () => {
                           </Box>
 
                   
-                </>
-              )}
-                        </Box>
+                    </>
+                  )}
+                </Box>
+              </Paper>
+            </Box>
 
             {/* Floating Add Button */}
             <Tooltip title="Create new library">
               <IconButton
                 onClick={() => { setEditingDashboard(null); resetCreateForm(); fetchCalculations(); setOpenCreateDialog(true); }}
-                            sx={{
+                sx={{
                   position: 'fixed',
                   bottom: 24,
                   right: 24,
@@ -2510,11 +2596,11 @@ const DashboardManagement: React.FC = () => {
                   boxShadow: '0 4px 14px rgba(59, 130, 246, 0.4)',
                   '&:hover': { bgcolor: '#2563EB' },
                 }}
-                          >
+              >
                 <AddIcon />
-                          </IconButton>
+              </IconButton>
             </Tooltip>
-          </>
+          </Box>
         ) : (
           /* Default/Other Nav Items - Coming Soon (Docs) */
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>

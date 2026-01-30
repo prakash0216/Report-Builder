@@ -193,7 +193,7 @@ const FunctionEditorDialog: React.FC<FunctionEditorDialogProps> = ({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle sx={{ 
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
         color: 'white',
         display: 'flex',
         alignItems: 'center',
@@ -488,7 +488,7 @@ const FunctionEditorDialog: React.FC<FunctionEditorDialogProps> = ({
                   startIcon={<PlayArrowIcon />}
                   onClick={handleTest}
                   sx={{
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
                     textTransform: 'none',
                   }}
                 >
@@ -540,7 +540,7 @@ const FunctionEditorDialog: React.FC<FunctionEditorDialogProps> = ({
           onClick={handleSave}
           disabled={!!nameError || !func.name || !func.body.trim()}
           sx={{
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
             textTransform: 'none',
           }}
         >
@@ -574,7 +574,7 @@ const FunctionInfoDialog: React.FC<FunctionInfoDialogProps> = ({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ 
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
         color: 'white',
         display: 'flex',
         alignItems: 'center',
@@ -738,7 +738,7 @@ const FunctionInfoDialog: React.FC<FunctionInfoDialogProps> = ({
       </DialogContent>
       <DialogActions sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
         <Button onClick={onClose} variant="contained" sx={{ 
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
           textTransform: 'none' 
         }}>
           Close
@@ -809,8 +809,8 @@ const FunctionCard: React.FC<FunctionCardProps> = ({
                 size="small" 
                 onClick={() => setInfoOpen(true)}
                 sx={{ 
-                  color: '#667eea',
-                  '&:hover': { bgcolor: alpha('#667eea', 0.1) }
+                  color: '#3B82F6',
+                  '&:hover': { bgcolor: alpha('#3B82F6', 0.1) }
                 }}
               >
                 <InfoIcon fontSize="small" />
@@ -1014,7 +1014,7 @@ const PredefinedFunctions: React.FC = () => {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
           <Box>
             <Typography variant="h5" fontWeight={700} sx={{ 
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
             }}>
@@ -1029,7 +1029,7 @@ const PredefinedFunctions: React.FC = () => {
             startIcon={<AddIcon />}
             onClick={handleCreateNew}
             sx={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
               textTransform: 'none',
               fontWeight: 600,
             }}

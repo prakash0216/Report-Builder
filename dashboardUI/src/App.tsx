@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import DropDragDashboard from './pages/DragDropDashboard';
 import EditChart from './pages/EditChart';
+import EmbedView from './pages/EmbedView';
 import GlobalCalculationWrapper from './components/GlobalCalculationWrapper';
 import DashboardsManagement from './pages/DashboardManagement';
 import DashboardViews from './pages/DashboardViews';
@@ -39,18 +40,28 @@ function App() {
               } 
             />
             
-            {/* Dashboard Views - /dashboardName (Protected) */}
+            {/* Edit Chart (Protected) - Most specific, must come first */}
             <Route 
-              path="/:dashboardName" 
+              path="/:dashboardName/:viewName/addChart/:id" 
               element={
                 <ProtectedRoute>
-                  <DashboardProvider>
-                    <DashboardViews />
-                  </DashboardProvider>
+                  <ViewDataWrapper>
+                    <EditChart />
+                  </ViewDataWrapper>
                 </ProtectedRoute>
-              } 
+              }
             />
-            
+
+            {/* View Embed View - /dashboardName/viewName/embed (Protected) */}
+            <Route 
+              path="/:dashboardSlug/:viewSlug/embed" 
+              element={
+                <ProtectedRoute>
+                  <EmbedView />
+                </ProtectedRoute>
+              }
+            />
+
             {/* View Editor - /dashboardName/viewName (Protected) */}
             <Route 
               path="/:dashboardName/:viewName" 
@@ -63,16 +74,26 @@ function App() {
               }
             />
             
-            {/* Edit Chart (Protected) */}
+            {/* Dashboard Embed View - /dashboardName/embed (Protected) */}
             <Route 
-              path="/:dashboardName/:viewName/addChart/:id" 
+              path="/:dashboardSlug/embed" 
               element={
                 <ProtectedRoute>
-                  <ViewDataWrapper>
-                    <EditChart />
-                  </ViewDataWrapper>
+                  <EmbedView />
                 </ProtectedRoute>
               }
+            />
+
+            {/* Dashboard Views - /dashboardName (Protected) - Most general, must come last */}
+            <Route 
+              path="/:dashboardName" 
+              element={
+                <ProtectedRoute>
+                  <DashboardProvider>
+                    <DashboardViews />
+                  </DashboardProvider>
+                </ProtectedRoute>
+              } 
             />
 
             {/* Catch all - redirect to login */}

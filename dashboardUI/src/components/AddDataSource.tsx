@@ -558,16 +558,15 @@ export default function AddDataSourceMui() {
         gap: 3,
         p: 3,
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+        bgcolor: '#F8FAFC',
       }}
     >
       {/* Data Sources Panel */}
       <Box
         sx={{
           gridColumn: 'span 3',
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(102, 126, 234, 0.2)',
+          bgcolor: '#FFFFFF',
+          border: '1px solid #E5E7EB',
           borderRadius: 3,
           display: 'flex',
           flexDirection: 'column',
@@ -582,11 +581,11 @@ export default function AddDataSourceMui() {
             alignItems: 'center',
             justifyContent: 'space-between',
             p: 2.5,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            bgcolor: '#3B82F6',
             cursor: 'pointer',
             borderRadius: '12px 12px 0 0',
             '&:hover': {
-              background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+              bgcolor: '#2563EB',
             },
           }}
           onClick={() => setIsDataSourcesCollapsed(!isDataSourcesCollapsed)}
@@ -657,7 +656,7 @@ export default function AddDataSourceMui() {
                     sx={{
                       mb: 1.5,
                       fontWeight: 700,
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      bgcolor: '#3B82F6',
                       backgroundClip: 'text',
                       WebkitBackgroundClip: 'text',
                       WebkitTextFillColor: 'transparent',
@@ -684,10 +683,10 @@ export default function AddDataSourceMui() {
                             borderColor: 'rgba(102, 126, 234, 0.3)',
                           },
                           '&:hover fieldset': {
-                            borderColor: '#667eea',
+                            borderColor: '#3B82F6',
                           },
                           '&.Mui-focused fieldset': {
-                            borderColor: '#667eea',
+                            borderColor: '#3B82F6',
                           },
                         },
                       }}
@@ -700,9 +699,9 @@ export default function AddDataSourceMui() {
                       }
                       startIcon={<AddIcon />}
                       sx={{
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        bgcolor: '#3B82F6',
                         '&:hover': {
-                          background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                          bgcolor: '#2563EB',
                         },
                         '&.Mui-disabled': {
                           background: '#e2e8f0',
@@ -738,7 +737,7 @@ export default function AddDataSourceMui() {
                           justifyContent: 'center',
                         }}
                       >
-                        <DataObjectIcon sx={{ fontSize: 32, color: '#667eea', opacity: 0.6 }} />
+                        <DataObjectIcon sx={{ fontSize: 32, color: '#3B82F6', opacity: 0.6 }} />
                       </Box>
                       <Typography
                         variant="body2"
@@ -762,15 +761,15 @@ export default function AddDataSourceMui() {
                             borderRadius: 2,
                             background:
                               selectedDS === ds
-                                ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                                ? 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)'
                                 : 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
-                            color: selectedDS === ds ? 'white' : '#667eea',
+                            color: selectedDS === ds ? 'white' : '#3B82F6',
                             border: '1px solid',
                             borderColor: selectedDS === ds ? 'transparent' : 'rgba(102, 126, 234, 0.3)',
                             boxShadow: selectedDS === ds ? '0 4px 15px rgba(102, 126, 234, 0.3)' : 'none',
                             '&:hover': {
                               background: selectedDS === ds
-                                ? 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)'
+                                ? 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)'
                                 : 'linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%)',
                             },
                             cursor: editingDS === ds ? 'default' : 'pointer',
@@ -804,7 +803,7 @@ export default function AddDataSourceMui() {
                                   sx={{
                                     flexGrow: 1,
                                     '& .MuiInputBase-root': {
-                                      color: '#667eea',
+                                      color: '#3B82F6',
                                       bgcolor: 'white',
                                       fontWeight: 600,
                                     },
@@ -909,14 +908,14 @@ export default function AddDataSourceMui() {
                 sx={{
                   background:
                     selectedDS === ds
-                      ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                      ? 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)'
                       : 'transparent',
-                  color: selectedDS === ds ? 'white' : '#667eea',
-                  borderColor: '#667eea',
+                  color: selectedDS === ds ? 'white' : '#3B82F6',
+                  borderColor: '#3B82F6',
                   fontWeight: 600,
                   '&:hover': {
                     background: selectedDS === ds
-                      ? 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)'
+                      ? 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)'
                       : 'rgba(102, 126, 234, 0.05)',
                   },
                 }}
@@ -940,9 +939,8 @@ export default function AddDataSourceMui() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
-              backdropFilter: 'blur(10px)',
-              border: '2px dashed rgba(102, 126, 234, 0.3)',
+              bgcolor: '#FFFFFF',
+              border: '2px dashed #D1D5DB',
               borderRadius: 3,
               boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
             }}
@@ -962,14 +960,14 @@ export default function AddDataSourceMui() {
                   justifyContent: 'center',
                 }}
               >
-                <DataObjectIcon sx={{ fontSize: 48, color: '#667eea', opacity: 0.6 }} />
+                <DataObjectIcon sx={{ fontSize: 48, color: '#3B82F6', opacity: 0.6 }} />
               </Box>
               <Typography 
                 variant="h5" 
                 sx={{ 
                   mb: 2, 
                   fontWeight: 700,
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  bgcolor: '#3B82F6',
                   backgroundClip: 'text',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
@@ -995,9 +993,8 @@ export default function AddDataSourceMui() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
-              backdropFilter: 'blur(10px)',
-              border: '2px dashed rgba(102, 126, 234, 0.3)',
+              bgcolor: '#FFFFFF',
+              border: '2px dashed #D1D5DB',
               borderRadius: 3,
               boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
             }}
@@ -1017,14 +1014,14 @@ export default function AddDataSourceMui() {
                   justifyContent: 'center',
                 }}
               >
-                <DataObjectIcon sx={{ fontSize: 48, color: '#667eea', opacity: 0.6 }} />
+                <DataObjectIcon sx={{ fontSize: 48, color: '#3B82F6', opacity: 0.6 }} />
               </Box>
               <Typography 
                 variant="h5" 
                 sx={{ 
                   mb: 2, 
                   fontWeight: 700,
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  bgcolor: '#3B82F6',
                   backgroundClip: 'text',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
@@ -1049,9 +1046,8 @@ export default function AddDataSourceMui() {
               elevation={0}
               sx={{
                 p: 3,
-                background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(102, 126, 234, 0.2)',
+                bgcolor: '#FFFFFF',
+                border: '1px solid #E5E7EB',
                 borderRadius: 3,
                 boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
               }}
@@ -1064,7 +1060,7 @@ export default function AddDataSourceMui() {
                   mb: 3,
                   pb: 2,
                   borderBottom: '2px solid',
-                  borderImage: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%) 1',
+                  borderImage: 'linear-gradient(90deg, #3B82F6 0%, #2563EB 100%) 1',
                   flexWrap: 'wrap',
                   gap: 2,
                 }}
@@ -1075,7 +1071,7 @@ export default function AddDataSourceMui() {
                       width: 40,
                       height: 40,
                       borderRadius: 2,
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      bgcolor: '#3B82F6',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -1091,7 +1087,7 @@ export default function AddDataSourceMui() {
                     <Typography
                       variant="caption"
                       sx={{
-                        color: '#667eea',
+                        color: '#3B82F6',
                         fontWeight: 600,
                       }}
                     >
@@ -1114,9 +1110,9 @@ export default function AddDataSourceMui() {
                     textTransform: 'none',
                     fontWeight: 700,
                     borderRadius: 2,
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    bgcolor: '#3B82F6',
                     '&:hover': {
-                        background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                        bgcolor: '#2563EB',
                     },
                     }}
                 >
@@ -1131,14 +1127,14 @@ export default function AddDataSourceMui() {
                           borderColor: 'rgba(102, 126, 234, 0.3)',
                         },
                         '&:hover fieldset': {
-                          borderColor: '#667eea',
+                          borderColor: '#3B82F6',
                         },
                         '&.Mui-focused fieldset': {
-                          borderColor: '#667eea',
+                          borderColor: '#3B82F6',
                         },
                       },
                       '& .MuiInputLabel-root.Mui-focused': {
-                        color: '#667eea',
+                        color: '#3B82F6',
                       },
                     }}
                   >
@@ -1185,14 +1181,14 @@ export default function AddDataSourceMui() {
                           borderColor: 'rgba(102, 126, 234, 0.3)',
                         },
                         '&:hover fieldset': {
-                          borderColor: '#667eea',
+                          borderColor: '#3B82F6',
                         },
                         '&.Mui-focused fieldset': {
-                          borderColor: '#667eea',
+                          borderColor: '#3B82F6',
                         },
                       },
                       '& .MuiInputLabel-root.Mui-focused': {
-                        color: '#667eea',
+                        color: '#3B82F6',
                       },
                     }}
                   >
@@ -1241,10 +1237,10 @@ export default function AddDataSourceMui() {
                       px: 3,
                       py: 1.25,
                       fontWeight: 700,
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      bgcolor: '#3B82F6',
                       boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)',
                       '&:hover': {
-                        background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                        bgcolor: '#2563EB',
                         boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)',
                       },
                       '&.Mui-disabled': {
@@ -1266,7 +1262,7 @@ export default function AddDataSourceMui() {
                       mt: 2,
                       mb: 0,
                       boxShadow: 'none',
-                      border: '1px solid rgba(102, 126, 234, 0.2)',
+                      border: '1px solid #E5E7EB',
                       borderRadius: 2,
                       '&:before': {
                         display: 'none',
@@ -1277,7 +1273,7 @@ export default function AddDataSourceMui() {
                     }}
                   >
                     <AccordionSummary
-                      expandIcon={<ExpandMoreIcon sx={{ color: '#667eea' }} />}
+                      expandIcon={<ExpandMoreIcon sx={{ color: '#3B82F6' }} />}
                       sx={{
                         background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%)',
                         borderRadius: schedulerExpanded ? '8px 8px 0 0' : '8px',
@@ -1294,12 +1290,12 @@ export default function AddDataSourceMui() {
                       }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
-                        <ScheduleIcon sx={{ color: '#667eea', fontSize: 22 }} />
+                        <ScheduleIcon sx={{ color: '#3B82F6', fontSize: 22 }} />
                         <Typography
                           variant="subtitle1"
                           sx={{
                             fontWeight: 700,
-                            color: '#667eea',
+                            color: '#3B82F6',
                             flex: 1,
                           }}
                         >
@@ -1311,7 +1307,7 @@ export default function AddDataSourceMui() {
                             size="small"
                             sx={{
                               bgcolor: 'rgba(102, 126, 234, 0.1)',
-                              color: '#667eea',
+                              color: '#3B82F6',
                               fontWeight: 600,
                               fontSize: '0.75rem',
                             }}
@@ -1323,7 +1319,7 @@ export default function AddDataSourceMui() {
                             size="small"
                             sx={{
                               bgcolor: 'rgba(102, 126, 234, 0.1)',
-                              color: '#667eea',
+                              color: '#3B82F6',
                               fontWeight: 600,
                               fontSize: '0.75rem',
                             }}
@@ -1383,7 +1379,7 @@ export default function AddDataSourceMui() {
                                 height: 20, 
                                 fontSize: '0.7rem',
                                 bgcolor: 'rgba(102, 126, 234, 0.1)',
-                                color: '#667eea',
+                                color: '#3B82F6',
                               }} 
                             />
                           </Box>
@@ -1428,10 +1424,10 @@ export default function AddDataSourceMui() {
                                   borderWidth: 2,
                                 },
                                 '&:hover fieldset': {
-                                  borderColor: '#667eea',
+                                  borderColor: '#3B82F6',
                                 },
                                 '&.Mui-focused fieldset': {
-                                  borderColor: '#667eea',
+                                  borderColor: '#3B82F6',
                                   borderWidth: 2,
                                 },
                               },
@@ -1440,7 +1436,7 @@ export default function AddDataSourceMui() {
                                 fontWeight: 500,
                               },
                               '& .MuiInputLabel-root.Mui-focused': {
-                                color: '#667eea',
+                                color: '#3B82F6',
                               },
                             }}
                             InputLabelProps={{
@@ -1497,10 +1493,10 @@ export default function AddDataSourceMui() {
                                     borderColor: 'rgba(102, 126, 234, 0.3)',
                                   },
                                   '&:hover fieldset': {
-                                    borderColor: '#667eea',
+                                    borderColor: '#3B82F6',
                                   },
                                   '&.Mui-focused fieldset': {
-                                    borderColor: '#667eea',
+                                    borderColor: '#3B82F6',
                                   },
                                 },
                               }}
@@ -1513,9 +1509,9 @@ export default function AddDataSourceMui() {
                               onClick={() => saveSchedule(refreshIntervalDays)}
                               disabled={isLoadingSchedule}
                               sx={{
-                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                bgcolor: '#3B82F6',
                                 '&:hover': {
-                                  background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                                  bgcolor: '#2563EB',
                                 },
                                 fontWeight: 600,
                                 mt: 0.5,
@@ -1574,7 +1570,7 @@ export default function AddDataSourceMui() {
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: 0.5,
-                                    color: '#667eea',
+                                    color: '#3B82F6',
                                     fontWeight: 600,
                                     fontSize: '0.8rem',
                                   }}
@@ -1601,7 +1597,7 @@ export default function AddDataSourceMui() {
                   borderRadius: 2,
                   overflow: 'hidden',
                   '&:focus-within': {
-                    borderColor: '#667eea',
+                    borderColor: '#3B82F6',
                     boxShadow: '0 0 0 3px rgba(102, 126, 234, 0.1)',
                   },
                 }}
@@ -1687,7 +1683,7 @@ ORDER BY created_at DESC;
                     position: 'absolute',
                     bottom: 12,
                     right: 12,
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    bgcolor: '#3B82F6',
                     color: 'white',
                     px: 2,
                     py: 0.75,
@@ -1712,9 +1708,8 @@ ORDER BY created_at DESC;
                 flexDirection: 'column',
                 overflow: 'hidden',
                 maxWidth:'100%',
-                background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(102, 126, 234, 0.2)',
+                bgcolor: '#FFFFFF',
+                border: '1px solid #E5E7EB',
                 borderRadius: 3,
                 boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)',
               }}
@@ -1730,7 +1725,7 @@ ORDER BY created_at DESC;
                   variant="h6" 
                   sx={{ 
                     fontWeight: 700,
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    bgcolor: '#3B82F6',
                     backgroundClip: 'text',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
@@ -1775,7 +1770,7 @@ ORDER BY created_at DESC;
                   }}
                 >
                   <Box sx={{ textAlign: 'center' }}>
-                    <CircularProgress size={56} sx={{ color: '#667eea' }} />
+                    <CircularProgress size={56} sx={{ color: '#3B82F6' }} />
                     <Typography
                       variant="body2"
                       sx={{ mt: 2, color: '#64748b', fontWeight: 600 }}
@@ -1808,7 +1803,7 @@ ORDER BY created_at DESC;
                         justifyContent: 'center',
                       }}
                     >
-                      <PlayArrowIcon sx={{ fontSize: 40, color: '#667eea', opacity: 0.6 }} />
+                      <PlayArrowIcon sx={{ fontSize: 40, color: '#3B82F6', opacity: 0.6 }} />
                     </Box>
                     <Typography variant="h6" sx={{ mb: 1, fontWeight: 700, color: '#475569' }}>
                       No query results yet

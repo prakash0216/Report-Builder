@@ -385,7 +385,7 @@ const CustomLayoutBuilder: React.FC<CustomLayoutBuilderProps> = ({
         bgcolor: 'rgba(102, 126, 234, 0.02)',
       }}
     >
-      <Typography variant="subtitle2" fontWeight={600} gutterBottom color="#667eea">
+      <Typography variant="subtitle2" fontWeight={600} gutterBottom color="#3B82F6">
         Custom Layout Builder
       </Typography>
       
@@ -404,7 +404,7 @@ const CustomLayoutBuilder: React.FC<CustomLayoutBuilderProps> = ({
               bgcolor: 'white',
               '& .MuiToggleButton-root': {
                 px: 2, py: 0.5,
-                '&.Mui-selected': { bgcolor: '#667eea', color: 'white' },
+                '&.Mui-selected': { bgcolor: '#3B82F6', color: 'white' },
               },
             }}
           >
@@ -504,8 +504,8 @@ const CustomLayoutBuilder: React.FC<CustomLayoutBuilderProps> = ({
             onClick={applyCustomLayout}
             sx={{
               ml: 'auto',
-              bgcolor: '#667eea',
-              '&:hover': { bgcolor: '#5568d3' },
+              bgcolor: '#3B82F6',
+              '&:hover': { bgcolor: '#2563EB' },
             }}
           >
             Apply Layout
@@ -534,7 +534,7 @@ const CustomLayoutBuilder: React.FC<CustomLayoutBuilderProps> = ({
                     key={`top-${i}`}
                     sx={{ 
                       flex: 1, 
-                      bgcolor: '#667eea', 
+                      bgcolor: '#3B82F6', 
                       borderRadius: 0.5,
                       display: 'flex',
                       alignItems: 'center',
@@ -612,7 +612,7 @@ const htmlTemplatePresets = [
   { label: "Custom", value: "" },
   {
     label: "KPI Card",
-    value: `<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; color: white; text-align: center;">
+    value: `<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); border-radius: 12px; padding: 24px; color: white; text-align: center;">
   <h2 style="font-size: 48px; font-weight: bold; margin: 0;">$1.2M</h2>
   <p style="font-size: 18px; margin: 8px 0 0 0; opacity: 0.9;">Total Revenue</p>
   <div style="margin-top: 16px; display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px;">
@@ -627,7 +627,7 @@ const htmlTemplatePresets = [
   <h3 style="margin: 0; font-size: 20px; font-weight: bold; color: #1e293b;">Dashboard Stats</h3>
   <p style="margin: 4px 0 16px 0; font-size: 14px; color: #64748b;">Updated just now</p>
   <div style="flex: 1; display: flex; flex-direction: column; gap: 12px;">
-    <div style="background: white; border-radius: 8px; padding: 16px; border-left: 4px solid #667eea;">
+    <div style="background: white; border-radius: 8px; padding: 16px; border-left: 4px solid #3B82F6;">
       <p style="margin: 0; font-size: 14px; color: #64748b;">Active Users</p>
       <p style="margin: 4px 0 0 0; font-size: 24px; font-weight: bold; color: #1e293b;">1,234</p>
     </div>
@@ -1229,9 +1229,9 @@ const InteractiveLayoutEditor: React.FC<InteractiveLayoutEditorProps> = ({
             onClick={handleAddCard}
             disabled={pendingCards.length >= 4}
             sx={{
-              borderColor: '#667eea',
-              color: '#667eea',
-              '&:hover': { borderColor: '#5568d3', bgcolor: 'rgba(102,126,234,0.05)' },
+              borderColor: '#3B82F6',
+              color: '#3B82F6',
+              '&:hover': { borderColor: '#2563EB', bgcolor: 'rgba(102,126,234,0.05)' },
             }}
           >
             Add Card
@@ -1241,7 +1241,7 @@ const InteractiveLayoutEditor: React.FC<InteractiveLayoutEditorProps> = ({
             size="small"
             sx={{ 
               bgcolor: pendingCards.length >= 4 ? 'rgba(239,68,68,0.1)' : 'rgba(102,126,234,0.1)',
-              color: pendingCards.length >= 4 ? '#ef4444' : '#667eea',
+              color: pendingCards.length >= 4 ? '#ef4444' : '#3B82F6',
             }}
           />
           {hasOverlap && (
@@ -1302,7 +1302,7 @@ const InteractiveLayoutEditor: React.FC<InteractiveLayoutEditorProps> = ({
               sx={{
                 height: '100%',
                 borderRadius: 1.5,
-                bgcolor: card.type === 'chart' ? '#667eea' :
+                bgcolor: card.type === 'chart' ? '#3B82F6' :
                          card.type === 'table' ? '#10b981' : '#f59e0b',
                 display: 'flex',
                 flexDirection: 'column',
@@ -1533,7 +1533,7 @@ const ChildCardDimensionConditionForm: React.FC<DimensionConditionFormProps> = (
             width: 36,
             height: 36,
             borderRadius: 1.5,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -1587,7 +1587,7 @@ const ChildCardDimensionConditionForm: React.FC<DimensionConditionFormProps> = (
           variant="subtitle2" 
           fontWeight={700} 
           gutterBottom
-          sx={{ color: '#667eea', mb: 2 }}
+          sx={{ color: '#3B82F6', mb: 2 }}
         >
           Add New Dimension Condition
         </Typography>
@@ -1700,7 +1700,7 @@ const ChildCardDimensionConditionForm: React.FC<DimensionConditionFormProps> = (
                 py: 1.25,
                 borderRadius: 1.5,
                 background: newCondVarName 
-                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                  ? 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)'
                   : 'rgba(0,0,0,0.1)',
                 fontWeight: 600,
                 textTransform: 'uppercase',
@@ -1723,7 +1723,7 @@ const ChildCardDimensionConditionForm: React.FC<DimensionConditionFormProps> = (
           bgcolor: 'rgba(102, 126, 234, 0.02)',
         }}
       >
-        <Typography variant="subtitle2" fontWeight={700} color="#667eea" gutterBottom>
+        <Typography variant="subtitle2" fontWeight={700} color="#3B82F6" gutterBottom>
           Dimension Conditions ({child.dimensionConditions?.length || 0})
         </Typography>
         <Typography variant="caption" color="#64748b" sx={{ display: 'block', mb: 2 }}>
@@ -1762,7 +1762,7 @@ const ChildCardDimensionConditionForm: React.FC<DimensionConditionFormProps> = (
                         height: 22, 
                         fontSize: '0.7rem', 
                         fontWeight: 700,
-                        bgcolor: '#667eea',
+                        bgcolor: '#3B82F6',
                         color: 'white',
                       }}
                     />
@@ -2596,7 +2596,7 @@ export default function ChildCardConfigTab() {
               }}
             >
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography fontWeight={600} color="#667eea">
+                <Typography fontWeight={600} color="#3B82F6">
                   <GridIcon sx={{ mr: 1, verticalAlign: 'middle', fontSize: 20 }} />
                   Layout Presets
                 </Typography>
@@ -2652,14 +2652,14 @@ export default function ChildCardConfigTab() {
                             py: 1.5,
                             flexDirection: 'column',
                             borderColor: 'rgba(102, 126, 234, 0.3)',
-                            color: isSelected ? 'white' : '#667eea',
+                            color: isSelected ? 'white' : '#3B82F6',
                             background: isSelected 
-                              ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+                              ? 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' 
                               : 'transparent',
                             '&:hover': {
-                              borderColor: '#667eea',
+                              borderColor: '#3B82F6',
                               background: isSelected 
-                                ? 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)'
+                                ? 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)'
                                 : 'rgba(102, 126, 234, 0.05)',
                             },
                             '&.Mui-disabled': {
@@ -2689,7 +2689,7 @@ export default function ChildCardConfigTab() {
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                    <Typography variant="subtitle2" fontWeight={700} color="#764ba2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography variant="subtitle2" fontWeight={700} color="#2563EB" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       🏷️ Parent Card Title
                     </Typography>
                     <FormControlLabel
@@ -2698,7 +2698,7 @@ export default function ChildCardConfigTab() {
                           checked={parentConfig.showParentTitle || false}
                           onChange={(e) => handleParentConfigChange({ showParentTitle: e.target.checked })}
                           size="small"
-                          sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#764ba2' } }}
+                          sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#2563EB' } }}
                         />
                       }
                       label={<Typography variant="caption" fontWeight={600}>Show Title</Typography>}
@@ -2762,7 +2762,7 @@ export default function ChildCardConfigTab() {
                               onClick={() => handleParentConfigChange({ 
                                 parentTitleTemplate: '<div style="text-align:center;width:100%;font-size:16px;font-weight:700;color:#1e293b;">${category} Dashboard</div>' 
                               })}
-                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#764ba210', color: '#764ba2' }}
+                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#2563EB10', color: '#2563EB' }}
                             />
                             <Chip
                               label="Left Aligned"
@@ -2770,7 +2770,7 @@ export default function ChildCardConfigTab() {
                               onClick={() => handleParentConfigChange({ 
                                 parentTitleTemplate: '<span style="font-size:16px;font-weight:700;color:#1e293b;">${category} Dashboard</span>' 
                               })}
-                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#764ba210', color: '#764ba2' }}
+                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#2563EB10', color: '#2563EB' }}
                             />
                             <Chip
                               label="Centered Subtitle"
@@ -2778,23 +2778,23 @@ export default function ChildCardConfigTab() {
                               onClick={() => handleParentConfigChange({ 
                                 parentTitleTemplate: '<div style="display:flex;flex-direction:column;align-items:center;width:100%;"><span style="font-size:16px;font-weight:700;color:#1e293b;">${category}</span><span style="font-size:11px;color:#64748b;">${filterYear} Data</span></div>' 
                               })}
-                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#764ba210', color: '#764ba2' }}
+                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#2563EB10', color: '#2563EB' }}
                             />
                             <Chip
                               label="Badge Centered"
                               size="small"
                               onClick={() => handleParentConfigChange({ 
-                                parentTitleTemplate: '<div style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;"><span style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:4px 12px;border-radius:6px;font-weight:600;font-size:14px;">${category}</span><span style="color:#64748b;font-size:12px;">Analysis Dashboard</span></div>' 
+                                parentTitleTemplate: '<div style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;"><span style="background:linear-gradient(135deg,#3B82F6,#2563EB);color:white;padding:4px 12px;border-radius:6px;font-weight:600;font-size:14px;">${category}</span><span style="color:#64748b;font-size:12px;">Analysis Dashboard</span></div>' 
                               })}
-                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#764ba210', color: '#764ba2' }}
+                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#2563EB10', color: '#2563EB' }}
                             />
                             <Chip
                               label="Metrics Header"
                               size="small"
                               onClick={() => handleParentConfigChange({ 
-                                parentTitleTemplate: '<div style="display:flex;align-items:center;justify-content:space-between;width:100%;"><span style="font-weight:700;font-size:16px;">${category}</span><div style="display:flex;gap:12px;"><span style="font-size:12px;color:#64748b;">Total: <b style="color:#667eea;">${totalValue}</b></span><span style="font-size:12px;color:#64748b;">Count: <b style="color:#22c55e;">${itemCount}</b></span></div></div>' 
+                                parentTitleTemplate: '<div style="display:flex;align-items:center;justify-content:space-between;width:100%;"><span style="font-weight:700;font-size:16px;">${category}</span><div style="display:flex;gap:12px;"><span style="font-size:12px;color:#64748b;">Total: <b style="color:#3B82F6;">${totalValue}</b></span><span style="font-size:12px;color:#64748b;">Count: <b style="color:#22c55e;">${itemCount}</b></span></div></div>' 
                               })}
-                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#764ba210', color: '#764ba2' }}
+                              sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#2563EB10', color: '#2563EB' }}
                             />
                           </Box>
                         </Box>
@@ -2918,7 +2918,7 @@ export default function ChildCardConfigTab() {
                                 { value: 2000, label: '2000' },
                               ]}
                               size="small"
-                              sx={{ color: '#667eea', mt: 1 }}
+                              sx={{ color: '#3B82F6', mt: 1 }}
                             />
                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
                               Fixed height for chart content. Set higher than container to enable scrolling.
@@ -2939,7 +2939,7 @@ export default function ChildCardConfigTab() {
                         max={24}
                         step={2}
                         size="small"
-                        sx={{ color: '#667eea' }}
+                        sx={{ color: '#3B82F6' }}
                       />
                     </Box>
                   </Stack>
@@ -3175,7 +3175,7 @@ export default function ChildCardConfigTab() {
               }}
             >
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography fontWeight={600} color="#667eea">
+                <Typography fontWeight={600} color="#3B82F6">
                   <DragIcon sx={{ mr: 1, verticalAlign: 'middle', fontSize: 20 }} />
                   Child Cards ({parentConfig.childCards.length}/4)
                 </Typography>
@@ -3190,12 +3190,12 @@ export default function ChildCardConfigTab() {
                         p: 1.5,
                         cursor: 'pointer',
                         border: selectedChildIndex === index 
-                          ? '2px solid #667eea' 
+                          ? '2px solid #3B82F6' 
                           : '1px solid rgba(0,0,0,0.08)',
                         borderRadius: 1.5,
                         transition: 'all 0.2s',
                         '&:hover': {
-                          borderColor: '#667eea',
+                          borderColor: '#3B82F6',
                           bgcolor: 'rgba(102, 126, 234, 0.02)',
                         },
                       }}
@@ -3215,7 +3215,7 @@ export default function ChildCardConfigTab() {
                               bgcolor: child.type === 'chart' ? 'rgba(102, 126, 234, 0.1)' :
                                        child.type === 'table' ? 'rgba(16, 185, 129, 0.1)' :
                                        'rgba(245, 158, 11, 0.1)',
-                              color: child.type === 'chart' ? '#667eea' :
+                              color: child.type === 'chart' ? '#3B82F6' :
                                      child.type === 'table' ? '#10b981' :
                                      '#f59e0b',
                               fontWeight: 600,
@@ -3251,9 +3251,9 @@ export default function ChildCardConfigTab() {
                     sx={{
                       mt: 2,
                       borderColor: 'rgba(102, 126, 234, 0.3)',
-                      color: '#667eea',
+                      color: '#3B82F6',
                       '&:hover': {
-                        borderColor: '#667eea',
+                        borderColor: '#3B82F6',
                         bgcolor: 'rgba(102, 126, 234, 0.05)',
                       },
                     }}
@@ -3276,7 +3276,7 @@ export default function ChildCardConfigTab() {
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="subtitle2" fontWeight={700} color="#667eea">
+                <Typography variant="subtitle2" fontWeight={700} color="#3B82F6">
                   🎯 Quick Switch: Card {selectedChild ? getChildDisplayNumber(selectedChild.id, selectedChildIndex) : selectedChildIndex + 1} of {parentConfig.childCards.length}
                 </Typography>
               </Box>
@@ -3295,17 +3295,17 @@ export default function ChildCardConfigTab() {
                       cursor: 'pointer',
                       fontWeight: selectedChildIndex === index ? 700 : 500,
                       bgcolor: selectedChildIndex === index 
-                        ? (child.type === 'chart' ? '#667eea' : child.type === 'table' ? '#10b981' : '#f59e0b')
+                        ? (child.type === 'chart' ? '#3B82F6' : child.type === 'table' ? '#10b981' : '#f59e0b')
                         : 'white',
                       color: selectedChildIndex === index 
                         ? 'white'
-                        : (child.type === 'chart' ? '#667eea' : child.type === 'table' ? '#10b981' : '#f59e0b'),
+                        : (child.type === 'chart' ? '#3B82F6' : child.type === 'table' ? '#10b981' : '#f59e0b'),
                       border: selectedChildIndex === index 
                         ? 'none'
-                        : `2px solid ${child.type === 'chart' ? '#667eea' : child.type === 'table' ? '#10b981' : '#f59e0b'}`,
+                        : `2px solid ${child.type === 'chart' ? '#3B82F6' : child.type === 'table' ? '#10b981' : '#f59e0b'}`,
                       '&:hover': {
                         bgcolor: selectedChildIndex === index 
-                          ? (child.type === 'chart' ? '#5568d3' : child.type === 'table' ? '#0ea572' : '#e08e0a')
+                          ? (child.type === 'chart' ? '#2563EB' : child.type === 'table' ? '#0ea572' : '#e08e0a')
                           : (child.type === 'chart' ? 'rgba(102, 126, 234, 0.15)' : child.type === 'table' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)'),
                       },
                     }}
@@ -3328,7 +3328,7 @@ export default function ChildCardConfigTab() {
                 }}
               >
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography fontWeight={600} color="#667eea">
+                  <Typography fontWeight={600} color="#3B82F6">
                     Configure: {selectedChild.title || `Card ${getChildDisplayNumber(selectedChild.id, selectedChildIndex)}`}
                   </Typography>
                 </AccordionSummary>
@@ -3345,7 +3345,7 @@ export default function ChildCardConfigTab() {
                       }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                        <Typography variant="subtitle2" fontWeight={700} color="#667eea" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography variant="subtitle2" fontWeight={700} color="#3B82F6" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                           📝 Card Title
                         </Typography>
                         <FormControlLabel
@@ -3354,7 +3354,7 @@ export default function ChildCardConfigTab() {
                               checked={selectedChild.showTitle || false}
                               onChange={(e) => handleChildCardChange(selectedChildIndex, { showTitle: e.target.checked })}
                               size="small"
-                              sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#667eea' } }}
+                              sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#3B82F6' } }}
                             />
                           }
                           label={<Typography variant="caption" fontWeight={600}>Show Title</Typography>}
@@ -3418,23 +3418,23 @@ export default function ChildCardConfigTab() {
                                   onClick={() => handleChildCardChange(selectedChildIndex, { 
                                     titleTemplate: '<span style="font-weight:700;color:#1e293b;">${category}</span>' 
                                   })}
-                                  sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#667eea10', color: '#667eea' }}
+                                  sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#3B82F610', color: '#3B82F6' }}
                                 />
                                 <Chip
                                   label="With Badge"
                                   size="small"
                                   onClick={() => handleChildCardChange(selectedChildIndex, { 
-                                    titleTemplate: '<div style="display:flex;align-items:center;gap:8px;"><span style="background:#667eea;color:white;padding:2px 8px;border-radius:4px;font-size:11px;">${filterValue}</span><b>${category}</b></div>' 
+                                    titleTemplate: '<div style="display:flex;align-items:center;gap:8px;"><span style="background:#3B82F6;color:white;padding:2px 8px;border-radius:4px;font-size:11px;">${filterValue}</span><b>${category}</b></div>' 
                                   })}
-                                  sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#667eea10', color: '#667eea' }}
+                                  sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#3B82F610', color: '#3B82F6' }}
                                 />
                                 <Chip
                                   label="Icon + Text"
                                   size="small"
                                   onClick={() => handleChildCardChange(selectedChildIndex, { 
-                                    titleTemplate: '<div style="display:flex;align-items:center;gap:6px;"><span style="color:#667eea;">📊</span><span style="font-weight:600;">${category} Analysis</span></div>' 
+                                    titleTemplate: '<div style="display:flex;align-items:center;gap:6px;"><span style="color:#3B82F6;">📊</span><span style="font-weight:600;">${category} Analysis</span></div>' 
                                   })}
-                                  sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#667eea10', color: '#667eea' }}
+                                  sx={{ height: 22, fontSize: '0.65rem', cursor: 'pointer', bgcolor: '#3B82F610', color: '#3B82F6' }}
                                 />
                               </Box>
                             </Box>
@@ -3554,7 +3554,7 @@ export default function ChildCardConfigTab() {
                                     fontSize: '0.65rem',
                                     height: 20,
                                     bgcolor: 'rgba(102, 126, 234, 0.08)',
-                                    color: '#667eea',
+                                    color: '#3B82F6',
                                     fontFamily: 'monospace',
                                     cursor: 'pointer',
                                     '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.15)' },
@@ -4440,7 +4440,7 @@ export default function ChildCardConfigTab() {
                         justifyContent: 'space-between',
                       }}
                     >
-                      <Typography variant="subtitle2" fontWeight={600} color={isPreviewMode ? '#10b981' : '#667eea'}>
+                      <Typography variant="subtitle2" fontWeight={600} color={isPreviewMode ? '#10b981' : '#3B82F6'}>
                         <OpenWithIcon sx={{ mr: 1, verticalAlign: 'middle', fontSize: 18 }} />
                         {isPreviewMode ? 'Preview Mode - Drag & Resize' : 'Layout Editor'}
                       </Typography>
@@ -4480,7 +4480,7 @@ export default function ChildCardConfigTab() {
                         <Chip
                           size="small"
                           label={`${(isPreviewMode && pendingLayoutCards ? pendingLayoutCards.length : parentConfig.childCards.length)} card${(isPreviewMode && pendingLayoutCards ? pendingLayoutCards.length : parentConfig.childCards.length) !== 1 ? 's' : ''}`}
-                          sx={{ bgcolor: 'rgba(102, 126, 234, 0.1)', color: '#667eea' }}
+                          sx={{ bgcolor: 'rgba(102, 126, 234, 0.1)', color: '#3B82F6' }}
                         />
                       </Stack>
                     </Box>
@@ -4526,7 +4526,7 @@ export default function ChildCardConfigTab() {
                         justifyContent: 'space-between',
                       }}
                     >
-                      <Typography variant="subtitle2" fontWeight={600} color="#667eea">
+                      <Typography variant="subtitle2" fontWeight={600} color="#3B82F6">
                         <PreviewIcon sx={{ mr: 1, verticalAlign: 'middle', fontSize: 18 }} />
                         Container Preview
                       </Typography>
@@ -4571,7 +4571,7 @@ export default function ChildCardConfigTab() {
                         justifyContent: 'space-between',
                       }}
                     >
-                      <Typography variant="subtitle2" fontWeight={600} color="#667eea">
+                      <Typography variant="subtitle2" fontWeight={600} color="#3B82F6">
                         <PreviewIcon sx={{ mr: 1, verticalAlign: 'middle', fontSize: 18 }} />
                         Card {getChildDisplayNumber(selectedChild.id, selectedChildIndex)} Preview
                       </Typography>
@@ -4586,7 +4586,7 @@ export default function ChildCardConfigTab() {
                             bgcolor: selectedChild.type === 'chart' ? 'rgba(102, 126, 234, 0.1)' :
                                      selectedChild.type === 'table' ? 'rgba(16, 185, 129, 0.1)' : 
                                      'rgba(245, 158, 11, 0.1)',
-                            color: selectedChild.type === 'chart' ? '#667eea' :
+                            color: selectedChild.type === 'chart' ? '#3B82F6' :
                                    selectedChild.type === 'table' ? '#10b981' : '#f59e0b',
                             textTransform: 'capitalize',
                           }}
@@ -4674,13 +4674,13 @@ export default function ChildCardConfigTab() {
                   bottom: fabPosition.y,
                   right: fabPosition.x,
                   zIndex: 9999,
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
                   boxShadow: isDraggingFab 
                     ? '0 8px 30px rgba(102, 126, 234, 0.6)' 
                     : '0 4px 20px rgba(102, 126, 234, 0.4)',
                   cursor: isDraggingFab ? 'grabbing' : 'grab',
                   '&:hover': {
-                    background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                    background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
                     boxShadow: '0 6px 25px rgba(102, 126, 234, 0.5)',
                     transform: isDraggingFab ? 'none' : 'scale(1.1)',
                   },
@@ -4740,7 +4740,7 @@ export default function ChildCardConfigTab() {
                     width: 48,
                     height: 48,
                     borderRadius: 2,
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

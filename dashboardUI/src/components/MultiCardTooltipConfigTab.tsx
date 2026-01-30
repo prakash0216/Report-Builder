@@ -221,7 +221,7 @@ const CustomTooltipLayoutBuilder: React.FC<CustomTooltipLayoutBuilderProps> = ({
         bgcolor: 'rgba(102, 126, 234, 0.02)',
       }}
     >
-      <Typography variant="caption" fontWeight={700} color="#667eea" sx={{ display: 'block', mb: 1.5 }}>
+      <Typography variant="caption" fontWeight={700} color="#3B82F6" sx={{ display: 'block', mb: 1.5 }}>
         ✎ Custom Layout Builder
       </Typography>
       
@@ -239,7 +239,7 @@ const CustomTooltipLayoutBuilder: React.FC<CustomTooltipLayoutBuilderProps> = ({
             sx={{ 
               '& .MuiToggleButton-root': {
                 px: 2, py: 0.5, fontSize: '0.8rem', fontWeight: 600,
-                '&.Mui-selected': { bgcolor: '#667eea', color: 'white' },
+                '&.Mui-selected': { bgcolor: '#3B82F6', color: 'white' },
               },
             }}
           >
@@ -269,12 +269,12 @@ const CustomTooltipLayoutBuilder: React.FC<CustomTooltipLayoutBuilderProps> = ({
                 key={i}
                 sx={{
                   flex: 1,
-                  bgcolor: i === selectedCardIndex ? '#667eea' : 'rgba(102, 126, 234, 0.3)',
+                  bgcolor: i === selectedCardIndex ? '#3B82F6' : 'rgba(102, 126, 234, 0.3)',
                   borderRadius: 0.5,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: i === selectedCardIndex ? 'white' : '#667eea',
+                  color: i === selectedCardIndex ? 'white' : '#3B82F6',
                   fontSize: '0.75rem',
                   fontWeight: 700,
                   cursor: 'pointer',
@@ -335,7 +335,7 @@ const CustomTooltipLayoutBuilder: React.FC<CustomTooltipLayoutBuilderProps> = ({
                 fontSize: '0.7rem',
                 py: 0.5,
                 px: 1.5,
-                bgcolor: '#667eea',
+                bgcolor: '#3B82F6',
                 '&:hover': { bgcolor: '#5567d5' },
               }}
             >
@@ -361,8 +361,8 @@ const CustomTooltipLayoutBuilder: React.FC<CustomTooltipLayoutBuilderProps> = ({
                   sx={{
                     height: 24,
                     fontSize: '0.65rem',
-                    bgcolor: i === selectedCardIndex ? '#667eea' : 'rgba(102, 126, 234, 0.1)',
-                    color: i === selectedCardIndex ? 'white' : '#667eea',
+                    bgcolor: i === selectedCardIndex ? '#3B82F6' : 'rgba(102, 126, 234, 0.1)',
+                    color: i === selectedCardIndex ? 'white' : '#3B82F6',
                     cursor: 'pointer',
                     '& .MuiChip-deleteIcon': {
                       color: i === selectedCardIndex ? 'rgba(255,255,255,0.7)' : '#94a3b8',
@@ -427,7 +427,7 @@ const chartTemplatePresets = [
   "title": { "text": \${hoveredCategory}, "style": { "fontSize": "14px" } },
   "xAxis": { "categories": \${tooltipCategories}, "labels": { "style": { "fontSize": "10px" } } },
   "yAxis": { "title": { "text": null } },
-  "series": [{ "name": "Value", "data": \${tooltipValues}, "color": "#667eea" }],
+  "series": [{ "name": "Value", "data": \${tooltipValues}, "color": "#3B82F6" }],
   "credits": { "enabled": false }
 }` 
   },
@@ -438,7 +438,7 @@ const chartTemplatePresets = [
   "title": { "text": \${hoveredCategory}, "style": { "fontSize": "14px" } },
   "xAxis": { "categories": \${tooltipCategories}, "labels": { "style": { "fontSize": "10px" } } },
   "yAxis": { "title": { "text": null } },
-  "series": [{ "name": "Value", "data": \${tooltipValues}, "color": "#764ba2" }],
+  "series": [{ "name": "Value", "data": \${tooltipValues}, "color": "#2563EB" }],
   "credits": { "enabled": false }
 }` 
   },
@@ -493,7 +493,7 @@ const htmlTemplatePresets = [
   { 
     label: "Metrics List", 
     value: `<div style="padding: 12px; font-family: system-ui;">
-  <h4 style="margin: 0 0 12px 0; color: #667eea; border-bottom: 2px solid #667eea; padding-bottom: 6px;">\${hoveredCategory}</h4>
+  <h4 style="margin: 0 0 12px 0; color: #3B82F6; border-bottom: 2px solid #3B82F6; padding-bottom: 6px;">\${hoveredCategory}</h4>
   <div style="display: grid; gap: 8px;">
     <div style="display: flex; justify-content: space-between;">
       <span style="color: #64748b;">Paid TRX:</span>
@@ -514,7 +514,7 @@ const htmlTemplatePresets = [
     label: "Comparison", 
     value: `<div style="padding: 16px; font-family: system-ui; background: linear-gradient(135deg, #f8fafc, #f1f5f9); border-radius: 8px;">
   <div style="text-align: center; margin-bottom: 12px;">
-    <span style="font-size: 24px; font-weight: 700; color: #667eea;">\${hoveredCategory}</span>
+    <span style="font-size: 24px; font-weight: 700; color: #3B82F6;">\${hoveredCategory}</span>
   </div>
   <div style="display: flex; gap: 16px; justify-content: center;">
     <div style="text-align: center; padding: 8px 16px; background: white; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
@@ -535,7 +535,7 @@ const htmlTemplatePresets = [
     \${status}
   </div>
   <h3 style="margin: 8px 0; color: #1e293b;">\${hoveredCategory}</h3>
-  <div style="font-size: 28px; font-weight: 700; color: #667eea;">\${hoveredValue}</div>
+  <div style="font-size: 28px; font-weight: 700; color: #3B82F6;">\${hoveredValue}</div>
   <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Last updated: \${lastUpdated}</div>
 </div>`
   },
@@ -1039,14 +1039,14 @@ const InteractiveTooltipLayoutEditor: React.FC<InteractiveTooltipLayoutEditorPro
             startIcon={<AddIcon />}
             onClick={handleAddCard}
             disabled={tooltipCards.length >= 4}
-            sx={{ fontSize: '0.7rem', py: 0.25, borderColor: '#667eea', color: '#667eea' }}
+            sx={{ fontSize: '0.7rem', py: 0.25, borderColor: '#3B82F6', color: '#3B82F6' }}
           >
             Add
           </Button>
           <Chip 
             label={`${tooltipCards.length}/4`}
             size="small"
-            sx={{ height: 20, fontSize: '0.65rem', bgcolor: tooltipCards.length >= 4 ? 'rgba(239,68,68,0.1)' : 'rgba(102,126,234,0.1)', color: tooltipCards.length >= 4 ? '#ef4444' : '#667eea' }}
+            sx={{ height: 20, fontSize: '0.65rem', bgcolor: tooltipCards.length >= 4 ? 'rgba(239,68,68,0.1)' : 'rgba(102,126,234,0.1)', color: tooltipCards.length >= 4 ? '#ef4444' : '#3B82F6' }}
           />
           {hasOverlap && <Chip label="⚠ Overlap" size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: 'rgba(239,68,68,0.1)', color: '#ef4444' }} />}
         </Box>
@@ -1093,7 +1093,7 @@ const InteractiveTooltipLayoutEditor: React.FC<InteractiveTooltipLayoutEditorPro
               sx={{
                 height: '100%',
                 borderRadius: 1,
-                bgcolor: card.type === 'chart' ? '#667eea' : card.type === 'table' ? '#10b981' : '#f59e0b',
+                bgcolor: card.type === 'chart' ? '#3B82F6' : card.type === 'table' ? '#10b981' : '#f59e0b',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -1706,9 +1706,9 @@ export default function MultiCardTooltipConfigTab() {
       }}>
         {/* Child Card Selector */}
         <Box sx={{ p: 1.5, borderBottom: '1px solid rgba(102, 126, 234, 0.15)' }}>
-          <Typography variant="subtitle2" fontWeight={700} color="#667eea" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Typography variant="subtitle2" fontWeight={700} color="#3B82F6" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
             📊 Select Child Card
-            <Chip label={childCards.length} size="small" sx={{ height: 16, fontSize: '0.55rem', bgcolor: '#667eea20', color: '#667eea' }} />
+            <Chip label={childCards.length} size="small" sx={{ height: 16, fontSize: '0.55rem', bgcolor: '#3B82F620', color: '#3B82F6' }} />
           </Typography>
           <Stack spacing={0.5}>
             {childCards.map((child, index) => {
@@ -1725,11 +1725,11 @@ export default function MultiCardTooltipConfigTab() {
                   sx={{
                     p: 1,
                     cursor: 'pointer',
-                    border: isSelected ? '2px solid #667eea' : '1px solid rgba(102, 126, 234, 0.15)',
+                    border: isSelected ? '2px solid #3B82F6' : '1px solid rgba(102, 126, 234, 0.15)',
                     bgcolor: isSelected ? 'rgba(102, 126, 234, 0.1)' : 'white',
                     borderRadius: 1,
                     transition: 'all 0.15s ease',
-                    '&:hover': { borderColor: '#667eea', bgcolor: 'rgba(102, 126, 234, 0.05)' },
+                    '&:hover': { borderColor: '#3B82F6', bgcolor: 'rgba(102, 126, 234, 0.05)' },
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1770,7 +1770,7 @@ export default function MultiCardTooltipConfigTab() {
         <Box sx={{ flex: 1, p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           {/* Quick Stats */}
           <Paper elevation={0} sx={{ p: 1.5, borderRadius: 1.5, border: '1px solid rgba(102, 126, 234, 0.15)', bgcolor: 'white' }}>
-            <Typography variant="caption" fontWeight={700} color="#667eea" sx={{ mb: 1, display: 'block' }}>
+            <Typography variant="caption" fontWeight={700} color="#3B82F6" sx={{ mb: 1, display: 'block' }}>
               📈 Tooltip Stats
             </Typography>
             <Stack spacing={0.75}>
@@ -1782,7 +1782,7 @@ export default function MultiCardTooltipConfigTab() {
                 <>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="caption" color="#64748b">Cards</Typography>
-                    <Chip label={tooltipStats.totalTooltipCards} size="small" sx={{ height: 18, fontSize: '0.6rem', bgcolor: '#667eea20', color: '#667eea', fontWeight: 700 }} />
+                    <Chip label={tooltipStats.totalTooltipCards} size="small" sx={{ height: 18, fontSize: '0.6rem', bgcolor: '#3B82F620', color: '#3B82F6', fontWeight: 700 }} />
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="caption" color="#64748b">Extractions</Typography>
@@ -1800,7 +1800,7 @@ export default function MultiCardTooltipConfigTab() {
           {/* Current Selection Info */}
           {selectedChildCardId && (
             <Paper elevation={0} sx={{ p: 1.5, borderRadius: 1.5, border: '1px solid rgba(102, 126, 234, 0.15)', bgcolor: 'white' }}>
-              <Typography variant="caption" fontWeight={700} color="#667eea" sx={{ mb: 1, display: 'block' }}>
+              <Typography variant="caption" fontWeight={700} color="#3B82F6" sx={{ mb: 1, display: 'block' }}>
                 🎯 Selected Card
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -1842,7 +1842,7 @@ export default function MultiCardTooltipConfigTab() {
           
           {/* Help tip */}
           <Box sx={{ mt: 'auto', p: 1, bgcolor: 'rgba(102, 126, 234, 0.05)', borderRadius: 1, border: '1px dashed rgba(102, 126, 234, 0.2)' }}>
-            <Typography variant="caption" color="#667eea" sx={{ display: 'block', fontWeight: 600, mb: 0.25 }}>
+            <Typography variant="caption" color="#3B82F6" sx={{ display: 'block', fontWeight: 600, mb: 0.25 }}>
               💡 Quick Tip
             </Typography>
             <Typography variant="caption" color="#64748b" sx={{ fontSize: '0.6rem', lineHeight: 1.3 }}>
@@ -1865,8 +1865,8 @@ export default function MultiCardTooltipConfigTab() {
           <Box sx={{ p: 1.5, borderBottom: '1px solid rgba(102, 126, 234, 0.15)', bgcolor: 'rgba(102, 126, 234, 0.02)' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <TouchAppIcon sx={{ color: '#667eea', fontSize: 22 }} />
-                <Typography variant="subtitle1" fontWeight={700} color="#667eea">
+                <TouchAppIcon sx={{ color: '#3B82F6', fontSize: 22 }} />
+                <Typography variant="subtitle1" fontWeight={700} color="#3B82F6">
                   Tooltip Configuration
                 </Typography>
                 {tooltipConfig.enabled && (
@@ -1883,12 +1883,12 @@ export default function MultiCardTooltipConfigTab() {
                     checked={tooltipConfig.enabled}
                     onChange={(e) => updateTooltipConfig({ enabled: e.target.checked })}
                     sx={{
-                      '& .MuiSwitch-switchBase.Mui-checked': { color: '#667eea' },
-                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: '#667eea' },
+                      '& .MuiSwitch-switchBase.Mui-checked': { color: '#3B82F6' },
+                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: '#3B82F6' },
                     }}
                   />
                 }
-                label={<Typography variant="caption" fontWeight={600} color={tooltipConfig.enabled ? '#667eea' : '#64748b'}>{tooltipConfig.enabled ? 'Enabled' : 'Disabled'}</Typography>}
+                label={<Typography variant="caption" fontWeight={600} color={tooltipConfig.enabled ? '#3B82F6' : '#64748b'}>{tooltipConfig.enabled ? 'Enabled' : 'Disabled'}</Typography>}
                 sx={{ mr: 0 }}
               />
             </Box>
@@ -1903,7 +1903,7 @@ export default function MultiCardTooltipConfigTab() {
               <Box sx={{ display: 'flex', gap: 3 }}>
                 {/* LEFT HALF - Layout Presets (Bigger buttons like MultiCard Viz Config) */}
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={700} color="#667eea" sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography variant="subtitle2" fontWeight={700} color="#3B82F6" sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     📐 Layout Preset
                   </Typography>
                   <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1 }}>
@@ -1929,13 +1929,13 @@ export default function MultiCardTooltipConfigTab() {
                               minWidth: 0,
                               flexDirection: 'column',
                               borderColor: 'rgba(102, 126, 234, 0.3)',
-                              color: isSelected ? 'white' : '#667eea',
+                              color: isSelected ? 'white' : '#3B82F6',
                               background: isSelected 
-                                ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+                                ? 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' 
                                 : 'white',
                               boxShadow: isSelected ? '0 4px 12px rgba(102, 126, 234, 0.3)' : 'none',
                               '&:hover': {
-                                borderColor: '#667eea',
+                                borderColor: '#3B82F6',
                                 background: isSelected 
                                   ? 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)'
                                   : 'rgba(102, 126, 234, 0.08)',
@@ -1963,7 +1963,7 @@ export default function MultiCardTooltipConfigTab() {
                 
                 {/* RIGHT HALF - Size Controls */}
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={700} color="#667eea" sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography variant="subtitle2" fontWeight={700} color="#3B82F6" sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     📏 Tooltip Size
                   </Typography>
                   <Stack spacing={2}>
@@ -1971,7 +1971,7 @@ export default function MultiCardTooltipConfigTab() {
                     <Box>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                         <Typography variant="caption" fontWeight={600} color="#64748b">Card Gap</Typography>
-                        <Chip label={`${tooltipConfig.gap ?? 4}px`} size="small" sx={{ height: 18, fontSize: '0.6rem', bgcolor: '#667eea20', color: '#667eea', fontWeight: 700 }} />
+                        <Chip label={`${tooltipConfig.gap ?? 4}px`} size="small" sx={{ height: 18, fontSize: '0.6rem', bgcolor: '#3B82F620', color: '#3B82F6', fontWeight: 700 }} />
                       </Box>
                       <Slider 
                         value={tooltipConfig.gap ?? 4} 
@@ -1980,7 +1980,7 @@ export default function MultiCardTooltipConfigTab() {
                         step={2} 
                         onChange={(_, value) => updateTooltipConfig({ gap: value as number })} 
                         size="small" 
-                        sx={{ color: '#667eea' }} 
+                        sx={{ color: '#3B82F6' }} 
                       />
                     </Box>
                     
@@ -2026,7 +2026,7 @@ export default function MultiCardTooltipConfigTab() {
               {/* Interactive Drag & Resize Layout Editor */}
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={700} color="#667eea">
+                  <Typography variant="subtitle2" fontWeight={700} color="#3B82F6">
                     🖱️ Interactive Layout Editor
                   </Typography>
                   <Typography variant="caption" color="#94a3b8">
@@ -2057,7 +2057,7 @@ export default function MultiCardTooltipConfigTab() {
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={700} color="#667eea">
+                  <Typography variant="subtitle2" fontWeight={700} color="#3B82F6">
                     🎯 Quick Switch: Card {selectedTooltipCardIndex + 1} of {(tooltipConfig.tooltipCards || []).length}
                   </Typography>
                 </Box>
@@ -2076,14 +2076,14 @@ export default function MultiCardTooltipConfigTab() {
                         cursor: 'pointer',
                         fontWeight: selectedTooltipCardIndex === index ? 700 : 500,
                         bgcolor: selectedTooltipCardIndex === index 
-                          ? (card.type === 'chart' ? '#667eea' : card.type === 'table' ? '#10b981' : '#f59e0b')
+                          ? (card.type === 'chart' ? '#3B82F6' : card.type === 'table' ? '#10b981' : '#f59e0b')
                           : 'white',
                         color: selectedTooltipCardIndex === index 
                           ? 'white'
-                          : (card.type === 'chart' ? '#667eea' : card.type === 'table' ? '#10b981' : '#f59e0b'),
+                          : (card.type === 'chart' ? '#3B82F6' : card.type === 'table' ? '#10b981' : '#f59e0b'),
                         border: selectedTooltipCardIndex === index 
                           ? 'none'
-                          : `2px solid ${card.type === 'chart' ? '#667eea' : card.type === 'table' ? '#10b981' : '#f59e0b'}`,
+                          : `2px solid ${card.type === 'chart' ? '#3B82F6' : card.type === 'table' ? '#10b981' : '#f59e0b'}`,
                         '&:hover': {
                           bgcolor: selectedTooltipCardIndex === index 
                             ? (card.type === 'chart' ? '#5568d3' : card.type === 'table' ? '#0ea572' : '#e08e0a')
@@ -2104,9 +2104,9 @@ export default function MultiCardTooltipConfigTab() {
           >
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <DataObjectIcon sx={{ color: '#667eea', fontSize: 20 }} />
+                <DataObjectIcon sx={{ color: '#3B82F6', fontSize: 20 }} />
                 <Typography variant="subtitle2" fontWeight={700}>Data Extraction</Typography>
-                <Chip label={(tooltipConfig.dataExtractions || []).length} size="small" sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#667eea20', color: '#667eea' }} />
+                <Chip label={(tooltipConfig.dataExtractions || []).length} size="small" sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#3B82F620', color: '#3B82F6' }} />
               </Box>
             </AccordionSummary>
             <AccordionDetails>
@@ -2207,7 +2207,7 @@ export default function MultiCardTooltipConfigTab() {
               {/* Extracted Variables */}
               {filteredGroupedVariables.extraction.length > 0 && (
                 <Box sx={{ mb: 1.5 }}>
-                  <Typography variant="caption" fontWeight={600} color="#667eea" sx={{ display: 'block', mb: 0.5 }}>
+                  <Typography variant="caption" fontWeight={600} color="#3B82F6" sx={{ display: 'block', mb: 0.5 }}>
                     🎯 Extracted (from hover):
                   </Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -2223,7 +2223,7 @@ export default function MultiCardTooltipConfigTab() {
                             fontSize: '0.7rem',
                             fontFamily: 'monospace',
                             bgcolor: 'rgba(102, 126, 234, 0.12)',
-                            color: '#667eea',
+                            color: '#3B82F6',
                             border: '1px solid rgba(102, 126, 234, 0.2)',
                             cursor: 'pointer',
                             '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.2)' },
@@ -2478,7 +2478,7 @@ export default function MultiCardTooltipConfigTab() {
                   <Chip
                     label={selectedTooltipCard.type}
                     size="small"
-                    sx={{ height: 20, bgcolor: 'rgba(102, 126, 234, 0.1)', color: '#667eea', fontWeight: 600, fontSize: '0.65rem' }}
+                    sx={{ height: 20, bgcolor: 'rgba(102, 126, 234, 0.1)', color: '#3B82F6', fontWeight: 600, fontSize: '0.65rem' }}
                   />
                 </Box>
                 {(tooltipConfig.tooltipCards || []).length > 1 && (
@@ -2505,7 +2505,7 @@ export default function MultiCardTooltipConfigTab() {
                   sx={{ 
                     '& .MuiToggleButton-root': {
                       px: 2, py: 0.75, textTransform: 'none', fontWeight: 600,
-                      '&.Mui-selected': { bgcolor: 'rgba(102, 126, 234, 0.15)', color: '#667eea' },
+                      '&.Mui-selected': { bgcolor: 'rgba(102, 126, 234, 0.15)', color: '#3B82F6' },
                     }
                   }}
                 >
@@ -2547,7 +2547,7 @@ export default function MultiCardTooltipConfigTab() {
               >
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <CodeIcon sx={{ color: '#667eea', fontSize: 20 }} />
+                    <CodeIcon sx={{ color: '#3B82F6', fontSize: 20 }} />
                     <Typography variant="subtitle2" fontWeight={700}>Content Configuration</Typography>
                   </Box>
                 </AccordionSummary>
@@ -2563,7 +2563,7 @@ export default function MultiCardTooltipConfigTab() {
                               label={preset.label}
                               size="small"
                               onClick={() => updateTooltipCard(selectedTooltipCardIndex, { chartTemplate: preset.value })}
-                              sx={{ height: 20, fontSize: '0.6rem', bgcolor: 'rgba(102, 126, 234, 0.1)', color: '#667eea', cursor: 'pointer' }}
+                              sx={{ height: 20, fontSize: '0.6rem', bgcolor: 'rgba(102, 126, 234, 0.1)', color: '#3B82F6', cursor: 'pointer' }}
                             />
                           ))}
                         </Box>
@@ -2579,7 +2579,7 @@ export default function MultiCardTooltipConfigTab() {
                       </Box>
                       {/* Available Variables Quick Reference */}
                       <Paper elevation={0} sx={{ mt: 1, p: 1, bgcolor: 'rgba(102, 126, 234, 0.03)', border: '1px solid rgba(102, 126, 234, 0.1)', borderRadius: 1 }}>
-                        <Typography variant="caption" fontWeight={600} color="#667eea" sx={{ display: 'block', mb: 0.5 }}>
+                        <Typography variant="caption" fontWeight={600} color="#3B82F6" sx={{ display: 'block', mb: 0.5 }}>
                           📋 Available Variables (click to copy):
                         </Typography>
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, maxHeight: 60, overflowY: 'auto' }}>
@@ -2598,7 +2598,7 @@ export default function MultiCardTooltipConfigTab() {
                                 fontSize: '0.6rem',
                                 fontFamily: 'monospace',
                                 bgcolor: copiedVariable === varName ? '#22c55e20' : 'rgba(102, 126, 234, 0.08)',
-                                color: copiedVariable === varName ? '#22c55e' : '#667eea',
+                                color: copiedVariable === varName ? '#22c55e' : '#3B82F6',
                                 cursor: 'pointer',
                                 '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.15)' },
                               }}
@@ -3208,8 +3208,8 @@ export default function MultiCardTooltipConfigTab() {
         <Box sx={{ p: 1.5, borderBottom: '1px solid rgba(102, 126, 234, 0.15)', bgcolor: 'rgba(102, 126, 234, 0.03)' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <VisibilityIcon sx={{ color: '#667eea', fontSize: 20 }} />
-              <Typography variant="subtitle2" fontWeight={700} color="#667eea">
+              <VisibilityIcon sx={{ color: '#3B82F6', fontSize: 20 }} />
+              <Typography variant="subtitle2" fontWeight={700} color="#3B82F6">
                 Live Preview
               </Typography>
             </Box>
@@ -3220,9 +3220,9 @@ export default function MultiCardTooltipConfigTab() {
                 sx={{ 
                   height: 20, 
                   fontSize: '0.6rem', 
-                  bgcolor: selectedTooltipCard.type === 'chart' ? '#667eea20' 
+                  bgcolor: selectedTooltipCard.type === 'chart' ? '#3B82F620' 
                          : selectedTooltipCard.type === 'table' ? '#10b98120' : '#f59e0b20',
-                  color: selectedTooltipCard.type === 'chart' ? '#667eea' 
+                  color: selectedTooltipCard.type === 'chart' ? '#3B82F6' 
                          : selectedTooltipCard.type === 'table' ? '#10b981' : '#f59e0b',
                 }} 
               />
@@ -3296,7 +3296,7 @@ export default function MultiCardTooltipConfigTab() {
                     sx={{ 
                       textTransform: 'none',
                       fontSize: '0.7rem',
-                      bgcolor: '#667eea',
+                      bgcolor: '#3B82F6',
                       '&:hover': { bgcolor: '#5567d5' },
                     }}
                   >
@@ -3383,7 +3383,7 @@ export default function MultiCardTooltipConfigTab() {
                       background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)',
                     }}
                   >
-                    <Typography variant="subtitle2" fontWeight={700} color="#667eea" sx={{ fontSize: '0.85rem' }}>
+                    <Typography variant="subtitle2" fontWeight={700} color="#3B82F6" sx={{ fontSize: '0.85rem' }}>
                       {(() => {
                         // Replace variables in title
                         let title = selectedTooltipCard.title || 'Details';

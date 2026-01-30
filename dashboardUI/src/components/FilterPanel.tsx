@@ -233,13 +233,13 @@ export const CompactFilterItem: React.FC<{
           transition: hasValidPosition ? 'none' : 'all 0.2s ease',
           '&:hover': {
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            borderColor: '#667eea',
+            borderColor: '#3B82F6',
           },
           // CSS for when being dragged (applied by react-draggable)
           '&.react-draggable-dragging': {
             zIndex: 1000,
             boxShadow: '0 8px 20px rgba(102, 126, 234, 0.3)',
-            border: '2px solid #667eea',
+            border: '2px solid #3B82F6',
           },
         }}
       >
@@ -253,7 +253,7 @@ export const CompactFilterItem: React.FC<{
               display: 'flex',
               alignItems: 'center',
               mr: 0.5,
-              '&:hover': { color: '#667eea' },
+              '&:hover': { color: '#3B82F6' },
               '&:active': { cursor: 'grabbing' },
             }}
           >
@@ -309,7 +309,7 @@ export const CompactFilterItem: React.FC<{
               border: '1px solid #e2e8f0',
               cursor: 'pointer',
               '&:hover': {
-                borderColor: '#667eea',
+                borderColor: '#3B82F6',
                 bgcolor: '#f0f4ff',
               },
             }}
@@ -379,7 +379,7 @@ export const CompactFilterItem: React.FC<{
                     <Radio 
                       size="small" 
                       checked={isValueSelected(option.value)}
-                      sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
+                      sx={{ color: '#3B82F6', '&.Mui-checked': { color: '#3B82F6' } }}
                     />
                     <Typography variant="body2" noWrap sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{option.label}</Typography>
                   </MenuItem>
@@ -409,9 +409,9 @@ export const CompactFilterItem: React.FC<{
                   checked={selectedValues.length === options.length}
                   indeterminate={selectedValues.length > 0 && selectedValues.length < options.length}
                   sx={{ 
-                    color: '#667eea', 
-                    '&.Mui-checked': { color: '#667eea' },
-                    '&.MuiCheckbox-indeterminate': { color: '#667eea' }
+                    color: '#3B82F6', 
+                    '&.Mui-checked': { color: '#3B82F6' },
+                    '&.MuiCheckbox-indeterminate': { color: '#3B82F6' }
                   }}
                 />
                 <Typography variant="body2" fontWeight={600} color="#475569">Select All</Typography>
@@ -426,7 +426,7 @@ export const CompactFilterItem: React.FC<{
                     <Checkbox 
                       size="small" 
                       checked={isValueSelected(option.value)}
-                      sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
+                      sx={{ color: '#3B82F6', '&.Mui-checked': { color: '#3B82F6' } }}
                     />
                     <Typography variant="body2" noWrap sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{option.label}</Typography>
                   </MenuItem>
@@ -456,10 +456,10 @@ export const CompactFilterItem: React.FC<{
               variant="contained"
               onClick={handleApply}
               sx={{ 
-                bgcolor: '#667eea', 
+                bgcolor: '#3B82F6', 
                 textTransform: 'none',
                 fontSize: '0.75rem',
-                '&:hover': { bgcolor: '#5568d3' } 
+                '&:hover': { bgcolor: '#2563EB' } 
               }}
             >
               Apply
@@ -516,13 +516,13 @@ export const CompactFilterItem: React.FC<{
           boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
           '&:hover': {
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            borderColor: '#667eea',
+            borderColor: '#3B82F6',
           },
           // CSS for when being dragged (applied by react-draggable)
           '&.react-draggable-dragging': {
             zIndex: 1000,
             boxShadow: '0 8px 20px rgba(102, 126, 234, 0.3)',
-            border: '2px solid #667eea',
+            border: '2px solid #3B82F6',
           },
         }}
       >
@@ -536,7 +536,7 @@ export const CompactFilterItem: React.FC<{
               display: 'flex',
               alignItems: 'center',
               mr: 0.5,
-              '&:hover': { color: '#667eea' },
+              '&:hover': { color: '#3B82F6' },
               '&:active': { cursor: 'grabbing' },
             }}
           >
@@ -591,7 +591,7 @@ export const CompactFilterItem: React.FC<{
               border: '1px solid #e2e8f0',
               cursor: 'pointer',
               '&:hover': {
-                borderColor: '#667eea',
+                borderColor: '#3B82F6',
                 bgcolor: '#f0f4ff',
               },
             }}
@@ -660,7 +660,7 @@ export const CompactFilterItem: React.FC<{
                     <Radio 
                       size="small" 
                       checked={isValueSelected(option.value)}
-                      sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
+                      sx={{ color: '#3B82F6', '&.Mui-checked': { color: '#3B82F6' } }}
                     />
                     <Typography variant="body2" noWrap sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{option.label}</Typography>
                   </MenuItem>
@@ -690,9 +690,9 @@ export const CompactFilterItem: React.FC<{
                   checked={selectedValues.length === options.length}
                   indeterminate={selectedValues.length > 0 && selectedValues.length < options.length}
                   sx={{ 
-                    color: '#667eea', 
-                    '&.Mui-checked': { color: '#667eea' },
-                    '&.MuiCheckbox-indeterminate': { color: '#667eea' }
+                    color: '#3B82F6', 
+                    '&.Mui-checked': { color: '#3B82F6' },
+                    '&.MuiCheckbox-indeterminate': { color: '#3B82F6' }
                   }}
                 />
                 <Typography variant="body2" fontWeight={600} color="#475569">Select All</Typography>
@@ -707,7 +707,7 @@ export const CompactFilterItem: React.FC<{
                     <Checkbox 
                       size="small" 
                       checked={isValueSelected(option.value)}
-                      sx={{ color: '#667eea', '&.Mui-checked': { color: '#667eea' } }}
+                      sx={{ color: '#3B82F6', '&.Mui-checked': { color: '#3B82F6' } }}
                     />
                     <Typography variant="body2" noWrap sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{option.label}</Typography>
                   </MenuItem>
@@ -736,9 +736,9 @@ export const CompactFilterItem: React.FC<{
               variant="contained"
               onClick={handleApply}
               sx={{ 
-                bgcolor: '#667eea', 
+                bgcolor: '#3B82F6', 
                 textTransform: 'none',
-                '&:hover': { bgcolor: '#5568d3' } 
+                '&:hover': { bgcolor: '#2563EB' } 
               }}
             >
               Apply
@@ -939,8 +939,8 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
   };
 
   // Always render the panel (collapsed or expanded)
-  // Account for footer height (approx 56px) to prevent content overlap
-  const FOOTER_HEIGHT = 56;
+  // No footer in the new UI design
+  const FOOTER_HEIGHT = 0;
   
   return (
     <Box
@@ -960,13 +960,14 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
         sx={{
           width: COLLAPSED_WIDTH,
           height: '100%',
-          background: 'linear-gradient(180deg, #64748b 0%, #475569 100%)',
+          bgcolor: '#F8FAFC',
+          borderLeft: '1px solid #E5E7EB',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'flex-start',
           pt: 0,
-          boxShadow: '-4px 0 20px rgba(71, 85, 105, 0.2)',
+          boxShadow: '-2px 0 8px rgba(0, 0, 0, 0.05)',
           position: 'relative',
           zIndex: 2,
         }}
@@ -985,7 +986,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
               cursor: 'pointer',
               transition: 'all 0.2s ease',
               '&:hover': {
-                bgcolor: 'rgba(65, 61, 61, 0.35)',
+                bgcolor: 'rgba(59, 130, 246, 0.08)',
               },
             }}
           >
@@ -1003,13 +1004,13 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 }
               }}
             >
-              <FilterAltIcon sx={{ color: 'white', fontSize: 22 }} />
+              <FilterAltIcon sx={{ color: '#3B82F6', fontSize: 22 }} />
             </Badge>
             <Typography
               sx={{
                 writingMode: 'vertical-lr',
                 textOrientation: 'mixed',
-                color: 'white',
+                color: '#374151',
                 fontSize: '0.75rem',
                 fontWeight: 600,
                 letterSpacing: 1,
@@ -1026,9 +1027,8 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
       <Box
         sx={{
           flex: 1,
-          background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.95) 100%)',
-          backdropFilter: 'blur(10px)',
-          borderLeft: '1px solid rgba(102, 126, 234, 0.1)',
+          bgcolor: '#F8FAFC',
+          borderLeft: '1px solid #E5E7EB',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -1039,17 +1039,16 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
         }}
       >
         {/* Header Section */}
-        <Box sx={{ p: 2, pt: isEdit ? 2 : 2, borderBottom: isEdit ? '1px solid #e2e8f0' : 0 }}>
+        <Box sx={{ p: 2, pt: isEdit ? 2 : 2, borderBottom: isEdit ? '1px solid #E5E7EB' : 0 }}>
           <Box 
             sx={{ 
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              bgcolor: '#3B82F6',
               color: 'white', 
               textAlign: 'center',
               py: 1.25,
               mx: -2,
               mt: -2,
               mb: isEdit ? 2 : -1.5,
-              boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)',
             }}
           >
             <Typography variant="subtitle2" fontWeight="700" letterSpacing={0.5}>
@@ -1063,8 +1062,8 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
               elevation={0}
               sx={{ 
                 p: 2, 
-                background: 'linear-gradient(135deg, rgba(224, 231, 255, 0.3) 0%, rgba(199, 210, 254, 0.3) 100%)',
-                border: '1px solid rgba(102, 126, 234, 0.3)',
+                background: '#F8FAFC',
+                border: '1px solid #E5E7EB',
                 borderRadius: 2,
               }}
             >
@@ -1082,7 +1081,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                         textTransform: 'none',
                         '&:hover': {
                           bgcolor: 'rgba(102, 126, 234, 0.1)',
-                          color: '#667eea',
+                          color: '#3B82F6',
                         }
                       }}
                     >
@@ -1092,7 +1091,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 </Box>
               )}
               <FormControl fullWidth size="small">
-                <InputLabel sx={{ color: '#667eea', '&.Mui-focused': { color: '#667eea' } }}>
+                <InputLabel sx={{ color: '#3B82F6', '&.Mui-focused': { color: '#3B82F6' } }}>
                   Add Filters
                 </InputLabel>
                 <Select
@@ -1117,10 +1116,10 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                       borderColor: 'rgba(102, 126, 234, 0.3)',
                     },
                     '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#667eea',
+                      borderColor: '#3B82F6',
                     },
                     '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#667eea',
+                      borderColor: '#3B82F6',
                     }
                   }}
                   MenuProps={{
@@ -1163,9 +1162,9 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                       checked={tempSelectedFilters.length === filterNames.length}
                       indeterminate={tempSelectedFilters.length > 0 && tempSelectedFilters.length < filterNames.length}
                       sx={{ 
-                        color: '#667eea', 
-                        '&.Mui-checked': { color: '#667eea' },
-                        '&.MuiCheckbox-indeterminate': { color: '#667eea' },
+                        color: '#3B82F6', 
+                        '&.Mui-checked': { color: '#3B82F6' },
+                        '&.MuiCheckbox-indeterminate': { color: '#3B82F6' },
                         ml: -0.5,
                       }}
                     />
@@ -1209,8 +1208,8 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                             size="small"
                             checked={isChecked}
                             sx={{ 
-                              color: '#667eea', 
-                              '&.Mui-checked': { color: '#667eea' },
+                              color: '#3B82F6', 
+                              '&.Mui-checked': { color: '#3B82F6' },
                               p: 0.5,
                               mr: 0.5,
                             }}
@@ -1285,11 +1284,11 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                       onClick={handleApplyFilters}
                       size="small"
                       sx={{
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        bgcolor: '#3B82F6',
                         fontWeight: 600,
                         borderRadius: 1.5,
                         '&:hover': {
-                          background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
+                          bgcolor: '#2563EB',
                         }
                       }}
                     >
@@ -1307,7 +1306,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
           sx={{ 
             flexGrow: 1,
             overflow: 'auto',
-            background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.5) 0%, rgba(241, 245, 249, 0.5) 100%)',
+            bgcolor: '#F8FAFC',
             position: 'relative',
             '&::-webkit-scrollbar': {
               width: '8px',
@@ -1343,7 +1342,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                     height: 64,
                     margin: '0 auto 16px',
                     borderRadius: '50%',
-                    background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                    bgcolor: 'rgba(59, 130, 246, 0.1)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1353,7 +1352,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                     style={{ width: 32, height: 32, opacity: 0.6 }} 
                     fill="none" 
                     viewBox="0 0 24 24" 
-                    stroke="#667eea"
+                    stroke="#3B82F6"
                     strokeWidth={2}
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />

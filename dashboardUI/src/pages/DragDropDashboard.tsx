@@ -26,7 +26,7 @@ import { filterNamesState } from '../recoil/FiltersFamily';
 import { isChartVisibleSelector, chartDynamicDimensionsSelector, chartVisibilityVariableState } from '../recoil/DashboardVisibility';
 import { IsEditModeState } from "../recoil/IsEditeMode";
 import { dahboardNameMain } from "../recoil/DashboardName";
-import { 
+import {
   Typography, 
   Box, 
   CircularProgress, 
@@ -57,6 +57,19 @@ import {
 import {
   Logout as LogoutIcon,
   Email as EmailIcon,
+  Home as HomeIcon,
+  LibraryBooks as LibraryBooksIcon,
+  Storage as StorageIcon,
+  Functions as FunctionsIcon,
+  Description as DocsIcon,
+  Help as HelpIcon,
+  Edit as EditIcon,
+  Save as SaveIcon,
+  Download as DownloadIcon,
+  ViewCompact as ViewCompactIcon,
+  ChevronRight as ChevronRightIcon,
+  Layers as LayersIcon,
+  Add as AddIcon,
 } from "@mui/icons-material";
 import { dataLoadedState } from '../components/DataInitializer';
 import Highcharts from 'highcharts';
@@ -236,6 +249,10 @@ export default function DropDragDashboard() {
   const [selectedBranch, setSelectedbranch] = useState<string>("createBranch");
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [downloadMenuAnchor, setDownloadMenuAnchor] = useState<null | HTMLElement>(null);
+  
+  // Left navbar state
+  const [allDashboards, setAllDashboards] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+  const [bookmarkedDashboardIds, setBookmarkedDashboardIds] = useState<Set<string>>(new Set());
 
   // Dynamic views from database
   interface ViewData {
@@ -274,6 +291,35 @@ export default function DropDragDashboard() {
   useEffect(() => {
     fetchViews();
   }, [fetchViews]);
+
+  // Fetch all dashboards for left nav hover menu
+  const fetchAllDashboards = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/dashboards`);
+      const data = await response.json();
+      if (data.success && data.dashboards) {
+        const mapped = data.dashboards.map((d: any) => ({
+          id: d.id.toString(),
+          name: d.name,
+          slug: d.slug || d.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-'),
+        }));
+        setAllDashboards(mapped);
+        
+        // Also fetch bookmarked dashboard IDs
+        const bookmarksResponse = await fetch(`${API_BASE_URL}/api/bookmarks`);
+        const bookmarksData = await bookmarksResponse.json();
+        if (bookmarksData.success && bookmarksData.dashboardIds) {
+          setBookmarkedDashboardIds(new Set(bookmarksData.dashboardIds.map((id: number) => id.toString())));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching dashboards:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAllDashboards();
+  }, [fetchAllDashboards]);
 
   // Handle create new view
   const handleCreateView = async () => {
@@ -1418,6 +1464,15 @@ export default function DropDragDashboard() {
   // Align filter panel to the navbar height; allow extra space in edit mode for edit toolbar
   const filterPanelTopOffset: string = isEditMode ? '158px' : '80px';
 
+  // Bookmarked and regular dashboards for hover menu (must be before early returns)
+  const bookmarkedDashboards = useMemo(() => {
+    return allDashboards.filter(d => bookmarkedDashboardIds.has(d.id));
+  }, [allDashboards, bookmarkedDashboardIds]);
+
+  const otherDashboards = useMemo(() => {
+    return allDashboards.filter(d => !bookmarkedDashboardIds.has(d.id));
+  }, [allDashboards, bookmarkedDashboardIds]);
+
   const renderChartContent = (item: Layout) => {
     const chartConfig = getChartConfig(item.i);
     const configData = chartConfigs[item.i];
@@ -1635,6 +1690,128 @@ export default function DropDragDashboard() {
     }
   }
 
+  // Library Menu Item Component with Views Submenu
+  const LibraryMenuItemWithViews = ({ dashboard }: { dashboard: { id: string; name: string; slug: string } }) => {
+    const [menuViews, setMenuViews] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+    const [loadingMenuViews, setLoadingMenuViews] = useState(false);
+    const [menuViewsLoaded, setMenuViewsLoaded] = useState(false);
+
+    const handleMouseEnter = async () => {
+      if (menuViewsLoaded) return;
+      setLoadingMenuViews(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/dashboards/${dashboard.slug}/views`);
+        const data = await response.json();
+        if (data.success && data.views) {
+          setMenuViews(data.views.map((v: any) => ({ id: v.id.toString(), name: v.name, slug: v.slug })));
+        }
+        setMenuViewsLoaded(true);
+      } catch (err) {
+        console.error('Error fetching views:', err);
+      } finally {
+        setLoadingMenuViews(false);
+      }
+    };
+
+    const handleMenuViewClick = (e: React.MouseEvent, viewSlug: string) => {
+      e.stopPropagation();
+      navigate(`/${dashboard.slug}/${viewSlug}`);
+    };
+
+    return (
+      <Box
+        onMouseEnter={handleMouseEnter}
+        sx={{ 
+          position: 'relative',
+          '&:hover .views-submenu': {
+            display: 'block',
+          },
+        }}
+      >
+        <Box
+          onClick={() => navigate(`/${dashboard.slug}`)}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1.5,
+            px: 2,
+            py: 1,
+            cursor: 'pointer',
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.08) },
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <ChevronRightIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+            <Typography variant="body2" sx={{ color: '#374151', fontWeight: 500 }}>
+              {dashboard.name}
+            </Typography>
+          </Box>
+          <ChevronRightIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+        </Box>
+        
+        {/* Views Submenu */}
+        <Paper
+          className="views-submenu"
+          elevation={8}
+          sx={{
+            display: 'none',
+            position: 'absolute',
+            left: '100%',
+            top: 0,
+            ml: 0.5,
+            minWidth: 200,
+            maxHeight: 300,
+            borderRadius: 2,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            overflowY: 'auto',
+            zIndex: 1400,
+            bgcolor: 'white',
+          }}
+        >
+          <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #E5E7EB' }}>
+            <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 600 }}>
+              Views in {dashboard.name}
+            </Typography>
+          </Box>
+          
+          {loadingMenuViews ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 2 }}>
+              <CircularProgress size={20} sx={{ color: '#3B82F6' }} />
+            </Box>
+          ) : menuViews.length > 0 ? (
+            menuViews.map((view) => (
+              <Box
+                key={view.id}
+                onClick={(e) => handleMenuViewClick(e, view.slug)}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  px: 2,
+                  py: 1,
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: alpha('#3B82F6', 0.08) },
+                }}
+              >
+                <LayersIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+                <Typography variant="body2" sx={{ color: '#374151', fontWeight: 500 }}>
+                  {view.name}
+                </Typography>
+              </Box>
+            ))
+          ) : (
+            <Box sx={{ px: 2, py: 1.5 }}>
+              <Typography variant="caption" sx={{ color: '#9CA3AF', fontStyle: 'italic' }}>
+                No views available
+              </Typography>
+            </Box>
+          )}
+        </Paper>
+      </Box>
+    );
+  };
+
   // Show loading state if data isn't loaded yet
   if (!dataLoaded) {
     return (
@@ -1645,14 +1822,14 @@ export default function DropDragDashboard() {
           alignItems: 'center',
           justifyContent: 'center',
           minHeight: '100vh',
-          background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+          background: '#F8FAFC',
         }}
       >
-        <CircularProgress size={60} sx={{ mb: 2 }} />
-        <Typography variant="h6" color="text.secondary">
+        <CircularProgress size={60} sx={{ mb: 2, color: '#3B82F6' }} />
+        <Typography variant="h6" sx={{ color: '#6B7280' }}>
           Loading dashboard data...
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        <Typography variant="body2" sx={{ color: '#9CA3AF', mt: 1 }}>
           Please wait while we load charts, filters, and calculations
         </Typography>
       </Box>
@@ -1661,280 +1838,546 @@ export default function DropDragDashboard() {
 
   return (
     <>
-    <div 
-      className="min-h-screen"
-      style={{
-        background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+    <Box 
+      sx={{ 
+        display: 'flex', 
+        height: '100vh',
+        background: '#F8FAFC',
+        overflow: 'hidden',
       }}
     >
-      <FilterPanel showFilters={true} topOffset={filterPanelTopOffset} />
+      <FilterPanel showFilters={true} topOffset="0px" />
 
-      {/* Navbar */}
-      <div 
-        className="fixed top-0 left-0 right-0 z-50"
-        style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          boxShadow: '0 4px 20px 0 rgba(102, 126, 234, 0.3)',
+      {/* Left Icon Sidebar - 72px wide */}
+      <Box
+        sx={{
+          width: 72,
+          minWidth: 72,
+          bgcolor: '#FFFFFF',
+          borderRight: '1px solid #E5E7EB',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          py: 2,
+          gap: 1,
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          zIndex: 50,
         }}
       >
-        <div className="px-6 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {/* Back Button */}
-              <button
-                onClick={() => navigate(`/${dashboardSlug}`)}
-                className="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 hover:scale-105"
-                style={{
-                  background: 'rgba(255, 255, 255, 0.15)',
-                  backdropFilter: 'blur(10px)',
-                }}
-                title="Back to Views"
-              >
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-              </button>
+        {/* RBI Logo */}
+        <Box
+          component="img"
+          src="/RBI.png"
+          alt="RBI"
+          sx={{
+            width: 50,
+            height: 50,
+            objectFit: 'contain',
+            mb: 2,
+            mt: 0.5,
+          }}
+        />
 
-              {/* Icon */}
-              <div 
-                className="flex items-center justify-center w-10 h-10 rounded-xl"
-                style={{
-                  background: 'rgba(255, 255, 255, 0.2)',
-                  backdropFilter: 'blur(10px)',
-                }}
-              >
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-                </svg>
-              </div>
+        {/* Home */}
+        <Tooltip title="Home" placement="right">
+          <Box
+            onClick={() => navigate('/')}
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              cursor: 'pointer',
+              py: 1,
+              px: 0.5,
+              borderRadius: 2,
+              color: '#6B7280',
+              '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+              transition: 'all 0.2s',
+            }}
+          >
+            <HomeIcon sx={{ fontSize: 22 }} />
+            <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Home</Typography>
+          </Box>
+        </Tooltip>
 
-              {/* Breadcrumb & View Name */}
-              <div>
-                {/* Breadcrumb Navigation */}
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => navigate('/')}
-                    className="text-sm font-semibold transition-colors hover:underline"
-                    style={{ color: 'rgba(255, 255, 255, 0.8)' }}
-                  >
-                    Dashboards
-                  </button>
-                  <svg className="w-4 h-4" style={{ color: 'rgba(255, 255, 255, 0.5)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                  <button
-                    onClick={() => navigate(`/${dashboardSlug}`)}
-                    className="text-sm font-semibold transition-colors hover:underline"
-                    style={{ color: 'rgba(255, 255, 255, 0.8)' }}
-                  >
-                    {currentDashboardName}
-                  </button>
-                  <svg className="w-4 h-4" style={{ color: 'rgba(255, 255, 255, 0.5)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                  <span className="text-sm font-bold text-white">
-                    {currentViewName}
-                  </span>
-                </div>
-                {/* View Name - Large */}
-                <h1 className="text-xl font-bold text-white mt-0.5" style={{ letterSpacing: '0.5px' }}>
-                  {currentViewName}
-                </h1>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="mr-1">
-                <select
-                  value={selectedBranch}
-                  onChange={(e) => setSelectedbranch(e.target.value)}
-                  className="bg-white/10 text-white text-sm px-3 py-1.5 rounded-lg border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/50 backdrop-blur-sm"
-                  style={{
-                    backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%)',
-                  }}
-                >
-                  {branchOptions.map((branch) => (
-                    <option 
-                      key={branch.id} 
-                      value={branch.id}
-                      style={{
-                        backgroundColor: '#667eea',
-                        color: 'white',
-                      }}
-                    >
-                      {branch.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {isEditMode && (
-                <button 
-                  onClick={toggleCompactType} 
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg hover:bg-white/20 border backdrop-blur-sm transition-all duration-200"
-                  style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                    borderColor: 'rgba(255, 255, 255, 0.2)',
-                  }}
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1v-3z" />
-                  </svg>
-                  {compactType === null ? "Free" : compactType === "vertical" ? "Vertical" : "Horizontal"}
-                </button>
-              )}
-
-              <button
-                onClick={toggleEditMode}
-                className={`inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 shadow-lg ${
-                  isEditMode 
-                    ? "text-white shadow-green-500/50" 
-                    : "text-purple-600 shadow-white/50 hover:shadow-white/70"
-                }`}
-                style={{
-                  background: isEditMode 
-                    ? 'linear-gradient(to right, #10b981, #14b8a6)'
-                    : 'white',
-                }}
-              >
-                {isEditMode ? (
-                  <>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    Save
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    Edit
-                  </>
-                )}
-              </button>
-
-              {/* User Menu */}
-              <Box sx={{ ml: 2 }}>
-                <Tooltip title={auth.email || 'User'}>
-                  <IconButton
-                    onClick={(e) => setUserMenuAnchor(e.currentTarget)}
-                    sx={{
-                      p: 0.5,
-                      background: 'rgba(255,255,255,0.15)',
-                      border: '2px solid rgba(255,255,255,0.3)',
-                      '&:hover': {
-                        background: 'rgba(255,255,255,0.25)',
-                        border: '2px solid rgba(255,255,255,0.5)',
-                      },
-                    }}
-                  >
-                    <Avatar
-                      sx={{
-                        width: 36,
-                        height: 36,
-                        bgcolor: 'rgba(255,255,255,0.2)',
-                        color: 'white',
-                        fontWeight: 700,
-                        fontSize: '0.875rem',
-                      }}
-                    >
-                      {auth.email ? auth.email[0].toUpperCase() : 'U'}
-                    </Avatar>
-                  </IconButton>
-                </Tooltip>
-                <Menu
-                  anchorEl={userMenuAnchor}
-                  open={Boolean(userMenuAnchor)}
-                  onClose={() => setUserMenuAnchor(null)}
-                  PaperProps={{
-                    sx: {
-                      mt: 1,
-                      minWidth: 220,
-                      borderRadius: 2,
-                      boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
-                      border: '1px solid rgba(102, 126, 234, 0.1)',
-                    },
-                  }}
-                  transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-                  anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-                >
-                  <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                      <EmailIcon sx={{ fontSize: 16, color: '#667eea' }} />
-                      <Typography variant="body2" fontWeight={600} color="text.primary">
-                        {auth.email || 'User'}
-                      </Typography>
-                    </Box>
-                  </Box>
-                  <MenuItem onClick={handleLogout} sx={{ py: 1.5, color: '#ef4444' }}>
-                    <ListItemIcon>
-                      <LogoutIcon fontSize="small" sx={{ color: '#ef4444' }} />
-                    </ListItemIcon>
-                    <ListItemText primary="Logout" />
-                  </MenuItem>
-                </Menu>
-              </Box>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Edit Mode Toolbar */}
-      {isEditMode && (
-        <div 
-          className="fixed left-0 right-0 z-40"
-          style={{
-            top: '68px',
-            background: 'linear-gradient(135deg,rgb(204, 204, 224) 0%,rgb(205, 195, 250) 100%)',
-            borderBottom: '1px solid rgba(139, 92, 246, 0.2)',
-            boxShadow: '0 2px 8px rgba(139, 92, 246, 0.1)',
+        {/* Libraries with Hover Menu */}
+        <Box
+          sx={{
+            position: 'relative',
+            '&:hover .library-hover-menu': {
+              display: 'block',
+            },
           }}
         >
-          <div className="px-6 py-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div
-                  className="droppable-element group inline-flex items-center gap-2 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-600 hover:to-purple-600 border-2 border-dashed border-indigo-300 hover:border-solid hover:border-indigo-600 rounded-lg px-4 py-2 cursor-grab active:cursor-grabbing transition-all duration-200 shadow-sm hover:shadow-md select-none"
-                  draggable={true}
-                  unselectable="on"
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData("text/plain", "");
-                    e.dataTransfer.effectAllowed = "move";
-                    setTimeout(() => { e.dataTransfer.dropEffect = "move"; }, 0);
-                  }}
-                  onDragEnd={(e) => { e.preventDefault(); }}
-                >
-                  <div className="flex items-center justify-center w-6 h-6 rounded bg-indigo-100 group-hover:bg-white/20">
-                    <svg className="w-4 h-4 text-indigo-600 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                  </div>
-                  <span className="text-sm font-semibold text-indigo-900 group-hover:text-white transition-colors">Drag to Add Content</span>
-                </div>
-                
-                <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-blue-50 px-3 py-1.5 rounded-md border border-blue-200">
-                  <svg className="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="font-medium">Drag and drop to position charts, tables, or HTML cards</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              cursor: 'pointer',
+              py: 1,
+              px: 0.5,
+              borderRadius: 2,
+              color: '#3B82F6',
+              bgcolor: alpha('#3B82F6', 0.1),
+              '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+              transition: 'all 0.2s',
+            }}
+          >
+            <LibraryBooksIcon sx={{ fontSize: 22 }} />
+            <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Libraries</Typography>
+          </Box>
+          
+          {/* Hover Menu */}
+          <Paper
+            className="library-hover-menu"
+            elevation={8}
+            sx={{
+              display: 'none',
+              position: 'absolute',
+              left: '100%',
+              top: 0,
+              ml: 0.5,
+              minWidth: 240,
+              maxHeight: 450,
+              borderRadius: 2,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+              overflow: 'visible',
+              zIndex: 1300,
+              bgcolor: 'white',
+            }}
+          >
+            <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #E5E7EB' }}>
+              <Typography variant="subtitle2" fontWeight={700} color="#1F2937">
+                Your libraries
+              </Typography>
+            </Box>
+            
+            {/* Favourites Section */}
+            {bookmarkedDashboards.length > 0 && (
+              <>
+                <Box sx={{ px: 2, py: 1 }}>
+                  <Typography variant="caption" sx={{ color: '#9CA3AF', fontWeight: 600, fontSize: '0.7rem' }}>
+                    Favourites
+                  </Typography>
+                </Box>
+                {bookmarkedDashboards.slice(0, 4).map((dashboard) => (
+                  <LibraryMenuItemWithViews key={dashboard.id} dashboard={dashboard} />
+                ))}
+              </>
+            )}
+            
+            {/* Other Libraries Section */}
+            <Box sx={{ px: 2, py: 1, mt: 1 }}>
+              <Typography variant="caption" sx={{ color: '#9CA3AF', fontWeight: 600, fontSize: '0.7rem' }}>
+                Other Libraries
+              </Typography>
+            </Box>
+            {otherDashboards.slice(0, 8).map((dashboard) => (
+              <LibraryMenuItemWithViews key={dashboard.id} dashboard={dashboard} />
+            ))}
+          </Paper>
+        </Box>
 
-      {/* Main Content */}
-      <div 
-        ref={dashboardGridRef}
-        className={`px-2 pb-16 transition-all duration-300 ${isEditMode ? 'pt-36' : 'pt-20'} ${isFilterPanelExpanded ? 'mr-80' : 'mr-12'}`}
-        style={{
-          backgroundImage: isEditMode ? `radial-gradient(circle, #94a3b8 1.5px, transparent 1.5px)` : 'none',
-          backgroundSize: isEditMode ? '24px 24px' : 'auto',
-          backgroundPosition: isEditMode ? '0 0' : 'initial',
-          minHeight: 'calc(100vh - 80px)',
+        {/* Data */}
+        <Tooltip title="Data & Connections" placement="right">
+          <Box
+            onClick={() => navigate('/?nav=data')}
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              cursor: 'pointer',
+              py: 1,
+              px: 0.5,
+              borderRadius: 2,
+              color: '#6B7280',
+              '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+              transition: 'all 0.2s',
+            }}
+          >
+            <StorageIcon sx={{ fontSize: 22 }} />
+            <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Data</Typography>
+          </Box>
+        </Tooltip>
+
+        {/* Functions */}
+        <Tooltip title="Predefined Functions" placement="right">
+          <Box
+            onClick={() => navigate('/?nav=functions')}
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              cursor: 'pointer',
+              py: 1,
+              px: 0.5,
+              borderRadius: 2,
+              color: '#6B7280',
+              '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+              transition: 'all 0.2s',
+            }}
+          >
+            <FunctionsIcon sx={{ fontSize: 22 }} />
+            <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Functions</Typography>
+          </Box>
+        </Tooltip>
+
+        <Box sx={{ flex: 1 }} />
+
+        {/* Docs */}
+        <Tooltip title="Docs" placement="right">
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              cursor: 'pointer',
+              py: 1,
+              px: 0.5,
+              borderRadius: 2,
+              color: '#6B7280',
+              '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+              transition: 'all 0.2s',
+            }}
+          >
+            <DocsIcon sx={{ fontSize: 22 }} />
+            <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Docs</Typography>
+          </Box>
+        </Tooltip>
+
+        {/* Help */}
+        <Tooltip title="Help" placement="right">
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              cursor: 'pointer',
+              py: 1,
+              px: 0.5,
+              borderRadius: 2,
+              color: '#6B7280',
+              '&:hover': { bgcolor: alpha('#3B82F6', 0.1), color: '#3B82F6' },
+              transition: 'all 0.2s',
+            }}
+          >
+            <HelpIcon sx={{ fontSize: 22 }} />
+            <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25 }}>Help</Typography>
+          </Box>
+        </Tooltip>
+
+        {/* User Avatar */}
+        <Box
+          onClick={(e) => setUserMenuAnchor(e.currentTarget)}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            cursor: 'pointer',
+            py: 1,
+            px: 0.5,
+            borderRadius: 2,
+            mt: 1,
+            '&:hover': { bgcolor: alpha('#3B82F6', 0.1) },
+            transition: 'all 0.2s',
+          }}
+        >
+          <Avatar
+            sx={{ 
+              width: 28,
+              height: 28,
+              bgcolor: '#3B82F6',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+            }}
+          >
+            {auth.email ? auth.email[0].toUpperCase() : 'U'}
+          </Avatar>
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, mt: 0.25, color: '#6B7280' }}>Account</Typography>
+        </Box>
+      </Box>
+
+      {/* User Menu */}
+      <Menu
+        anchorEl={userMenuAnchor}
+        open={Boolean(userMenuAnchor)}
+        onClose={() => setUserMenuAnchor(null)}
+        PaperProps={{
+          sx: {
+            mt: 1,
+            minWidth: 220,
+            borderRadius: 2,
+            boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+            border: '1px solid #E5E7EB',
+          },
         }}
+        transformOrigin={{ horizontal: 'left', vertical: 'bottom' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
+        <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #E5E7EB' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+            <EmailIcon sx={{ fontSize: 16, color: '#3B82F6' }} />
+            <Typography variant="body2" fontWeight={600} color="text.primary">
+              {auth.email || 'User'}
+            </Typography>
+          </Box>
+        </Box>
+        <MenuItem onClick={handleLogout} sx={{ py: 1.5, color: '#ef4444' }}>
+          <ListItemIcon>
+            <LogoutIcon fontSize="small" sx={{ color: '#ef4444' }} />
+          </ListItemIcon>
+          <ListItemText primary="Logout" />
+        </MenuItem>
+      </Menu>
+
+      {/* Main Content Area */}
+      <Box sx={{ flex: 1, ml: '72px', display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: '#E5E7EB' }}>
+        {/* Top Header Bar - White rounded card */}
+        <Box 
+          sx={{ 
+            p: 2, 
+            pb: 0,
+            pr: 4,
+            mr: isFilterPanelExpanded ? '306px' : '34px',
+            transition: 'margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+        >
+          <Paper
+            elevation={0}
+            sx={{
+              bgcolor: '#FFFFFF',
+              borderRadius: 3,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              px: 3,
+              py: 1.5,
+              border: '1px solid #E5E7EB',
+            }}
+          >
+            {/* Left side - Dashboard/View name */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ width: 4, height: 32, bgcolor: '#3B82F6', borderRadius: 1 }} />
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#1F2937' }}>
+                {currentDashboardName}
+              </Typography>
+            </Box>
+
+            {/* Right side - Action buttons with text */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              {/* Compact Type Toggle - only in edit mode */}
+              {isEditMode && (
+                <Button
+                  onClick={toggleCompactType}
+                  startIcon={<ViewCompactIcon />}
+                  variant="outlined"
+                  size="small"
+                  sx={{
+                    color: '#6B7280',
+                    borderColor: '#E5E7EB',
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    '&:hover': { borderColor: '#3B82F6', color: '#3B82F6', bgcolor: alpha('#3B82F6', 0.05) },
+                  }}
+                >
+                  {compactType === null ? "Free" : compactType === "vertical" ? "Vertical" : "Horizontal"}
+                </Button>
+              )}
+
+              {/* Download Button */}
+              <Button
+                onClick={(e) => setDownloadMenuAnchor(e.currentTarget)}
+                disabled={isDownloading || visibleCharts.length === 0}
+                startIcon={isDownloading ? <CircularProgress size={16} sx={{ color: '#6B7280' }} /> : <DownloadIcon />}
+                variant="outlined"
+                size="small"
+                sx={{
+                  color: '#6B7280',
+                  borderColor: '#E5E7EB',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  '&:hover': { borderColor: '#3B82F6', color: '#3B82F6', bgcolor: alpha('#3B82F6', 0.05) },
+                  '&.Mui-disabled': { opacity: 0.5 },
+                }}
+              >
+                Download
+              </Button>
+
+              {/* Edit/Save Button */}
+              <Button
+                onClick={toggleEditMode}
+                startIcon={isEditMode ? <SaveIcon /> : <EditIcon />}
+                variant="contained"
+                size="small"
+                sx={{
+                  bgcolor: isEditMode ? '#10b981' : '#3B82F6',
+                  color: 'white',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  boxShadow: 'none',
+                  '&:hover': { 
+                    bgcolor: isEditMode ? '#059669' : '#2563EB',
+                    boxShadow: 'none',
+                  },
+                }}
+              >
+                {isEditMode ? 'Save' : 'Edit'}
+              </Button>
+            </Box>
+          </Paper>
+        </Box>
+
+        {/* Edit Mode Toolbar + Views Tabs - Rounded card */}
+        <Box 
+          sx={{ 
+            pl: 2,
+            pr: 4,
+            pt: 2, 
+            pb: 2, 
+            flex: 1, 
+            display: 'flex', 
+            flexDirection: 'column',
+            mr: isFilterPanelExpanded ? '306px' : '34px',
+            transition: 'margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+        >
+          <Paper
+            elevation={0}
+            sx={{
+              bgcolor: '#FFFFFF',
+              borderRadius: 3,
+              border: '1px solid #E5E7EB',
+              overflow: 'hidden',
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {/* Edit Mode Toolbar */}
+            {isEditMode && (
+              <Box
+                sx={{
+                  bgcolor: '#F8FAFC',
+                  borderBottom: '1px solid #E5E7EB',
+                  px: 3,
+                  py: 1.5,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Box
+                    className="droppable-element"
+                    draggable={true}
+                    unselectable="on"
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("text/plain", "");
+                      e.dataTransfer.effectAllowed = "move";
+                      setTimeout(() => { e.dataTransfer.dropEffect = "move"; }, 0);
+                    }}
+                    onDragEnd={(e) => { e.preventDefault(); }}
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      bgcolor: 'white',
+                      border: '2px dashed #3B82F6',
+                      borderRadius: 2,
+                      px: 2,
+                      py: 1,
+                      cursor: 'grab',
+                      '&:active': { cursor: 'grabbing' },
+                      '&:hover': { 
+                        bgcolor: '#3B82F6',
+                        borderStyle: 'solid',
+                        '& .drag-icon': { color: 'white' },
+                        '& .drag-text': { color: 'white' },
+                      },
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <AddIcon className="drag-icon" sx={{ fontSize: 18, color: '#3B82F6', transition: 'color 0.2s' }} />
+                    <Typography className="drag-text" sx={{ fontSize: '0.8rem', fontWeight: 600, color: '#3B82F6', transition: 'color 0.2s' }}>
+                      Drag to Add Content
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: '#EFF6FF', px: 2, py: 0.75, borderRadius: 1.5, border: '1px solid #BFDBFE' }}>
+                    <Typography sx={{ fontSize: '0.75rem', color: '#3B82F6', fontWeight: 500 }}>
+                      Drag and drop to position charts, tables, or HTML cards
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            )}
+
+            {/* Views Tabs Bar */}
+            <Box
+              sx={{
+                px: 2,
+                py: 1,
+                display: 'flex',
+                alignItems: 'center',
+                borderBottom: '1px solid #E5E7EB',
+              }}
+            >
+              {dynamicViews.map((view) => (
+                <Box
+                  key={view.id}
+                  onClick={() => handleViewTabClick(view)}
+                  sx={{
+                    px: 2,
+                    py: 1,
+                    mr: 1,
+                    cursor: 'pointer',
+                    borderRadius: 2,
+                    bgcolor: viewSlug === view.slug ? alpha('#3B82F6', 0.1) : 'transparent',
+                    color: viewSlug === view.slug ? '#3B82F6' : '#6B7280',
+                    fontWeight: viewSlug === view.slug ? 600 : 500,
+                    fontSize: '0.875rem',
+                    borderBottom: viewSlug === view.slug ? '3px solid #3B82F6' : '3px solid transparent',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      color: '#3B82F6',
+                      bgcolor: alpha('#3B82F6', 0.05),
+                    },
+                  }}
+                >
+                  {view.name}
+                </Box>
+              ))}
+              
+              {/* Add View Button */}
+              <Tooltip title="Add View">
+                <IconButton
+                  onClick={() => setOpenCreateViewDialog(true)}
+                  size="small"
+                  sx={{
+                    ml: 0.5,
+                    color: '#9CA3AF',
+                    '&:hover': { color: '#3B82F6', bgcolor: alpha('#3B82F6', 0.1) },
+                  }}
+                >
+                  <AddIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+
+            {/* Main Content - Inside the rounded card */}
+            <Box
+              ref={dashboardGridRef}
+              sx={{
+                flex: 1,
+                overflow: 'auto',
+                p: 2,
+                backgroundImage: isEditMode ? `radial-gradient(circle, #CBD5E1 1.5px, transparent 1.5px)` : 'none',
+                backgroundSize: isEditMode ? '24px 24px' : 'auto',
+                backgroundPosition: isEditMode ? '0 0' : 'initial',
+                minHeight: 'calc(100vh - 200px)',
+              }}
+            >
         <ResponsiveGridLayout
           key={gridStateKey}
           className="layout"
@@ -2051,166 +2494,61 @@ export default function DropDragDashboard() {
             </div>
           </div>
         )}
-      </div>
+            </Box>
+          </Paper>
+        </Box>
+      </Box>
 
-      {/* Footer */}
-      <div 
-        className="fixed bottom-0 left-0 right-0 z-[60] border-t shadow-lg" 
-        style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          borderTopColor: 'rgba(102, 126, 234, 0.3)',
-          boxShadow: '0 -4px 20px 0 rgba(102, 126, 234, 0.2)',
+      {/* Download Menu */}
+      <Menu
+        anchorEl={downloadMenuAnchor}
+        open={Boolean(downloadMenuAnchor)}
+        onClose={() => setDownloadMenuAnchor(null)}
+        PaperProps={{
+          sx: {
+            mt: 1,
+            minWidth: 260,
+            borderRadius: 2,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+            border: '1px solid #E5E7EB',
+          }
         }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
-        <div className="flex items-center justify-between px-4 py-2">
-          <div className="flex items-center gap-1">
-            {/* Dynamic View Tabs */}
-            {dynamicViews.map((view) => (
-              <button
-                key={view.id}
-                onClick={() => handleViewTabClick(view)}
-                className={`group relative px-4 py-1.5 text-sm font-medium rounded-t-lg transition-all ${
-                  viewSlug === view.slug
-                    ? "bg-white text-gray-900 shadow-md"
-                    : "bg-transparent text-white hover:bg-white/20 hover:text-white"
-                }`}
-              >
-                {view.name}
-                {viewSlug === view.slug && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
-                )}
-              </button>
-            ))}
-            
-            {/* Add View Button */}
-            <button
-              onClick={() => setOpenCreateViewDialog(true)}
-              className="ml-2 p-1.5 text-white/60 hover:text-white hover:bg-white/20 rounded transition-colors"
-              title="Add View"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-            </button>
-          </div>
-
-          <div className="flex items-center justify-end">
-            <div className="flex items-center gap-3 mr-3">
-              <button
-                onClick={(e) => setDownloadMenuAnchor(e.currentTarget)}
-                disabled={isDownloading || visibleCharts.length === 0}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{
-                  background: isDownloading 
-                    ? 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)'
-                    : 'linear-gradient(135deg,rgb(157, 173, 245) 0%,rgb(135, 93, 177) 100%)',
-                  boxShadow: isDownloading 
-                    ? '0 2px 8px rgba(148, 163, 184, 0.3)'
-                    : '0 4px 15px rgba(102, 126, 234, 0.3)',
-                }}
-                title={visibleCharts.length === 0 ? 'No charts to download' : 'Download dashboard'}
-              >
-                {isDownloading ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Exporting...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Download
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </>
-                )}
-              </button>
-              <Menu
-                anchorEl={downloadMenuAnchor}
-                open={Boolean(downloadMenuAnchor)}
-                onClose={() => setDownloadMenuAnchor(null)}
-                PaperProps={{
-                  sx: {
-                    mt: 1,
-                    minWidth: 260,
-                    borderRadius: 2,
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
-                    border: '1px solid rgba(0,0,0,0.08)',
-                  }
-                }}
-                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-              >
-                <Box sx={{ px: 1.5, py: 1 }}>
-                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-                    Export Dashboard
-                  </Typography>
-                </Box>
-                <Divider />
-                {downloadOptions.map((option) => (
-                  <MenuItem
-                    key={option.id}
-                    onClick={() => handleDownload(option.id)}
-                    disabled={isDownloading || visibleCharts.length === 0}
-                    sx={{
-                      py: 1.4,
-                      px: 2,
-                      '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.08)' },
-                      '&.Mui-disabled': { opacity: 0.5 },
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-                      <Box sx={{ fontSize: '1.2rem', width: 24, textAlign: 'center' }}>{option.icon}</Box>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b' }}>
-                          {option.name}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.74rem' }}>
-                          {option.description}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Menu>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <select
-                value={selectedCustomView}
-                onChange={(e) => setSelectedCustomView(e.target.value)}
-                className="bg-white/10 text-white text-sm px-3 py-1.5 rounded border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/50 backdrop-blur-sm"
-                style={{
-                  backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%)',
-                }}
-              >
-                {customViews.map((view) => (
-                  <option 
-                    key={view.id} 
-                    value={view.id}
-                    style={{
-                      backgroundColor: '#667eea',
-                      color: 'white',
-                    }}
-                  >
-                    {view.name}
-                  </option>
-                ))}
-              </select>
-              
-              <div className="text-xs text-white/80 font-medium">
-                {visibleCharts.length} sheet{visibleCharts.length !== 1 ? 's' : ''}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+        <Box sx={{ px: 1.5, py: 1 }}>
+          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+            Export Dashboard
+          </Typography>
+        </Box>
+        <Divider />
+        {downloadOptions.map((option) => (
+          <MenuItem
+            key={option.id}
+            onClick={() => handleDownload(option.id)}
+            disabled={isDownloading || visibleCharts.length === 0}
+            sx={{
+              py: 1.4,
+              px: 2,
+              '&:hover': { bgcolor: alpha('#3B82F6', 0.08) },
+              '&.Mui-disabled': { opacity: 0.5 },
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+              <Box sx={{ fontSize: '1.2rem', width: 24, textAlign: 'center' }}>{option.icon}</Box>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                  {option.name}
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.74rem' }}>
+                  {option.description}
+                </Typography>
+              </Box>
+            </Box>
+          </MenuItem>
+        ))}
+      </Menu>
+    </Box>
       {isDownloading && createPortal(
         <div
           style={{

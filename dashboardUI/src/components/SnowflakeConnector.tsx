@@ -57,8 +57,8 @@ const connectorTypes: ConnectorType[] = [
     id: "snowflake", 
     name: "Snowflake", 
     description: "Connect to Snowflake data warehouse", 
-    color: "#667eea",
-    gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+    color: "#3B82F6",
+    gradient: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)"
   },
   { 
     id: "mysql", 
@@ -92,8 +92,8 @@ const connectorTypes: ConnectorType[] = [
     id: "redshift", 
     name: "Amazon Redshift", 
     description: "Connect to Amazon Redshift", 
-    color: "#764ba2",
-    gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+    color: "#2563EB",
+    gradient: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)"
   }
 ];
 
@@ -590,15 +590,15 @@ const ConnectorManager: React.FC = () => {
   const inputSx = {
     '& .MuiOutlinedInput-root': {
       '& fieldset': { borderColor: 'rgba(102, 126, 234, 0.3)' },
-      '&:hover fieldset': { borderColor: '#667eea' },
-      '&.Mui-focused fieldset': { borderColor: '#667eea' },
+      '&:hover fieldset': { borderColor: '#3B82F6' },
+      '&.Mui-focused fieldset': { borderColor: '#3B82F6' },
     },
-    '& .MuiInputLabel-root.Mui-focused': { color: '#667eea' },
+    '& .MuiInputLabel-root.Mui-focused': { color: '#3B82F6' },
   };
 
   const renderConnectionsTable = () => (
-    <Paper elevation={0} sx={{ mt: 3, p: 3, background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)', backdropFilter: 'blur(10px)', border: '1px solid rgba(102, 126, 234, 0.2)', borderRadius: 3, boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)' }}>
-      <Typography variant="h6" mb={2} sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 700 }}>
+    <Paper elevation={0} sx={{ mt: 3, p: 3, bgcolor: '#FFFFFF',  border: '1px solid #E5E7EB', borderRadius: 3, boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)' }}>
+      <Typography variant="h6" mb={2} sx={{ bgcolor: '#3B82F6', backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 700 }}>
         Saved Connections ({connections.length} total)
       </Typography>
       <TableContainer sx={{ maxHeight: 400, borderRadius: 2 }}>
@@ -612,7 +612,7 @@ const ConnectorManager: React.FC = () => {
           </TableHead>
           <TableBody>
             {paginatedConnections.length === 0 ? (
-              <TableRow><TableCell colSpan={10} align="center"><Box sx={{ py: 4 }}><Box sx={{ width: 64, height: 64, margin: '0 auto 16px', borderRadius: '50%', background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Storage sx={{ fontSize: 32, color: '#667eea', opacity: 0.6 }} /></Box><Typography variant="body2" color="#94a3b8" fontWeight={500}>No connections found. Add your first connection above.</Typography></Box></TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} align="center"><Box sx={{ py: 4 }}><Box sx={{ width: 64, height: 64, margin: '0 auto 16px', borderRadius: '50%', background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Storage sx={{ fontSize: 32, color: '#3B82F6', opacity: 0.6 }} /></Box><Typography variant="body2" color="#94a3b8" fontWeight={500}>No connections found. Add your first connection above.</Typography></Box></TableCell></TableRow>
             ) : (
               paginatedConnections.map((connection) => (
                 <TableRow key={connection.id} hover sx={{ '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.05)' } }}>
@@ -624,9 +624,9 @@ const ConnectorManager: React.FC = () => {
                   <TableCell sx={{ color: '#475569' }}>{connection.warehouse}</TableCell>
                   <TableCell sx={{ color: '#475569' }}>{connection.database}</TableCell>
                   <TableCell sx={{ color: '#475569' }}>{connection.schema}</TableCell>
-                  <TableCell>{connection.type === "snowflake" ? <Chip label="Snowflake" size="small" sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', fontWeight: 600 }} /> : connection.type}</TableCell>
+                  <TableCell>{connection.type === "snowflake" ? <Chip label="Snowflake" size="small" sx={{ bgcolor: '#3B82F6', color: 'white', fontWeight: 600 }} /> : connection.type}</TableCell>
                   <TableCell align="center">
-                    <Tooltip title="Edit connection"><IconButton onClick={() => handleEdit(connection)} size="small" sx={{ color: '#667eea', '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.1)' } }}><Edit fontSize="small" /></IconButton></Tooltip>
+                    <Tooltip title="Edit connection"><IconButton onClick={() => handleEdit(connection)} size="small" sx={{ color: '#3B82F6', '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.1)' } }}><Edit fontSize="small" /></IconButton></Tooltip>
                     <Tooltip title="Delete connection"><IconButton onClick={() => handleDeleteClick(connection)} size="small" disabled={isDeletingConnection === connection.id} sx={{ color: '#ef4444', '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' } }}>{isDeletingConnection === connection.id ? <CircularProgress size={16} sx={{ color: '#ef4444' }} /> : <Delete fontSize="small" />}</IconButton></Tooltip>
                   </TableCell>
                 </TableRow>
@@ -640,24 +640,24 @@ const ConnectorManager: React.FC = () => {
   );
 
   return (
-    <Box sx={{ width: '100%', p: 3, background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' }}>
+    <Box sx={{ width: '100%', p: 3, bgcolor: '#F8FAFC' }}>
       {alert.show && (
         <Alert severity={alert.severity} sx={{ mb: 3, borderRadius: 2, border: '1px solid', borderColor: alert.severity === 'success' ? 'rgba(16, 185, 129, 0.3)' : alert.severity === 'error' ? 'rgba(239, 68, 68, 0.3)' : alert.severity === 'warning' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(59, 130, 246, 0.3)', background: alert.severity === 'success' ? 'linear-gradient(135deg, rgba(209, 250, 229, 0.5) 0%, rgba(167, 243, 208, 0.5) 100%)' : alert.severity === 'error' ? 'linear-gradient(135deg, rgba(254, 226, 226, 0.5) 0%, rgba(254, 202, 202, 0.5) 100%)' : alert.severity === 'warning' ? 'linear-gradient(135deg, rgba(254, 243, 199, 0.3) 0%, rgba(253, 224, 71, 0.3) 100%)' : 'linear-gradient(135deg, rgba(224, 242, 254, 0.5) 0%, rgba(186, 230, 253, 0.5) 100%)', boxShadow: '0 4px 15px rgba(102, 126, 234, 0.2)' }} onClose={() => setAlert(prev => ({ ...prev, show: false }))}>{alert.message}</Alert>
       )}
 
       {currentView === 'selection' && (
         <Box>
-          <Paper elevation={0} sx={{ mb: 4, p: 3, background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)', backdropFilter: 'blur(10px)', border: '1px solid rgba(102, 126, 234, 0.2)', borderRadius: 3, boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)' }}>
+          <Paper elevation={0} sx={{ mb: 4, p: 3, bgcolor: '#FFFFFF',  border: '1px solid #E5E7EB', borderRadius: 3, boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)' }}>
             <Stack direction="row" alignItems="center" spacing={2}>
-              <Box sx={{ width: 48, height: 48, borderRadius: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)' }}><Search sx={{ color: 'white', fontSize: 24 }} /></Box>
-              <TextField fullWidth variant="standard" placeholder="Search for connectors... (e.g., snowflake, mysql, postgresql)" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'rgba(102, 126, 234, 0.3)' }, '& .MuiInput-underline:hover:before': { borderBottomColor: '#667eea' }, '& .MuiInput-underline:after': { borderBottomColor: '#667eea' } }} />
+              <Box sx={{ width: 48, height: 48, borderRadius: 2, bgcolor: '#3B82F6', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)' }}><Search sx={{ color: 'white', fontSize: 24 }} /></Box>
+              <TextField fullWidth variant="standard" placeholder="Search for connectors... (e.g., snowflake, mysql, postgresql)" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'rgba(102, 126, 234, 0.3)' }, '& .MuiInput-underline:hover:before': { borderBottomColor: '#3B82F6' }, '& .MuiInput-underline:after': { borderBottomColor: '#3B82F6' } }} />
             </Stack>
           </Paper>
 
           <Grid container spacing={3}>
             {filteredConnectors.map((connector) => (
               <Grid item xs={12} sm={6} md={4} key={connector.id}>
-                <Paper elevation={0} onClick={() => handleConnectorSelect(connector.id)} sx={{ p: 4, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'all 0.3s', background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)', backdropFilter: 'blur(10px)', border: '1px solid rgba(102, 126, 234, 0.2)', borderRadius: 3, '&:hover': { boxShadow: '0 12px 40px rgba(102, 126, 234, 0.25)', transform: 'translateY(-4px)', border: '1px solid rgba(102, 126, 234, 0.4)' } }}>
+                <Paper elevation={0} onClick={() => handleConnectorSelect(connector.id)} sx={{ p: 4, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'all 0.3s', bgcolor: '#FFFFFF',  border: '1px solid #E5E7EB', borderRadius: 3, '&:hover': { boxShadow: '0 12px 40px rgba(102, 126, 234, 0.25)', transform: 'translateY(-4px)', border: '1px solid rgba(102, 126, 234, 0.4)' } }}>
                   <Box sx={{ width: 80, height: 80, borderRadius: 3, background: connector.gradient, display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2, boxShadow: `0 8px 24px ${connector.color}40` }}><Storage sx={{ color: 'white', fontSize: 40 }} /></Box>
                   <Typography variant="h6" sx={{ mb: 1, fontWeight: 700, color: '#1e293b' }}>{connector.name}</Typography>
                   <Typography variant="body2" color="#64748b" textAlign="center" fontWeight={500}>{connector.description}</Typography>
@@ -668,7 +668,7 @@ const ConnectorManager: React.FC = () => {
           
           {filteredConnectors.length === 0 && (
             <Box sx={{ textAlign: 'center', py: 8 }}>
-              <Box sx={{ width: 80, height: 80, margin: '0 auto 24px', borderRadius: '50%', background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Search sx={{ fontSize: 40, color: '#667eea', opacity: 0.6 }} /></Box>
+              <Box sx={{ width: 80, height: 80, margin: '0 auto 24px', borderRadius: '50%', background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Search sx={{ fontSize: 40, color: '#3B82F6', opacity: 0.6 }} /></Box>
               <Typography variant="h6" color="#475569" sx={{ mb: 2, fontWeight: 700 }}>No connectors found matching "{searchTerm}"</Typography>
               <Typography color="#94a3b8" fontWeight={500}>Try searching for: snowflake, mysql, postgresql, mongodb, oracle, redshift</Typography>
             </Box>
@@ -677,8 +677,8 @@ const ConnectorManager: React.FC = () => {
           {connections.length > 0 && (
             <>
               <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2} mt={5}>
-                <Typography variant="h6" sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 700 }}>Existing Connections ({connections.length})</Typography>
-                <Button variant="outlined" startIcon={showTable ? <VisibilityOff /> : <Visibility />} onClick={() => setShowTable(prev => !prev)} sx={{ borderColor: '#667eea', color: '#667eea', fontWeight: 600, borderRadius: 2, '&:hover': { borderColor: '#5568d3', bgcolor: 'rgba(102, 126, 234, 0.05)' } }}>{showTable ? 'Hide' : 'Show'} Connections</Button>
+                <Typography variant="h6" sx={{ bgcolor: '#3B82F6', backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 700 }}>Existing Connections ({connections.length})</Typography>
+                <Button variant="outlined" startIcon={showTable ? <VisibilityOff /> : <Visibility />} onClick={() => setShowTable(prev => !prev)} sx={{ borderColor: '#3B82F6', color: '#3B82F6', fontWeight: 600, borderRadius: 2, '&:hover': { borderColor: '#2563EB', bgcolor: 'rgba(102, 126, 234, 0.05)' } }}>{showTable ? 'Hide' : 'Show'} Connections</Button>
               </Stack>
               {showTable && renderConnectionsTable()}
             </>
@@ -688,9 +688,9 @@ const ConnectorManager: React.FC = () => {
 
       {currentView === 'snowflake' && (
         <Box>
-          <Stack direction="row" alignItems="center" sx={{ borderBottom: '2px solid', borderImage: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%) 1', pb: 3, position: 'relative', minHeight: 64, mb: 4 }}>
-            <Button onClick={handleBackToSelection} startIcon={<ArrowBack />} sx={{ position: 'absolute', left: 0, color: '#667eea', fontWeight: 600, borderRadius: 2, '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.05)' } }} variant="text">Back to Connectors</Button>
-            <Typography variant="h4" fontWeight={700} sx={{ width: '100%', textAlign: 'center', pointerEvents: 'none', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Configure Snowflake Connection</Typography>
+          <Stack direction="row" alignItems="center" sx={{ borderBottom: '2px solid', borderImage: 'linear-gradient(90deg, #3B82F6 0%, #2563EB 100%) 1', pb: 3, position: 'relative', minHeight: 64, mb: 4 }}>
+            <Button onClick={handleBackToSelection} startIcon={<ArrowBack />} sx={{ position: 'absolute', left: 0, color: '#3B82F6', fontWeight: 600, borderRadius: 2, '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.05)' } }} variant="text">Back to Connectors</Button>
+            <Typography variant="h4" fontWeight={700} sx={{ width: '100%', textAlign: 'center', pointerEvents: 'none', bgcolor: '#3B82F6', backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Configure Snowflake Connection</Typography>
           </Stack>
 
           <Alert severity="info" icon={<Info />} sx={{ mb: 3, borderRadius: 2, border: '1px solid rgba(59, 130, 246, 0.3)', background: 'linear-gradient(135deg, rgba(224, 242, 254, 0.5) 0%, rgba(186, 230, 253, 0.5) 100%)' }}>
@@ -698,7 +698,7 @@ const ConnectorManager: React.FC = () => {
             <Typography variant="body2" component="div" color="#0c4a6e" fontWeight={500}>• Fill in all required fields before testing the connection<br />• Use the <strong>"Check Snowflake Connection"</strong> button to verify your credentials<br />• The <strong>"Add Connection"</strong> button will be enabled only after a successful connection check<br />• Keep your private key file secure and never share it</Typography>
           </Alert>
 
-          <Paper elevation={0} sx={{ mb: 4, p: 4, background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)', backdropFilter: 'blur(10px)', border: '1px solid rgba(102, 126, 234, 0.2)', borderRadius: 3, boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)' }}>
+          <Paper elevation={0} sx={{ mb: 4, p: 4, bgcolor: '#FFFFFF',  border: '1px solid #E5E7EB', borderRadius: 3, boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)' }}>
             <form onSubmit={handleSubmit}>
               <Grid container spacing={3}>
                 <Grid item xs={12} sm={6}><TextField fullWidth required label="Connection Name" name="connectionName" value={formData.connectionName} onChange={handleInputChange} variant="outlined" helperText="A unique name to identify this connection" sx={inputSx} /></Grid>
@@ -707,10 +707,10 @@ const ConnectorManager: React.FC = () => {
                 <Grid item xs={12} sm={6}><FormControl fullWidth required sx={inputSx}><InputLabel>Authenticator</InputLabel><Select label="Authenticator" name="authenticator" value={formData.authenticator} onChange={handleSelectChange}><MenuItem value="SNOWFLAKE_JWT">SNOWFLAKE_JWT</MenuItem><MenuItem value="SNOWFLAKE">SNOWFLAKE</MenuItem><MenuItem value="OAUTH">OAUTH</MenuItem></Select></FormControl></Grid>
 
                 <Grid item xs={12}>
-                  <Box sx={{ border: '2px dashed', borderColor: formData.privateKey ? '#667eea' : 'rgba(102, 126, 234, 0.3)', borderRadius: 3, p: 4, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 180, background: formData.privateKey ? 'linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)' : 'transparent' }}>
-                    <Typography variant="h6" fontWeight="700" color={formData.privateKey ? '#667eea' : '#64748b'}>Upload Private Key *</Typography>
-                    <Button variant="contained" component="label" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2, px: 5, borderRadius: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)' } }}><CloudUpload sx={{ fontSize: 32, mb: 1 }} /><Typography variant="body1" fontWeight="700">Choose File</Typography><input type="file" accept=".der,.pem,.key,.p8" hidden onChange={handleFileUpload} /></Button>
-                    {formData.privateKey && <Box sx={{ mt: 1, p: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: 2, width: '100%', maxWidth: 400 }}><Typography variant="body1" sx={{ color: 'white', fontWeight: 700 }}>✓ Selected: {formData.privateKey.name}</Typography></Box>}
+                  <Box sx={{ border: '2px dashed', borderColor: formData.privateKey ? '#3B82F6' : 'rgba(102, 126, 234, 0.3)', borderRadius: 3, p: 4, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 180, background: formData.privateKey ? 'linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)' : 'transparent' }}>
+                    <Typography variant="h6" fontWeight="700" color={formData.privateKey ? '#3B82F6' : '#64748b'}>Upload Private Key *</Typography>
+                    <Button variant="contained" component="label" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2, px: 5, borderRadius: 2, bgcolor: '#3B82F6', '&:hover': { bgcolor: '#2563EB' } }}><CloudUpload sx={{ fontSize: 32, mb: 1 }} /><Typography variant="body1" fontWeight="700">Choose File</Typography><input type="file" accept=".der,.pem,.key,.p8" hidden onChange={handleFileUpload} /></Button>
+                    {formData.privateKey && <Box sx={{ mt: 1, p: 2, bgcolor: '#3B82F6', borderRadius: 2, width: '100%', maxWidth: 400 }}><Typography variant="body1" sx={{ color: 'white', fontWeight: 700 }}>✓ Selected: {formData.privateKey.name}</Typography></Box>}
                     <Typography variant="caption" color="#94a3b8" fontWeight={500}>Accepted formats: .der, .pem, .key, .p8</Typography>
                   </Box>
                 </Grid>
@@ -722,8 +722,8 @@ const ConnectorManager: React.FC = () => {
                 <Grid item xs={12}>
                   <Stack direction="row" spacing={2} flexWrap="wrap" gap={2}>
                     <Tooltip title={!formData.privateKey ? "Please upload a private key file first" : "Test your connection credentials"}><span><Button variant='contained' type="button" startIcon={isCheckingConnection ? <CircularProgress size={16} color="inherit" /> : (isSnowflakeConnectionValid ? <Check /> : connectionCheckFailed ? <Warning /> : <Close />)} onClick={CheckSnowflakeConnection} disabled={isCheckingConnection || isAddingConnection || !formData.privateKey || !formData.connectionName || !formData.account || !formData.username || !formData.authenticator || !formData.warehouse || !formData.database || !formData.schema} sx={{ borderRadius: 2, fontWeight: 700, background: isSnowflakeConnectionValid ? 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)' : connectionCheckFailed ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)', '&:hover': { background: isSnowflakeConnectionValid ? 'linear-gradient(135deg, #059669 0%, #0d9488 100%)' : connectionCheckFailed ? 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)' : 'linear-gradient(135deg, #64748b 0%, #475569 100%)' } }}>{isCheckingConnection ? 'Checking...' : (isSnowflakeConnectionValid ? 'Connection Valid ✓' : connectionCheckFailed ? 'Connection Failed ✗' : 'Check Connection')}</Button></span></Tooltip>
-                    <Tooltip title={!isSnowflakeConnectionValid ? "Please check connection first" : "Add this connection to your saved connections"}><span><Button variant="contained" type="submit" startIcon={isAddingConnection ? <CircularProgress size={16} color="inherit" /> : <Add />} disabled={isAddingConnection || !formData.privateKey || !isSnowflakeConnectionValid} sx={{ borderRadius: 2, fontWeight: 700, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)' } }}>{isAddingConnection ? 'Adding...' : 'Add Connection'}</Button></span></Tooltip>
-                    <Button variant="outlined" startIcon={showTable ? <VisibilityOff /> : <Visibility />} onClick={() => setShowTable(prev => !prev)} sx={{ borderRadius: 2, fontWeight: 700, borderColor: '#667eea', color: '#667eea', '&:hover': { borderColor: '#5568d3', bgcolor: 'rgba(102, 126, 234, 0.05)' } }}>{showTable ? "Hide" : "Show"} Connections</Button>
+                    <Tooltip title={!isSnowflakeConnectionValid ? "Please check connection first" : "Add this connection to your saved connections"}><span><Button variant="contained" type="submit" startIcon={isAddingConnection ? <CircularProgress size={16} color="inherit" /> : <Add />} disabled={isAddingConnection || !formData.privateKey || !isSnowflakeConnectionValid} sx={{ borderRadius: 2, fontWeight: 700, bgcolor: '#3B82F6', '&:hover': { bgcolor: '#2563EB' } }}>{isAddingConnection ? 'Adding...' : 'Add Connection'}</Button></span></Tooltip>
+                    <Button variant="outlined" startIcon={showTable ? <VisibilityOff /> : <Visibility />} onClick={() => setShowTable(prev => !prev)} sx={{ borderRadius: 2, fontWeight: 700, borderColor: '#3B82F6', color: '#3B82F6', '&:hover': { borderColor: '#2563EB', bgcolor: 'rgba(102, 126, 234, 0.05)' } }}>{showTable ? "Hide" : "Show"} Connections</Button>
                   </Stack>
                 </Grid>
               </Grid>
@@ -735,7 +735,7 @@ const ConnectorManager: React.FC = () => {
       )}
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: 3, boxShadow: '0 8px 32px rgba(102, 126, 234, 0.2)' } }}>
-        <DialogTitle sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', fontWeight: 700 }}>Edit Connection<IconButton onClick={() => setOpenDialog(false)} sx={{ position: 'absolute', right: 16, top: 16, color: 'white', '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.1)' } }}><Close /></IconButton></DialogTitle>
+        <DialogTitle sx={{ bgcolor: '#3B82F6', color: 'white', fontWeight: 700 }}>Edit Connection<IconButton onClick={() => setOpenDialog(false)} sx={{ position: 'absolute', right: 16, top: 16, color: 'white', '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.1)' } }}><Close /></IconButton></DialogTitle>
         <DialogContent dividers sx={{ p: 3 }}>
           <Alert severity="warning" icon={<Warning />} sx={{ mb: 3, borderRadius: 2, border: '1px solid rgba(245, 158, 11, 0.3)', background: 'linear-gradient(135deg, rgba(254, 243, 199, 0.3) 0%, rgba(253, 224, 71, 0.3) 100%)' }}><Typography variant="body2" fontWeight="700" mb={1} color="#92400e">Security Requirement:</Typography><Typography variant="body2" color="#92400e" fontWeight={500}>You <strong>must upload a new private key file</strong> to update this connection. This is required for security purposes.<br />After uploading, use <strong>"Check Connection"</strong> to verify before saving.</Typography></Alert>
           
@@ -763,7 +763,7 @@ const ConnectorManager: React.FC = () => {
         <DialogActions sx={{ px: 3, py: 2.5, background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
           <Button onClick={() => setOpenDialog(false)} startIcon={<Close />} variant="outlined" sx={{ borderRadius: 2, fontWeight: 600, borderColor: '#cbd5e1', color: '#64748b', '&:hover': { borderColor: '#94a3b8', bgcolor: '#f1f5f9' } }}>Cancel</Button>
           <Tooltip title={!editData.privateKey ? "Please upload a new private key file first" : "Test your connection before saving"}><span><Button variant='contained' type="button" startIcon={isEditCheckingConnection ? <CircularProgress size={16} color="inherit" /> : (isEditSnowflakeConnectionValid ? <Check /> : editConnectionCheckFailed ? <Warning /> : <Close />)} onClick={checkEditSnowFlakeConnection} disabled={isEditCheckingConnection || isEditingConnection || !editData.privateKey ||!editData.account || !editData.username || !editData.authenticator || !editData.warehouse || !editData.database || !editData.schema} sx={{ borderRadius: 2, fontWeight: 700, background: isEditSnowflakeConnectionValid ? 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)' : editConnectionCheckFailed ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)', '&:hover': { background: isEditSnowflakeConnectionValid ? 'linear-gradient(135deg, #059669 0%, #0d9488 100%)' : editConnectionCheckFailed ? 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)' : 'linear-gradient(135deg, #64748b 0%, #475569 100%)' } }}>{isEditCheckingConnection ? 'Checking...' : (isEditSnowflakeConnectionValid ? 'Connection Valid ✓' : editConnectionCheckFailed ? 'Connection Failed ✗' : 'Check Connection')}</Button></span></Tooltip>
-          <Tooltip title={!editData.privateKey ? "Upload a new private key first" : !isEditSnowflakeConnectionValid ? "Check connection first" : "Save your changes"}><span><Button onClick={handleSaveEdit} startIcon={isEditingConnection ? <CircularProgress size={16} color="inherit" /> : <Save />} variant="contained" disabled={isEditingConnection || !editData.privateKey || !isEditSnowflakeConnectionValid} sx={{ borderRadius: 2, fontWeight: 700, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)' } }}>{isEditingConnection ? 'Saving...' : 'Save Changes'}</Button></span></Tooltip>
+          <Tooltip title={!editData.privateKey ? "Upload a new private key first" : !isEditSnowflakeConnectionValid ? "Check connection first" : "Save your changes"}><span><Button onClick={handleSaveEdit} startIcon={isEditingConnection ? <CircularProgress size={16} color="inherit" /> : <Save />} variant="contained" disabled={isEditingConnection || !editData.privateKey || !isEditSnowflakeConnectionValid} sx={{ borderRadius: 2, fontWeight: 700, bgcolor: '#3B82F6', '&:hover': { bgcolor: '#2563EB' } }}>{isEditingConnection ? 'Saving...' : 'Save Changes'}</Button></span></Tooltip>
         </DialogActions>
       </Dialog>
 
