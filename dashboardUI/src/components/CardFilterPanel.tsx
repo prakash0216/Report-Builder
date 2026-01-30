@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import axios from "axios";
+import { API_BASE_URL } from '../config/api.config';
 import {
   CompactFilterItem,
 } from "./FilterPanel";
@@ -58,7 +59,7 @@ const CardFilterPanel: React.FC<CardFilterPanelProps> = ({ cardId, onClose }) =>
       const uniqueIds = Array.from(new Set(ids));
       try {
         setIsSaving(true);
-        await axios.post(`http://localhost:3002/api/cards/${cardId}/filter-panel-state`, {
+        await axios.post(`${API_BASE_URL}/api/cards/${cardId}/filter-panel-state`, {
           activeFilterIds: uniqueIds,
           positions,
         });

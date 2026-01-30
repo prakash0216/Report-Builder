@@ -9,6 +9,7 @@ import {
   updateLastValue
 } from './initializationState';
 import { getCurrentViewId } from './ViewContext';
+import { API_BASE_URL } from '../config/api.config';
 
 const ATOM_KEY = 'chartVisibilityVariableState';
 
@@ -36,13 +37,13 @@ export const chartVisibilityVariableState = atom<Record<string, string>>({
         if (isReset) {
           // If reset, clear all visibility
           const viewId = getCurrentViewId();
-          axios.post('http://localhost:3002/api/chart-visibility', { visibility: {}, viewId })
+          axios.post(`${API_BASE_URL}/api/chart-visibility`, { visibility: {}, viewId })
             .catch(error => console.error('Failed to reset chart visibility:', error));
         } else {
           timeoutId = setTimeout(async () => {
             try {
               const viewId = getCurrentViewId();
-              await axios.post('http://localhost:3002/api/chart-visibility', {
+              await axios.post(`${API_BASE_URL}/api/chart-visibility`, {
                 visibility: newValue,
                 viewId,
               });

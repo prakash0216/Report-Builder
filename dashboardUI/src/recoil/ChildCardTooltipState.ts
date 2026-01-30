@@ -6,6 +6,7 @@ import {
   updateLastValue,
 } from "./initializationState";
 import { TableSettings } from "../types/tableTypes";
+import { API_BASE_URL } from '../config/api.config';
 
 const ATOM_KEY = 'childCardTooltipConfigState';
 
@@ -217,7 +218,7 @@ export const childCardTooltipConfigState = atom<{[childCardKey: string]: ChildCa
     ({ setSelf }) => {
       const loadConfigs = async () => {
         try {
-          const response = await axios.get('http://localhost:3002/api/child-card-tooltip-configs');
+          const response = await axios.get(`${API_BASE_URL}/api/child-card-tooltip-configs`);
           if (response.data?.success && response.data.configs) {
             // 🔥 Validate and sanitize loaded configs to handle corrupt/old data
             const sanitizedConfigs: {[key: string]: ChildCardTooltipConfig} = {};
@@ -284,7 +285,7 @@ export const childCardTooltipConfigState = atom<{[childCardKey: string]: ChildCa
         timeoutId = setTimeout(async () => {
           try {
             // Save all configs at once
-            await axios.post('http://localhost:3002/api/child-card-tooltip-configs', {
+            await axios.post(`${API_BASE_URL}/api/child-card-tooltip-configs`, {
               configs: newValue,
             });
             console.log(`✅ ChildCardTooltipConfig: Saved ${Object.keys(newValue).length} configs`);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRecoilState, useResetRecoilState } from 'recoil';
 import { dataSourceAtomFamily } from '../recoil/DataSourceFamily';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import axios from 'axios';
 import { dataSourceNamesState } from '../recoil/DataSourceTracker';
 import Editor, { OnMount, Monaco } from '@monaco-editor/react';
@@ -49,6 +49,7 @@ import {
   Close as CloseIcon,
   Schedule as ScheduleIcon,
 } from '@mui/icons-material';
+import { API_BASE_URL } from '../config/api.config';
 
 interface QueryResult {
   success: boolean;
@@ -64,8 +65,6 @@ interface AlertState {
   message: string;
   severity: 'success' | 'error' | 'warning' | 'info';
 }
-
-const API_BASE_URL = 'http://localhost:3002';
 
 export default function AddDataSourceMui() {
   const [selectedDS, setSelectedDS] = useState<string>('');
@@ -223,7 +222,7 @@ export default function AddDataSourceMui() {
   const fetchConnectionNames = async () => {
     try {
       const connectionNames = await axios.get(
-        `${API_BASE_URL}/all-connections`
+        `${API_BASE_URL}/api/all-connections`
       );
       const fetchedConnectionNames = connectionNames.data.connections;
       setConnectionNames(fetchedConnectionNames);
@@ -345,7 +344,7 @@ export default function AddDataSourceMui() {
   const removeDataSource = async (dsName: string): Promise<void> => {
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/remove-data-source`,
+        `${API_BASE_URL}/api/remove-data-source`,
         { dsName }
       );
       if (response) {
@@ -388,7 +387,7 @@ export default function AddDataSourceMui() {
     try {
       // Update in backend
       const response = await axios.post(
-        `${API_BASE_URL}/rename-data-source`,
+        `${API_BASE_URL}/api/rename-data-source`,
         {
           oldName: editingDS,
           newName: editedName,
@@ -433,7 +432,7 @@ export default function AddDataSourceMui() {
 
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/execute-query`,
+        `${API_BASE_URL}/api/execute-query`,
         {
           query: sqlQuery,
           dataSourceName: selectedDS,
@@ -603,20 +602,19 @@ export default function AddDataSourceMui() {
         </Box>
 
         {/* Collapsible Content */}
-        <AnimatePresence>
-          {!isDataSourcesCollapsed && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                flex: 1,
-                overflow: 'hidden',
-              }}
-            >
+        {!isDataSourcesCollapsed && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              flex: 1,
+              overflow: 'hidden',
+            }}
+          >
               <Box
                 sx={{
                   p: 2.5,
@@ -896,9 +894,8 @@ export default function AddDataSourceMui() {
                   )}
                 </Box>
               </Box>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          </motion.div>
+        )}
 
         {/* Always visible data source names when collapsed */}
         <Collapse in={isDataSourcesCollapsed}>

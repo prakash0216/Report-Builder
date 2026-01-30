@@ -29,7 +29,7 @@ import {
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:3002';
+import { API_BASE_URL } from '../config/api.config';
 
 // Re-export dataLoadedState for backwards compatibility
 export { dataLoadedState } from '../recoil/initializationState';

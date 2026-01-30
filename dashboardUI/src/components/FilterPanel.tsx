@@ -35,6 +35,7 @@ import { atom } from 'recoil';
 import { IsEditModeState } from "../recoil/IsEditeMode";
 import { shouldBlockSave } from "../recoil/initializationState";
 import { currentViewContextState } from "../recoil/ViewContext";
+import { API_BASE_URL } from '../config/api.config';
 
 // Type for filter options
 interface DefaultValueOption {
@@ -805,7 +806,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
     
     const saveState = async () => {
       try {
-        await axios.post('http://localhost:3002/api/filter-panel-state', {
+        await axios.post(`${API_BASE_URL}/api/filter-panel-state`, {
           dashboardId: viewContext.dashboardId,
           activeFilterIds,
           positions: filterPositions,
@@ -927,7 +928,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
     setFilterPositions(newPositions);
     
     // Save to database
-    axios.post('http://localhost:3002/api/filter-panel-state', {
+    axios.post(`${API_BASE_URL}/api/filter-panel-state`, {
       activeFilterIds,
       positions: newPositions,
     }).catch(err => console.error('Failed to save reset positions:', err));

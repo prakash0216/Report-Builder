@@ -16,6 +16,7 @@ import { liveFilterFamily } from '../recoil/LiveFilterFamily';
 import { allFiltersSnapshotSelector } from '../recoil/AllFiltersSelector';
 import { dataLoadedState } from '../components/DataInitializer';
 import { filterResetTriggerState } from './initializationState';
+import { API_BASE_URL } from '../config/api.config';
 
 // Helper to safely parse stored strings into arrays/objects/values
 const safeParse = (value: string): any => {
@@ -129,7 +130,7 @@ export const useGlobalRecalculation = () => {
         }
       });
       
-      const response = await fetch('http://localhost:3002/api/calculate', {
+      const response = await fetch(`${API_BASE_URL}/api/calculate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

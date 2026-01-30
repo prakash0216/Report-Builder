@@ -1381,7 +1381,7 @@ export default function TooltipConfigPanel({
                 </AccordionSummary>
                 <AccordionDetails>
                   <Grid container spacing={2}>
-                    <Grid size={{ xs: 6 }}>
+                    <Grid item xs={6}>
                       <Typography variant="caption" color="#64748b">Width: {config.width}px</Typography>
                       <Slider
                         value={config.width}
@@ -1393,7 +1393,7 @@ export default function TooltipConfigPanel({
                         sx={{ color: '#667eea' }}
                       />
                     </Grid>
-                    <Grid size={{ xs: 6 }}>
+                    <Grid item xs={6}>
                       <Typography variant="caption" color="#64748b">Height: {config.height}px</Typography>
                       <Slider
                         value={config.height}
@@ -1405,7 +1405,7 @@ export default function TooltipConfigPanel({
                         sx={{ color: '#667eea' }}
                       />
                     </Grid>
-                    <Grid size={{ xs: 6 }}>
+                    <Grid item xs={6}>
                       <Typography variant="caption" color="#64748b">Hide Delay: {config.hideDelay}ms</Typography>
                       <Slider
                         value={config.hideDelay}
@@ -1417,7 +1417,7 @@ export default function TooltipConfigPanel({
                         sx={{ color: '#667eea' }}
                       />
                     </Grid>
-                    <Grid size={{ xs: 6 }}>
+                    <Grid item xs={6}>
                       <FormControlLabel
                         control={
                           <Switch
@@ -1431,7 +1431,7 @@ export default function TooltipConfigPanel({
                       />
                     </Grid>
                     {config.showHeader && (
-                      <Grid size={{ xs: 12 }}>
+                      <Grid item xs={12}>
                         <TextField
                           fullWidth
                           size="small"

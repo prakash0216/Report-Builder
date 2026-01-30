@@ -2483,7 +2483,7 @@ export default function ChildCardConfigTab() {
 
     // 🔥 Also delete the tooltip config for this child card
     try {
-      await fetch(`http://localhost:3002/api/child-card-tooltip-configs/${encodeURIComponent(childCardKey)}`, {
+      await fetch(`/api/child-card-tooltip-configs/${encodeURIComponent(childCardKey)}`, {
         method: 'DELETE',
       });
       console.log(`✅ Tooltip config for ${childCardKey} deleted from database`);
@@ -2642,7 +2642,7 @@ export default function ChildCardConfigTab() {
                       : selectedLayoutPreset === preset.key;
                     
                     return (
-                      <Grid key={preset.key} size={{ xs: 4 }}>
+                      <Grid item key={preset.key} xs={4}>
                         <Button
                           fullWidth
                           variant={isSelected ? 'contained' : 'outlined'}
@@ -4192,7 +4192,7 @@ export default function ChildCardConfigTab() {
                                     value={effectiveTableSettings.theme?.cellPadding || 'normal'}
                                     label="Cell Padding"
                                     onChange={(e) => handleChildCardChange(selectedChildIndex, {
-                                      tableSettings: { ...effectiveTableSettings, theme: { ...effectiveTableSettings.theme, cellPadding: e.target.value } }
+                                      tableSettings: { ...effectiveTableSettings, theme: { ...effectiveTableSettings.theme, cellPadding: e.target.value as 'normal' | 'compact' | 'comfortable' } }
                                     })}
                                     sx={{ bgcolor: 'white' }}
                                   >
@@ -4207,7 +4207,7 @@ export default function ChildCardConfigTab() {
                                     value={effectiveTableSettings.theme?.fontSize || 'medium'}
                                     label="Font Size"
                                     onChange={(e) => handleChildCardChange(selectedChildIndex, {
-                                      tableSettings: { ...effectiveTableSettings, theme: { ...effectiveTableSettings.theme, fontSize: e.target.value } }
+                                      tableSettings: { ...effectiveTableSettings, theme: { ...effectiveTableSettings.theme, fontSize: e.target.value as 'small' | 'medium' | 'large' } }
                                     })}
                                     sx={{ bgcolor: 'white' }}
                                   >

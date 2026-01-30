@@ -3,7 +3,7 @@ import axios from 'axios';
 import { shouldBlockSave } from './initializationState';
 import { getCurrentDashboardId } from './ViewContext';
 
-const API_BASE_URL = 'http://localhost:3002';
+import { API_BASE_URL } from '../config/api.config';
 
 // Custom effect for syncing parameters with database via API
 // Note: DataInitializer loads parameter values at startup

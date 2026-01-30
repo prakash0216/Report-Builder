@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRecoilState, useRecoilValue, useResetRecoilState } from 'recoil';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { parameterAtomFamily } from '../recoil/ParameterFamliy';
 import { parameterNamesState } from '../recoil/ParameterTracker';
 import {
@@ -32,14 +32,13 @@ import {
   Close as CloseIcon,
   Edit as EditIcon,
 } from '@mui/icons-material';
+import { API_BASE_URL } from '../config/api.config';
 
 interface AlertState {
   show: boolean;
   message: string;
   severity: 'success' | 'error' | 'warning' | 'info';
 }
-
-const API_BASE_URL = 'http://localhost:3002';
 
 export default function AddParameterMui() {
   const [selectedParam, setSelectedParam] = useState<string>('');
@@ -217,20 +216,19 @@ export default function AddParameterMui() {
         </Box>
 
         {/* Collapsible Content */}
-        <AnimatePresence>
-          {!isParamsCollapsed && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                flex: 1,
-                overflow: 'hidden',
-              }}
-            >
+        {!isParamsCollapsed && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              flex: 1,
+              overflow: 'hidden',
+            }}
+          >
               <Box sx={{ p: 2.5, flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 
                 {/* --- In-Panel Alert --- */}
@@ -508,9 +506,8 @@ export default function AddParameterMui() {
                   )}
                 </Box>
               </Box>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          </motion.div>
+        )}
 
         {/* Always visible parameter names when collapsed */}
         <Collapse in={isParamsCollapsed}>
@@ -562,20 +559,19 @@ export default function AddParameterMui() {
           }}
         >
           {selectedParam ? (
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={selectedParam}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3 }}
-                style={{
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 16,
-                }}
-              >
+            <motion.div
+              key={selectedParam}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+              style={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16,
+              }}
+            >
                 <Box
                   sx={{
                     display: 'flex',
@@ -685,8 +681,7 @@ Examples:
                     sx: { height: '100% !important' },
                   }}
                 />
-              </motion.div>
-            </AnimatePresence>
+            </motion.div>
           ) : (
             <Box
               sx={{

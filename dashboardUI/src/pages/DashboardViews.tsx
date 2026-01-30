@@ -71,9 +71,10 @@ import SnowflakeConnector from '../components/SnowflakeConnector';
 import PredefinedFunctions from '../components/PredefinedFunctions';
 import { Functions as FunctionsIcon } from '@mui/icons-material';
 import { predefinedFunctionsState } from '../recoil/PredefinedFunctionsState';
+import { API_BASE_URL } from '../config/api.config';
 
 // API base URL
-const API_BASE = 'http://localhost:3002/api';
+const API_BASE = `${API_BASE_URL}/api`;
 
 interface View {
   id: string;
@@ -1342,7 +1343,7 @@ const DashboardViews: React.FC = () => {
           <>
           {/* Stats Row */}
           <Grid container spacing={2}>
-          <Grid size={{xs:6, sm:3}}>
+          <Grid item xs={6} sm={3}>
             <StatCard
               icon={<ViewModuleIcon sx={{ color: 'white', fontSize: 24 }} />}
               label="Total Views"
@@ -1351,7 +1352,7 @@ const DashboardViews: React.FC = () => {
               gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
             />
           </Grid>
-          <Grid size={{xs:6, sm:3}}>
+          <Grid item xs={6} sm={3}>
             <StatCard
               icon={<BarChartIcon sx={{ color: 'white', fontSize: 24 }} />}
               label="Total Charts"
@@ -1360,7 +1361,7 @@ const DashboardViews: React.FC = () => {
               gradient="linear-gradient(135deg, #10b981 0%, #059669 100%)"
             />
           </Grid>
-          <Grid size={{xs:6, sm:3}}>
+          <Grid item xs={6} sm={3}>
             <StatCard
               icon={<TrendingUpIcon sx={{ color: 'white', fontSize: 24 }} />}
               label="Recently Updated"
@@ -1369,7 +1370,7 @@ const DashboardViews: React.FC = () => {
               gradient="linear-gradient(135deg, #f59e0b 0%, #d97706 100%)"
             />
           </Grid>
-          <Grid size={{xs:6, sm:3}}>
+          <Grid item xs={6} sm={3}>
             <StatCard
               icon={<StarIcon sx={{ color: 'white', fontSize: 24 }} />}
               label="Favorites"
@@ -1567,7 +1568,7 @@ const DashboardViews: React.FC = () => {
           ) : viewMode === 'grid' ? (
             <Grid container spacing={2.5}>
               {filteredViews.map((view, index) => (
-                <Grid size={{xs:12, sm:6, md:4, lg:3}} key={view.id}>
+                <Grid item xs={12} sm={6} md={4} lg={3} key={view.id}>
                   <ViewCard view={view} index={index} />
                 </Grid>
               ))}

@@ -52,6 +52,7 @@ import { parameterNamesState } from '../recoil/ParameterTracker';
 import { liveFilterFamily } from '../recoil/LiveFilterFamily';
 import { CalculationEditor } from './CalculationEditor';
 import { getCurrentDashboardId } from '../recoil/ViewContext';
+import { API_BASE_URL } from '../config/api.config';
 
 // Helper to safely parse stored strings into arrays/objects/values
 const safeParse = (value: string): any => {
@@ -676,7 +677,7 @@ export default function Hooks() {
     // Helper function to reload calculations from database
     const reloadCalculations = useCallback(async () => {
         try {
-            const response = await fetch('http://localhost:3002/api/calculations');
+            const response = await fetch(`${API_BASE_URL}/api/calculations`);
             if (response.ok) {
                 const data = await response.json();
                 if (data.success && data.calculations) {
@@ -823,7 +824,7 @@ export default function Hooks() {
                     console.log(`📦 [Hooks] Fresh filters:`, Object.keys(allFilters));
 
                     const dashboardId = getCurrentDashboardId();
-                    const response = await fetch('http://localhost:3002/api/calculate', {
+                    const response = await fetch(`${API_BASE_URL}/api/calculate`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -859,7 +860,7 @@ export default function Hooks() {
 
                     // Update last_executed timestamp in database
                     try {
-                        await fetch(`http://localhost:3002/api/calculations/${logic.id}/execute`, {
+                        await fetch(`${API_BASE_URL}/api/calculations/${logic.id}/execute`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
                         });
@@ -995,7 +996,7 @@ export default function Hooks() {
                       });
 
                     const calcDashboardId = getCurrentDashboardId();
-                    const response = await fetch('http://localhost:3002/api/calculate', {
+                    const response = await fetch(`${API_BASE_URL}/api/calculate`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1042,7 +1043,7 @@ export default function Hooks() {
                                 console.log(`🧹 Cleaned up old variable: ${oldVariableName}`);
                             }
 
-                            const updateResponse = await fetch(`http://localhost:3002/api/calculations/${editingCalculationId}`, {
+                            const updateResponse = await fetch(`${API_BASE_URL}/api/calculations/${editingCalculationId}`, {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
@@ -1056,7 +1057,7 @@ export default function Hooks() {
                             }
 
                             // Update execution timestamp
-                            await fetch(`http://localhost:3002/api/calculations/${editingCalculationId}/execute`, {
+                            await fetch(`${API_BASE_URL}/api/calculations/${editingCalculationId}/execute`, {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
                             });
@@ -1080,7 +1081,7 @@ export default function Hooks() {
                             // Variable name exists - update it
                             const existingLogic = storedLogics[existingLogicIndex];
                             try {
-                                const updateResponse = await fetch(`http://localhost:3002/api/calculations/${existingLogic.id}`, {
+                                const updateResponse = await fetch(`${API_BASE_URL}/api/calculations/${existingLogic.id}`, {
                                     method: 'PUT',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
@@ -1093,7 +1094,7 @@ export default function Hooks() {
                                 }
 
                                 // Update execution timestamp
-                                await fetch(`http://localhost:3002/api/calculations/${existingLogic.id}/execute`, {
+                                await fetch(`${API_BASE_URL}/api/calculations/${existingLogic.id}/execute`, {
                                     method: 'PUT',
                                     headers: { 'Content-Type': 'application/json' },
                                 });
@@ -1109,7 +1110,7 @@ export default function Hooks() {
                         // Create new calculation in database
                         try {
                             const dashboardId = getCurrentDashboardId();
-                            const createResponse = await fetch('http://localhost:3002/api/calculations', {
+                            const createResponse = await fetch(`${API_BASE_URL}/api/calculations`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
@@ -1131,7 +1132,7 @@ export default function Hooks() {
                             if (updatedLogics) {
                                 const newCalc = updatedLogics.find((c: StoredLogic) => c.variableName === variableName);
                                 if (newCalc) {
-                                    await fetch(`http://localhost:3002/api/calculations/${newCalc.id}/execute`, {
+                                    await fetch(`${API_BASE_URL}/api/calculations/${newCalc.id}/execute`, {
                                         method: 'PUT',
                                         headers: { 'Content-Type': 'application/json' },
                                     });
@@ -1201,7 +1202,7 @@ export default function Hooks() {
 
                 try {
                     // Delete from database
-                    const deleteResponse = await fetch(`http://localhost:3002/api/calculations/${id}`, {
+                    const deleteResponse = await fetch(`${API_BASE_URL}/api/calculations/${id}`, {
                         method: 'DELETE',
                         headers: { 'Content-Type': 'application/json' },
                     });
@@ -1763,7 +1764,7 @@ export default function Hooks() {
             <TabPanel value={tabValue} index={2}>
                 <Grid container spacing={3}>
                     {/* Variables Column */}
-                    <Grid size={{xs:12,md:6}}>
+                    <Grid item xs={12} md={6}>
                         <Paper 
                             elevation={0} 
                             sx={{ 
@@ -1821,7 +1822,7 @@ export default function Hooks() {
                     </Grid>
 
                     {/* Filters Column */}
-                    <Grid size={{xs:12,md:6}}>
+                    <Grid item xs={12} md={6}>
                         <Paper 
                             elevation={0} 
                             sx={{ 

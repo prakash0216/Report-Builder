@@ -7,6 +7,7 @@ import {
   updateLastValue
 } from './initializationState';
 import { getCurrentViewId } from './ViewContext';
+import { API_BASE_URL } from '../config/api.config';
 
 export interface DimensionCondition {
   id: string;
@@ -49,7 +50,7 @@ export const cardDimensionConditionsState = atom<Record<string, DimensionConditi
             const viewId = getCurrentViewId();
             // Save conditions for each chart
             for (const [chartId, conditions] of Object.entries(newValue)) {
-              await axios.post('http://localhost:3002/api/card-dimension-conditions', {
+              await axios.post(`${API_BASE_URL}/api/card-dimension-conditions`, {
                 chartId,
                 viewId,
                 conditions: conditions || [],

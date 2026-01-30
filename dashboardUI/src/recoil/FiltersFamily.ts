@@ -1,7 +1,7 @@
 import { atomFamily, atom, selector } from 'recoil';
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:3002';
+import { API_BASE_URL } from '../config/api.config';
 
 export interface DefaultValueOption {
     label: string;

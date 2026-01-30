@@ -41,6 +41,7 @@ import { variableAtomFamily } from '../recoil/VariableFamily';
 import { hooksArraySelector,hooksArrayOfArraySelector,hooksArrayOfObjectsSelector } from '../recoil/Variabletracker';
 import { getCurrentDashboardId } from '../recoil/ViewContext';
 import axios from 'axios';
+import { API_BASE_URL } from '../config/api.config';
 
 // Utility function to format dates to yyyy-mm-dd
 // Only formats actual dates, not numbers that happen to be small
@@ -264,7 +265,7 @@ const CascadingDropdown: React.FC = () => {
     const fetchDataSources = async () => {
         setIsLoadingDataSources(true);
         try {
-            const response = await axios.get("http://localhost:3002/get-all-ds-names");
+            const response = await axios.get(`${API_BASE_URL}/api/get-all-ds-names`);
             if (response && response.data.data_source_names) {
                 setAvailableDataSources(response.data.data_source_names);
             }
@@ -283,7 +284,7 @@ const CascadingDropdown: React.FC = () => {
         setAvailableFilterColumns([]);
         
         try {
-            const response = await axios.post("http://localhost:3002/get-ds-column-names", { ds_name: dsName });
+            const response = await axios.post(`${API_BASE_URL}/api/get-ds-column-names`, { ds_name: dsName });
             if (response && response.data.column_names) {
                 setAvailableFilterColumns(response.data.column_names);
             }
@@ -308,7 +309,7 @@ const CascadingDropdown: React.FC = () => {
         setAvailableFilterColumnValues([]);
         
         try {
-            const response = await axios.post("http://localhost:3002/get-distinct-column-values", {
+            const response = await axios.post(`${API_BASE_URL}/api/get-distinct-column-values`, {
                 ds_name: dsName,
                 column_name: columnName
             });
@@ -728,10 +729,10 @@ const CascadingDropdown: React.FC = () => {
 
             if (editingId) {
                 // Update existing filter by variable name
-                await axios.put(`http://localhost:3002/api/filters/${configId}`, filterData);
+                await axios.put(`${API_BASE_URL}/api/filters/${configId}`, filterData);
             } else {
                 // Create new filter
-                await axios.post('http://localhost:3002/api/filters', filterData);
+                await axios.post(`${API_BASE_URL}/api/filters`, filterData);
                 if (!filterNames.includes(configId)) {
                     setFilterNames(prev => [...prev, configId]);
                 }
@@ -741,7 +742,7 @@ const CascadingDropdown: React.FC = () => {
             setSpecificConfig(newConfig);
             
             // Reload filters from database to ensure consistency (scoped by dashboardId)
-            const reloadResponse = await axios.get(`http://localhost:3002/api/filters${dashboardId ? `?dashboardId=${dashboardId}` : ''}`);
+            const reloadResponse = await axios.get(`${API_BASE_URL}/api/filters${dashboardId ? `?dashboardId=${dashboardId}` : ''}`);
             if (reloadResponse.data.success && reloadResponse.data.filters) {
                 const reloadedFilterNames = reloadResponse.data.filters.map((f: any) => f.variable_name);
                 setFilterNames(reloadedFilterNames);
@@ -809,14 +810,14 @@ const CascadingDropdown: React.FC = () => {
     const handleDeleteFilter = async (variableName: string) => {
         try {
             // Delete from database
-            await axios.delete(`http://localhost:3002/api/filters/${variableName}`);
+            await axios.delete(`${API_BASE_URL}/api/filters/${variableName}`);
             
             // Update local state
             setFilterNames(prev => prev.filter(name => name !== variableName));
             clearFilterConfig(variableName);
             
             // Reload filters from database to ensure consistency
-            const reloadResponse = await axios.get('http://localhost:3002/api/filters');
+            const reloadResponse = await axios.get(`${API_BASE_URL}/api/filters`);
             if (reloadResponse.data.success && reloadResponse.data.filters) {
                 const reloadedFilterNames = reloadResponse.data.filters.map((f: any) => f.variable_name);
                 setFilterNames(reloadedFilterNames);
@@ -1458,7 +1459,7 @@ const CascadingDropdown: React.FC = () => {
 
             <Grid container spacing={3}>
                 {/* LEFT COLUMN - CREATE/EDIT FORM */}
-                <Grid size={{xs:12,md:6}}>
+                <Grid item xs={12} md={6}>
                     <Card 
                         elevation={0}
                         sx={{ 
@@ -2016,24 +2017,22 @@ const CascadingDropdown: React.FC = () => {
                                                             },
                                                         },
                                                     }}
-                                                    slotProps={{
-                                                        input: {
-                                                            startAdornment: (
-                                                                <Typography
-                                                                    component="span"
-                                                                    fontWeight={700}
-                                                                    sx={{
-                                                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                                                        backgroundClip: 'text',
-                                                                        WebkitBackgroundClip: 'text',
-                                                                        WebkitTextFillColor: 'transparent',
-                                                                        mr: 0.5
-                                                                    }}
-                                                                >
-                                                                    $
-                                                                </Typography>
-                                                            ),
-                                                        },
+                                                    InputProps={{
+                                                        startAdornment: (
+                                                            <Typography
+                                                                component="span"
+                                                                fontWeight={700}
+                                                                sx={{
+                                                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                                                    backgroundClip: 'text',
+                                                                    WebkitBackgroundClip: 'text',
+                                                                    WebkitTextFillColor: 'transparent',
+                                                                    mr: 0.5
+                                                                }}
+                                                            >
+                                                                $
+                                                            </Typography>
+                                                        ),
                                                     }}
                                                 />
                                                 <Typography 
@@ -2258,7 +2257,7 @@ const CascadingDropdown: React.FC = () => {
                 </Grid>
 
                 {/* RIGHT COLUMN - SAVED FILTERS LIST */}
-                <Grid size={{xs:12,md:6}}>
+                <Grid item xs={12} md={6}>
                     <Card 
                         elevation={0}
                         sx={{

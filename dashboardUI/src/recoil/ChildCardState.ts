@@ -7,6 +7,7 @@ import {
 } from "./initializationState";
 import { getCurrentViewId } from "./ViewContext";
 import { TableSettings } from "../types/tableTypes";
+import { API_BASE_URL } from '../config/api.config';
 
 const ATOM_KEY = 'childCardConfigState';
 
@@ -199,7 +200,7 @@ export const childCardConfigState = atom<{[parentCardId: string]: ParentCardConf
           try {
             const viewId = getCurrentViewId();
             for (const [parentCardId, config] of Object.entries(newValue)) {
-              await axios.post('http://localhost:3002/api/child-card-configs', {
+              await axios.post(`${API_BASE_URL}/api/child-card-configs`, {
                 parentCardId,
                 viewId,
                 config,

@@ -7,6 +7,7 @@ import {
   updateLastValue
 } from "./initializationState";
 import { getCurrentViewId } from "./ViewContext";
+import { API_BASE_URL } from '../config/api.config';
 
 const ATOM_KEY = 'layoutState';
 
@@ -43,7 +44,7 @@ export const layoutState = atom<{ [key: string]: Layout[] }>({
                         const totalItems = Object.values(newValue).reduce((sum, arr) => sum + (arr?.length || 0), 0);
                         console.log(`💾 [LayoutState SAVE] viewId=${viewId}, saving ${totalItems} layout items`);
                         
-                        await axios.post('http://localhost:3002/api/layouts', {
+                        await axios.post(`${API_BASE_URL}/api/layouts`, {
                             layouts: newValue,
                             viewId, // Include viewId to scope to current view
                         });

@@ -138,12 +138,16 @@ export function JsonEditor({
       }
     });
 
-    monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-      validate: true,
-      allowComments: false,
-      schemas: [],
-      enableSchemaRequest: false
-    });
+    // Monaco JSON defaults - using optional chaining for compatibility
+    const jsonDefaults = (monaco.languages.json as any).jsonDefaults;
+    if (jsonDefaults?.setDiagnosticsOptions) {
+      jsonDefaults.setDiagnosticsOptions({
+        validate: true,
+        allowComments: false,
+        schemas: [],
+        enableSchemaRequest: false
+      });
+    }
   };
 
   // Function to highlight ${variableName} patterns

@@ -1,5 +1,6 @@
 import { atomFamily } from "recoil";
 import axios from "axios";
+import { API_BASE_URL } from '../config/api.config';
 
 export type CardFilterPosition = {
   x: number;
@@ -12,7 +13,7 @@ export const cardFilterIdsFamily = atomFamily<string[], string>({
   effects: (cardId) => [
     ({ setSelf }) => {
       axios
-        .get(`http://localhost:3002/api/cards/${cardId}/filter-panel-state`)
+        .get(`${API_BASE_URL}/api/cards/${cardId}/filter-panel-state`)
         .then((response) => {
           if (response.data.success && response.data.activeFilterIds) {
             setSelf(response.data.activeFilterIds);
@@ -34,7 +35,7 @@ export const cardFilterPositionsFamily = atomFamily<
   effects: (cardId) => [
     ({ setSelf }) => {
       axios
-        .get(`http://localhost:3002/api/cards/${cardId}/filter-panel-state`)
+        .get(`${API_BASE_URL}/api/cards/${cardId}/filter-panel-state`)
         .then((response) => {
           if (response.data.success && response.data.positions) {
             setSelf(response.data.positions);

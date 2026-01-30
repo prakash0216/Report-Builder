@@ -11,6 +11,7 @@ import {
 
 import { SelectChangeEvent } from '@mui/material/Select';
 import axios from 'axios';
+import { API_BASE_URL } from '../config/api.config';
 
 interface SnowflakeConnection {
   id: number;
@@ -116,7 +117,7 @@ const ConnectorManager: React.FC = () => {
 
   const fetchConnections = async () => {
     try {
-      const response = await axios.get('http://localhost:3002/snowflake-connections');
+      const response = await axios.get(`${API_BASE_URL}/api/snowflake-connections`);
       setConnections(response.data.connections);
     } catch (error) {
       console.error('Error fetching connections:', error);
@@ -269,7 +270,7 @@ const ConnectorManager: React.FC = () => {
       formDataToSend.append('database', formData.database);
       formDataToSend.append('schema', formData.schema);
       
-      const response = await axios.post('http://localhost:3002/add-snowflake-connection', formDataToSend);
+      const response = await axios.post(`${API_BASE_URL}/api/add-snowflake-connection`, formDataToSend);
       
       if (response.data.success) {
         setFormData({
@@ -345,7 +346,7 @@ const ConnectorManager: React.FC = () => {
       editFormData.append('database', editData.database);
       editFormData.append('schema', editData.schema);
       
-      const response = await axios.post(`http://localhost:3002/update-snowflake-connection/${editingId}`, editFormData);
+      const response = await axios.post(`${API_BASE_URL}/api/update-snowflake-connection/${editingId}`, editFormData);
       
       if (response.data.success) {
         setOpenDialog(false);
@@ -387,7 +388,7 @@ const ConnectorManager: React.FC = () => {
     setIsDeletingConnection(connectionToDelete.id);
     
     try {
-      const response = await axios.delete(`http://localhost:3002/delete-snowflake-connection/${connectionToDelete.id}`);
+      const response = await axios.delete(`${API_BASE_URL}/api/delete-snowflake-connection/${connectionToDelete.id}`);
       
       if (response.data.success) {
         showAlert('Connection deleted successfully!', 'info');
@@ -485,7 +486,7 @@ const ConnectorManager: React.FC = () => {
       formDataToSend.append('database', formData.database);
       formDataToSend.append('schema', formData.schema);
 
-      const response = await axios.post('http://localhost:3002/check-snowflake-connection', formDataToSend);
+      const response = await axios.post(`${API_BASE_URL}/api/check-snowflake-connection`, formDataToSend);
 
       if (response.data.success) {
         showAlert('✓ Snowflake connection is valid! You can now add this connection.', 'success');
@@ -547,7 +548,7 @@ const ConnectorManager: React.FC = () => {
       editFormData.append('database', editData.database);
       editFormData.append('schema', editData.schema);
 
-      const response = await axios.post('http://localhost:3002/check-snowflake-connection', editFormData);
+      const response = await axios.post(`${API_BASE_URL}/api/check-snowflake-connection`, editFormData);
 
       if (response.data.success) {
         showAlert('✓ Snowflake connection is valid! You can now save the changes.', 'success');
@@ -655,7 +656,7 @@ const ConnectorManager: React.FC = () => {
 
           <Grid container spacing={3}>
             {filteredConnectors.map((connector) => (
-              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={connector.id}>
+              <Grid item xs={12} sm={6} md={4} key={connector.id}>
                 <Paper elevation={0} onClick={() => handleConnectorSelect(connector.id)} sx={{ p: 4, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'all 0.3s', background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)', backdropFilter: 'blur(10px)', border: '1px solid rgba(102, 126, 234, 0.2)', borderRadius: 3, '&:hover': { boxShadow: '0 12px 40px rgba(102, 126, 234, 0.25)', transform: 'translateY(-4px)', border: '1px solid rgba(102, 126, 234, 0.4)' } }}>
                   <Box sx={{ width: 80, height: 80, borderRadius: 3, background: connector.gradient, display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2, boxShadow: `0 8px 24px ${connector.color}40` }}><Storage sx={{ color: 'white', fontSize: 40 }} /></Box>
                   <Typography variant="h6" sx={{ mb: 1, fontWeight: 700, color: '#1e293b' }}>{connector.name}</Typography>
@@ -700,12 +701,12 @@ const ConnectorManager: React.FC = () => {
           <Paper elevation={0} sx={{ mb: 4, p: 4, background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)', backdropFilter: 'blur(10px)', border: '1px solid rgba(102, 126, 234, 0.2)', borderRadius: 3, boxShadow: '0 8px 32px rgba(102, 126, 234, 0.1)' }}>
             <form onSubmit={handleSubmit}>
               <Grid container spacing={3}>
-                <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Connection Name" name="connectionName" value={formData.connectionName} onChange={handleInputChange} variant="outlined" helperText="A unique name to identify this connection" sx={inputSx} /></Grid>
-                <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Account" name="account" value={formData.account} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake account identifier" sx={inputSx} /></Grid>
-                <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Username" name="username" value={formData.username} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake username" sx={inputSx} /></Grid>
-                <Grid size={{ xs: 12, sm: 6 }}><FormControl fullWidth required sx={inputSx}><InputLabel>Authenticator</InputLabel><Select label="Authenticator" name="authenticator" value={formData.authenticator} onChange={handleSelectChange}><MenuItem value="SNOWFLAKE_JWT">SNOWFLAKE_JWT</MenuItem><MenuItem value="SNOWFLAKE">SNOWFLAKE</MenuItem><MenuItem value="OAUTH">OAUTH</MenuItem></Select></FormControl></Grid>
+                <Grid item xs={12} sm={6}><TextField fullWidth required label="Connection Name" name="connectionName" value={formData.connectionName} onChange={handleInputChange} variant="outlined" helperText="A unique name to identify this connection" sx={inputSx} /></Grid>
+                <Grid item xs={12} sm={6}><TextField fullWidth required label="Account" name="account" value={formData.account} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake account identifier" sx={inputSx} /></Grid>
+                <Grid item xs={12} sm={6}><TextField fullWidth required label="Username" name="username" value={formData.username} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake username" sx={inputSx} /></Grid>
+                <Grid item xs={12} sm={6}><FormControl fullWidth required sx={inputSx}><InputLabel>Authenticator</InputLabel><Select label="Authenticator" name="authenticator" value={formData.authenticator} onChange={handleSelectChange}><MenuItem value="SNOWFLAKE_JWT">SNOWFLAKE_JWT</MenuItem><MenuItem value="SNOWFLAKE">SNOWFLAKE</MenuItem><MenuItem value="OAUTH">OAUTH</MenuItem></Select></FormControl></Grid>
 
-                <Grid size={{ xs: 12 }}>
+                <Grid item xs={12}>
                   <Box sx={{ border: '2px dashed', borderColor: formData.privateKey ? '#667eea' : 'rgba(102, 126, 234, 0.3)', borderRadius: 3, p: 4, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 180, background: formData.privateKey ? 'linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)' : 'transparent' }}>
                     <Typography variant="h6" fontWeight="700" color={formData.privateKey ? '#667eea' : '#64748b'}>Upload Private Key *</Typography>
                     <Button variant="contained" component="label" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2, px: 5, borderRadius: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)' } }}><CloudUpload sx={{ fontSize: 32, mb: 1 }} /><Typography variant="body1" fontWeight="700">Choose File</Typography><input type="file" accept=".der,.pem,.key,.p8" hidden onChange={handleFileUpload} /></Button>
@@ -714,11 +715,11 @@ const ConnectorManager: React.FC = () => {
                   </Box>
                 </Grid>
 
-                <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Warehouse" name="warehouse" value={formData.warehouse} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake warehouse name" sx={inputSx} /></Grid>
-                <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Database" name="database" value={formData.database} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake database name" sx={inputSx} /></Grid>
-                <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Schema" name="schema" value={formData.schema} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake schema name" sx={inputSx} /></Grid>
+                <Grid item xs={12} sm={6}><TextField fullWidth required label="Warehouse" name="warehouse" value={formData.warehouse} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake warehouse name" sx={inputSx} /></Grid>
+                <Grid item xs={12} sm={6}><TextField fullWidth required label="Database" name="database" value={formData.database} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake database name" sx={inputSx} /></Grid>
+                <Grid item xs={12} sm={6}><TextField fullWidth required label="Schema" name="schema" value={formData.schema} onChange={handleInputChange} variant="outlined" helperText="Your Snowflake schema name" sx={inputSx} /></Grid>
 
-                <Grid size={{ xs: 12 }}>
+                <Grid item xs={12}>
                   <Stack direction="row" spacing={2} flexWrap="wrap" gap={2}>
                     <Tooltip title={!formData.privateKey ? "Please upload a private key file first" : "Test your connection credentials"}><span><Button variant='contained' type="button" startIcon={isCheckingConnection ? <CircularProgress size={16} color="inherit" /> : (isSnowflakeConnectionValid ? <Check /> : connectionCheckFailed ? <Warning /> : <Close />)} onClick={CheckSnowflakeConnection} disabled={isCheckingConnection || isAddingConnection || !formData.privateKey || !formData.connectionName || !formData.account || !formData.username || !formData.authenticator || !formData.warehouse || !formData.database || !formData.schema} sx={{ borderRadius: 2, fontWeight: 700, background: isSnowflakeConnectionValid ? 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)' : connectionCheckFailed ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)', '&:hover': { background: isSnowflakeConnectionValid ? 'linear-gradient(135deg, #059669 0%, #0d9488 100%)' : connectionCheckFailed ? 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)' : 'linear-gradient(135deg, #64748b 0%, #475569 100%)' } }}>{isCheckingConnection ? 'Checking...' : (isSnowflakeConnectionValid ? 'Connection Valid ✓' : connectionCheckFailed ? 'Connection Failed ✗' : 'Check Connection')}</Button></span></Tooltip>
                     <Tooltip title={!isSnowflakeConnectionValid ? "Please check connection first" : "Add this connection to your saved connections"}><span><Button variant="contained" type="submit" startIcon={isAddingConnection ? <CircularProgress size={16} color="inherit" /> : <Add />} disabled={isAddingConnection || !formData.privateKey || !isSnowflakeConnectionValid} sx={{ borderRadius: 2, fontWeight: 700, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)' } }}>{isAddingConnection ? 'Adding...' : 'Add Connection'}</Button></span></Tooltip>
@@ -739,12 +740,12 @@ const ConnectorManager: React.FC = () => {
           <Alert severity="warning" icon={<Warning />} sx={{ mb: 3, borderRadius: 2, border: '1px solid rgba(245, 158, 11, 0.3)', background: 'linear-gradient(135deg, rgba(254, 243, 199, 0.3) 0%, rgba(253, 224, 71, 0.3) 100%)' }}><Typography variant="body2" fontWeight="700" mb={1} color="#92400e">Security Requirement:</Typography><Typography variant="body2" color="#92400e" fontWeight={500}>You <strong>must upload a new private key file</strong> to update this connection. This is required for security purposes.<br />After uploading, use <strong>"Check Connection"</strong> to verify before saving.</Typography></Alert>
           
           <Grid container spacing={3}>
-            <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Connection Name" name="connectionName" value={editData.connectionName || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
-            <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Account" name="account" value={editData.account || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
-            <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Username" name="username" value={editData.username || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
-            <Grid size={{ xs: 12, sm: 6 }}><FormControl fullWidth required sx={inputSx}><InputLabel>Authenticator</InputLabel><Select label="Authenticator" name="authenticator" value={editData.authenticator || ''} onChange={handleEditSelectChange}><MenuItem value="SNOWFLAKE_JWT">SNOWFLAKE_JWT</MenuItem><MenuItem value="SNOWFLAKE">SNOWFLAKE</MenuItem><MenuItem value="OAUTH">OAUTH</MenuItem></Select></FormControl></Grid>
+            <Grid item xs={12} sm={6}><TextField fullWidth required label="Connection Name" name="connectionName" value={editData.connectionName || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
+            <Grid item xs={12} sm={6}><TextField fullWidth required label="Account" name="account" value={editData.account || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
+            <Grid item xs={12} sm={6}><TextField fullWidth required label="Username" name="username" value={editData.username || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
+            <Grid item xs={12} sm={6}><FormControl fullWidth required sx={inputSx}><InputLabel>Authenticator</InputLabel><Select label="Authenticator" name="authenticator" value={editData.authenticator || ''} onChange={handleEditSelectChange}><MenuItem value="SNOWFLAKE_JWT">SNOWFLAKE_JWT</MenuItem><MenuItem value="SNOWFLAKE">SNOWFLAKE</MenuItem><MenuItem value="OAUTH">OAUTH</MenuItem></Select></FormControl></Grid>
             
-            <Grid size={{ xs: 12 }}>
+            <Grid item xs={12}>
               <Box sx={{ border: '2px dashed', borderColor: editData.privateKey ? '#10b981' : '#f59e0b', borderRadius: 3, p: 4, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 200, background: editData.privateKey ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(20, 184, 166, 0.05) 100%)' : 'linear-gradient(135deg, rgba(254, 243, 199, 0.3) 0%, rgba(253, 224, 71, 0.3) 100%)' }}>
                 <Typography variant="h6" fontWeight="700" color={editData.privateKey ? '#10b981' : '#f59e0b'}>{editData.privateKey ? '✓ New Private Key Uploaded' : '⚠ Upload New Private Key (Required) *'}</Typography>
                 <Button variant="contained" component="label" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2.5, px: 6, borderRadius: 2, background: editData.privateKey ? 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)' : 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)', '&:hover': { background: editData.privateKey ? 'linear-gradient(135deg, #059669 0%, #0d9488 100%)' : 'linear-gradient(135deg, #ea580c 0%, #dc2626 100%)' } }}><CloudUpload sx={{ fontSize: 36, mb: 1 }} /><Typography variant="body1" fontWeight="700">{editData.privateKey ? 'Change File' : 'Choose New File'}</Typography><input type="file" accept=".der,.pem,.key,.p8" hidden onChange={handleEditFileUpload} /></Button>
@@ -754,9 +755,9 @@ const ConnectorManager: React.FC = () => {
               </Box>
             </Grid>
             
-            <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Warehouse" name="warehouse" value={editData.warehouse || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
-            <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth required label="Database" name="database" value={editData.database || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
-            <Grid size={{ xs: 12 }}><TextField fullWidth required label="Schema" name="schema" value={editData.schema || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
+            <Grid item xs={12} sm={6}><TextField fullWidth required label="Warehouse" name="warehouse" value={editData.warehouse || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
+            <Grid item xs={12} sm={6}><TextField fullWidth required label="Database" name="database" value={editData.database || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
+            <Grid item xs={12}><TextField fullWidth required label="Schema" name="schema" value={editData.schema || ''} onChange={handleEditInputChange} variant="outlined" sx={inputSx} /></Grid>
           </Grid>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2.5, background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>

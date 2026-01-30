@@ -617,7 +617,7 @@ export default function TooltipConfigTab({ availableVariables = {} }: TooltipCon
                 </AccordionSummary>
                 <AccordionDetails>
                   <Grid container spacing={2}>
-                    <Grid size={{ xs: 6 }}>
+                    <Grid item xs={6}>
                       <Typography variant="caption" fontWeight={600} color="#64748b" sx={{ mb: 0.5, display: 'block' }}>
                         Width: {localConfig.width}px
                       </Typography>
@@ -630,7 +630,7 @@ export default function TooltipConfigTab({ availableVariables = {} }: TooltipCon
                         sx={{ color: '#667eea' }}
                       />
                     </Grid>
-                    <Grid size={{ xs: 6 }}>
+                    <Grid item xs={6}>
                       <Typography variant="caption" fontWeight={600} color="#64748b" sx={{ mb: 0.5, display: 'block' }}>
                         Height: {localConfig.height}px
                       </Typography>
@@ -643,7 +643,7 @@ export default function TooltipConfigTab({ availableVariables = {} }: TooltipCon
                         sx={{ color: '#667eea' }}
                       />
                     </Grid>
-                    <Grid size={{ xs: 6 }}>
+                    <Grid item xs={6}>
                       <Typography variant="caption" fontWeight={600} color="#64748b" sx={{ mb: 0.5, display: 'block' }}>
                         X Offset: {localConfig.offsetX}px
                       </Typography>
@@ -655,7 +655,7 @@ export default function TooltipConfigTab({ availableVariables = {} }: TooltipCon
                         sx={{ color: '#667eea' }}
                       />
                     </Grid>
-                    <Grid size={{ xs: 6 }}>
+                    <Grid item xs={6}>
                       <Typography variant="caption" fontWeight={600} color="#64748b" sx={{ mb: 0.5, display: 'block' }}>
                         Y Offset: {localConfig.offsetY}px
                       </Typography>
@@ -667,7 +667,7 @@ export default function TooltipConfigTab({ availableVariables = {} }: TooltipCon
                         sx={{ color: '#667eea' }}
                       />
                     </Grid>
-                    <Grid size={{ xs: 6 }}>
+                    <Grid item xs={6}>
                       <Typography variant="caption" fontWeight={600} color="#64748b" sx={{ mb: 0.5, display: 'block' }}>
                         Hide Delay: {localConfig.hideDelay}ms
                       </Typography>
@@ -680,7 +680,7 @@ export default function TooltipConfigTab({ availableVariables = {} }: TooltipCon
                         sx={{ color: '#667eea' }}
                       />
                     </Grid>
-                    <Grid size={{ xs: 6 }}>
+                    <Grid item xs={6}>
                       <FormControlLabel
                         control={
                           <Switch
@@ -694,7 +694,7 @@ export default function TooltipConfigTab({ availableVariables = {} }: TooltipCon
                       />
                     </Grid>
                     {localConfig.showHeader && (
-                      <Grid size={{ xs: 12 }}>
+                      <Grid item xs={12}>
                         <TextField
                           fullWidth
                           size="small"

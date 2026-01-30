@@ -6,6 +6,7 @@ import {
   updateLastValue
 } from "./initializationState";
 import { getCurrentViewId } from "./ViewContext";
+import { API_BASE_URL } from '../config/api.config';
 
 const ATOM_KEY = 'chartConfigState';
 
@@ -38,7 +39,7 @@ export const chartConfigState = atom<{[id:string]:any}>({
                         // Save each chart config individually with viewId
                         for (const [chartId, config] of Object.entries(newValue)) {
                             console.log(`💾 [ChartConfig SAVE] Saving chartId="${chartId}" with viewId=${viewId}`);
-                            await axios.post('http://localhost:3002/api/chart-configs', {
+                            await axios.post(`${API_BASE_URL}/api/chart-configs`, {
                                 chartId,
                                 viewId, // Include viewId to scope to current view
                                 template: config.template,

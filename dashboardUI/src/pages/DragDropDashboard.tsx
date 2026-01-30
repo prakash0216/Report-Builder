@@ -69,6 +69,7 @@ import {
   ChartRef,
 } from '../utils/downloadUtilities';
 import { exportDashboardPPTXEditable } from '../utils/pptxExport';
+import { API_BASE_URL } from '../config/api.config';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -253,7 +254,7 @@ export default function DropDragDashboard() {
     if (!dashboardSlug) return;
     
     try {
-      const response = await fetch(`http://localhost:3002/api/dashboards/${dashboardSlug}/views`);
+      const response = await fetch(`${API_BASE_URL}/api/dashboards/${dashboardSlug}/views`);
       const data = await response.json();
       
       if (data.success && data.views) {
@@ -280,7 +281,7 @@ export default function DropDragDashboard() {
 
     try {
       setIsCreatingView(true);
-      const response = await fetch(`http://localhost:3002/api/dashboards/${dashboardSlug}/views`, {
+      const response = await fetch(`${API_BASE_URL}/api/dashboards/${dashboardSlug}/views`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -432,7 +433,7 @@ export default function DropDragDashboard() {
       setLayouts(defaultLayouts);
       
       // Save layouts to database
-      fetch('http://localhost:3002/api/layouts', {
+      fetch(`${API_BASE_URL}/api/layouts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ layouts: defaultLayouts })
@@ -772,7 +773,7 @@ export default function DropDragDashboard() {
   useEffect(() => {
     const initializeChartId = async () => {
       try {
-        const response = await fetch('http://localhost:3002/api/next-chart-id');
+        const response = await fetch(`${API_BASE_URL}/api/next-chart-id`);
         const data = await response.json();
         if (data.success && data.nextChartId) {
           idRef.current = data.nextChartId;
@@ -1206,7 +1207,7 @@ export default function DropDragDashboard() {
     // Get next chart ID from server to ensure no duplicates
     let newId: string;
     try {
-      const response = await fetch('http://localhost:3002/api/next-chart-id');
+      const response = await fetch(`${API_BASE_URL}/api/next-chart-id`);
       const data = await response.json();
       if (data.success && data.nextChartId) {
         newId = data.nextChartId.toString();
@@ -1267,7 +1268,7 @@ export default function DropDragDashboard() {
   const removeItem = useCallback(async (id: string) => {
     // Delete chart from database first
     try {
-      const response = await fetch(`http://localhost:3002/api/charts/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/charts/${id}`, {
         method: 'DELETE',
       });
       const data = await response.json();
@@ -1285,7 +1286,7 @@ export default function DropDragDashboard() {
 
     // Also delete child card configs from database
     try {
-      await fetch(`http://localhost:3002/api/child-card-configs/${id}`, {
+      await fetch(`${API_BASE_URL}/api/child-card-configs/${id}`, {
         method: 'DELETE',
       });
       console.log(`✅ Child card config for ${id} deleted from database`);
@@ -1300,7 +1301,7 @@ export default function DropDragDashboard() {
       for (const childCard of parentConfig.childCards) {
         const childCardKey = `${id}_${childCard.id}`;
         try {
-          await fetch(`http://localhost:3002/api/child-card-tooltip-configs/${encodeURIComponent(childCardKey)}`, {
+          await fetch(`${API_BASE_URL}/api/child-card-tooltip-configs/${encodeURIComponent(childCardKey)}`, {
             method: 'DELETE',
           });
           console.log(`✅ Tooltip config for ${childCardKey} deleted from database`);

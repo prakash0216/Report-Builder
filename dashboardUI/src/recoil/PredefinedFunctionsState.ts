@@ -5,6 +5,7 @@ import {
   hasValueChanged,
   updateLastValue,
 } from "./initializationState";
+import { API_BASE_URL } from '../config/api.config';
 
 const ATOM_KEY = 'predefinedFunctionsState';
 
@@ -454,7 +455,7 @@ export const predefinedFunctionsState = atom<PredefinedFunction[]>({
         timeoutId = setTimeout(async () => {
           try {
             console.log(`🚀 [PredefinedFunctions] Sending to backend:`, newValue.map(f => f.name));
-            const response = await axios.post('http://localhost:3002/api/predefined-functions/bulk', {
+            const response = await axios.post(`${API_BASE_URL}/api/predefined-functions/bulk`, {
               functions: newValue,
               global: true, // 🔥 Mark as global functions
             });

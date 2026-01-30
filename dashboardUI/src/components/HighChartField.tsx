@@ -1221,7 +1221,7 @@ export default function HighChartField() {
 
       <Container maxWidth={false} sx={{ flex: 1, py: 3 }}>
         <Grid container spacing={3} sx={{ height: 'calc(100vh - 120px)' }}>
-          <Grid size={{ xs: 12, lg: 6 }} sx={{ display: 'flex', flexDirection: 'column' }}>
+          <Grid item xs={12} lg={6} sx={{ display: 'flex', flexDirection: 'column' }}>
             <Paper 
               elevation={0} 
               sx={{ 
@@ -2105,7 +2105,7 @@ export default function HighChartField() {
             </Paper>
           </Grid>
 
-          <Grid size={{ xs: 12, lg: 6 }} sx={{ display: 'flex', flexDirection: 'column' }}>
+          <Grid item xs={12} lg={6} sx={{ display: 'flex', flexDirection: 'column' }}>
             <Paper 
               elevation={0} 
               sx={{ 

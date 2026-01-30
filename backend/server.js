@@ -444,7 +444,7 @@ app.put('/api/datasources/:name/query', async (req, res) => {
   }
 });
 
-app.post('/remove-data-source', async (req, res) => {
+app.post('/api/remove-data-source', async (req, res) => {
   const {dsName}= req.body;
   try{
     const deleteQuery = `DELETE FROM data_source_registry WHERE ds_name='${dsName}'`;
@@ -1170,7 +1170,7 @@ app.delete('/api/filters/:variableName', async (req, res) => {
 // EXISTING ENDPOINTS (KEPT AS IS)
 // ============================================
 
-app.get('/snowflake-connections', async (req, res) => {
+app.get('/api/snowflake-connections', async (req, res) => {
   try {
     const result = await dbClient.query('SELECT * from snow_flake_connections');
     res.json({ success: true, connections: result });
@@ -1179,7 +1179,7 @@ app.get('/snowflake-connections', async (req, res) => {
   }
 });
 
-app.post('/check-snowflake-connection', upload.single('privateKey'), async (req, res) => {
+app.post('/api/check-snowflake-connection', upload.single('privateKey'), async (req, res) => {
   const { account, username, authenticator, warehouse, database, schema } = req.body;
   const privateKeyFile = req.file;
 
@@ -1314,7 +1314,7 @@ app.post('/check-snowflake-connection', upload.single('privateKey'), async (req,
   }
 });
 
-app.post('/add-snowflake-connection', upload.single('privateKey'), async (req, res) => {
+app.post('/api/add-snowflake-connection', upload.single('privateKey'), async (req, res) => {
   const { connectionName, account, username, authenticator, warehouse, database, schema } = req.body;
   const privateKey = req.file;
 
@@ -1363,7 +1363,7 @@ app.post('/add-snowflake-connection', upload.single('privateKey'), async (req, r
   }
 });
 
-app.post('/update-snowflake-connection/:id',upload.single('privateKey'), async (req, res) => {
+app.post('/api/update-snowflake-connection/:id',upload.single('privateKey'), async (req, res) => {
   const { id } = req.params;
   const {connectionName,account,username,authenticator,warehouse,database,schema} = req.body;
   const privateKey = req.file;
@@ -1398,7 +1398,7 @@ app.post('/update-snowflake-connection/:id',upload.single('privateKey'), async (
   }
 });
 
-app.delete('/delete-snowflake-connection/:id', async (req, res) => {
+app.delete('/api/delete-snowflake-connection/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
@@ -1412,7 +1412,7 @@ app.delete('/delete-snowflake-connection/:id', async (req, res) => {
   }
 });
 
-app.get('/all-connections', async (req, res) => {
+app.get('/api/all-connections', async (req, res) => {
   try{
     const connections=await dbClient.query('SELECT id,connectionname from snow_flake_connections');
     res.json({success:true,connections});
@@ -1422,7 +1422,7 @@ app.get('/all-connections', async (req, res) => {
 }
 );
 
-app.post('/execute-query', async (req, res) => {
+app.post('/api/execute-query', async (req, res) => {
   const { connectionId, connectionType, dataSourceName, query } = req.body;
 
   if (!connectionId || !connectionType || !dataSourceName || !query) {
@@ -2573,7 +2573,7 @@ function isValidValue(value) {
   }
 });
 
-app.get("/get-all-ds-names", async (req, res) => {
+app.get("/api/get-all-ds-names", async (req, res) => {
   try{
     const result=await dbClient.query(`
       SELECT 
@@ -2602,7 +2602,7 @@ app.get("/get-all-ds-names", async (req, res) => {
   }
 });
 
-app.post("/rename-data-source",async(req,res)=>{
+app.post("/api/rename-data-source",async(req,res)=>{
   const {oldName,newName}=req.body; 
   if(!oldName || !newName){
     return res.status(400).json({success:false,error:'Both oldName and newName are required'});
@@ -2634,7 +2634,7 @@ app.post("/rename-data-source",async(req,res)=>{
   }
 });
 
-app.post("/get-ds-column-names",async(req,res)=>{
+app.post("/api/get-ds-column-names",async(req,res)=>{
   const ds_name=req.body.ds_name;
   if(!ds_name){
     return res.status(400).json({success:false,error:'ds_name is required'});
@@ -2713,7 +2713,7 @@ app.post("/get-ds-column-names",async(req,res)=>{
   }
 });
 
-app.post("/get-distinct-column-values", async (req, res) => {
+app.post("/api/get-distinct-column-values", async (req, res) => {
   const { ds_name, column_name } = req.body;
   
   if (!ds_name) {
@@ -2817,7 +2817,7 @@ app.post("/get-distinct-column-values", async (req, res) => {
 // CACHE MANAGEMENT ENDPOINTS
 // ============================================
 
-app.get('/cache/stats', (req, res) => {
+app.get('/api/cache/stats', (req, res) => {
   try {
     let totalRows = 0;
     let estimatedSize = 0;
@@ -2851,7 +2851,7 @@ app.get('/cache/stats', (req, res) => {
   }
 });
 
-app.post('/cache/clear', (req, res) => {
+app.post('/api/cache/clear', (req, res) => {
   try {
     const keysBefore = fastCache.size;
     fastCache.clear();
@@ -2868,7 +2868,7 @@ app.post('/cache/clear', (req, res) => {
   }
 });
 
-app.post('/cache/clear/:dataSourceName', (req, res) => {
+app.post('/api/cache/clear/:dataSourceName', (req, res) => {
   try {
     const { dataSourceName } = req.params;
     const prefix = `query:${dataSourceName}:`;
@@ -2894,7 +2894,7 @@ app.post('/cache/clear/:dataSourceName', (req, res) => {
   }
 });
 
-app.get('/cache/keys', (req, res) => {
+app.get('/api/cache/keys', (req, res) => {
   try {
     const keys = Array.from(fastCache.keys());
     res.json({ 
@@ -5998,6 +5998,11 @@ app.put('/api/auth/profile', async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to update profile' });
   }
 });
+
+
+app.get('/api/auth/test', async (req, res) => {
+	return res.status(200).json({ success: true, error: 'Auth pass' });
+})
 
 /**
  * Change user password

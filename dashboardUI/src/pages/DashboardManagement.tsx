@@ -89,9 +89,10 @@ import AddDataSource from '../components/AddDataSource';
 import SnowflakeConnector from '../components/SnowflakeConnector';
 import PredefinedFunctions from '../components/PredefinedFunctions';
 import { Functions as FunctionsIcon } from '@mui/icons-material';
+import { API_BASE_URL } from '../config/api.config';
 
 // API base URL
-const API_BASE = 'http://localhost:3002/api';
+const API_BASE = `${API_BASE_URL}/api`;
 
 // Library types for tabs
 const LIBRARY_TYPES = ['All', 'Core libraries', 'Claims libraries', 'Reference libraries', 'Premium libraries'];
@@ -1572,7 +1573,7 @@ const DashboardManagement: React.FC = () => {
                 <Collapse in={recentProjectsExpanded}>
                   <Grid container spacing={2}>
                     {dashboards.slice(0, 3).map((dashboard) => (
-                      <Grid size={{xs:12,sm:6,md:4}} key={dashboard.id}>
+                      <Grid item xs={12} sm={6} md={4} key={dashboard.id}>
                         <Paper
                           onClick={() => handleDashboardClick(dashboard)}
                       sx={{
@@ -1891,7 +1892,7 @@ const DashboardManagement: React.FC = () => {
                           /* Grid View */
                           <Grid container spacing={2}>
                             {bookmarkedDashboards.map((dashboard) => (
-                              <Grid size={{xs:12,sm:6,md:4,lg:3}} key={dashboard.id}>
+                              <Grid item xs={12} sm={6} md={4} lg={3} key={dashboard.id}>
                                 <LibraryCard dashboard={dashboard} isBookmarked={true} />
                               </Grid>
                             ))}
@@ -2024,7 +2025,7 @@ const DashboardManagement: React.FC = () => {
                         /* Grid View */
                         <Grid container spacing={2}>
                           {regularDashboards.map((dashboard) => (
-                            <Grid size={{xs:12,sm:6,md:4,lg:3}}  key={dashboard.id}>
+                            <Grid item xs={12} sm={6} md={4} lg={3} key={dashboard.id}>
                               <LibraryCard dashboard={dashboard} isBookmarked={false} />
                             </Grid>
                           ))}

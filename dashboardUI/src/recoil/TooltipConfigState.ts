@@ -6,6 +6,7 @@ import {
   updateLastValue,
 } from "./initializationState";
 import { getCurrentViewId } from "./ViewContext";
+import { API_BASE_URL } from '../config/api.config';
 
 const ATOM_KEY = 'tooltipConfigState';
 
@@ -89,7 +90,7 @@ export const tooltipConfigState = atom<{[chartId: string]: TooltipConfig}>({
             const viewId = getCurrentViewId();
             // Save each tooltip config individually
             for (const [chartId, config] of Object.entries(newValue)) {
-              await axios.post('http://localhost:3002/api/tooltip-configs', {
+              await axios.post(`${API_BASE_URL}/api/tooltip-configs`, {
                 chartId,
                 viewId,
                 config,

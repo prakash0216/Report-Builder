@@ -1,0 +1,87 @@
+<html>
+<head>
+    <title>iisnode logs</title>
+    <style type="text/css">
+        body
+        {
+            font-family: "Trebuchet MS" , Arial, Helvetica, sans-serif;
+        }
+        table
+        {
+            border-collapse: collapse;
+        }
+        td, th
+        {
+            border: 1px solid lightgray;
+            padding: 3px 7px 2px 7px;
+        }
+        th
+        {
+            text-align: left;
+            padding-top: 5px;
+            padding-bottom: 4px;
+            background-color: Gray;
+            color: #ffffff;
+        }
+        td.stderr
+        {
+            color: Red;
+        }
+    </style>
+</head>
+<body>
+    <table id="logFilesTable">
+        <tr>
+            <th>
+                Computer name
+            </th>
+            <th>
+                PID
+            </th>
+            <th>
+                Type
+            </th>
+            <th>
+                Created
+            </th>
+            <th>
+                Link
+            </th>
+        </tr>
+    </table>
+    <p id="lastUpdated"></p>
+    <script type="text/javascript">
+
+        // this is replaced with actual data at runtime by code in interceptor.js
+        var logFiles = [{"file":"CA1SAPP4635P-11672-stderr-1769694395957.txt","computername":"CA1SAPP4635P","pid":11672,"type":"stderr","created":1769694395957},{"file":"CA1SAPP4635P-11672-stdout-1769694395955.txt","computername":"CA1SAPP4635P","pid":11672,"type":"stdout","created":1769694395955},{"file":"CA1SAPP4635P-14804-stderr-1769693931366.txt","computername":"CA1SAPP4635P","pid":14804,"type":"stderr","created":1769693931366},{"file":"CA1SAPP4635P-14804-stdout-1769693931366.txt","computername":"CA1SAPP4635P","pid":14804,"type":"stdout","created":1769693931366},{"file":"CA1SAPP4635P-19164-stderr-1769690745954.txt","computername":"CA1SAPP4635P","pid":19164,"type":"stderr","created":1769690745954},{"file":"CA1SAPP4635P-19164-stdout-1769690745953.txt","computername":"CA1SAPP4635P","pid":19164,"type":"stdout","created":1769690745953},{"file":"CA1SAPP4635P-20020-stderr-1769706132086.txt","computername":"CA1SAPP4635P","pid":20020,"type":"stderr","created":1769706132086},{"file":"CA1SAPP4635P-20020-stdout-1769706132084.txt","computername":"CA1SAPP4635P","pid":20020,"type":"stdout","created":1769706132084},{"file":"CA1SAPP4635P-21076-stderr-1769696882553.txt","computername":"CA1SAPP4635P","pid":21076,"type":"stderr","created":1769696882553},{"file":"CA1SAPP4635P-21076-stdout-1769696882551.txt","computername":"CA1SAPP4635P","pid":21076,"type":"stdout","created":1769696882551},{"file":"CA1SAPP4635P-21124-stderr-1769708469507.txt","computername":"CA1SAPP4635P","pid":21124,"type":"stderr","created":1769708469507},{"file":"CA1SAPP4635P-21124-stdout-1769708469505.txt","computername":"CA1SAPP4635P","pid":21124,"type":"stdout","created":1769708469505},{"file":"CA1SAPP4635P-21384-stderr-1769697301480.txt","computername":"CA1SAPP4635P","pid":21384,"type":"stderr","created":1769697301480},{"file":"CA1SAPP4635P-21384-stdout-1769697301479.txt","computername":"CA1SAPP4635P","pid":21384,"type":"stdout","created":1769697301479},{"file":"CA1SAPP4635P-22820-stderr-1769692285460.txt","computername":"CA1SAPP4635P","pid":22820,"type":"stderr","created":1769692285460},{"file":"CA1SAPP4635P-22820-stdout-1769692285459.txt","computername":"CA1SAPP4635P","pid":22820,"type":"stdout","created":1769692285459},{"file":"CA1SAPP4635P-23176-stderr-1769705220022.txt","computername":"CA1SAPP4635P","pid":23176,"type":"stderr","created":1769705220022},{"file":"CA1SAPP4635P-23176-stdout-1769705220020.txt","computername":"CA1SAPP4635P","pid":23176,"type":"stdout","created":1769705220020},{"file":"CA1SAPP4635P-24104-stderr-1769712902535.txt","computername":"CA1SAPP4635P","pid":24104,"type":"stderr","created":1769712902535},{"file":"CA1SAPP4635P-24104-stdout-1769712902533.txt","computername":"CA1SAPP4635P","pid":24104,"type":"stdout","created":1769712902533},{"file":"CA1SAPP4635P-3408-stderr-1769697437715.txt","computername":"CA1SAPP4635P","pid":3408,"type":"stderr","created":1769697437715},{"file":"CA1SAPP4635P-3408-stdout-1769697437714.txt","computername":"CA1SAPP4635P","pid":3408,"type":"stdout","created":1769697437714}];
+        var lastUpdated = 1769712904055;
+        var date = new Date();
+
+        date.setTime(lastUpdated);
+        document.getElementById('lastUpdated').innerHTML = 'Index was last updated ' + date;
+
+        logFiles.sort(function (a, b) {
+            return b.created - a.created;
+        });
+
+        var logFilesTable = document.getElementById("logFilesTable");
+        for (var i = 0; i < logFiles.length; i++) {
+            var logFile = logFiles[i];
+            date.setTime(logFile.created);
+            var row = logFilesTable.insertRow(-1);
+            var computerNameCell = row.insertCell(0);
+            var pidCell = row.insertCell(1);
+            var typeCell = row.insertCell(2);
+            var dateCell = row.insertCell(3);
+            var logCell = row.insertCell(4);
+            computerNameCell.innerHTML = logFile.computername;
+            pidCell.innerHTML = logFile.pid.toString();
+            typeCell.innerHTML = logFile.type;
+            typeCell.setAttribute('class', logFile.type);
+            dateCell.innerHTML = date.toString();
+            logCell.innerHTML = '<a href="' + logFile.file + '">log</a>';
+        };
+
+    </script>
+</body>
+</html>

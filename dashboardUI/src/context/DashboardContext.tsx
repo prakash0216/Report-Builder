@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
+import { API_BASE_URL } from '../config/api.config';
 
-const API_BASE = 'http://localhost:3002/api';
+const API_BASE = `${API_BASE_URL}/api`;
 
 type ErrorType = 'dashboard_not_found' | 'view_not_found' | 'network_error' | null;
 
