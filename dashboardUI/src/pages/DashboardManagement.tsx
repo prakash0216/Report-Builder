@@ -84,6 +84,7 @@ import {
   CloudUpload as CloudUploadIcon,
   Palette as PaletteIcon,
   Image as ImageIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import AddDataSource from '../components/AddDataSource';
 import SnowflakeConnector from '../components/SnowflakeConnector';
@@ -137,27 +138,42 @@ const DashboardManagement: React.FC = () => {
   const [newDashboardDesc, setNewDashboardDesc] = useState<string>('');
   const [newLibraryType, setNewLibraryType] = useState<string>('Core libraries');
   const [newDataSource, setNewDataSource] = useState<string>('');
-  const [newTimePeriodStart, setNewTimePeriodStart] = useState<number | ''>('');
-  const [newTimePeriodEnd, setNewTimePeriodEnd] = useState<number | ''>('');
+  const [newTimePeriodStart, setNewTimePeriodStart] = useState<string>('');
+  const [newTimePeriodEnd, setNewTimePeriodEnd] = useState<string>('');
   const [newIconType, setNewIconType] = useState<'text' | 'upload'>('text');
   const [newIconText, setNewIconText] = useState<string>('');
   const [newIconColor, setNewIconColor] = useState<string>('#3B82F6');
   const [newIconImageUrl, setNewIconImageUrl] = useState<string>('');
+  const [newAdminPortalId, setNewAdminPortalId] = useState<string>('');
+  const [newEmbedType, setNewEmbedType] = useState<'' | 'iframe' | 'tableau'>('');
+  const [newEmbedLink, setNewEmbedLink] = useState<string>('');
+  const [newTriggerCalculation, setNewTriggerCalculation] = useState<string>('');
   const [editingDashboard, setEditingDashboard] = useState<Dashboard | null>(null);
   const [editName, setEditName] = useState<string>('');
   const [editDesc, setEditDesc] = useState<string>('');
   const [editDataSource, setEditDataSource] = useState<string>('');
-  const [editTimePeriodStart, setEditTimePeriodStart] = useState<number | ''>('');
-  const [editTimePeriodEnd, setEditTimePeriodEnd] = useState<number | ''>('');
+  const [editTimePeriodStart, setEditTimePeriodStart] = useState<string>('');
+  const [editTimePeriodEnd, setEditTimePeriodEnd] = useState<string>('');
   const [editLibraryType, setEditLibraryType] = useState<string>('Core libraries');
   const [editIconType, setEditIconType] = useState<'text' | 'upload'>('text');
   const [editIconText, setEditIconText] = useState<string>('');
   const [editIconColor, setEditIconColor] = useState<string>('#3B82F6');
   const [editIconImageUrl, setEditIconImageUrl] = useState<string>('');
+  const [editAdminPortalId, setEditAdminPortalId] = useState<string>('');
+  const [editEmbedType, setEditEmbedType] = useState<'' | 'iframe' | 'tableau'>('');
+  const [editEmbedLink, setEditEmbedLink] = useState<string>('');
+  const [editTriggerCalculation, setEditTriggerCalculation] = useState<string>('');
+  const [calculations, setCalculations] = useState<Array<{ id: string; variable_name: string }>>([]);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
   const [deletingDashboard, setDeletingDashboard] = useState<Dashboard | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<{
+    dashboards: Dashboard[];
+    views: Array<{ id: string; name: string; slug: string; description?: string; dashboardId: string; dashboardName: string; dashboardSlug: string; dashboardIconText: string; dashboardIconColor: string }>;
+  }>({ dashboards: [], views: [] });
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'compact'>('grid');
   const [sortBy, setSortBy] = useState<string>('name');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -234,21 +250,25 @@ const DashboardManagement: React.FC = () => {
           slug: d.slug,
           description: d.description || '',
           thumbnail: '',
-          createdAt: new Date(d.created_at).getTime(),
-          updatedAt: new Date(d.updated_at).getTime(),
+          createdAt: new Date(d.createdAt || d.created_at).getTime(),
+          updatedAt: new Date(d.updatedAt || d.updated_at).getTime(),
           chartsCount: Number(rawCharts),
           viewsCount: Number(rawViews),
           icon: d.icon,
             color: d.color || getCardColor(d.id.toString()),
-            // New fields
-            dataSource: d.data_source || '',
-            timePeriodStart: d.time_period_start || null,
-            timePeriodEnd: d.time_period_end || null,
-            libraryType: d.library_type || 'Core libraries',
-            iconType: d.icon_type || 'text',
-            iconText: d.icon_text || '',
-            iconColor: d.icon_color || '#3B82F6',
-            iconImageUrl: d.icon_image_url || '',
+            // New fields (backend now returns camelCase)
+            dataSource: d.dataSource || d.data_source || '',
+            timePeriodStart: d.timePeriodStart || d.time_period_start || null,
+            timePeriodEnd: d.timePeriodEnd || d.time_period_end || null,
+            libraryType: d.libraryType || d.library_type || 'Core libraries',
+            iconType: d.iconType || d.icon_type || 'text',
+            iconText: d.iconText || d.icon_text || '',
+            iconColor: d.iconColor || d.icon_color || '#3B82F6',
+            iconImageUrl: d.iconImageUrl || d.icon_image_url || '',
+            adminPortalId: d.adminPortalId || d.admin_portal_id || '',
+            embedType: d.embedType || d.embed_type || '',
+            embedLink: d.embedLink || d.embed_link || '',
+            triggerCalculation: d.triggerCalculation || d.trigger_calculation || '',
         };
         });
         setDashboards(mappedDashboards);
@@ -335,7 +355,108 @@ const DashboardManagement: React.FC = () => {
     setNewIconText('');
     setNewIconColor('#3B82F6');
     setNewIconImageUrl('');
+    setNewAdminPortalId('');
+    setNewEmbedType('');
+    setNewEmbedLink('');
+    setNewTriggerCalculation('');
   };
+
+  // Fetch calculations for dropdown
+  const fetchCalculations = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/calculations`);
+      const data = await response.json();
+      if (data.success && data.calculations) {
+        setCalculations(data.calculations.map((c: any) => ({ id: c.id.toString(), variable_name: c.variable_name })));
+      }
+    } catch (err) {
+      console.error('Error fetching calculations:', err);
+    }
+  }, []);
+
+  // Deep search across dashboards and views
+  const performDeepSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults({ dashboards: [], views: [] });
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    const lowerQuery = query.toLowerCase();
+
+    try {
+      // Search dashboards
+      const matchingDashboards = dashboards.filter(d =>
+        d.name.toLowerCase().includes(lowerQuery) ||
+        (d.description && d.description.toLowerCase().includes(lowerQuery)) ||
+        (d.dataSource && d.dataSource.toLowerCase().includes(lowerQuery)) ||
+        (d.iconText && d.iconText.toLowerCase().includes(lowerQuery))
+      );
+
+      // Fetch views for all dashboards and search through them
+      const allViews: Array<{ id: string; name: string; slug: string; description?: string; dashboardId: string; dashboardName: string; dashboardSlug: string; dashboardIconText: string; dashboardIconColor: string }> = [];
+      
+      // Fetch views from all dashboards in parallel
+      const viewPromises = dashboards.map(async (dashboard) => {
+        try {
+          const slug = (dashboard as any).slug || dashboard.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
+          const response = await fetch(`${API_BASE}/dashboards/${slug}/views`);
+          const data = await response.json();
+          if (data.success && data.views) {
+            return data.views.map((v: any) => ({
+              id: v.id.toString(),
+              name: v.name,
+              slug: v.slug,
+              description: v.description || '',
+              dashboardId: dashboard.id,
+              dashboardName: dashboard.name,
+              dashboardSlug: slug,
+              dashboardIconText: (dashboard as any).iconText || getShortCode(dashboard.name),
+              dashboardIconColor: (dashboard as any).iconColor || (dashboard as any).color || getCardColor(dashboard.id),
+            }));
+          }
+          return [];
+        } catch (err) {
+          console.error(`Error fetching views for dashboard ${dashboard.name}:`, err);
+          return [];
+        }
+      });
+
+      const viewsArrays = await Promise.all(viewPromises);
+      viewsArrays.forEach(views => allViews.push(...views));
+
+      // Filter views by search query
+      const matchingViews = allViews.filter(v =>
+        v.name.toLowerCase().includes(lowerQuery) ||
+        (v.description && v.description.toLowerCase().includes(lowerQuery))
+      );
+
+      setSearchResults({
+        dashboards: matchingDashboards,
+        views: matchingViews,
+      });
+    } catch (err) {
+      console.error('Error performing deep search:', err);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [dashboards]);
+
+  // Debounced search handler
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Debounce the search
+    searchTimeoutRef.current = setTimeout(() => {
+      performDeepSearch(value);
+    }, 300);
+  }, [performDeepSearch]);
 
   // Create new dashboard
   const handleCreateDashboard = async () => {
@@ -343,6 +464,9 @@ const DashboardManagement: React.FC = () => {
 
     // Auto-generate icon text if not provided
     const autoIconText = newIconText || getShortCode(newDashboardName);
+    
+    // Generate admin portal ID (auto-generated, not editable)
+    const generatedAdminPortalId = `AP-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
     try {
       const response = await fetch(`${API_BASE}/dashboards`, {
@@ -359,21 +483,41 @@ const DashboardManagement: React.FC = () => {
           iconText: autoIconText,
           iconColor: newIconColor,
           iconImageUrl: newIconImageUrl,
+          adminPortalId: generatedAdminPortalId,
+          embedType: newEmbedType || null,
+          embedLink: newEmbedLink || null,
+          triggerCalculation: newTriggerCalculation || null,
         }),
       });
       
       const data = await response.json();
       
       if (data.success && data.dashboard) {
+        const db = data.dashboard;
         const newDashboard: Dashboard = {
-          id: data.dashboard.id.toString(),
-          name: data.dashboard.name,
-          slug: data.dashboard.slug,
-          description: data.dashboard.description || '',
+          id: db.id.toString(),
+          name: db.name,
+          slug: db.slug,
+          description: db.description || '',
           thumbnail: '',
-          createdAt: new Date(data.dashboard.created_at).getTime(),
-          updatedAt: new Date(data.dashboard.updated_at).getTime(),
+          createdAt: new Date(db.createdAt || db.created_at).getTime(),
+          updatedAt: new Date(db.updatedAt || db.updated_at).getTime(),
           chartsCount: 0,
+          viewsCount: 0,
+          icon: db.icon,
+          color: db.color,
+          dataSource: db.dataSource || db.data_source || '',
+          timePeriodStart: db.timePeriodStart || db.time_period_start || null,
+          timePeriodEnd: db.timePeriodEnd || db.time_period_end || null,
+          libraryType: db.libraryType || db.library_type || 'Core libraries',
+          iconType: db.iconType || db.icon_type || 'text',
+          iconText: db.iconText || db.icon_text || '',
+          iconColor: db.iconColor || db.icon_color || '#3B82F6',
+          iconImageUrl: db.iconImageUrl || db.icon_image_url || '',
+          adminPortalId: db.adminPortalId || db.admin_portal_id || '',
+          embedType: db.embedType || db.embed_type || '',
+          embedLink: db.embedLink || db.embed_link || '',
+          triggerCalculation: db.triggerCalculation || db.trigger_calculation || '',
         };
         
         setDashboards([...dashboards, newDashboard]);
@@ -390,14 +534,19 @@ const DashboardManagement: React.FC = () => {
     setEditingDashboard(dashboard);
     setEditName(dashboard.name);
     setEditDesc(dashboard.description || '');
-    setEditDataSource(dashboard.dataSource || '');
-    setEditTimePeriodStart(dashboard.timePeriodStart || '');
-    setEditTimePeriodEnd(dashboard.timePeriodEnd || '');
-    setEditLibraryType(dashboard.libraryType || 'Core libraries');
-    setEditIconType(dashboard.iconType || 'text');
-    setEditIconText(dashboard.iconText || '');
-    setEditIconColor(dashboard.iconColor || '#3B82F6');
-    setEditIconImageUrl(dashboard.iconImageUrl || '');
+    setEditDataSource((dashboard as any).dataSource || '');
+    setEditTimePeriodStart((dashboard as any).timePeriodStart?.toString() || '');
+    setEditTimePeriodEnd((dashboard as any).timePeriodEnd?.toString() || '');
+    setEditLibraryType((dashboard as any).libraryType || 'Core libraries');
+    setEditIconType((dashboard as any).iconType || 'text');
+    setEditIconText((dashboard as any).iconText || '');
+    setEditIconColor((dashboard as any).iconColor || '#3B82F6');
+    setEditIconImageUrl((dashboard as any).iconImageUrl || '');
+    setEditAdminPortalId((dashboard as any).adminPortalId || '');
+    setEditEmbedType((dashboard as any).embedType || '');
+    setEditEmbedLink((dashboard as any).embedLink || '');
+    setEditTriggerCalculation((dashboard as any).triggerCalculation || '');
+    fetchCalculations();
     setOpenCreateDialog(true);
     setAnchorEl(null);
   };
@@ -423,27 +572,36 @@ const DashboardManagement: React.FC = () => {
           iconText: autoIconText,
           iconColor: editIconColor,
           iconImageUrl: editIconImageUrl,
+          adminPortalId: editAdminPortalId || null,
+          embedType: editEmbedType || null,
+          embedLink: editEmbedLink || null,
+          triggerCalculation: editTriggerCalculation || null,
         }),
       });
       
       const data = await response.json();
       
       if (data.success && data.dashboard) {
+        const db = data.dashboard;
         setDashboards(
           dashboards.map((d) =>
             d.id === editingDashboard.id
               ? { 
                   ...d, 
-                  name: data.dashboard.name, 
-                  description: data.dashboard.description || '', 
-                  dataSource: data.dashboard.data_source || '',
-                  timePeriodStart: data.dashboard.time_period_start,
-                  timePeriodEnd: data.dashboard.time_period_end,
-                  libraryType: data.dashboard.library_type || 'Core libraries',
-                  iconType: data.dashboard.icon_type || 'text',
-                  iconText: data.dashboard.icon_text || '',
-                  iconColor: data.dashboard.icon_color || '#3B82F6',
-                  iconImageUrl: data.dashboard.icon_image_url || '',
+                  name: db.name, 
+                  description: db.description || '', 
+                  dataSource: db.dataSource || db.data_source || '',
+                  timePeriodStart: db.timePeriodStart || db.time_period_start,
+                  timePeriodEnd: db.timePeriodEnd || db.time_period_end,
+                  libraryType: db.libraryType || db.library_type || 'Core libraries',
+                  iconType: db.iconType || db.icon_type || 'text',
+                  iconText: db.iconText || db.icon_text || '',
+                  iconColor: db.iconColor || db.icon_color || '#3B82F6',
+                  iconImageUrl: db.iconImageUrl || db.icon_image_url || '',
+                  adminPortalId: db.adminPortalId || db.admin_portal_id || '',
+                  embedType: db.embedType || db.embed_type || '',
+                  embedLink: db.embedLink || db.embed_link || '',
+                  triggerCalculation: db.triggerCalculation || db.trigger_calculation || '',
                 }
               : d
           )
@@ -527,29 +685,57 @@ const DashboardManagement: React.FC = () => {
     }
   };
 
-  // Library Menu Item Component (dashboards only)
-  const LibraryMenuItem = ({ dashboard }: { dashboard: Dashboard }) => {
+  // Library Menu Item Component with Views Submenu - Pure CSS hover approach
+  const LibraryMenuItemWithViews = ({ dashboard }: { dashboard: Dashboard }) => {
+    const [views, setViews] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+    const [loadingViews, setLoadingViews] = useState(false);
+    const [viewsLoaded, setViewsLoaded] = useState(false);
+
+    // Fetch views when hovering over dashboard
+    const handleMouseEnter = async () => {
+      if (viewsLoaded) return;
+      setLoadingViews(true);
+      try {
+        const slug = (dashboard as any).slug || dashboard.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
+        const response = await fetch(`${API_BASE}/dashboards/${slug}/views`);
+        const data = await response.json();
+        if (data.success && data.views) {
+          setViews(data.views.map((v: any) => ({ id: v.id.toString(), name: v.name, slug: v.slug })));
+        }
+        setViewsLoaded(true);
+      } catch (err) {
+        console.error('Error fetching views:', err);
+      } finally {
+        setLoadingViews(false);
+      }
+    };
+
+    const handleViewClick = (e: React.MouseEvent, viewSlug: string) => {
+      e.stopPropagation();
+      const dashboardSlug = (dashboard as any).slug || dashboard.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
+      navigate(`/${dashboardSlug}/${viewSlug}`);
+    };
+
     return (
       <Box
-        onMouseEnter={() => {
-          if (libraryMenuTimeoutRef.current) clearTimeout(libraryMenuTimeoutRef.current);
+        onMouseEnter={handleMouseEnter}
+        sx={{ 
+          position: 'relative',
+          '&:hover .views-submenu': {
+            display: 'block',
+          },
         }}
-        onMouseLeave={() => {
-          libraryMenuTimeoutRef.current = setTimeout(() => setLibraryMenuAnchor(null), 250);
-        }}
-        sx={{ position: 'relative' }}
       >
-        <MenuItem
-          onClick={() => {
-            handleDashboardClick(dashboard);
-            setLibraryMenuAnchor(null);
-          }}
+        <Box
+          onClick={() => handleDashboardClick(dashboard)}
           sx={{
-            py: 1,
-            px: 2,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: 1.5,
+            px: 2,
+            py: 1,
+            cursor: 'pointer',
             '&:hover': { bgcolor: alpha('#3B82F6', 0.08) },
           }}
         >
@@ -559,7 +745,67 @@ const DashboardManagement: React.FC = () => {
               {dashboard.name}
             </Typography>
           </Box>
-        </MenuItem>
+          <ChevronRightIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+        </Box>
+        
+        {/* Views Submenu - Pure CSS controlled, positioned to the right */}
+        <Paper
+          className="views-submenu"
+          elevation={8}
+          sx={{
+            display: 'none',
+            position: 'absolute',
+            left: '100%',
+            top: 0,
+            ml: 0.5,
+            minWidth: 200,
+            maxHeight: 300,
+            borderRadius: 2,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            overflowY: 'auto',
+            zIndex: 1400,
+            bgcolor: 'white',
+          }}
+        >
+          <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #E5E7EB' }}>
+            <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 600 }}>
+              Views in {dashboard.iconText}
+            </Typography>
+          </Box>
+          
+          {loadingViews ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 2 }}>
+              <CircularProgress size={20} sx={{ color: '#3B82F6' }} />
+            </Box>
+          ) : views.length > 0 ? (
+            views.map((view) => (
+              <Box
+                key={view.id}
+                onClick={(e) => handleViewClick(e, view.slug)}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  px: 2,
+                  py: 1,
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: alpha('#3B82F6', 0.08) },
+                }}
+              >
+                <LayersIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+                <Typography variant="body2" sx={{ color: '#374151', fontWeight: 500 }}>
+                  {view.name}
+                </Typography>
+              </Box>
+            ))
+          ) : (
+            <Box sx={{ px: 2, py: 1.5 }}>
+              <Typography variant="caption" sx={{ color: '#9CA3AF', fontStyle: 'italic' }}>
+                No views available
+              </Typography>
+            </Box>
+          )}
+        </Paper>
       </Box>
     );
   };
@@ -1110,7 +1356,7 @@ const DashboardManagement: React.FC = () => {
               maxHeight: 450,
               borderRadius: 2,
               boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-              overflow: 'auto',
+              overflow: 'visible',
               zIndex: 1300,
               bgcolor: 'white',
             }}
@@ -1130,24 +1376,7 @@ const DashboardManagement: React.FC = () => {
                   </Typography>
                 </Box>
                 {bookmarkedDashboards.slice(0, 4).map((dashboard) => (
-                  <Box
-                    key={dashboard.id}
-                    onClick={() => handleDashboardClick(dashboard)}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1.5,
-                      px: 2,
-                      py: 1,
-                      cursor: 'pointer',
-                      '&:hover': { bgcolor: alpha('#3B82F6', 0.08) },
-                    }}
-                  >
-                    <ChevronRightIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
-                    <Typography variant="body2" sx={{ color: '#374151', fontWeight: 500 }}>
-                      {dashboard.name}
-                    </Typography>
-                  </Box>
+                  <LibraryMenuItemWithViews key={dashboard.id} dashboard={dashboard} />
                 ))}
               </>
             )}
@@ -1159,24 +1388,7 @@ const DashboardManagement: React.FC = () => {
               </Typography>
             </Box>
             {regularDashboards.slice(0, 8).map((dashboard) => (
-              <Box
-                key={dashboard.id}
-                onClick={() => handleDashboardClick(dashboard)}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                  px: 2,
-                  py: 1,
-                  cursor: 'pointer',
-                  '&:hover': { bgcolor: alpha('#3B82F6', 0.08) },
-                }}
-              >
-                <ChevronRightIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
-                <Typography variant="body2" sx={{ color: '#374151', fontWeight: 500 }}>
-                  {dashboard.name}
-                </Typography>
-              </Box>
+              <LibraryMenuItemWithViews key={dashboard.id} dashboard={dashboard} />
             ))}
           </Paper>
         </Box>
@@ -1363,7 +1575,7 @@ const DashboardManagement: React.FC = () => {
           </Box>
         ) : activeNav === 'home' ? (
           /* Home Content - Welcome Dashboard with Neon Background */
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto', bgcolor: '#FFFFFF' }}>
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto', bgcolor: '#FFFFFF', pt:4 }}>
             {/* Hero Section with Neon Background */}
             <Box
               sx={{
@@ -1373,7 +1585,7 @@ const DashboardManagement: React.FC = () => {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                py: 5,
+                py:3,
                 px: 3,
                 overflow: 'visible',
               }}
@@ -1382,10 +1594,10 @@ const DashboardManagement: React.FC = () => {
               <Box
                 sx={{
                   position: 'absolute',
-                  top: 60,
+                  
                   left: 20,
                   right: 20,
-                  height: 180,
+                  height: 300,
                   borderRadius: 4,
                   overflow: 'hidden',
                   zIndex: 0,
@@ -1419,43 +1631,199 @@ const DashboardManagement: React.FC = () => {
               </Typography>
 
               {/* Search Box */}
-              <Paper
-                elevation={0}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  width: '100%',
-                  maxWidth: 500,
-                  px: 2,
-                  py: 1,
-                  borderRadius: 3,
-                  bgcolor: 'white',
-                  border: '1px solid #E5E7EB',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                  zIndex: 1,
-                }}
-              >
-                <SearchIcon sx={{ color: '#9CA3AF', mr: 1 }} />
-                <TextField
-                  placeholder="Search or ask anything..."
-                  variant="standard"
-                  fullWidth
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && searchQuery.trim()) {
-                      setActiveNav('libraries');
-                    }
+              <Box sx={{ position: 'relative', width: '100%', maxWidth: 500, zIndex: 10 }}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    width: '100%',
+                    px: 2,
+                    py: 1,
+                    borderRadius: searchQuery.trim() ? '12px 12px 0 0' : 3,
+                    bgcolor: 'white',
+                    border: '1px solid #E5E7EB',
+                    borderBottom: searchQuery.trim() ? '1px solid #E5E7EB' : '1px solid #E5E7EB',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
                   }}
-                  InputProps={{
-                    disableUnderline: true,
-                    sx: { fontSize: '0.95rem' },
-                  }}
-                />
-                <IconButton size="small" sx={{ ml: 1 }}>
-                  <AddIcon sx={{ color: '#9CA3AF' }} />
-                </IconButton>
-              </Paper>
+                >
+                  <SearchIcon sx={{ color: '#9CA3AF', mr: 1 }} />
+                  <TextField
+                    placeholder="Search libraries and views..."
+                    variant="standard"
+                    fullWidth
+                    value={searchQuery}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    InputProps={{
+                      disableUnderline: true,
+                      sx: { fontSize: '0.95rem' },
+                    }}
+                  />
+                  {isSearching && <CircularProgress size={20} sx={{ ml: 1, color: '#3B82F6' }} />}
+                  {searchQuery && !isSearching && (
+                    <IconButton size="small" onClick={() => { setSearchQuery(''); setSearchResults({ dashboards: [], views: [] }); }}>
+                      <CloseIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
+                    </IconButton>
+                  )}
+                </Paper>
+
+                {/* Search Results Dropdown */}
+                {searchQuery.trim() && (
+                  <Paper
+                    elevation={8}
+                    sx={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      maxHeight: 400,
+                      overflow: 'auto',
+                      borderRadius: '0 0 12px 12px',
+                      border: '1px solid #E5E7EB',
+                      borderTop: 'none',
+                      bgcolor: 'white',
+                      zIndex: 1000,
+                    }}
+                  >
+                    {isSearching ? (
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4 }}>
+                        <CircularProgress size={24} sx={{ color: '#3B82F6' }} />
+                        <Typography sx={{ ml: 2, color: '#6B7280' }}>Searching...</Typography>
+                      </Box>
+                    ) : (searchResults.dashboards.length === 0 && searchResults.views.length === 0) ? (
+                      <Box sx={{ py: 4, textAlign: 'center' }}>
+                        <Typography sx={{ color: '#9CA3AF' }}>No results found for "{searchQuery}"</Typography>
+                      </Box>
+                    ) : (
+                      <>
+                        {/* Dashboard Results */}
+                        {searchResults.dashboards.length > 0 && (
+                          <>
+                            <Box sx={{ px: 2, py: 1.5, bgcolor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                Libraries ({searchResults.dashboards.length})
+                              </Typography>
+                            </Box>
+                            {searchResults.dashboards.map((dashboard) => {
+                              const iconText = (dashboard as any).iconText || getShortCode(dashboard.name);
+                              const iconColor = (dashboard as any).iconColor || (dashboard as any).color || getCardColor(dashboard.id);
+                              return (
+                                <Box
+                                  key={dashboard.id}
+                                  onClick={() => {
+                                    handleDashboardClick(dashboard);
+                                    setSearchQuery('');
+                                    setSearchResults({ dashboards: [], views: [] });
+                                  }}
+                                  sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    px: 2,
+                                    py: 1.5,
+                                    cursor: 'pointer',
+                                    '&:hover': { bgcolor: '#F3F4F6' },
+                                    borderBottom: '1px solid #F3F4F6',
+                                  }}
+                                >
+                                  <Box
+                                    sx={{
+                                      minWidth: 36,
+                                      height: 36,
+                                      borderRadius: 1.5,
+                                      bgcolor: iconColor,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      color: 'white',
+                                      fontWeight: 700,
+                                      fontSize: '0.75rem',
+                                      mr: 2,
+                                    }}
+                                  >
+                                    {iconText}
+                                  </Box>
+                                  <Box sx={{ flex: 1 }}>
+                                    <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: '0.9rem' }}>
+                                      {dashboard.name}
+                                    </Typography>
+                                    {dashboard.description && (
+                                      <Typography sx={{ color: '#6B7280', fontSize: '0.8rem', mt: 0.25 }}>
+                                        {dashboard.description.length > 60 ? dashboard.description.substring(0, 60) + '...' : dashboard.description}
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                  <Box sx={{ px: 1.5, py: 0.5, bgcolor: '#EEF2FF', borderRadius: 1 }}>
+                                    <Typography sx={{ fontSize: '0.7rem', color: '#4F46E5', fontWeight: 500 }}>Library</Typography>
+                                  </Box>
+                                </Box>
+                              );
+                            })}
+                          </>
+                        )}
+
+                        {/* View Results */}
+                        {searchResults.views.length > 0 && (
+                          <>
+                            <Box sx={{ px: 2, py: 1.5, bgcolor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                Views ({searchResults.views.length})
+                              </Typography>
+                            </Box>
+                            {searchResults.views.map((view) => (
+                              <Box
+                                key={`${view.dashboardId}-${view.id}`}
+                                onClick={() => {
+                                  navigate(`/${view.dashboardSlug}/${view.slug}`);
+                                  setSearchQuery('');
+                                  setSearchResults({ dashboards: [], views: [] });
+                                }}
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  px: 2,
+                                  py: 1.5,
+                                  cursor: 'pointer',
+                                  '&:hover': { bgcolor: '#F3F4F6' },
+                                  borderBottom: '1px solid #F3F4F6',
+                                }}
+                              >
+                                <Box
+                                  sx={{
+                                    minWidth: 36,
+                                    height: 36,
+                                    borderRadius: 1.5,
+                                    bgcolor: view.dashboardIconColor,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'white',
+                                    fontWeight: 700,
+                                    fontSize: '0.75rem',
+                                    mr: 2,
+                                  }}
+                                >
+                                  {view.dashboardIconText}
+                                </Box>
+                                <Box sx={{ flex: 1 }}>
+                                  <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: '0.9rem' }}>
+                                    {view.name}
+                                  </Typography>
+                                  <Typography sx={{ color: '#6B7280', fontSize: '0.8rem', mt: 0.25 }}>
+                                    in <span style={{ fontWeight: 500, color: '#4B5563' }}>{view.dashboardName}</span>
+                                  </Typography>
+                                </Box>
+                                <Box sx={{ px: 1.5, py: 0.5, bgcolor: '#ECFDF5', borderRadius: 1 }}>
+                                  <Typography sx={{ fontSize: '0.7rem', color: '#059669', fontWeight: 500 }}>View</Typography>
+                                </Box>
+                              </Box>
+                            ))}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </Paper>
+                )}
+              </Box>
             </Box>
 
             {/* Content Sections */}
@@ -1756,29 +2124,117 @@ const DashboardManagement: React.FC = () => {
                   </Menu>
 
                   {/* Search */}
-            <TextField
-                    placeholder="Search or ask anything..."
-              size="small"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              sx={{
-                      width: 220,
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                        bgcolor: '#F3F4F6',
-                        '& fieldset': { borderColor: 'transparent' },
-                        '&:hover fieldset': { borderColor: '#D1D5DB' },
-                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' },
-                },
-              }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                          <SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
-                  </InputAdornment>
-                ),
-              }}
-            />
+                  <Box sx={{ position: 'relative' }}>
+                    <TextField
+                      placeholder="Search libraries & views..."
+                      size="small"
+                      value={searchQuery}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                      sx={{
+                        width: 280,
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 2,
+                          bgcolor: '#F3F4F6',
+                          '& fieldset': { borderColor: 'transparent' },
+                          '&:hover fieldset': { borderColor: '#D1D5DB' },
+                          '&.Mui-focused fieldset': { borderColor: '#3B82F6' },
+                        },
+                      }}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            {isSearching && <CircularProgress size={16} sx={{ color: '#3B82F6' }} />}
+                            {searchQuery && !isSearching && (
+                              <IconButton size="small" onClick={() => { setSearchQuery(''); setSearchResults({ dashboards: [], views: [] }); }}>
+                                <CloseIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+                              </IconButton>
+                            )}
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+
+                    {/* Search Results Dropdown for Libraries Page */}
+                    {searchQuery.trim() && (searchResults.dashboards.length > 0 || searchResults.views.length > 0) && (
+                      <Paper
+                        elevation={8}
+                        sx={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          mt: 0.5,
+                          maxHeight: 350,
+                          overflow: 'auto',
+                          borderRadius: 2,
+                          border: '1px solid #E5E7EB',
+                          bgcolor: 'white',
+                          zIndex: 1000,
+                        }}
+                      >
+                        {/* View Results in Libraries Page */}
+                        {searchResults.views.length > 0 && (
+                          <>
+                            <Box sx={{ px: 2, py: 1, bgcolor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                Views ({searchResults.views.length})
+                              </Typography>
+                            </Box>
+                            {searchResults.views.slice(0, 8).map((view) => (
+                              <Box
+                                key={`lib-${view.dashboardId}-${view.id}`}
+                                onClick={() => {
+                                  navigate(`/${view.dashboardSlug}/${view.slug}`);
+                                  setSearchQuery('');
+                                  setSearchResults({ dashboards: [], views: [] });
+                                }}
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  px: 2,
+                                  py: 1,
+                                  cursor: 'pointer',
+                                  '&:hover': { bgcolor: '#F3F4F6' },
+                                  borderBottom: '1px solid #F3F4F6',
+                                }}
+                              >
+                                <Box
+                                  sx={{
+                                    minWidth: 28,
+                                    height: 28,
+                                    borderRadius: 1,
+                                    bgcolor: view.dashboardIconColor,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'white',
+                                    fontWeight: 700,
+                                    fontSize: '0.65rem',
+                                    mr: 1.5,
+                                  }}
+                                >
+                                  {view.dashboardIconText}
+                                </Box>
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                  <Typography sx={{ fontWeight: 500, color: '#1F2937', fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {view.name}
+                                  </Typography>
+                                  <Typography sx={{ color: '#9CA3AF', fontSize: '0.7rem' }}>
+                                    in {view.dashboardName}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            ))}
+                          </>
+                        )}
+                      </Paper>
+                    )}
+                  </Box>
 
                   {/* View toggles */}
               <ToggleButtonGroup
@@ -1931,7 +2387,7 @@ const DashboardManagement: React.FC = () => {
                   <Button
                     variant="contained"
                     startIcon={<AddIcon />}
-                    onClick={() => setOpenCreateDialog(true)}
+                    onClick={() => { resetCreateForm(); fetchCalculations(); setOpenCreateDialog(true); }}
                     sx={{
                               bgcolor: '#3B82F6',
                       textTransform: 'none',
@@ -2042,7 +2498,7 @@ const DashboardManagement: React.FC = () => {
             {/* Floating Add Button */}
             <Tooltip title="Create new library">
               <IconButton
-                onClick={() => { setEditingDashboard(null); setNewDashboardName(''); setNewDashboardDesc(''); setOpenCreateDialog(true); }}
+                onClick={() => { setEditingDashboard(null); resetCreateForm(); fetchCalculations(); setOpenCreateDialog(true); }}
                             sx={{
                   position: 'fixed',
                   bottom: 24,
@@ -2207,18 +2663,16 @@ const DashboardManagement: React.FC = () => {
             {/* Time Period */}
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1, color: '#374151', fontWeight: 600 }}>
-                Time Period (Calendar Year)
+                Time Period
               </Typography>
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <TextField
-                  label="Start Year"
-                  type="number"
+                  label="Start Date"
                   value={editingDashboard ? editTimePeriodStart : newTimePeriodStart}
                   onChange={(e) => {
-                    const val = e.target.value ? parseInt(e.target.value) : '';
-                    editingDashboard ? setEditTimePeriodStart(val) : setNewTimePeriodStart(val);
+                    editingDashboard ? setEditTimePeriodStart(e.target.value) : setNewTimePeriodStart(e.target.value);
                   }}
-                  placeholder="2020"
+                  placeholder="e.g., 2020, Jan 2020, Q1 2020"
                   sx={{ flex: 1 }}
                   InputProps={{
                     startAdornment: (
@@ -2229,14 +2683,12 @@ const DashboardManagement: React.FC = () => {
                   }}
                 />
                 <TextField
-                  label="End Year"
-                  type="number"
+                  label="End Date"
                   value={editingDashboard ? editTimePeriodEnd : newTimePeriodEnd}
                   onChange={(e) => {
-                    const val = e.target.value ? parseInt(e.target.value) : '';
-                    editingDashboard ? setEditTimePeriodEnd(val) : setNewTimePeriodEnd(val);
+                    editingDashboard ? setEditTimePeriodEnd(e.target.value) : setNewTimePeriodEnd(e.target.value);
                   }}
-                  placeholder="2025"
+                  placeholder="e.g., 2025, Dec 2025, Q4 2025"
                   sx={{ flex: 1 }}
                   InputProps={{
                     startAdornment: (
@@ -2248,6 +2700,119 @@ const DashboardManagement: React.FC = () => {
                 />
               </Box>
             </Box>
+
+            {/* Admin Portal Permission ID - Read Only */}
+            <TextField
+              label="Admin Portal Permission ID"
+              fullWidth
+              value={editingDashboard ? editAdminPortalId : (newAdminPortalId || 'Will be auto-generated on create')}
+              disabled
+              InputProps={{
+                readOnly: true,
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <InfoIcon sx={{ color: '#6B7280' }} />
+                  </InputAdornment>
+                ),
+              }}
+              helperText="This ID is auto-generated and cannot be edited"
+              sx={{
+                '& .MuiInputBase-input.Mui-disabled': {
+                  WebkitTextFillColor: '#6B7280',
+                },
+              }}
+            />
+
+            {/* Embed Type Dropdown */}
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1, color: '#374151', fontWeight: 600 }}>
+                Embed Configuration (Optional)
+              </Typography>
+              <TextField
+                select
+                label="Embed Type"
+                fullWidth
+                value={editingDashboard ? editEmbedType : newEmbedType}
+                onChange={(e) => {
+                  const val = e.target.value as '' | 'iframe' | 'tableau';
+                  editingDashboard ? setEditEmbedType(val) : setNewEmbedType(val);
+                  // Clear embed link when type changes
+                  if (!val) {
+                    editingDashboard ? setEditEmbedLink('') : setNewEmbedLink('');
+                  }
+                }}
+                sx={{ mb: 2 }}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+                SelectProps={{
+                  displayEmpty: true,
+                  renderValue: (value) => {
+                    if (!value || value === '') {
+                      return <span style={{ color: '#9CA3AF' }}>None</span>;
+                    }
+                    if (value === 'iframe') return 'iFrame Link';
+                    if (value === 'tableau') return 'Tableau Link';
+                    return value as string;
+                  },
+                }}
+              >
+                <MenuItem value="">None</MenuItem>
+                <MenuItem value="iframe">iFrame Link</MenuItem>
+                <MenuItem value="tableau">Tableau Link</MenuItem>
+              </TextField>
+
+              {/* Embed Link - Only shown when embed type is selected */}
+              {(editingDashboard ? editEmbedType : newEmbedType) && (
+                <TextField
+                  label={(editingDashboard ? editEmbedType : newEmbedType) === 'iframe' ? 'iFrame URL' : 'Tableau URL'}
+                  fullWidth
+                  value={editingDashboard ? editEmbedLink : newEmbedLink}
+                  onChange={(e) => editingDashboard ? setEditEmbedLink(e.target.value) : setNewEmbedLink(e.target.value)}
+                  placeholder={
+                    (editingDashboard ? editEmbedType : newEmbedType) === 'iframe' 
+                      ? 'https://example.com/embed/...' 
+                      : 'https://tableau.example.com/views/...'
+                  }
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <OpenInNewIcon sx={{ color: '#6B7280' }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              )}
+            </Box>
+
+            {/* Trigger Calculation Dropdown */}
+            <TextField
+              select
+              label="Trigger Calculation on Visit"
+              fullWidth
+              value={editingDashboard ? editTriggerCalculation : newTriggerCalculation}
+              onChange={(e) => editingDashboard ? setEditTriggerCalculation(e.target.value) : setNewTriggerCalculation(e.target.value)}
+              helperText="Select a calculation to trigger when this dashboard is visited (for display purposes only)"
+              InputLabelProps={{
+                shrink: true,
+              }}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (value) => {
+                  if (!value || value === '') {
+                    return <span style={{ color: '#9CA3AF' }}>None</span>;
+                  }
+                  return value as string;
+                },
+              }}
+            >
+              <MenuItem value="">None</MenuItem>
+              {calculations.map((calc) => (
+                <MenuItem key={calc.id} value={calc.variable_name}>
+                  {calc.variable_name}
+                </MenuItem>
+              ))}
+            </TextField>
 
             {/* Icon Configuration */}
             <Box sx={{ p: 2.5, bgcolor: alpha('#3B82F6', 0.03), borderRadius: 2.5, border: '1px solid', borderColor: alpha('#3B82F6', 0.08) }}>

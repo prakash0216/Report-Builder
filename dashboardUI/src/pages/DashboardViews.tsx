@@ -37,6 +37,11 @@ import {
   ListItemIcon,
   ListItemText,
   CircularProgress,
+  Select,
+  FormControl,
+  InputLabel,
+  Stack,
+  SelectChangeEvent,
 } from '@mui/material';
 import NotFound from './NotFound';
 import {
@@ -65,6 +70,11 @@ import {
   AcUnit as SnowflakeIcon,
   Logout as LogoutIcon,
   Email as EmailIcon,
+  Info as InfoIcon,
+  CloudUpload as CloudUploadIcon,
+  Palette as PaletteIcon,
+  Image as ImageIcon,
+  CalendarToday as CalendarTodayIcon,
 } from '@mui/icons-material';
 import AddDataSource from '../components/AddDataSource';
 import SnowflakeConnector from '../components/SnowflakeConnector';
@@ -84,6 +94,15 @@ interface View {
   createdAt: number;
   updatedAt: number;
   chartsCount: number;
+  // New fields
+  adminPortalId?: string;
+  embedType?: '' | 'iframe' | 'tableau';
+  embedLink?: string;
+  triggerCalculation?: string;
+  iconType?: 'text' | 'upload';
+  iconText?: string;
+  iconColor?: string;
+  iconImageUrl?: string;
 }
 
 const DashboardViews: React.FC = () => {
@@ -118,11 +137,38 @@ const DashboardViews: React.FC = () => {
       .replace(/-+/g, '-') // Replace multiple dashes with single
       .trim();
   };
+
+  // Generate short code from name (up to 5 chars)
+  const getShortCode = (name: string): string => {
+    return name.replace(/\s+/g, '').substring(0, 5).toUpperCase() || 'VIEW';
+  };
+
+  // Fetch calculations for dropdown
+  const fetchCalculations = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/calculations`);
+      const data = await response.json();
+      if (data.success && data.calculations) {
+        setCalculations(data.calculations.map((c: any) => ({ id: c.id.toString(), variable_name: c.variable_name })));
+      }
+    } catch (err) {
+      console.error('Error fetching calculations:', err);
+    }
+  }, []);
   
   const [views, setViews] = useState<View[]>([]);
   
   const [newViewName, setNewViewName] = useState<string>('');
   const [newViewDesc, setNewViewDesc] = useState<string>('');
+  const [newAdminPortalId, setNewAdminPortalId] = useState<string>('');
+  const [newEmbedType, setNewEmbedType] = useState<'' | 'iframe' | 'tableau'>('');
+  const [newEmbedLink, setNewEmbedLink] = useState<string>('');
+  const [newTriggerCalculation, setNewTriggerCalculation] = useState<string>('');
+  const [newIconType, setNewIconType] = useState<'text' | 'upload'>('text');
+  const [newIconText, setNewIconText] = useState<string>('');
+  const [newIconColor, setNewIconColor] = useState<string>('#667eea');
+  const [newIconImageUrl, setNewIconImageUrl] = useState<string>('');
+  const [calculations, setCalculations] = useState<Array<{ id: string; variable_name: string }>>([]);
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [deletingView, setDeletingView] = useState<View | null>(null);
@@ -200,9 +246,18 @@ const DashboardViews: React.FC = () => {
             name: v.name,
             slug: v.slug,
             description: v.description || '',
-            createdAt: new Date(v.created_at).getTime(),
-            updatedAt: new Date(v.updated_at).getTime(),
+            createdAt: new Date(v.created_at || v.createdAt).getTime(),
+            updatedAt: new Date(v.updated_at || v.updatedAt).getTime(),
             chartsCount: Number(v.charts_count ?? v.chartsCount ?? 0),
+            // New fields
+            adminPortalId: v.admin_portal_id || v.adminPortalId || '',
+            embedType: v.embed_type || v.embedType || '',
+            embedLink: v.embed_link || v.embedLink || '',
+            triggerCalculation: v.trigger_calculation || v.triggerCalculation || '',
+            iconType: v.icon_type || v.iconType || 'text',
+            iconText: v.icon_text || v.iconText || '',
+            iconColor: v.icon_color || v.iconColor || '#667eea',
+            iconImageUrl: v.icon_image_url || v.iconImageUrl || '',
           }));
           setViews(mappedViews);
           console.log('📊 [Views] mapped totals', {
@@ -322,6 +377,12 @@ const DashboardViews: React.FC = () => {
   const handleCreateView = async () => {
     if (!newViewName.trim() || !dashboardSlug) return;
 
+    // Auto-generate icon text if not provided
+    const autoIconText = newIconText || getShortCode(newViewName);
+    
+    // Generate admin portal ID (auto-generated, not editable)
+    const generatedAdminPortalId = `VP-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
     try {
       const response = await fetch(`${API_BASE}/dashboards/${dashboardSlug}/views`, {
         method: 'POST',
@@ -329,25 +390,41 @@ const DashboardViews: React.FC = () => {
         body: JSON.stringify({
           name: newViewName,
           description: newViewDesc,
+          adminPortalId: generatedAdminPortalId,
+          embedType: newEmbedType || null,
+          embedLink: newEmbedLink || null,
+          triggerCalculation: newTriggerCalculation || null,
+          iconType: newIconType,
+          iconText: autoIconText,
+          iconColor: newIconColor,
+          iconImageUrl: newIconImageUrl,
         }),
       });
       
       const data = await response.json();
       
       if (data.success && data.view) {
+        const v = data.view;
         const newView: View = {
-          id: data.view.id.toString(),
-          name: data.view.name,
-          slug: data.view.slug,
-          description: data.view.description || '',
-          createdAt: new Date(data.view.created_at).getTime(),
-          updatedAt: new Date(data.view.updated_at).getTime(),
+          id: v.id.toString(),
+          name: v.name,
+          slug: v.slug,
+          description: v.description || '',
+          createdAt: new Date(v.created_at || v.createdAt).getTime(),
+          updatedAt: new Date(v.updated_at || v.updatedAt).getTime(),
           chartsCount: 0,
+          adminPortalId: v.admin_portal_id || v.adminPortalId || '',
+          embedType: v.embed_type || v.embedType || '',
+          embedLink: v.embed_link || v.embedLink || '',
+          triggerCalculation: v.trigger_calculation || v.triggerCalculation || '',
+          iconType: v.icon_type || v.iconType || 'text',
+          iconText: v.icon_text || v.iconText || '',
+          iconColor: v.icon_color || v.iconColor || '#667eea',
+          iconImageUrl: v.icon_image_url || v.iconImageUrl || '',
         };
         
         setViews([...views, newView]);
-        setNewViewName('');
-        setNewViewDesc('');
+        resetCreateForm();
         setOpenCreateDialog(false);
       } else {
         console.error('Failed to create view:', data.error);
@@ -359,16 +436,42 @@ const DashboardViews: React.FC = () => {
     }
   };
 
+  // Reset form fields
+  const resetCreateForm = () => {
+    setNewViewName('');
+    setNewViewDesc('');
+    setNewAdminPortalId('');
+    setNewEmbedType('');
+    setNewEmbedLink('');
+    setNewTriggerCalculation('');
+    setNewIconType('text');
+    setNewIconText('');
+    setNewIconColor('#667eea');
+    setNewIconImageUrl('');
+  };
+
   const handleEditStart = (view: View) => {
     setEditingView(view);
     setNewViewName(view.name);
     setNewViewDesc(view.description);
+    setNewAdminPortalId(view.adminPortalId || '');
+    setNewEmbedType(view.embedType || '');
+    setNewEmbedLink(view.embedLink || '');
+    setNewTriggerCalculation(view.triggerCalculation || '');
+    setNewIconType(view.iconType || 'text');
+    setNewIconText(view.iconText || '');
+    setNewIconColor(view.iconColor || '#667eea');
+    setNewIconImageUrl(view.iconImageUrl || '');
+    fetchCalculations();
     setOpenCreateDialog(true);
     setAnchorEl(null);
   };
 
   const handleEditSave = async () => {
     if (!newViewName.trim() || !editingView || !dashboardSlug) return;
+
+    // Auto-generate icon text if not provided
+    const autoIconText = newIconText || getShortCode(newViewName);
 
     try {
       const response = await fetch(`${API_BASE}/dashboards/${dashboardSlug}/views/${editingView.id}`, {
@@ -377,21 +480,38 @@ const DashboardViews: React.FC = () => {
         body: JSON.stringify({
           name: newViewName,
           description: newViewDesc,
+          adminPortalId: newAdminPortalId || null,
+          embedType: newEmbedType || null,
+          embedLink: newEmbedLink || null,
+          triggerCalculation: newTriggerCalculation || null,
+          iconType: newIconType,
+          iconText: autoIconText,
+          iconColor: newIconColor,
+          iconImageUrl: newIconImageUrl,
         }),
       });
       
       const data = await response.json();
       
       if (data.success && data.view) {
+        const vw = data.view;
         setViews(
           views.map((v) =>
             v.id === editingView.id
               ? { 
                   ...v, 
-                  name: data.view.name, 
-                  slug: data.view.slug,
-                  description: data.view.description || '', 
-                  updatedAt: new Date(data.view.updated_at).getTime() 
+                  name: vw.name, 
+                  slug: vw.slug,
+                  description: vw.description || '', 
+                  updatedAt: new Date(vw.updated_at || vw.updatedAt).getTime(),
+                  adminPortalId: vw.admin_portal_id || vw.adminPortalId || '',
+                  embedType: vw.embed_type || vw.embedType || '',
+                  embedLink: vw.embed_link || vw.embedLink || '',
+                  triggerCalculation: vw.trigger_calculation || vw.triggerCalculation || '',
+                  iconType: vw.icon_type || vw.iconType || 'text',
+                  iconText: vw.icon_text || vw.iconText || '',
+                  iconColor: vw.icon_color || vw.iconColor || '#667eea',
+                  iconImageUrl: vw.icon_image_url || vw.iconImageUrl || '',
                 }
               : v
           )
@@ -400,9 +520,9 @@ const DashboardViews: React.FC = () => {
         if (selectedView?.id === editingView.id) {
           setSelectedView({ 
             ...editingView, 
-            name: data.view.name, 
-            slug: data.view.slug,
-            description: data.view.description || '' 
+            name: vw.name, 
+            slug: vw.slug,
+            description: vw.description || '' 
           });
         }
       } else {
@@ -888,7 +1008,7 @@ const DashboardViews: React.FC = () => {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => { setEditingView(null); setNewViewName(''); setNewViewDesc(''); setOpenCreateDialog(true); }}
+            onClick={() => { setEditingView(null); resetCreateForm(); fetchCalculations(); setOpenCreateDialog(true); }}
             sx={{
               background: 'rgba(255,255,255,0.95)',
               color: '#667eea',
@@ -1549,7 +1669,7 @@ const DashboardViews: React.FC = () => {
                   <Button
                     variant="contained"
                     startIcon={<AddIcon />}
-                    onClick={() => setOpenCreateDialog(true)}
+                    onClick={() => { resetCreateForm(); fetchCalculations(); setOpenCreateDialog(true); }}
                     sx={{
                       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                       textTransform: 'none',
@@ -1722,8 +1842,8 @@ const DashboardViews: React.FC = () => {
       {/* Create/Edit Dialog */}
       <Dialog
         open={openCreateDialog}
-        onClose={() => { setOpenCreateDialog(false); setEditingView(null); setNewViewName(''); setNewViewDesc(''); }}
-        maxWidth="sm"
+        onClose={() => { setOpenCreateDialog(false); setEditingView(null); resetCreateForm(); }}
+        maxWidth="md"
         fullWidth
         PaperProps={{
           sx: {
@@ -1760,51 +1880,259 @@ const DashboardViews: React.FC = () => {
             </Box>
           </Box>
         </DialogTitle>
-        <DialogContent sx={{ pt: 3 }}>
-          <TextField
-            autoFocus
-            label="View Name"
-            fullWidth
-            required
-            value={newViewName}
-            onChange={(e) => setNewViewName(e.target.value)}
-            placeholder="e.g., Patient View, Sales Overview"
-            InputLabelProps={{ shrink: true }}
-            sx={{
-              mt: 1,
-              mb: 3,
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                '& fieldset': { borderColor: alpha('#667eea', 0.2) },
-                '&:hover fieldset': { borderColor: alpha('#667eea', 0.4) },
-                '&.Mui-focused fieldset': { borderColor: '#667eea' },
-              },
-              '& .MuiInputLabel-root.Mui-focused': { color: '#667eea' },
-            }}
-          />
-          <TextField
-            label="Description (Optional)"
-            fullWidth
-            multiline
-            rows={3}
-            value={newViewDesc}
-            onChange={(e) => setNewViewDesc(e.target.value)}
-            placeholder="Describe what this view will display..."
-            InputLabelProps={{ shrink: true }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                '& fieldset': { borderColor: alpha('#667eea', 0.2) },
-                '&:hover fieldset': { borderColor: alpha('#667eea', 0.4) },
-                '&.Mui-focused fieldset': { borderColor: '#667eea' },
-              },
-              '& .MuiInputLabel-root.Mui-focused': { color: '#667eea' },
-            }}
-          />
+        <DialogContent dividers sx={{ p: 3 }}>
+          <Stack spacing={3}>
+            {/* View Name */}
+            <TextField
+              autoFocus
+              label="View Name"
+              fullWidth
+              required
+              value={newViewName}
+              onChange={(e) => setNewViewName(e.target.value)}
+              placeholder="e.g., Patient View, Sales Overview"
+              InputLabelProps={{ shrink: true }}
+            />
+
+            {/* Description */}
+            <TextField
+              label="Description (Optional)"
+              fullWidth
+              multiline
+              rows={2}
+              value={newViewDesc}
+              onChange={(e) => setNewViewDesc(e.target.value)}
+              placeholder="Describe what this view will display..."
+              InputLabelProps={{ shrink: true }}
+            />
+
+            {/* Admin Portal Permission ID */}
+            <TextField
+              label="Admin Portal Permission ID"
+              fullWidth
+              value={editingView ? newAdminPortalId : '(Auto-generated on create)'}
+              InputProps={{
+                readOnly: true,
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <InfoIcon sx={{ color: '#9CA3AF' }} />
+                  </InputAdornment>
+                ),
+              }}
+              InputLabelProps={{ shrink: true }}
+              helperText="This ID is auto-generated and cannot be edited"
+              sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#F9FAFB' } }}
+            />
+
+            {/* Embed Configuration */}
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#374151', mt: 1 }}>
+              Embed Configuration (Optional)
+            </Typography>
+            
+            <FormControl fullWidth>
+              <InputLabel shrink>Embed Type</InputLabel>
+              <Select
+                value={newEmbedType}
+                onChange={(e: SelectChangeEvent) => setNewEmbedType(e.target.value as '' | 'iframe' | 'tableau')}
+                label="Embed Type"
+                displayEmpty
+                notched
+                renderValue={(value) => {
+                  if (!value) return <span style={{ color: '#9CA3AF' }}>None</span>;
+                  return value === 'iframe' ? 'iFrame Link' : 'Tableau Link';
+                }}
+              >
+                <MenuItem value="">None</MenuItem>
+                <MenuItem value="iframe">iFrame Link</MenuItem>
+                <MenuItem value="tableau">Tableau Link</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Embed Link - shown when embed type is selected */}
+            {newEmbedType && (
+              <TextField
+                label={newEmbedType === 'iframe' ? 'iFrame URL' : 'Tableau URL'}
+                fullWidth
+                value={newEmbedLink}
+                onChange={(e) => setNewEmbedLink(e.target.value)}
+                placeholder={newEmbedType === 'iframe' ? 'https://example.com/embed' : 'https://tableau.example.com/view'}
+                InputLabelProps={{ shrink: true }}
+              />
+            )}
+
+            {/* Trigger Calculation */}
+            <TextField
+              select
+              label="Trigger Calculation on Visit"
+              fullWidth
+              value={newTriggerCalculation}
+              onChange={(e) => setNewTriggerCalculation(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              helperText="Select a calculation to trigger when this view is visited (for display purposes only)"
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (value: unknown) => {
+                  if (!value) return <span style={{ color: '#9CA3AF' }}>None</span>;
+                  const calc = calculations.find(c => c.variable_name === value);
+                  return calc ? calc.variable_name : String(value);
+                },
+              }}
+            >
+              <MenuItem value="">None</MenuItem>
+              {calculations.map((calc) => (
+                <MenuItem key={calc.id} value={calc.variable_name}>
+                  {calc.variable_name}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            {/* View Icon Section */}
+            <Box sx={{ bgcolor: '#F9FAFB', borderRadius: 2, p: 2.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#374151' }}>
+                  View Icon
+                </Typography>
+                <ToggleButtonGroup
+                  value={newIconType}
+                  exclusive
+                  onChange={(_, value) => value && setNewIconType(value)}
+                  size="small"
+                >
+                  <ToggleButton value="text" sx={{ textTransform: 'none', px: 2 }}>
+                    Custom Text
+                  </ToggleButton>
+                  <ToggleButton value="upload" sx={{ textTransform: 'none', px: 2 }}>
+                    Upload Image
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+
+              {newIconType === 'text' ? (
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                    {/* Preview */}
+                    <Box
+                      sx={{
+                        minWidth: 64,
+                        height: 64,
+                        px: 1,
+                        borderRadius: 2.5,
+                        bgcolor: newIconColor,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontWeight: 700,
+                        fontSize: (newIconText || getShortCode(newViewName || 'VIEW')).length > 3 ? '0.85rem' : '1rem',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      }}
+                    >
+                      {newIconText || getShortCode(newViewName || 'VIEW')}
+                    </Box>
+                    <TextField
+                      label="Icon Text (max 5 letters)"
+                      value={newIconText}
+                      onChange={(e) => setNewIconText(e.target.value.substring(0, 5).toUpperCase())}
+                      placeholder={getShortCode(newViewName || 'VIEW')}
+                      size="small"
+                      sx={{ flex: 1 }}
+                      inputProps={{ maxLength: 5, style: { textTransform: 'uppercase' } }}
+                    />
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 500 }}>Choose Color:</Typography>
+                    <Box sx={{ position: 'relative' }}>
+                      <input
+                        type="color"
+                        value={newIconColor}
+                        onChange={(e) => setNewIconColor(e.target.value)}
+                        style={{
+                          width: 48,
+                          height: 48,
+                          border: 'none',
+                          borderRadius: 8,
+                          cursor: 'pointer',
+                          padding: 0,
+                          background: 'transparent',
+                        }}
+                      />
+                    </Box>
+                    <Typography variant="caption" sx={{ color: '#9CA3AF', ml: 1 }}>
+                      Click to open color picker
+                    </Typography>
+                  </Box>
+                </Box>
+              ) : (
+                <Box>
+                  {/* File Upload */}
+                  <input
+                    type="file"
+                    id="view-icon-upload"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setNewIconImageUrl(reader.result as string);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  <label htmlFor="view-icon-upload">
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 2,
+                        p: 2,
+                        border: '2px dashed #D1D5DB',
+                        borderRadius: 2,
+                        cursor: 'pointer',
+                        '&:hover': { borderColor: '#667eea', bgcolor: alpha('#667eea', 0.05) },
+                      }}
+                    >
+                      {newIconImageUrl ? (
+                        <Box
+                          component="img"
+                          src={newIconImageUrl}
+                          sx={{ width: 64, height: 64, borderRadius: 2, objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <Box
+                          sx={{
+                            width: 64,
+                            height: 64,
+                            borderRadius: 2,
+                            bgcolor: '#E5E7EB',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <ImageIcon sx={{ color: '#9CA3AF', fontSize: 28 }} />
+                        </Box>
+                      )}
+                      <Box>
+                        <Typography variant="body2" fontWeight={600} color="#374151">
+                          {newIconImageUrl ? 'Change Image' : 'Upload Icon Image'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          PNG, JPG up to 2MB
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </label>
+                </Box>
+              )}
+            </Box>
+          </Stack>
         </DialogContent>
         <DialogActions sx={{ p: 3, pt: 2 }}>
           <Button
-            onClick={() => { setOpenCreateDialog(false); setEditingView(null); setNewViewName(''); setNewViewDesc(''); }}
+            onClick={() => { setOpenCreateDialog(false); setEditingView(null); resetCreateForm(); }}
             sx={{ textTransform: 'none', fontWeight: 600, color: 'text.secondary' }}
           >
             Cancel

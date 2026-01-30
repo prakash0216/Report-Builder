@@ -4602,11 +4602,30 @@ app.get('/api/dashboards', async (req, res) => {
       child_charts: childChartsByDashboard[d.id] || 0,
     })));
 
-    // Convert BigInt to Number for JSON serialization
+    // Convert BigInt to Number and snake_case to camelCase for JSON serialization
     const serializedDashboards = dashboards.map(d => {
       const childCharts = childChartsByDashboard[d.id] || 0;
       return {
-        ...d,
+        id: d.id,
+        name: d.name,
+        slug: d.slug,
+        description: d.description,
+        icon: d.icon,
+        color: d.color,
+        dataSource: d.data_source,
+        timePeriodStart: d.time_period_start,
+        timePeriodEnd: d.time_period_end,
+        libraryType: d.library_type,
+        iconType: d.icon_type,
+        iconText: d.icon_text,
+        iconColor: d.icon_color,
+        iconImageUrl: d.icon_image_url,
+        adminPortalId: d.admin_portal_id,
+        embedType: d.embed_type,
+        embedLink: d.embed_link,
+        triggerCalculation: d.trigger_calculation,
+        createdAt: d.created_at,
+        updatedAt: d.updated_at,
         views_count: Number(d.views_count) || 0,
         charts_count: (Number(d.charts_count) || 0) + childCharts,
       };
@@ -4641,7 +4660,32 @@ app.get('/api/dashboards/:identifier', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Dashboard not found' });
     }
     
-    res.json({ success: true, dashboard: result[0] });
+    // Convert snake_case to camelCase
+    const d = result[0];
+    const dashboard = {
+      id: d.id,
+      name: d.name,
+      slug: d.slug,
+      description: d.description,
+      icon: d.icon,
+      color: d.color,
+      dataSource: d.data_source,
+      timePeriodStart: d.time_period_start,
+      timePeriodEnd: d.time_period_end,
+      libraryType: d.library_type,
+      iconType: d.icon_type,
+      iconText: d.icon_text,
+      iconColor: d.icon_color,
+      iconImageUrl: d.icon_image_url,
+      adminPortalId: d.admin_portal_id,
+      embedType: d.embed_type,
+      embedLink: d.embed_link,
+      triggerCalculation: d.trigger_calculation,
+      createdAt: d.created_at,
+      updatedAt: d.updated_at,
+    };
+    
+    res.json({ success: true, dashboard });
   } catch (err) {
     console.error('❌ Error fetching dashboard:', err.message);
     res.status(500).json({ success: false, error: err.message });
@@ -4665,7 +4709,11 @@ app.post('/api/dashboards', async (req, res) => {
     iconType,
     iconText,
     iconColor,
-    iconImageUrl
+    iconImageUrl,
+    adminPortalId,
+    embedType,
+    embedLink,
+    triggerCalculation
   } = req.body;
   
   if (!name || name.trim() === '') {
@@ -4686,6 +4734,7 @@ app.post('/api/dashboards', async (req, res) => {
         name, slug, description, icon, color,
         data_source, time_period_start, time_period_end,
         library_type, icon_type, icon_text, icon_color, icon_image_url,
+        admin_portal_id, embed_type, embed_link, trigger_calculation,
         created_at, updated_at
       )
       VALUES (
@@ -4695,13 +4744,17 @@ app.post('/api/dashboards', async (req, res) => {
         '${icon || 'dashboard'}',
         '${color || '#667eea'}',
         ${dataSource ? `'${dataSource.replace(/'/g, "''")}'` : 'NULL'},
-        ${timePeriodStart ? parseInt(timePeriodStart) : 'NULL'},
-        ${timePeriodEnd ? parseInt(timePeriodEnd) : 'NULL'},
+        ${timePeriodStart ? `'${String(timePeriodStart).replace(/'/g, "''")}'` : 'NULL'},
+        ${timePeriodEnd ? `'${String(timePeriodEnd).replace(/'/g, "''")}'` : 'NULL'},
         '${libraryType || 'Core libraries'}',
         '${iconType || 'text'}',
         ${iconText ? `'${iconText.replace(/'/g, "''").substring(0, 5)}'` : 'NULL'},
         '${iconColor || '#3B82F6'}',
         ${iconImageUrl ? `'${iconImageUrl.replace(/'/g, "''")}'` : 'NULL'},
+        ${adminPortalId ? `'${adminPortalId.replace(/'/g, "''")}'` : 'NULL'},
+        '${embedType || ''}',
+        ${embedLink ? `'${embedLink.replace(/'/g, "''")}'` : 'NULL'},
+        ${triggerCalculation ? `'${triggerCalculation.replace(/'/g, "''")}'` : 'NULL'},
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
       )
@@ -4709,9 +4762,34 @@ app.post('/api/dashboards', async (req, res) => {
     
     // Get the created dashboard
     const result = await dbClient.query(`SELECT * FROM dashboards WHERE slug = '${slug}'`);
+    const d = result[0];
+    
+    // Convert snake_case to camelCase
+    const dashboard = {
+      id: d.id,
+      name: d.name,
+      slug: d.slug,
+      description: d.description,
+      icon: d.icon,
+      color: d.color,
+      dataSource: d.data_source,
+      timePeriodStart: d.time_period_start,
+      timePeriodEnd: d.time_period_end,
+      libraryType: d.library_type,
+      iconType: d.icon_type,
+      iconText: d.icon_text,
+      iconColor: d.icon_color,
+      iconImageUrl: d.icon_image_url,
+      adminPortalId: d.admin_portal_id,
+      embedType: d.embed_type,
+      embedLink: d.embed_link,
+      triggerCalculation: d.trigger_calculation,
+      createdAt: d.created_at,
+      updatedAt: d.updated_at,
+    };
     
     console.log(`✅ Created dashboard: ${name} (${slug})`);
-    res.status(201).json({ success: true, dashboard: result[0] });
+    res.status(201).json({ success: true, dashboard });
   } catch (err) {
     console.error('❌ Error creating dashboard:', err.message);
     res.status(500).json({ success: false, error: err.message });
@@ -4736,7 +4814,11 @@ app.put('/api/dashboards/:id', async (req, res) => {
     iconType,
     iconText,
     iconColor,
-    iconImageUrl
+    iconImageUrl,
+    adminPortalId,
+    embedType,
+    embedLink,
+    triggerCalculation
   } = req.body;
   
   try {
@@ -4756,10 +4838,10 @@ app.put('/api/dashboards/:id', async (req, res) => {
       updates.push(dataSource ? `data_source='${dataSource.replace(/'/g, "''")}'` : `data_source=NULL`);
     }
     if (timePeriodStart !== undefined) {
-      updates.push(timePeriodStart ? `time_period_start=${parseInt(timePeriodStart)}` : `time_period_start=NULL`);
+      updates.push(timePeriodStart ? `time_period_start='${String(timePeriodStart).replace(/'/g, "''")}'` : `time_period_start=NULL`);
     }
     if (timePeriodEnd !== undefined) {
-      updates.push(timePeriodEnd ? `time_period_end=${parseInt(timePeriodEnd)}` : `time_period_end=NULL`);
+      updates.push(timePeriodEnd ? `time_period_end='${String(timePeriodEnd).replace(/'/g, "''")}'` : `time_period_end=NULL`);
     }
     if (libraryType !== undefined) {
       updates.push(`library_type='${libraryType || 'Core libraries'}'`);
@@ -4773,6 +4855,19 @@ app.put('/api/dashboards/:id', async (req, res) => {
     if (iconColor !== undefined) {
       updates.push(`icon_color='${iconColor || '#3B82F6'}'`);
     }
+    // Additional new fields
+    if (adminPortalId !== undefined) {
+      updates.push(adminPortalId ? `admin_portal_id='${adminPortalId.replace(/'/g, "''")}'` : `admin_portal_id=NULL`);
+    }
+    if (embedType !== undefined) {
+      updates.push(`embed_type='${embedType || ''}'`);
+    }
+    if (embedLink !== undefined) {
+      updates.push(embedLink ? `embed_link='${embedLink.replace(/'/g, "''")}'` : `embed_link=NULL`);
+    }
+    if (triggerCalculation !== undefined) {
+      updates.push(triggerCalculation ? `trigger_calculation='${triggerCalculation.replace(/'/g, "''")}'` : `trigger_calculation=NULL`);
+    }
     if (iconImageUrl !== undefined) {
       updates.push(iconImageUrl ? `icon_image_url='${iconImageUrl.replace(/'/g, "''")}'` : `icon_image_url=NULL`);
     }
@@ -4782,9 +4877,34 @@ app.put('/api/dashboards/:id', async (req, res) => {
     await dbClient.run(`UPDATE dashboards SET ${updates.join(', ')} WHERE id=${id}`);
     
     const result = await dbClient.query(`SELECT * FROM dashboards WHERE id=${id}`);
+    const d = result[0];
+    
+    // Convert snake_case to camelCase
+    const dashboard = {
+      id: d.id,
+      name: d.name,
+      slug: d.slug,
+      description: d.description,
+      icon: d.icon,
+      color: d.color,
+      dataSource: d.data_source,
+      timePeriodStart: d.time_period_start,
+      timePeriodEnd: d.time_period_end,
+      libraryType: d.library_type,
+      iconType: d.icon_type,
+      iconText: d.icon_text,
+      iconColor: d.icon_color,
+      iconImageUrl: d.icon_image_url,
+      adminPortalId: d.admin_portal_id,
+      embedType: d.embed_type,
+      embedLink: d.embed_link,
+      triggerCalculation: d.trigger_calculation,
+      createdAt: d.created_at,
+      updatedAt: d.updated_at,
+    };
     
     console.log(`✅ Updated dashboard: ${id}`);
-    res.json({ success: true, dashboard: result[0] });
+    res.json({ success: true, dashboard });
   } catch (err) {
     console.error('❌ Error updating dashboard:', err.message);
     res.status(500).json({ success: false, error: err.message });
@@ -4981,7 +5101,21 @@ app.get('/api/dashboards/:dashboardId/views/:viewIdentifier', async (req, res) =
  */
 app.post('/api/dashboards/:dashboardId/views', async (req, res) => {
   const { dashboardId } = req.params;
-  const { name, description, icon, is_default, display_order } = req.body;
+  const { 
+    name, 
+    description, 
+    icon, 
+    is_default, 
+    display_order,
+    adminPortalId,
+    embedType,
+    embedLink,
+    triggerCalculation,
+    iconType,
+    iconText,
+    iconColor,
+    iconImageUrl
+  } = req.body;
   
   if (!name || name.trim() === '') {
     return res.status(400).json({ success: false, error: 'View name is required' });
@@ -5014,7 +5148,12 @@ app.post('/api/dashboards/:dashboardId/views', async (req, res) => {
     }
     
     await dbClient.run(`
-      INSERT INTO views (dashboard_id, name, slug, description, icon, is_default, display_order, created_at, updated_at)
+      INSERT INTO views (
+        dashboard_id, name, slug, description, icon, is_default, display_order,
+        admin_portal_id, embed_type, embed_link, trigger_calculation,
+        icon_type, icon_text, icon_color, icon_image_url,
+        created_at, updated_at
+      )
       VALUES (
         ${actualDashboardId},
         '${name.replace(/'/g, "''")}',
@@ -5023,6 +5162,14 @@ app.post('/api/dashboards/:dashboardId/views', async (req, res) => {
         '${icon || 'view_module'}',
         ${is_default ? 'TRUE' : 'FALSE'},
         ${display_order || 0},
+        ${adminPortalId ? `'${adminPortalId.replace(/'/g, "''")}'` : 'NULL'},
+        '${embedType || ''}',
+        ${embedLink ? `'${embedLink.replace(/'/g, "''")}'` : 'NULL'},
+        ${triggerCalculation ? `'${triggerCalculation.replace(/'/g, "''")}'` : 'NULL'},
+        '${iconType || 'text'}',
+        ${iconText ? `'${iconText.replace(/'/g, "''").substring(0, 5)}'` : 'NULL'},
+        '${iconColor || '#667eea'}',
+        ${iconImageUrl ? `'${iconImageUrl.replace(/'/g, "''")}'` : 'NULL'},
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
       )
@@ -5030,9 +5177,32 @@ app.post('/api/dashboards/:dashboardId/views', async (req, res) => {
     
     // Get the created view
     const result = await dbClient.query(`SELECT * FROM views WHERE slug = '${slug}' AND dashboard_id = ${actualDashboardId}`);
+    const v = result[0];
+    
+    // Convert snake_case to camelCase
+    const view = {
+      id: v.id,
+      dashboardId: v.dashboard_id,
+      name: v.name,
+      slug: v.slug,
+      description: v.description,
+      icon: v.icon,
+      isDefault: v.is_default,
+      displayOrder: v.display_order,
+      adminPortalId: v.admin_portal_id,
+      embedType: v.embed_type,
+      embedLink: v.embed_link,
+      triggerCalculation: v.trigger_calculation,
+      iconType: v.icon_type,
+      iconText: v.icon_text,
+      iconColor: v.icon_color,
+      iconImageUrl: v.icon_image_url,
+      createdAt: v.created_at,
+      updatedAt: v.updated_at,
+    };
     
     console.log(`✅ Created view: ${name} (${slug}) in dashboard ${actualDashboardId}`);
-    res.status(201).json({ success: true, view: result[0] });
+    res.status(201).json({ success: true, view });
   } catch (err) {
     console.error('❌ Error creating view:', err.message);
     res.status(500).json({ success: false, error: err.message });
@@ -5045,7 +5215,21 @@ app.post('/api/dashboards/:dashboardId/views', async (req, res) => {
  */
 app.put('/api/dashboards/:dashboardId/views/:viewId', async (req, res) => {
   const { dashboardId, viewId } = req.params;
-  const { name, description, icon, is_default, display_order } = req.body;
+  const { 
+    name, 
+    description, 
+    icon, 
+    is_default, 
+    display_order,
+    adminPortalId,
+    embedType,
+    embedLink,
+    triggerCalculation,
+    iconType,
+    iconText,
+    iconColor,
+    iconImageUrl
+  } = req.body;
   
   try {
     // Get dashboard ID
@@ -5076,14 +5260,64 @@ app.put('/api/dashboards/:dashboardId/views/:viewId', async (req, res) => {
     if (icon) updates.push(`icon='${icon}'`);
     if (is_default !== undefined) updates.push(`is_default=${is_default ? 'TRUE' : 'FALSE'}`);
     if (display_order !== undefined) updates.push(`display_order=${display_order}`);
+    
+    // New fields
+    if (adminPortalId !== undefined) {
+      updates.push(adminPortalId ? `admin_portal_id='${adminPortalId.replace(/'/g, "''")}'` : `admin_portal_id=NULL`);
+    }
+    if (embedType !== undefined) {
+      updates.push(`embed_type='${embedType || ''}'`);
+    }
+    if (embedLink !== undefined) {
+      updates.push(embedLink ? `embed_link='${embedLink.replace(/'/g, "''")}'` : `embed_link=NULL`);
+    }
+    if (triggerCalculation !== undefined) {
+      updates.push(triggerCalculation ? `trigger_calculation='${triggerCalculation.replace(/'/g, "''")}'` : `trigger_calculation=NULL`);
+    }
+    if (iconType !== undefined) {
+      updates.push(`icon_type='${iconType || 'text'}'`);
+    }
+    if (iconText !== undefined) {
+      updates.push(iconText ? `icon_text='${iconText.replace(/'/g, "''").substring(0, 5)}'` : `icon_text=NULL`);
+    }
+    if (iconColor !== undefined) {
+      updates.push(`icon_color='${iconColor || '#667eea'}'`);
+    }
+    if (iconImageUrl !== undefined) {
+      updates.push(iconImageUrl ? `icon_image_url='${iconImageUrl.replace(/'/g, "''")}'` : `icon_image_url=NULL`);
+    }
+    
     updates.push(`updated_at=CURRENT_TIMESTAMP`);
     
     await dbClient.run(`UPDATE views SET ${updates.join(', ')} WHERE id=${viewId} AND dashboard_id=${actualDashboardId}`);
     
     const result = await dbClient.query(`SELECT * FROM views WHERE id=${viewId}`);
+    const v = result[0];
+    
+    // Convert snake_case to camelCase
+    const view = {
+      id: v.id,
+      dashboardId: v.dashboard_id,
+      name: v.name,
+      slug: v.slug,
+      description: v.description,
+      icon: v.icon,
+      isDefault: v.is_default,
+      displayOrder: v.display_order,
+      adminPortalId: v.admin_portal_id,
+      embedType: v.embed_type,
+      embedLink: v.embed_link,
+      triggerCalculation: v.trigger_calculation,
+      iconType: v.icon_type,
+      iconText: v.icon_text,
+      iconColor: v.icon_color,
+      iconImageUrl: v.icon_image_url,
+      createdAt: v.created_at,
+      updatedAt: v.updated_at,
+    };
     
     console.log(`✅ Updated view: ${viewId}`);
-    res.json({ success: true, view: result[0] });
+    res.json({ success: true, view });
   } catch (err) {
     console.error('❌ Error updating view:', err.message);
     res.status(500).json({ success: false, error: err.message });

@@ -15,13 +15,18 @@ export interface Dashboard{
     color?:string;
     // New fields for enhanced library management
     dataSource?: string;           // Data source name
-    timePeriodStart?: number;      // Calendar year start (e.g., 2020)
-    timePeriodEnd?: number;        // Calendar year end (e.g., 2025)
+    timePeriodStart?: string | number | null;  // Calendar period start (e.g., "Jan 2020", "Q1 2020")
+    timePeriodEnd?: string | number | null;    // Calendar period end (e.g., "Dec 2025", "present")
     libraryType?: string;          // Core, Claims, Reference, Premium
     iconType?: 'text' | 'upload';  // Whether using text abbreviation or uploaded image
-    iconText?: string;             // Custom 2-letter text for icon (max 2 chars)
+    iconText?: string;             // Custom text for icon (max 5 chars)
     iconColor?: string;            // Custom color for text icon
     iconImageUrl?: string;         // URL of uploaded icon image
+    // Additional fields
+    adminPortalId?: string;        // Auto-generated admin portal permission ID
+    embedType?: '' | 'iframe' | 'tableau';  // Embed type
+    embedLink?: string;            // Embed link URL
+    triggerCalculation?: string;   // Calculation to trigger on visit
 }
 
 export const dashboardsManager=atom<Dashboard[]>({

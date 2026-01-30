@@ -14,13 +14,17 @@ CREATE TABLE IF NOT EXISTS dashboards (
   icon TEXT DEFAULT 'dashboard',
   color TEXT DEFAULT '#667eea',
   data_source TEXT,
-  time_period_start INTEGER,
-  time_period_end INTEGER,
+  time_period_start TEXT,
+  time_period_end TEXT,
   library_type VARCHAR DEFAULT 'Core libraries',
   icon_type VARCHAR DEFAULT 'text' CHECK (icon_type IN ('text', 'upload')),
   icon_text VARCHAR(5),
   icon_color VARCHAR DEFAULT '#3B82F6',
   icon_image_url TEXT,
+  admin_portal_id TEXT,
+  embed_type VARCHAR DEFAULT '' CHECK (embed_type IN ('', 'iframe', 'tableau')),
+  embed_link TEXT,
+  trigger_calculation TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -37,6 +41,14 @@ CREATE TABLE IF NOT EXISTS views (
   icon TEXT DEFAULT 'view_module',
   is_default BOOLEAN DEFAULT FALSE,
   display_order INTEGER DEFAULT 0,
+  admin_portal_id TEXT,
+  embed_type VARCHAR DEFAULT '',
+  embed_link TEXT,
+  trigger_calculation TEXT,
+  icon_type VARCHAR DEFAULT 'text',
+  icon_text VARCHAR(5),
+  icon_color VARCHAR DEFAULT '#667eea',
+  icon_image_url TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(dashboard_id, slug)
@@ -52,17 +64,20 @@ async function createDashboardsTable() {
     // Migration: Add new columns if they don't exist
     try {
       await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS data_source TEXT`);
-      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS time_period_start INTEGER`);
-      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS time_period_end INTEGER`);
       await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS library_type VARCHAR DEFAULT 'Core libraries'`);
       await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS icon_type VARCHAR DEFAULT 'text'`);
       await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS icon_text VARCHAR(5)`);
       await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS icon_color VARCHAR DEFAULT '#3B82F6'`);
       await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS icon_image_url TEXT`);
+      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS admin_portal_id TEXT`);
+      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS embed_type VARCHAR DEFAULT ''`);
+      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS embed_link TEXT`);
+      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS trigger_calculation TEXT`);
       console.log("✅ Migration: Added new columns to dashboards table");
     } catch (migrationErr) {
       console.log("ℹ️ Dashboard columns migration skipped (may already exist)");
     }
+    
   } catch (err) {
     console.error("❌ Error creating table 'dashboards':", err.message);
   }
@@ -73,6 +88,21 @@ async function createViewsTable() {
     await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS views_seq START 1;`);
     await dbClient.run(viewsTable);
     console.log("✅ Table 'views' created successfully.");
+    
+    // Migration: Add new columns if they don't exist
+    try {
+      await dbClient.run(`ALTER TABLE views ADD COLUMN IF NOT EXISTS admin_portal_id TEXT`);
+      await dbClient.run(`ALTER TABLE views ADD COLUMN IF NOT EXISTS embed_type VARCHAR DEFAULT ''`);
+      await dbClient.run(`ALTER TABLE views ADD COLUMN IF NOT EXISTS embed_link TEXT`);
+      await dbClient.run(`ALTER TABLE views ADD COLUMN IF NOT EXISTS trigger_calculation TEXT`);
+      await dbClient.run(`ALTER TABLE views ADD COLUMN IF NOT EXISTS icon_type VARCHAR DEFAULT 'text'`);
+      await dbClient.run(`ALTER TABLE views ADD COLUMN IF NOT EXISTS icon_text VARCHAR(5)`);
+      await dbClient.run(`ALTER TABLE views ADD COLUMN IF NOT EXISTS icon_color VARCHAR DEFAULT '#667eea'`);
+      await dbClient.run(`ALTER TABLE views ADD COLUMN IF NOT EXISTS icon_image_url TEXT`);
+      console.log("✅ Migration: Added new columns to views table");
+    } catch (migrationErr) {
+      console.log("ℹ️ Views columns migration skipped (may already exist)");
+    }
   } catch (err) {
     console.error("❌ Error creating table 'views':", err.message);
   }
