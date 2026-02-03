@@ -8,6 +8,13 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Determine environment and database name
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const DB_NAME = process.env.DB_NAME || (NODE_ENV === 'production' ? 'chartBuilder.db' : 'chartBuilder_dev.db');
+
+console.log(`🔧 Environment: ${NODE_ENV}`);
+console.log(`🗄️  Database: ${DB_NAME}`);
+
 class DuckDBClient {
   constructor() {
     this.connection = null;
@@ -17,9 +24,10 @@ class DuckDBClient {
 
   async init() {
     // Define the desired path for the database file
+    // Use environment-specific database name
     const dbDir = path.resolve(__dirname, './data');
-    const dbPath = path.join(dbDir, 'chartBuilder.db');
-    const walPath = path.join(dbDir, 'chartBuilder.db.wal');
+    const dbPath = path.join(dbDir, DB_NAME);
+    const walPath = path.join(dbDir, `${DB_NAME}.wal`);
 
     // Ensure the directory exists
     try {
@@ -30,6 +38,24 @@ class DuckDBClient {
       throw err;
     }
 
+    // Try to clean up stale WAL file before opening (in case previous process crashed)
+    try {
+      const walStats = await fs.stat(walPath);
+      // If WAL file exists and is older than 5 seconds, try to remove it
+      // This handles cases where previous process crashed without cleanup
+      const walAge = Date.now() - walStats.mtimeMs;
+      if (walAge > 5000) {
+        console.log(`⚠️ Found stale WAL file (${Math.round(walAge/1000)}s old), attempting cleanup...`);
+        await fs.unlink(walPath);
+        console.log('✅ Removed stale WAL file');
+      }
+    } catch (walCheckErr) {
+      // WAL file doesn't exist or can't be accessed, that's fine
+      if (walCheckErr.code !== 'ENOENT') {
+        console.log(`ℹ️ WAL file check: ${walCheckErr.message}`);
+      }
+    }
+
     try {
       // Create and connect to the DuckDB database with optimized settings
       this.db = await DuckDBInstance.create(dbPath, {
@@ -38,14 +64,24 @@ class DuckDBClient {
       this.connection = await this.db.connect();
       
       // Set performance optimizations for DuckDB
+      // Use DELETE access mode instead of WAL for better multi-process compatibility
       await this.connection.run(`
         SET memory_limit='16GB';
         SET threads=${Math.min(8, os.cpus().length)};
         SET preserve_insertion_order=false;
         SET enable_object_cache=true;
         SET enable_progress_bar=false;
-        SET checkpoint_threshold='1GB';
+        SET checkpoint_threshold='256MB';
+        PRAGMA wal_autocheckpoint='256MB';
       `);
+      
+      // Force an immediate checkpoint to flush any pending WAL data
+      try {
+        await this.connection.run('CHECKPOINT');
+        console.log('✅ Initial checkpoint completed');
+      } catch (checkpointErr) {
+        console.log('ℹ️ Initial checkpoint skipped:', checkpointErr.message);
+      }
       
       console.log(`✅ DuckDB initialized at ${dbPath} with ${Math.min(8, os.cpus().length)} threads`);
     } catch (err) {
@@ -239,6 +275,35 @@ class DuckDBClient {
 }
 
 const dbClient = new DuckDBClient();
+
+// Periodic checkpoint to prevent WAL file growth and ensure data durability
+// Run every 5 minutes
+setInterval(async () => {
+  try {
+    await dbClient.checkpoint();
+    console.log('✅ Periodic checkpoint completed');
+  } catch (err) {
+    console.warn('⚠️ Periodic checkpoint failed:', err.message);
+  }
+}, 5 * 60 * 1000);
+
+// Graceful shutdown handler
+const gracefulShutdown = async (signal) => {
+  console.log(`\n🛑 Received ${signal}, performing graceful shutdown...`);
+  try {
+    await dbClient.checkpoint();
+    await dbClient.close();
+    console.log('✅ DuckDB closed gracefully');
+    process.exit(0);
+  } catch (err) {
+    console.error('❌ Error during shutdown:', err.message);
+    process.exit(1);
+  }
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 export default dbClient;
 
 

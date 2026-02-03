@@ -61,11 +61,25 @@ const connectorTypes: ConnectorType[] = [
     gradient: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)"
   },
   { 
-    id: "mysql", 
-    name: "MySQL", 
-    description: "Connect to MySQL database", 
-    color: "#f093fb",
-    gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
+    id: "csv", 
+    name: "CSV Upload", 
+    description: "Upload and query CSV files", 
+    color: "#10b981",
+    gradient: "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+  },
+  { 
+    id: "palantir", 
+    name: "Palantir Foundry", 
+    description: "Connect to Palantir Foundry datasets", 
+    color: "#1a1a2e",
+    gradient: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)"
+  },
+  { 
+    id: "hive", 
+    name: "Hive / Impala", 
+    description: "Connect to Hive or Impala data warehouse", 
+    color: "#FDCC0D",
+    gradient: "linear-gradient(135deg, #FDCC0D 0%, #F7971E 100%)"
   },
   { 
     id: "postgresql", 
@@ -75,32 +89,45 @@ const connectorTypes: ConnectorType[] = [
     gradient: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
   },
   { 
-    id: "mongodb", 
-    name: "MongoDB", 
-    description: "Connect to MongoDB database", 
-    color: "#43e97b",
-    gradient: "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)"
-  },
-  { 
     id: "oracle", 
     name: "Oracle", 
     description: "Connect to Oracle database", 
     color: "#fa709a",
     gradient: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)"
-  },
-  { 
-    id: "redshift", 
-    name: "Amazon Redshift", 
-    description: "Connect to Amazon Redshift", 
-    color: "#2563EB",
-    gradient: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)"
   }
 ];
 
+// CSV Connector Interface
+interface CsvConnector {
+  id: number;
+  connector_name: string;
+  original_filename: string;
+  duckdb_table_name: string;
+  columns_json: string;
+  row_count: number;
+  file_size_bytes: number;
+  uploaded_at: string;
+}
+
 const ConnectorManager: React.FC = () => {
-  const [currentView, setCurrentView] = useState<'selection' | 'snowflake'>('selection');
+  const [currentView, setCurrentView] = useState<'selection' | 'snowflake' | 'csv' | 'palantir' | 'hive'>('selection');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedConnectorType, setSelectedConnectorType] = useState<string>('');
+  
+  // Palantir demo state
+  const [selectedPalantirDataset, setSelectedPalantirDataset] = useState<string>('');
+
+  // CSV Connector states
+  const [csvConnectors, setCsvConnectors] = useState<CsvConnector[]>([]);
+  const [csvConnectorName, setCsvConnectorName] = useState<string>('');
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [isUploadingCsv, setIsUploadingCsv] = useState<boolean>(false);
+  const [isDeletingCsvConnector, setIsDeletingCsvConnector] = useState<number | null>(null);
+  const [showCsvTable, setShowCsvTable] = useState<boolean>(false);
+  const [csvPage, setCsvPage] = useState<number>(0);
+  const [csvRowsPerPage, setCsvRowsPerPage] = useState<number>(10);
+  const [deleteCsvDialogOpen, setDeleteCsvDialogOpen] = useState<boolean>(false);
+  const [csvConnectorToDelete, setCsvConnectorToDelete] = useState<CsvConnector | null>(null);
 
   const [formData, setFormData] = useState<FormData>({
     connectionName: '',
@@ -125,8 +152,19 @@ const ConnectorManager: React.FC = () => {
     }
   };
 
+  const fetchCsvConnectors = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/csv-connectors`);
+      setCsvConnectors(response.data.connectors || []);
+    } catch (error) {
+      console.error('Error fetching CSV connectors:', error);
+      // Don't show error for CSV connectors on initial load
+    }
+  };
+
   useEffect(() => {
     fetchConnections();
+    fetchCsvConnectors();
   }, []);
 
   const [showTable, setShowTable] = useState<boolean>(false);
@@ -169,6 +207,14 @@ const ConnectorManager: React.FC = () => {
     setSelectedConnectorType(connectorType);
     if (connectorType === 'snowflake') {
       setCurrentView('snowflake');
+    } else if (connectorType === 'csv') {
+      setCurrentView('csv');
+      fetchCsvConnectors();
+    } else if (connectorType === 'palantir') {
+      setCurrentView('palantir');
+      setSelectedPalantirDataset('');
+    } else if (connectorType === 'hive') {
+      setCurrentView('hive');
     } else {
       showAlert(`${connectorType} connector is coming soon!`, 'info');
     }
@@ -189,7 +235,112 @@ const ConnectorManager: React.FC = () => {
     });
     setIsSnowflakeConnectionValid(false);
     setConnectionCheckFailed(false);
+    // Reset CSV states
+    setCsvConnectorName('');
+    setCsvFile(null);
+    // Reset Palantir states
+    setSelectedPalantirDataset('');
   };
+
+  // ============================================
+  // CSV CONNECTOR FUNCTIONS
+  // ============================================
+
+  const handleCsvFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        showAlert('Please select a valid CSV file', 'error');
+        return;
+      }
+      setCsvFile(file);
+      showAlert(`File "${file.name}" selected`, 'success');
+    }
+  };
+
+  const handleUploadCsvConnector = async () => {
+    if (!csvConnectorName.trim()) {
+      showAlert('Please enter a connector name', 'error');
+      return;
+    }
+    if (!csvFile) {
+      showAlert('Please select a CSV file', 'error');
+      return;
+    }
+
+    setIsUploadingCsv(true);
+    try {
+      const formData = new FormData();
+      formData.append('connectorName', csvConnectorName.trim());
+      formData.append('csvFile', csvFile);
+
+      const response = await axios.post(`${API_BASE_URL}/api/upload-csv-connector`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (response.data.success) {
+        showAlert(`CSV connector "${csvConnectorName}" created successfully with ${response.data.rowCount} rows`, 'success');
+        setCsvConnectorName('');
+        setCsvFile(null);
+        fetchCsvConnectors();
+      } else {
+        showAlert(response.data.error || 'Failed to create CSV connector', 'error');
+      }
+    } catch (error: any) {
+      console.error('Error uploading CSV:', error);
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to upload CSV file';
+      showAlert(errorMsg, 'error');
+    } finally {
+      setIsUploadingCsv(false);
+    }
+  };
+
+  const handleDeleteCsvClick = (connector: CsvConnector) => {
+    setCsvConnectorToDelete(connector);
+    setDeleteCsvDialogOpen(true);
+  };
+
+  const handleConfirmDeleteCsv = async () => {
+    if (!csvConnectorToDelete) return;
+
+    setIsDeletingCsvConnector(csvConnectorToDelete.id);
+    try {
+      const response = await axios.delete(`${API_BASE_URL}/api/delete-csv-connector/${csvConnectorToDelete.id}`);
+      
+      if (response.data.success) {
+        showAlert('CSV connector deleted successfully', 'success');
+        fetchCsvConnectors();
+        setDeleteCsvDialogOpen(false);
+        setCsvConnectorToDelete(null);
+      } else {
+        showAlert(response.data.error || 'Failed to delete CSV connector', 'error');
+      }
+    } catch (error: any) {
+      console.error('Error deleting CSV connector:', error);
+      const errorMsg = error.response?.data?.error || 'Failed to delete CSV connector';
+      showAlert(errorMsg, 'error');
+    } finally {
+      setIsDeletingCsvConnector(null);
+    }
+  };
+
+  const handleCancelDeleteCsv = () => {
+    setDeleteCsvDialogOpen(false);
+    setCsvConnectorToDelete(null);
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const paginatedCsvConnectors = csvConnectors.slice(
+    csvPage * csvRowsPerPage,
+    csvPage * csvRowsPerPage + csvRowsPerPage
+  );
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -733,6 +884,368 @@ const ConnectorManager: React.FC = () => {
           {showTable && renderConnectionsTable()}
         </Box>
       )}
+
+      {/* CSV Connector View */}
+      {currentView === 'csv' && (
+        <Box>
+          <Stack direction="row" alignItems="center" sx={{ borderBottom: '2px solid', borderImage: 'linear-gradient(90deg, #10b981 0%, #059669 100%) 1', pb: 3, position: 'relative', minHeight: 64, mb: 4 }}>
+            <Button onClick={handleBackToSelection} startIcon={<ArrowBack />} sx={{ position: 'absolute', left: 0, color: '#10b981', fontWeight: 600, borderRadius: 2, '&:hover': { bgcolor: 'rgba(16, 185, 129, 0.05)' } }} variant="text">Back to Connectors</Button>
+            <Typography variant="h4" fontWeight={700} sx={{ width: '100%', textAlign: 'center', pointerEvents: 'none', bgcolor: '#10b981', backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>CSV Connector</Typography>
+          </Stack>
+
+          <Alert severity="info" icon={<Info />} sx={{ mb: 3, borderRadius: 2, border: '1px solid rgba(16, 185, 129, 0.3)', background: 'linear-gradient(135deg, rgba(209, 250, 229, 0.5) 0%, rgba(167, 243, 208, 0.5) 100%)' }}>
+            <Typography variant="body2" fontWeight="700" mb={1} color="#065f46">How CSV Connectors Work:</Typography>
+            <Typography variant="body2" component="div" color="#065f46" fontWeight={500}>
+              • Upload a CSV file to create a connector that can be queried like a database<br />
+              • Once uploaded, the CSV data is stored in DuckDB for fast SQL queries<br />
+              • Use the connector in <strong>Add Data Source</strong> to create data sources with SQL queries<br />
+            </Typography>
+          </Alert>
+
+          <Paper elevation={0} sx={{ mb: 4, p: 4, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 3, boxShadow: '0 8px 32px rgba(16, 185, 129, 0.1)', position: 'relative' }}>
+            {/* Loading Overlay */}
+            {isUploadingCsv && (
+              <Box sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                bgcolor: 'rgba(255, 255, 255, 0.9)',
+                zIndex: 10,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 3,
+              }}>
+                <CircularProgress size={60} sx={{ color: '#10b981', mb: 3 }} />
+                <Typography variant="h6" sx={{ color: '#065f46', fontWeight: 700, mb: 1 }}>
+                  Creating CSV Connector...
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#64748b', textAlign: 'center', maxWidth: 300 }}>
+                  Parsing CSV file, creating DuckDB table, and storing metadata. This may take a moment for large files.
+                </Typography>
+              </Box>
+            )}
+
+            <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, color: '#065f46' }}>Upload New CSV Connector</Typography>
+            
+            <Grid container spacing={3}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  required
+                  label="Connector Name"
+                  value={csvConnectorName}
+                  onChange={(e) => setCsvConnectorName(e.target.value)}
+                  variant="outlined"
+                  helperText="A unique name to identify this CSV connector"
+                  disabled={isUploadingCsv}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': { borderColor: 'rgba(16, 185, 129, 0.3)' },
+                      '&:hover fieldset': { borderColor: '#10b981' },
+                      '&.Mui-focused fieldset': { borderColor: '#10b981' },
+                    },
+                    '& .MuiInputLabel-root.Mui-focused': { color: '#10b981' },
+                  }}
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Box sx={{ 
+                  border: '2px dashed', 
+                  borderColor: csvFile ? '#10b981' : 'rgba(16, 185, 129, 0.3)', 
+                  borderRadius: 3, 
+                  p: 4, 
+                  textAlign: 'center', 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: 2, 
+                  minHeight: 180, 
+                  background: csvFile ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(5, 150, 105, 0.05) 100%)' : 'transparent' 
+                }}>
+                  <Typography variant="h6" fontWeight="700" color={csvFile ? '#10b981' : '#64748b'}>
+                    {csvFile ? '✓ CSV File Selected' : 'Upload CSV File *'}
+                  </Typography>
+                  <Button 
+                    variant="contained" 
+                    component="label"
+                    disabled={isUploadingCsv}
+                    sx={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'center', 
+                      py: 2, 
+                      px: 5, 
+                      borderRadius: 2, 
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
+                      '&:hover': { background: 'linear-gradient(135deg, #059669 0%, #047857 100%)' },
+                      '&.Mui-disabled': { background: '#e2e8f0' }
+                    }}
+                  >
+                    <CloudUpload sx={{ fontSize: 32, mb: 1 }} />
+                    <Typography variant="body1" fontWeight="700">{csvFile ? 'Change File' : 'Choose CSV File'}</Typography>
+                    <input type="file" accept=".csv" hidden onChange={handleCsvFileSelect} disabled={isUploadingCsv} />
+                  </Button>
+                  {csvFile && (
+                    <Box sx={{ mt: 1, p: 2, background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', borderRadius: 2, width: '100%', maxWidth: 400 }}>
+                      <Typography variant="body1" sx={{ color: 'white', fontWeight: 700 }}>
+                        {csvFile.name} ({formatFileSize(csvFile.size)})
+                      </Typography>
+                    </Box>
+                  )}
+                  <Typography variant="caption" color="#94a3b8" fontWeight={500}>Accepted format: .csv (max 1Gb)</Typography>
+                </Box>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Stack direction="row" spacing={2} flexWrap="wrap" gap={2}>
+                  <Tooltip title={!csvConnectorName.trim() || !csvFile ? "Please enter a name and select a CSV file" : "Upload and create the connector"}>
+                    <span>
+                      <Button 
+                        variant="contained" 
+                        startIcon={isUploadingCsv ? <CircularProgress size={16} color="inherit" /> : <Add />} 
+                        onClick={handleUploadCsvConnector}
+                        disabled={isUploadingCsv || !csvConnectorName.trim() || !csvFile}
+                        sx={{ 
+                          borderRadius: 2, 
+                          fontWeight: 700, 
+                          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
+                          '&:hover': { background: 'linear-gradient(135deg, #059669 0%, #047857 100%)' },
+                          '&.Mui-disabled': { background: '#e2e8f0' }
+                        }}
+                      >
+                        {isUploadingCsv ? 'Uploading...' : 'Create CSV Connector'}
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Button 
+                    variant="outlined" 
+                    startIcon={showCsvTable ? <VisibilityOff /> : <Visibility />} 
+                    onClick={() => setShowCsvTable(prev => !prev)} 
+                    sx={{ 
+                      borderRadius: 2, 
+                      fontWeight: 700, 
+                      borderColor: '#10b981', 
+                      color: '#10b981', 
+                      '&:hover': { borderColor: '#059669', bgcolor: 'rgba(16, 185, 129, 0.05)' } 
+                    }}
+                  >
+                    {showCsvTable ? "Hide" : "Show"} CSV Connectors
+                  </Button>
+                </Stack>
+              </Grid>
+            </Grid>
+          </Paper>
+
+          {/* CSV Connectors Table */}
+          {showCsvTable && (
+            <Paper elevation={0} sx={{ p: 3, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 3, boxShadow: '0 8px 32px rgba(16, 185, 129, 0.1)' }}>
+              <Typography variant="h6" mb={2} sx={{ color: '#065f46', fontWeight: 700 }}>
+                CSV Connectors ({csvConnectors.length} total)
+              </Typography>
+              <TableContainer sx={{ maxHeight: 400, borderRadius: 2 }}>
+                <Table stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      {['Connector Name', 'Original File', 'Table Name', 'Rows', 'File Size', 'Uploaded', 'Actions'].map(header => (
+                        <TableCell key={header} align={header === 'Actions' ? 'center' : 'left'} sx={{ fontWeight: 700, background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', color: '#065f46' }}>{header}</TableCell>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {paginatedCsvConnectors.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} align="center">
+                          <Box sx={{ py: 4 }}>
+                            <Box sx={{ width: 64, height: 64, margin: '0 auto 16px', borderRadius: '50%', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Storage sx={{ fontSize: 32, color: '#10b981', opacity: 0.6 }} />
+                            </Box>
+                            <Typography variant="body2" color="#94a3b8" fontWeight={500}>No CSV connectors found. Upload your first CSV file above.</Typography>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      paginatedCsvConnectors.map((connector) => (
+                        <TableRow key={connector.id} hover sx={{ '&:hover': { bgcolor: 'rgba(16, 185, 129, 0.05)' } }}>
+                          <TableCell sx={{ fontWeight: 600, color: '#065f46' }}>{connector.connector_name}</TableCell>
+                          <TableCell sx={{ color: '#475569' }}>{connector.original_filename}</TableCell>
+                          <TableCell sx={{ color: '#475569', fontFamily: 'monospace', fontSize: '0.85rem' }}>{connector.duckdb_table_name}</TableCell>
+                          <TableCell sx={{ color: '#475569' }}>{connector.row_count?.toLocaleString() || 0}</TableCell>
+                          <TableCell sx={{ color: '#475569' }}>{formatFileSize(connector.file_size_bytes || 0)}</TableCell>
+                          <TableCell sx={{ color: '#475569' }}>{connector.uploaded_at ? new Date(connector.uploaded_at).toLocaleDateString() : '-'}</TableCell>
+                          <TableCell align="center">
+                            <Tooltip title="Delete connector">
+                              <IconButton 
+                                onClick={() => handleDeleteCsvClick(connector)} 
+                                size="small" 
+                                disabled={isDeletingCsvConnector === connector.id}
+                                sx={{ color: '#ef4444', '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' } }}
+                              >
+                                {isDeletingCsvConnector === connector.id ? <CircularProgress size={16} sx={{ color: '#ef4444' }} /> : <Delete fontSize="small" />}
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+                {paginatedCsvConnectors.length > 0 && (
+                  <TablePagination 
+                    rowsPerPageOptions={[5, 10, 25, 50]} 
+                    component="div" 
+                    count={csvConnectors.length} 
+                    rowsPerPage={csvRowsPerPage} 
+                    page={csvPage} 
+                    onPageChange={(_, newPage) => setCsvPage(newPage)} 
+                    onRowsPerPageChange={(e) => { setCsvRowsPerPage(parseInt(e.target.value, 10)); setCsvPage(0); }}
+                    sx={{ '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': { color: '#64748b', fontWeight: 500 } }} 
+                  />
+                )}
+              </TableContainer>
+            </Paper>
+          )}
+        </Box>
+      )}
+
+      {/* Palantir Foundry Connector View (Demo) */}
+      {currentView === 'palantir' && (
+        <Box>
+          <Stack direction="row" alignItems="center" sx={{ borderBottom: '2px solid', borderImage: 'linear-gradient(90deg, #1a1a2e 0%, #16213e 100%) 1', pb: 3, position: 'relative', minHeight: 64, mb: 4 }}>
+            <Button onClick={handleBackToSelection} startIcon={<ArrowBack />} sx={{ position: 'absolute', left: 0, color: '#1a1a2e', fontWeight: 600, borderRadius: 2, '&:hover': { bgcolor: 'rgba(26, 26, 46, 0.05)' } }} variant="text">Back to Connectors</Button>
+            <Typography variant="h4" fontWeight={700} sx={{ width: '100%', textAlign: 'center', pointerEvents: 'none', bgcolor: '#1a1a2e', backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Palantir Foundry Connector</Typography>
+          </Stack>
+
+          <Alert severity="info" icon={<Info />} sx={{ mb: 3, borderRadius: 2, border: '1px solid rgba(26, 26, 46, 0.3)', background: 'linear-gradient(135deg, rgba(26, 26, 46, 0.05) 0%, rgba(22, 33, 62, 0.05) 100%)' }}>
+            <Typography variant="body2" fontWeight="700" mb={1} color="#1a1a2e">Palantir Foundry Integration (Demo):</Typography>
+            <Typography variant="body2" component="div" color="#1a1a2e" fontWeight={500}>
+              • Connect to your Palantir Foundry datasets<br />
+              • Select datasets from your Foundry workspace<br />
+              • Query data using SQL or Foundry's native query language<br />
+              • This is a demo connector for demonstration purposes
+            </Typography>
+          </Alert>
+
+          <Paper elevation={0} sx={{ mb: 4, p: 4, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 3, boxShadow: '0 8px 32px rgba(26, 26, 46, 0.1)' }}>
+            <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, color: '#1a1a2e' }}>Select Palantir Dataset</Typography>
+            
+            <FormControl fullWidth sx={{ mb: 3 }}>
+              <InputLabel>Select your Palantir Dataset</InputLabel>
+              <Select
+                value={selectedPalantirDataset}
+                onChange={(e) => setSelectedPalantirDataset(e.target.value)}
+                label="Select your Palantir Dataset"
+                sx={{
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(26, 26, 46, 0.3)' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#1a1a2e' },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#1a1a2e' },
+                }}
+              >
+                <MenuItem value="">
+                  <em>Select a dataset...</em>
+                </MenuItem>
+                <MenuItem value="customer_analytics">Customer Analytics Dataset</MenuItem>
+                <MenuItem value="sales_performance">Sales Performance Dataset</MenuItem>
+                <MenuItem value="inventory_management">Inventory Management Dataset</MenuItem>
+                <MenuItem value="supply_chain">Supply Chain Dataset</MenuItem>
+                <MenuItem value="financial_reports">Financial Reports Dataset</MenuItem>
+                <MenuItem value="hr_analytics">HR Analytics Dataset</MenuItem>
+              </Select>
+            </FormControl>
+
+            {selectedPalantirDataset && (
+              <Alert severity="success" sx={{ borderRadius: 2, border: '1px solid rgba(16, 185, 129, 0.3)', background: 'linear-gradient(135deg, rgba(209, 250, 229, 0.5) 0%, rgba(167, 243, 208, 0.5) 100%)' }}>
+                <Typography variant="body2" fontWeight="700" color="#065f46">
+                  Dataset Selected: {selectedPalantirDataset.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                </Typography>
+                <Typography variant="body2" color="#065f46" fontWeight={500} sx={{ mt: 1 }}>
+                  This is a demo. In production, this would connect to your Palantir Foundry workspace.
+                </Typography>
+              </Alert>
+            )}
+
+            <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
+              <Button 
+                variant="contained" 
+                disabled={!selectedPalantirDataset}
+                sx={{ 
+                  borderRadius: 2, 
+                  fontWeight: 700, 
+                  background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)', 
+                  '&:hover': { background: 'linear-gradient(135deg, #16213e 0%, #0f172a 100%)' },
+                  '&.Mui-disabled': { background: '#e2e8f0' }
+                }}
+                onClick={() => showAlert('Demo: Palantir connector would be created here', 'info')}
+              >
+                Connect to Dataset
+              </Button>
+            </Stack>
+          </Paper>
+        </Box>
+      )}
+
+      {/* Hive / Impala Connector View (Demo) */}
+      {currentView === 'hive' && (
+        <Box>
+          <Stack direction="row" alignItems="center" sx={{ borderBottom: '2px solid', borderImage: 'linear-gradient(90deg, #FDCC0D 0%, #F7971E 100%) 1', pb: 3, position: 'relative', minHeight: 64, mb: 4 }}>
+            <Button onClick={handleBackToSelection} startIcon={<ArrowBack />} sx={{ position: 'absolute', left: 0, color: '#F7971E', fontWeight: 600, borderRadius: 2, '&:hover': { bgcolor: 'rgba(247, 151, 30, 0.05)' } }} variant="text">Back to Connectors</Button>
+            <Typography variant="h4" fontWeight={700} sx={{ width: '100%', textAlign: 'center', pointerEvents: 'none', bgcolor: '#F7971E', backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Hive / Impala Connector</Typography>
+          </Stack>
+
+          <Alert severity="info" icon={<Info />} sx={{ mb: 3, borderRadius: 2, border: '1px solid rgba(253, 204, 13, 0.5)', background: 'linear-gradient(135deg, rgba(254, 249, 195, 0.5) 0%, rgba(254, 240, 138, 0.5) 100%)' }}>
+            <Typography variant="body2" fontWeight="700" mb={1} color="#92400e">Hive / Impala Integration (Demo):</Typography>
+            <Typography variant="body2" component="div" color="#92400e" fontWeight={500}>
+              • Connect to Apache Hive or Cloudera Impala clusters<br />
+              • Query large-scale data stored in Hadoop<br />
+              • Support for HiveQL and Impala SQL<br />
+              • This is a demo connector for demonstration purposes
+            </Typography>
+          </Alert>
+
+          <Paper elevation={0} sx={{ mb: 4, p: 4, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 3, boxShadow: '0 8px 32px rgba(253, 204, 13, 0.1)' }}>
+            <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, color: '#92400e' }}>Hive / Impala Connection (Coming Soon)</Typography>
+            
+            <Alert severity="warning" sx={{ borderRadius: 2, border: '1px solid rgba(245, 158, 11, 0.3)', background: 'linear-gradient(135deg, rgba(254, 243, 199, 0.3) 0%, rgba(253, 224, 71, 0.3) 100%)' }}>
+              <Typography variant="body2" fontWeight="700" color="#92400e">
+                This connector is under development.
+              </Typography>
+              <Typography variant="body2" color="#92400e" fontWeight={500} sx={{ mt: 1 }}>
+                Hive and Impala connectivity will be available in a future release. Stay tuned!
+              </Typography>
+            </Alert>
+          </Paper>
+        </Box>
+      )}
+
+      {/* Delete CSV Connector Confirmation Dialog */}
+      <Dialog open={deleteCsvDialogOpen} onClose={handleCancelDeleteCsv} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3, boxShadow: '0 8px 32px rgba(239, 68, 68, 0.2)' } }}>
+        <DialogTitle sx={{ color: '#dc2626', fontWeight: 700 }}>Delete CSV Connector</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2, color: '#1e293b' }}>
+            Are you sure you want to delete the CSV connector <strong>"{csvConnectorToDelete?.connector_name}"</strong>?
+          </Typography>
+          <Alert severity="warning" sx={{ mt: 2, borderRadius: 2, border: '1px solid rgba(245, 158, 11, 0.3)', background: 'linear-gradient(135deg, rgba(254, 243, 199, 0.3) 0%, rgba(253, 224, 71, 0.3) 100%)' }}>
+            This will permanently delete the connector and its associated DuckDB table. Data sources using this connector will no longer work.
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2.5, background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+          <Button onClick={handleCancelDeleteCsv} variant="outlined" sx={{ borderRadius: 2, fontWeight: 600, borderColor: '#cbd5e1', color: '#64748b', '&:hover': { borderColor: '#94a3b8', bgcolor: '#f1f5f9' } }}>Cancel</Button>
+          <Button 
+            onClick={handleConfirmDeleteCsv} 
+            variant="contained" 
+            startIcon={isDeletingCsvConnector ? <CircularProgress size={16} color="inherit" /> : <Delete />} 
+            disabled={isDeletingCsvConnector !== null}
+            sx={{ borderRadius: 2, fontWeight: 700, background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', '&:hover': { background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)' } }}
+          >
+            {isDeletingCsvConnector ? 'Deleting...' : 'Delete Connector'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: 3, boxShadow: '0 8px 32px rgba(102, 126, 234, 0.2)' } }}>
         <DialogTitle sx={{ bgcolor: '#3B82F6', color: 'white', fontWeight: 700 }}>Edit Connection<IconButton onClick={() => setOpenDialog(false)} sx={{ position: 'absolute', right: 16, top: 16, color: 'white', '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.1)' } }}><Close /></IconButton></DialogTitle>

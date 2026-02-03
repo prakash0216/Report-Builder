@@ -2,3 +2,13 @@ backend/db/data/
 backend/db/parquet_files/
 .cursor
 dashboardUI/src/reference/
+
+# Environment files (may contain secrets)
+backend/.env.production
+backend/.env.local
+
+# Node modules
+node_modules/
+
+# IIS logs
+backend/iisnode/

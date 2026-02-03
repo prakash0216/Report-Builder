@@ -2159,8 +2159,22 @@ export default function DropDragDashboard() {
               border: '1px solid #E5E7EB',
             }}
           >
-            {/* Left side - Dashboard/View name */}
+            {/* Left side - Back button + Dashboard/View name */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Tooltip title={`Back to ${currentDashboardName} views`}>
+                <IconButton
+                  onClick={() => navigate(`/${dashboardSlug}`)}
+                  size="small"
+                  sx={{
+                    color: '#6B7280',
+                    bgcolor: '#F3F4F6',
+                    borderRadius: 1,
+                    '&:hover': { bgcolor: '#E5E7EB', color: '#3B82F6' },
+                  }}
+                >
+                  <ChevronRightIcon sx={{ transform: 'rotate(180deg)' }} /> Back
+                </IconButton>
+              </Tooltip>
               <Box sx={{ width: 4, height: 32, bgcolor: '#3B82F6', borderRadius: 1 }} />
               <Typography variant="h6" sx={{ fontWeight: 700, color: '#1F2937' }}>
                 {currentDashboardName}

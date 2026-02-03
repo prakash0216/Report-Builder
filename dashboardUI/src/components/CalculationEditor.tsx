@@ -130,10 +130,11 @@ export function CalculationEditor({
           const searchTerm = atMatch[1].toLowerCase();
           const suggestions: languages.CompletionItem[] = [];
           const word = model.getWordUntilPosition(position);
+          // Range must include the @ symbol so it gets replaced
           const range = {
             startLineNumber: position.lineNumber,
             endLineNumber: position.lineNumber,
-            startColumn: position.column - atMatch[0].length,
+            startColumn: position.column - atMatch[0].length, // Start before @
             endColumn: position.column
           };
 
@@ -287,10 +288,17 @@ export function CalculationEditor({
 
         if (textUntilPosition.match(/ds[Cc]?$/)) {
           const word = model.getWordUntilPosition(position);
+          const atPrefix = model.getValueInRange({
+            startLineNumber: position.lineNumber,
+            endLineNumber: position.lineNumber,
+            startColumn: Math.max(1, word.startColumn - 1),
+            endColumn: word.startColumn
+          });
+          const startColumn = atPrefix === '@' ? Math.max(1, word.startColumn - 1) : word.startColumn;
           const range = {
             startLineNumber: position.lineNumber,
             endLineNumber: position.lineNumber,
-            startColumn: word.startColumn,
+            startColumn,
             endColumn: word.endColumn
           };
 

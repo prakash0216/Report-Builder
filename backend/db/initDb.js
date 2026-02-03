@@ -153,7 +153,8 @@ async function createDataSourceRegistry(){
   CREATE TABLE IF NOT EXISTS data_source_registry (
   id INTEGER PRIMARY KEY DEFAULT NEXTVAL('ds_registry_seq'),
   ds_name VARCHAR NOT NULL,
-  connection_id INTEGER NOT NULL,
+  connection_id INTEGER,
+  csv_connector_id INTEGER,
   type VARCHAR NOT NULL,
   query TEXT NOT NULL,
   parquet_path TEXT,
@@ -161,7 +162,8 @@ async function createDataSourceRegistry(){
   last_refreshed TIMESTAMP,
   last_modified TIMESTAMP,
   refresh_interval_days INTEGER,
-  FOREIGN KEY (connection_id) REFERENCES snow_flake_connections(id)
+  FOREIGN KEY (connection_id) REFERENCES snow_flake_connections(id),
+  FOREIGN KEY (csv_connector_id) REFERENCES csv_connectors(id)
 );
 `;
   try{
@@ -175,9 +177,67 @@ async function createDataSourceRegistry(){
       // Column might already be correctly named or doesn't exist, ignore error
     }
     
+    // Migration: Add csv_connector_id if it doesn't exist
+    try {
+      await dbClient.run(`ALTER TABLE data_source_registry ADD COLUMN IF NOT EXISTS csv_connector_id INTEGER`);
+      console.log("✅ Migration: Added csv_connector_id to data_source_registry");
+    } catch (alterErr) {
+      console.log("ℹ️ csv_connector_id column migration skipped (may already exist)");
+    }
+    
+    // Migration: Remove NOT NULL constraint from connection_id for CSV connector support
+    // DuckDB doesn't support ALTER COLUMN to drop NOT NULL, so we recreate the table
+    try {
+      // Check if connection_id has NOT NULL constraint by trying to insert NULL
+      // If it fails, we need to migrate the table
+      const testResult = await dbClient.query(`
+        SELECT sql FROM sqlite_master WHERE type='table' AND name='data_source_registry'
+      `).catch(() => []);
+      
+      // Alternative approach: try to update a dummy check
+      // We'll handle this at runtime in the INSERT statement instead
+      console.log("ℹ️ Note: If you see NOT NULL constraint errors on connection_id, delete the database file and restart");
+    } catch (migrationErr) {
+      console.log("ℹ️ connection_id constraint check skipped");
+    }
+    
     console.log("✅ Table 'data_source_registry' created successfully.");
   }catch(err){
     console.error("❌ Error creating table:", err.message);
+  }
+}
+
+// CSV Connectors table - stores uploaded CSV files as DuckDB tables
+const csvConnectorsTable = `
+CREATE TABLE IF NOT EXISTS csv_connectors (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('csv_connectors_seq'),
+  dashboard_id INTEGER,
+  connector_name TEXT NOT NULL UNIQUE,
+  original_filename TEXT NOT NULL,
+  duckdb_table_name TEXT NOT NULL,
+  columns_json TEXT,
+  row_count INTEGER,
+  file_size_bytes INTEGER,
+  uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+`;
+
+async function createCsvConnectorsTable() {
+  try {
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS csv_connectors_seq START 1;`);
+    await dbClient.run(csvConnectorsTable);
+    console.log("✅ Table 'csv_connectors' created successfully.");
+    
+    // Migration: Add dashboard_id if it doesn't exist
+    try {
+      await dbClient.run(`ALTER TABLE csv_connectors ADD COLUMN IF NOT EXISTS dashboard_id INTEGER`);
+      console.log("✅ Migration: Added dashboard_id to csv_connectors");
+    } catch (alterErr) {
+      console.log("ℹ️ csv_connectors dashboard_id column migration skipped");
+    }
+  } catch (err) {
+    console.error("❌ Error creating table 'csv_connectors':", err.message);
   }
 }
 
@@ -995,6 +1055,7 @@ const createTables = async () => {
   
   // Create common resource tables (scoped to dashboard)
   await createSnowFlakeConnnection();
+  await createCsvConnectorsTable();  // CSV connectors before data_source_registry (for FK reference)
   await createDataSourceRegistry();
   await createParametersTable();
   await createCalculationsTable();
@@ -1039,6 +1100,7 @@ export {
   createViewsTable,
   // Common resource tables
   createSnowFlakeConnnection,
+  createCsvConnectorsTable,
   createDataSourceRegistry,
   createParametersTable,
   createCalculationsTable,

@@ -5,6 +5,25 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import csvParser from 'csv-parser';
 import iconv from 'iconv-lite';
+import dotenv from 'dotenv';
+
+// Load environment-specific .env file
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env.production if in production, otherwise .env
+if (NODE_ENV === 'production') {
+  const prodEnvPath = path.join(__dirname, '.env.production');
+  if (fs.existsSync(prodEnvPath)) {
+    dotenv.config({ path: prodEnvPath });
+    console.log('📦 Loaded production environment from .env.production');
+  }
+} else {
+  dotenv.config(); // Load default .env
+  console.log('🔧 Loaded development environment from .env');
+}
+
 import dbClient from './db/duckDb.js';
 import multer from 'multer';
 import snowflake from 'snowflake-sdk';
@@ -95,8 +114,7 @@ app.use(cors({
   credentials: true
 }));
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// __filename and __dirname already defined at the top of the file
 
 const csvFolder = path.join(__dirname, 'csv');
 
@@ -114,6 +132,24 @@ const upload=multer({
     }
   },
 })
+
+// CSV Upload multer configuration
+const csvUploadStorage = multer.memoryStorage();
+const csvUpload = multer({
+  storage: csvUploadStorage,
+  limits: {
+    fileSize: 1024 * 1024 * 1024, // 100MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedExtensions = ['.csv'];
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    if (allowedExtensions.includes(fileExtension)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only .csv files are allowed'));
+    }
+  },
+});
 
 const csvFiles = {
   DynamicMarketShare: 'DynamicMarketShare.csv',
@@ -333,10 +369,15 @@ app.get('/api/datasources/:name/query', async (req, res) => {
  * POST /api/datasources
  */
 app.post('/api/datasources', async (req, res) => {
-  const { dataSourceName, connectionId, connectionType, query } = req.body;
+  const { dataSourceName, connectionId, csvConnectorId, connectionType, query } = req.body;
   
-  if (!dataSourceName || !connectionId || !connectionType) {
-    return res.status(400).json({ success: false, error: 'dataSourceName, connectionId, and connectionType are required' });
+  // Either connectionId or csvConnectorId should be provided (but not necessarily both)
+  if (!dataSourceName || !connectionType) {
+    return res.status(400).json({ success: false, error: 'dataSourceName and connectionType are required' });
+  }
+  
+  if (!connectionId && !csvConnectorId) {
+    return res.status(400).json({ success: false, error: 'Either connectionId or csvConnectorId is required' });
   }
 
   try {
@@ -346,7 +387,8 @@ app.post('/api/datasources', async (req, res) => {
     if (existing.length > 0) {
       // Update existing data source
       const updateQuery = `UPDATE data_source_registry 
-        SET connection_id=${connectionId}, 
+        SET connection_id=${connectionId || 'NULL'}, 
+            csv_connector_id=${csvConnectorId || 'NULL'},
             type='${connectionType}',
             ${query ? `query='${query.replace(/'/g, "''")}',` : ''}
             last_modified=CURRENT_TIMESTAMP 
@@ -355,8 +397,8 @@ app.post('/api/datasources', async (req, res) => {
       console.log(`✅ Updated data source: ${dataSourceName}`);
     } else {
       // Insert new data source
-      const insertQuery = `INSERT INTO data_source_registry (ds_name, connection_id, type, query, created_at, last_modified) 
-        VALUES ('${dataSourceName}', ${connectionId}, '${connectionType}', '${query ? query.replace(/'/g, "''") : ''}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
+      const insertQuery = `INSERT INTO data_source_registry (ds_name, connection_id, csv_connector_id, type, query, created_at, last_modified) 
+        VALUES ('${dataSourceName}', ${connectionId || 'NULL'}, ${csvConnectorId || 'NULL'}, '${connectionType}', '${query ? query.replace(/'/g, "''") : ''}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
       await dbClient.run(insertQuery);
       console.log(`✅ Created data source: ${dataSourceName}`);
     }
@@ -379,11 +421,14 @@ app.get('/api/datasources/:name', async (req, res) => {
       SELECT 
         dsr.ds_name,
         dsr.connection_id,
+        dsr.csv_connector_id,
         dsr.type,
         dsr.query,
-        sfc.connectionName
+        sfc.connectionName,
+        csv.connector_name as csvConnectorName
       FROM data_source_registry dsr
       LEFT JOIN snow_flake_connections sfc ON dsr.connection_id = sfc.id
+      LEFT JOIN csv_connectors csv ON dsr.csv_connector_id = csv.id
       WHERE dsr.ds_name='${name}'
     `);
     
@@ -397,8 +442,10 @@ app.get('/api/datasources/:name', async (req, res) => {
       dataSource: {
         name: ds.ds_name,
         connectionId: ds.connection_id,
+        csvConnectorId: ds.csv_connector_id,
         connectionType: ds.type,
         connectionName: ds.connectionName,
+        csvConnectorName: ds.csvConnectorName,
         query: ds.query || ''
       }
     });
@@ -1413,6 +1460,409 @@ app.delete('/api/delete-snowflake-connection/:id', async (req, res) => {
   }
 });
 
+// ============================================
+// CSV CONNECTOR ENDPOINTS
+// ============================================
+
+/**
+ * Upload CSV and create DuckDB table
+ * POST /api/upload-csv-connector
+ */
+app.post('/api/upload-csv-connector', csvUpload.single('csvFile'), async (req, res) => {
+  const { connectorName } = req.body;
+  const file = req.file;
+
+  if (!connectorName || !file) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Connector name and CSV file are required' 
+    });
+  }
+
+  // Validate connector name (no special characters except underscore)
+  const sanitizedName = connectorName.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+  const duckdbTableName = `csv_${sanitizedName}`;
+
+  try {
+    // Check if connector name already exists
+    const existing = await dbClient.query(
+      `SELECT id FROM csv_connectors WHERE connector_name='${connectorName.replace(/'/g, "''")}'`
+    );
+    if (existing.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `Connector with name "${connectorName}" already exists` 
+      });
+    }
+
+    // Parse CSV from buffer
+    const csvContent = file.buffer.toString('utf-8');
+    const lines = csvContent.split(/\r?\n/).filter(line => line.trim());
+    
+    if (lines.length < 2) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'CSV file must have at least a header row and one data row' 
+      });
+    }
+
+    // Parse headers (first line)
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    
+    // Sanitize column names for DuckDB
+    const sanitizedHeaders = headers.map(h => {
+      // Replace spaces and special chars with underscore, remove quotes
+      return h.replace(/[^a-zA-Z0-9]/g, '_').replace(/^_+|_+$/g, '') || 'column';
+    });
+
+    // Create unique column names (handle duplicates)
+    const columnNames = [];
+    const seenNames = new Map();
+    for (const name of sanitizedHeaders) {
+      if (seenNames.has(name)) {
+        const count = seenNames.get(name) + 1;
+        seenNames.set(name, count);
+        columnNames.push(`${name}_${count}`);
+      } else {
+        seenNames.set(name, 1);
+        columnNames.push(name);
+      }
+    }
+
+    console.log(`📁 Uploading CSV: ${file.originalname} -> ${duckdbTableName}`);
+    console.log(`📊 Columns: ${columnNames.join(', ')}`);
+
+    // Drop existing table if exists
+    try {
+      await dbClient.run(`DROP TABLE IF EXISTS ${duckdbTableName}`);
+    } catch (dropErr) {
+      console.log(`ℹ️ Table ${duckdbTableName} did not exist or could not be dropped`);
+    }
+
+    // Create table with TEXT columns (DuckDB will handle type inference)
+    const createTableSQL = `CREATE TABLE ${duckdbTableName} (${columnNames.map(col => `"${col}" TEXT`).join(', ')})`;
+    await dbClient.run(createTableSQL);
+    console.log(`✅ Created table ${duckdbTableName}`);
+
+    // Parse and insert data rows
+    let rowCount = 0;
+    const batchSize = 1000;
+    let batch = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      // Simple CSV parsing (handles basic cases, not complex quoted fields)
+      const values = parseCSVLine(line);
+      
+      if (values.length === columnNames.length) {
+        batch.push(values);
+        rowCount++;
+
+        if (batch.length >= batchSize) {
+          await insertCSVBatch(duckdbTableName, columnNames, batch);
+          batch = [];
+        }
+      }
+    }
+
+    // Insert remaining batch
+    if (batch.length > 0) {
+      await insertCSVBatch(duckdbTableName, columnNames, batch);
+    }
+
+    console.log(`✅ Inserted ${rowCount} rows into ${duckdbTableName}`);
+
+    // Store columns info as JSON
+    const columnsJson = JSON.stringify(columnNames.map((name, idx) => ({
+      name,
+      originalName: headers[idx],
+      type: 'TEXT'
+    })));
+
+    // Insert into csv_connectors table
+    const insertQuery = `
+      INSERT INTO csv_connectors (connector_name, original_filename, duckdb_table_name, columns_json, row_count, file_size_bytes, uploaded_at)
+      VALUES ('${connectorName.replace(/'/g, "''")}', '${file.originalname.replace(/'/g, "''")}', '${duckdbTableName}', '${columnsJson.replace(/'/g, "''")}', ${rowCount}, ${file.size}, CURRENT_TIMESTAMP)
+    `;
+    await dbClient.run(insertQuery);
+
+    // Get the inserted connector
+    const newConnector = await dbClient.query(
+      `SELECT * FROM csv_connectors WHERE connector_name='${connectorName.replace(/'/g, "''")}'`
+    );
+
+    res.json({
+      success: true,
+      message: `CSV connector "${connectorName}" created successfully with ${rowCount} rows`,
+      connector: newConnector[0],
+      columns: columnNames,
+      rowCount
+    });
+
+  } catch (err) {
+    console.error('❌ Error creating CSV connector:', err);
+    // Cleanup: try to drop table if it was created
+    try {
+      await dbClient.run(`DROP TABLE IF EXISTS ${duckdbTableName}`);
+    } catch (cleanupErr) {
+      // Ignore cleanup errors
+    }
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Helper function to parse a CSV line (handles quoted values)
+function parseCSVLine(line) {
+  const values = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const nextChar = line[i + 1];
+    
+    if (char === '"' && !inQuotes) {
+      inQuotes = true;
+    } else if (char === '"' && inQuotes) {
+      if (nextChar === '"') {
+        current += '"';
+        i++; // Skip next quote
+      } else {
+        inQuotes = false;
+      }
+    } else if (char === ',' && !inQuotes) {
+      values.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  values.push(current.trim());
+  
+  return values;
+}
+
+// Helper function to insert batch of CSV rows
+async function insertCSVBatch(tableName, columns, rows) {
+  if (rows.length === 0) return;
+  
+  const values = rows.map(row => {
+    const escapedValues = row.map(val => {
+      if (val === null || val === undefined || val === '') {
+        return 'NULL';
+      }
+      // Escape single quotes
+      return `'${String(val).replace(/'/g, "''")}'`;
+    });
+    return `(${escapedValues.join(', ')})`;
+  }).join(', ');
+  
+  const insertSQL = `INSERT INTO ${tableName} ("${columns.join('", "')}") VALUES ${values}`;
+  await dbClient.run(insertSQL);
+}
+
+/**
+ * Get all CSV connectors
+ * GET /api/csv-connectors
+ */
+app.get('/api/csv-connectors', async (req, res) => {
+  try {
+    const connectors = await dbClient.query(
+      'SELECT id, connector_name, original_filename, duckdb_table_name, columns_json, row_count, file_size_bytes, uploaded_at FROM csv_connectors ORDER BY uploaded_at DESC'
+    );
+    res.json({ success: true, connectors });
+  } catch (err) {
+    console.error('❌ Error fetching CSV connectors:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get single CSV connector by ID
+ * GET /api/csv-connectors/:id
+ */
+app.get('/api/csv-connectors/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const connectors = await dbClient.query(
+      `SELECT * FROM csv_connectors WHERE id=${id}`
+    );
+    if (connectors.length === 0) {
+      return res.status(404).json({ success: false, error: 'CSV connector not found' });
+    }
+    res.json({ success: true, connector: connectors[0] });
+  } catch (err) {
+    console.error('❌ Error fetching CSV connector:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Delete CSV connector and its DuckDB table
+ * DELETE /api/delete-csv-connector/:id
+ */
+app.delete('/api/delete-csv-connector/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Get connector details first
+    const connectors = await dbClient.query(
+      `SELECT duckdb_table_name, connector_name FROM csv_connectors WHERE id=${id}`
+    );
+    
+    if (connectors.length === 0) {
+      return res.status(404).json({ success: false, error: 'CSV connector not found' });
+    }
+
+    const { duckdb_table_name, connector_name } = connectors[0];
+
+    // Check if any data sources are using this connector
+    const usingSources = await dbClient.query(
+      `SELECT ds_name FROM data_source_registry WHERE csv_connector_id=${id}`
+    );
+    
+    if (usingSources.length > 0) {
+      const sourceNames = usingSources.map(s => s.ds_name).join(', ');
+      return res.status(400).json({ 
+        success: false, 
+        error: `Cannot delete: This connector is used by data sources: ${sourceNames}. Please delete those data sources first.` 
+      });
+    }
+
+    // Drop the DuckDB table
+    try {
+      await dbClient.run(`DROP TABLE IF EXISTS ${duckdb_table_name}`);
+      console.log(`✅ Dropped table ${duckdb_table_name}`);
+    } catch (dropErr) {
+      console.warn(`⚠️ Could not drop table ${duckdb_table_name}:`, dropErr.message);
+    }
+
+    // Delete from csv_connectors
+    await dbClient.run(`DELETE FROM csv_connectors WHERE id=${id}`);
+    
+    console.log(`✅ Deleted CSV connector: ${connector_name}`);
+    res.json({ success: true, message: `CSV connector "${connector_name}" deleted successfully` });
+  } catch (err) {
+    console.error('❌ Error deleting CSV connector:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get columns/schema of a CSV connector's table
+ * GET /api/csv-connectors/:id/columns
+ */
+app.get('/api/csv-connectors/:id/columns', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const connectors = await dbClient.query(
+      `SELECT duckdb_table_name, columns_json FROM csv_connectors WHERE id=${id}`
+    );
+    
+    if (connectors.length === 0) {
+      return res.status(404).json({ success: false, error: 'CSV connector not found' });
+    }
+
+    const { duckdb_table_name, columns_json } = connectors[0];
+    
+    // Also get actual table columns from DuckDB for verification
+    let actualColumns = [];
+    try {
+      actualColumns = await dbClient.query(`PRAGMA table_info('${duckdb_table_name}')`);
+    } catch (pragmaErr) {
+      console.warn(`⚠️ Could not get table info for ${duckdb_table_name}`);
+    }
+
+    res.json({ 
+      success: true, 
+      columns: columns_json ? JSON.parse(columns_json) : [],
+      actualColumns: actualColumns.map(c => c.name)
+    });
+  } catch (err) {
+    console.error('❌ Error fetching CSV connector columns:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Preview data from CSV connector's table
+ * GET /api/csv-connectors/:id/preview
+ */
+app.get('/api/csv-connectors/:id/preview', async (req, res) => {
+  const { id } = req.params;
+  const limit = parseInt(req.query.limit) || 100;
+  
+  try {
+    const connectors = await dbClient.query(
+      `SELECT duckdb_table_name FROM csv_connectors WHERE id=${id}`
+    );
+    
+    if (connectors.length === 0) {
+      return res.status(404).json({ success: false, error: 'CSV connector not found' });
+    }
+
+    const { duckdb_table_name } = connectors[0];
+    
+    const data = await dbClient.query(`SELECT * FROM ${duckdb_table_name} LIMIT ${limit}`);
+    
+    res.json({ 
+      success: true, 
+      data,
+      rowCount: data.length
+    });
+  } catch (err) {
+    console.error('❌ Error previewing CSV data:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// ALL CONNECTORS ENDPOINT (UNIFIED)
+// ============================================
+
+/**
+ * Get all connectors (both Snowflake and CSV) for data source dropdown
+ * GET /api/all-connectors
+ */
+app.get('/api/all-connectors', async (req, res) => {
+  try {
+    // Get Snowflake connections
+    const snowflakeConnections = await dbClient.query(
+      'SELECT id, connectionName FROM snow_flake_connections'
+    );
+    
+    // Get CSV connectors
+    const csvConnectors = await dbClient.query(
+      'SELECT id, connector_name, duckdb_table_name, row_count FROM csv_connectors'
+    );
+    
+    // Format response with type information
+    const connectors = [
+      ...snowflakeConnections.map(conn => ({
+        id: conn.id,
+        name: conn.connectionName || conn.connectionname,
+        type: 'snowflake',
+        snowflakeConnectionId: conn.id
+      })),
+      ...csvConnectors.map(conn => ({
+        id: `csv_${conn.id}`, // Prefix to differentiate from snowflake IDs
+        name: conn.connector_name,
+        type: 'csv',
+        csvConnectorId: conn.id,
+        tableName: conn.duckdb_table_name,
+        rowCount: conn.row_count
+      }))
+    ];
+    
+    res.json({ success: true, connectors });
+  } catch (err) {
+    console.error('❌ Error fetching all connectors:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.get('/api/all-connections', async (req, res) => {
   try{
     const connections=await dbClient.query('SELECT id,connectionname from snow_flake_connections');
@@ -1424,10 +1874,148 @@ app.get('/api/all-connections', async (req, res) => {
 );
 
 app.post('/api/execute-query', async (req, res) => {
-  const { connectionId, connectionType, dataSourceName, query } = req.body;
+  const { connectionId, connectionType, dataSourceName, query, connectorType, csvConnectorId } = req.body;
 
-  if (!connectionId || !connectionType || !dataSourceName || !query) {
-      return res.status(400).json({ success: false, error: 'All fields are required' });
+  if (!dataSourceName || !query) {
+      return res.status(400).json({ success: false, error: 'Data source name and query are required' });
+  }
+
+  // Check if this is a CSV connector (either explicit connectorType or connectionId starts with 'csv_')
+  const isCsvConnector = connectorType === 'csv' || 
+                         csvConnectorId || 
+                         (typeof connectionId === 'string' && connectionId.startsWith('csv_'));
+
+  // ============================================
+  // CSV CONNECTOR QUERY EXECUTION
+  // ============================================
+  if (isCsvConnector) {
+    try {
+      // Extract CSV connector ID
+      let actualCsvConnectorId = csvConnectorId;
+      if (!actualCsvConnectorId && typeof connectionId === 'string' && connectionId.startsWith('csv_')) {
+        actualCsvConnectorId = parseInt(connectionId.replace('csv_', ''));
+      }
+
+      if (!actualCsvConnectorId) {
+        return res.status(400).json({ success: false, error: 'CSV connector ID is required' });
+      }
+
+      // Get CSV connector details
+      const csvConnectors = await dbClient.query(
+        `SELECT id, connector_name, duckdb_table_name FROM csv_connectors WHERE id=${actualCsvConnectorId}`
+      );
+
+      if (csvConnectors.length === 0) {
+        return res.status(404).json({ success: false, error: 'CSV connector not found' });
+      }
+
+      const csvConnector = csvConnectors[0];
+      console.log(`📁 Executing query on CSV connector: ${csvConnector.connector_name} (table: ${csvConnector.duckdb_table_name})`);
+
+      const startTime = Date.now();
+
+      // Execute the query directly on DuckDB (the CSV data is already in a DuckDB table)
+      const queryResult = await dbClient.query(query);
+      
+      const endTime = Date.now();
+      const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
+      console.log(`⏱️  CSV query executed in ${timeTaken}s, returned ${queryResult.length} rows`);
+
+      // For CSV connector, we always create an Extract (parquet file)
+      const PARQUET_DIR = path.join(__dirname, './db/parquet_files');
+      if (!fs.existsSync(PARQUET_DIR)) {
+        fs.mkdirSync(PARQUET_DIR, { recursive: true });
+      }
+
+      const tableName = 'ds_' + dataSourceName.toLowerCase();
+      const parquetFilePath = path.join(PARQUET_DIR, `${tableName}.parquet`);
+
+      // Delete existing parquet file if exists
+      if (fs.existsSync(parquetFilePath)) {
+        fs.unlinkSync(parquetFilePath);
+        console.log(`✅ Existing parquet file deleted: ${parquetFilePath}`);
+      }
+
+      if (queryResult.length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Query returned no results. Cannot create data source without data.' 
+        });
+      }
+
+      // Get column names from result
+      const columnNames = Object.keys(queryResult[0]);
+
+      // Create parquet schema
+      const parquetSchema = new parquet.ParquetSchema(
+        columnNames.reduce((schema, colName) => {
+          schema[colName] = { type: 'UTF8', optional: true };
+          return schema;
+        }, {})
+      );
+
+      // Write to parquet file
+      const writer = await parquet.ParquetWriter.openFile(parquetSchema, parquetFilePath);
+      
+      for (const row of queryResult) {
+        const parquetRow = {};
+        columnNames.forEach(col => {
+          const val = row[col];
+          parquetRow[col] = (val === null || typeof val === 'undefined') ? null : String(val);
+        });
+        await writer.appendRow(parquetRow);
+      }
+      
+      await writer.close();
+      console.log(`✅ Parquet file created: ${parquetFilePath} (${queryResult.length} rows)`);
+
+      // Register in data_source_registry with csv_connector_id instead of connection_id
+      // connection_id is NULL for CSV-based data sources
+      const deleteQuery = `DELETE FROM data_source_registry WHERE ds_name='${dataSourceName}'`;
+      const insertQuery = `INSERT INTO data_source_registry (ds_name, connection_id, csv_connector_id, type, query, created_at, parquet_path) 
+                           VALUES ('${dataSourceName}', NULL, ${actualCsvConnectorId}, 'Extract', '${query.replace(/'/g, "''")}', CURRENT_TIMESTAMP, '${parquetFilePath.replace(/\\/g, '\\\\')}')`;
+      
+      await dbClient.run(deleteQuery);
+      await dbClient.run(insertQuery);
+      console.log(`✅ Data source ${dataSourceName} registered in data_source_registry (CSV connector)`);
+
+      // Create base table from parquet for faster subsequent queries
+      try {
+        await dbClient.run(`DROP TABLE IF EXISTS ${tableName}`);
+        const normalizedPath = parquetFilePath.replace(/\\/g, '/');
+        await dbClient.run(`CREATE TABLE IF NOT EXISTS ${tableName} AS SELECT * FROM read_parquet('${normalizedPath}')`);
+        console.log(`✅ Base table ${tableName} created from parquet`);
+      } catch (tableErr) {
+        console.warn(`⚠️ Could not create base table: ${tableErr.message}`);
+      }
+
+      // Clear any existing cache for this data source
+      clearCacheForDataSource(dataSourceName);
+
+      const fileStats = fs.statSync(parquetFilePath);
+      const fileSizeMB = (fileStats.size / (1024 * 1024)).toFixed(2);
+
+      res.json({
+        success: true,
+        data: queryResult.slice(0, 100), // Preview first 100 rows
+        rowCount: queryResult.length,
+        query: query,
+        message: `Data source ${dataSourceName} created successfully from CSV with ${queryResult.length} rows (${fileSizeMB} MB)`
+      });
+
+    } catch (err) {
+      console.error('❌ Error executing CSV query:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+    return; // Exit after handling CSV connector
+  }
+
+  // ============================================
+  // SNOWFLAKE CONNECTOR QUERY EXECUTION (Original code)
+  // ============================================
+  
+  if (!connectionId || !connectionType) {
+    return res.status(400).json({ success: false, error: 'Connection ID and connection type are required for Snowflake connectors' });
   }
 
   if (connectionType === 'Live') {
@@ -2835,6 +3423,8 @@ app.get('/api/cache/stats', (req, res) => {
     res.json({
       success: true,
       stats: {
+        environment: process.env.NODE_ENV || 'development',
+        database: process.env.DB_NAME || 'chartBuilder_dev.db',
         processId: process.pid,
         keys: fastCache.size,
         maxKeys: MAX_CACHE_SIZE,
@@ -3999,24 +4589,23 @@ async function saveFilterPanelStateToDb(dashboardId, positions, activeFilterIds)
     console.log('Note: Could not update existing filters (may not exist yet)');
   }
 
-  // Process each filter - use DELETE + INSERT pattern for reliability
+  // Process each filter - use INSERT ... ON CONFLICT for atomic upsert
   for (let i = 0; i < activeFilterIds.length; i++) {
     const filterId = activeFilterIds[i];
     const position = positions[filterId] || { x: 6, y: 6 + (i * 80) };
     const escapedFilterId = filterId.replace(/'/g, "''");
     
     try {
-      // First try to delete if exists FOR THIS DASHBOARD
-      await dbClient.run(`DELETE FROM filter_panel_state WHERE filter_id = '${escapedFilterId}' AND ${scopeClause}`);
-    } catch (delErr) {
-      // Ignore delete errors
-    }
-    
-    // Then insert with dashboard scope
-    try {
+      // Use INSERT ... ON CONFLICT DO UPDATE for atomic upsert (DuckDB syntax)
       await dbClient.run(`
         INSERT INTO filter_panel_state (view_id, filter_id, x_position, y_position, is_active, display_order, last_modified)
         VALUES (${dashboardId || 'NULL'}, '${escapedFilterId}', ${Math.round(position.x)}, ${Math.round(position.y)}, true, ${i}, CURRENT_TIMESTAMP)
+        ON CONFLICT (view_id, filter_id) DO UPDATE SET
+          x_position = EXCLUDED.x_position,
+          y_position = EXCLUDED.y_position,
+          is_active = EXCLUDED.is_active,
+          display_order = EXCLUDED.display_order,
+          last_modified = EXCLUDED.last_modified
       `);
     } catch (insertErr) {
       console.warn(`Warning: Could not save filter state for ${filterId}:`, insertErr.message);
@@ -4149,7 +4738,7 @@ async function saveCardFilterPanelStateToDb(cardId, positions, activeFilterIds) 
     console.log('Note: Could not update existing card filters (may not exist yet)');
   }
 
-  // Use DELETE + INSERT pattern to avoid unique constraint issues
+  // Use INSERT ... ON CONFLICT for atomic upsert
   for (let i = 0; i < uniqueActiveIds.length; i++) {
     const filterId = uniqueActiveIds[i];
     const rawPos = positions[filterId];
@@ -4158,21 +4747,18 @@ async function saveCardFilterPanelStateToDb(cardId, positions, activeFilterIds) 
     const position = hasPosition ? { x: Math.round(rawPos.x), y: Math.round(rawPos.y) } : { x: -1, y: -1 };
     const escapedFilterId = filterId.replace(/'/g, "''");
 
-    // Delete existing record first
+    // Use INSERT ... ON CONFLICT DO UPDATE for atomic upsert (DuckDB syntax)
+    // Note: UNIQUE constraint is on (view_id, card_id, filter_id), so we include view_id as NULL
     try {
       await dbClient.run(`
-        DELETE FROM card_filter_panel_state 
-        WHERE card_id = '${escapedCardId}' AND filter_id = '${escapedFilterId}'
-      `);
-    } catch (delErr) {
-      // Ignore delete errors
-    }
-
-    // Then insert new record
-    try {
-      await dbClient.run(`
-        INSERT INTO card_filter_panel_state (card_id, filter_id, x_position, y_position, is_active, display_order, last_modified)
-        VALUES ('${escapedCardId}', '${escapedFilterId}', ${position.x}, ${position.y}, true, ${i}, CURRENT_TIMESTAMP)
+        INSERT INTO card_filter_panel_state (view_id, card_id, filter_id, x_position, y_position, is_active, display_order, last_modified)
+        VALUES (NULL, '${escapedCardId}', '${escapedFilterId}', ${position.x}, ${position.y}, true, ${i}, CURRENT_TIMESTAMP)
+        ON CONFLICT (view_id, card_id, filter_id) DO UPDATE SET
+          x_position = EXCLUDED.x_position,
+          y_position = EXCLUDED.y_position,
+          is_active = EXCLUDED.is_active,
+          display_order = EXCLUDED.display_order,
+          last_modified = EXCLUDED.last_modified
       `);
     } catch (insertErr) {
       console.warn(`Warning: Could not save card filter state for card ${cardId} filter ${filterId}:`, insertErr.message);

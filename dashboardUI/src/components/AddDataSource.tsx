@@ -84,12 +84,14 @@ export default function AddDataSourceMui() {
     severity: 'success',
   });
 
-  // Connection dropdowns
-  const [connectionNames, setConnectionNames] = useState<any[]>([]);
-  const [selectedConnectionId, setSelectedConnectionId] = useState<Number | ''>(
-    ''
-  );
+  // Connection dropdowns - now unified to handle both Snowflake and CSV connectors
+  const [connectors, setConnectors] = useState<any[]>([]);
+  const [selectedConnectorId, setSelectedConnectorId] = useState<string | number | ''>('');
+  const [selectedConnectorType, setSelectedConnectorType] = useState<'snowflake' | 'csv'>('snowflake');
   const [connectionType, setConnectionType] = useState<string>('Live');
+  
+  // Legacy state for backward compatibility
+  const [connectionNames, setConnectionNames] = useState<any[]>([]);
 
   // Edit functionality states
   const [editingDS, setEditingDS] = useState<string | null>(null);
@@ -219,25 +221,39 @@ export default function AddDataSourceMui() {
     }, 4000);
   };
 
-  const fetchConnectionNames = async () => {
+  const fetchConnectors = async () => {
     try {
-      const connectionNames = await axios.get(
-        `${API_BASE_URL}/api/all-connections`
-      );
-      const fetchedConnectionNames = connectionNames.data.connections;
-      setConnectionNames(fetchedConnectionNames);
-      console.log('Fetched connection names', connectionNames.data.connections);
-      if (fetchedConnectionNames.length > 0) {
-        setSelectedConnectionId(fetchedConnectionNames[0].id);
+      const response = await axios.get(`${API_BASE_URL}/api/all-connectors`);
+      const fetchedConnectors = response.data.connectors || [];
+      setConnectors(fetchedConnectors);
+      
+      // Also set legacy connectionNames for backward compatibility
+      const snowflakeConnectors = fetchedConnectors.filter((c: any) => c.type === 'snowflake');
+      setConnectionNames(snowflakeConnectors.map((c: any) => ({ id: c.snowflakeConnectionId, connectionName: c.name })));
+      
+      console.log('Fetched connectors:', fetchedConnectors);
+      if (fetchedConnectors.length > 0) {
+        const firstConnector = fetchedConnectors[0];
+        setSelectedConnectorId(firstConnector.id);
+        setSelectedConnectorType(firstConnector.type);
+        // For CSV connectors, default to Extract mode
+        if (firstConnector.type === 'csv') {
+          setConnectionType('Extract');
+        }
       }
     } catch (err) {
-      console.error('Failed to fetch connection names', err);
-      showAlert('Failed to fetch connection names', 'error');
+      console.error('Failed to fetch connectors', err);
+      showAlert('Failed to fetch connectors', 'error');
     }
   };
 
+  // Legacy function for backward compatibility
+  const fetchConnectionNames = async () => {
+    await fetchConnectors();
+  };
+
   useEffect(() => {
-    fetchConnectionNames();
+    fetchConnectors();
   }, []);
 
   // Fetch schedule when Extract data source is selected
@@ -308,10 +324,12 @@ export default function AddDataSourceMui() {
 
   const addDataSource = async (): Promise<void> => {
     if (newDSName && !dataSourceNames.includes(newDSName)) {
-      if (!selectedConnectionId || !connectionType) {
-        showAlert('Please select a connection and connection type', 'error');
+      if (!selectedConnectorId || !connectionType) {
+        showAlert('Please select a connector and connection type', 'error');
         return;
       }
+
+      const selectedConn = connectors.find(c => c.id === selectedConnectorId);
 
       try {
         // Store data source in database immediately
@@ -319,8 +337,9 @@ export default function AddDataSourceMui() {
           `${API_BASE_URL}/api/datasources`,
           {
             dataSourceName: newDSName,
-            connectionId: selectedConnectionId,
-            connectionType: connectionType,
+            connectionId: selectedConn?.type === 'snowflake' ? selectedConn.snowflakeConnectionId : null,
+            csvConnectorId: selectedConn?.type === 'csv' ? selectedConn.csvConnectorId : null,
+            connectionType: selectedConn?.type === 'csv' ? 'Extract' : connectionType,
             query: '' // Empty query initially
           }
         );
@@ -431,14 +450,30 @@ export default function AddDataSourceMui() {
     setPage(0);
 
     try {
+      // Find the selected connector to determine its type
+      const selectedConnector = connectors.find(c => c.id === selectedConnectorId);
+      const isCsvConnector = selectedConnector?.type === 'csv' || selectedConnectorType === 'csv';
+      
+      // Build request body based on connector type
+      const requestBody: any = {
+        query: sqlQuery,
+        dataSourceName: selectedDS,
+      };
+      
+      if (isCsvConnector) {
+        // CSV connector - pass csvConnectorId
+        requestBody.connectorType = 'csv';
+        requestBody.csvConnectorId = selectedConnector?.csvConnectorId;
+        requestBody.connectionType = 'Extract'; // CSV always uses Extract mode
+      } else {
+        // Snowflake connector
+        requestBody.connectionId = selectedConnector?.snowflakeConnectionId || selectedConnectorId;
+        requestBody.connectionType = connectionType;
+      }
+      
       const response = await axios.post(
         `${API_BASE_URL}/api/execute-query`,
-        {
-          query: sqlQuery,
-          dataSourceName: selectedDS,
-          connectionId: selectedConnectionId,
-          connectionType: connectionType,
-        }
+        requestBody
       );
 
       const result = response.data;
@@ -500,26 +535,37 @@ export default function AddDataSourceMui() {
         const response = await axios.get(`${API_BASE_URL}/api/datasources/${selectedDS}`);
         if (response.data.success && response.data.dataSource) {
           const ds = response.data.dataSource;
-          // Set connection ID and type if they exist
-          if (ds.connectionId && connectionNames.length > 0) {
-            // Verify the connection exists in the dropdown
-            const connectionExists = connectionNames.some((conn: any) => conn.id === ds.connectionId);
-            if (connectionExists) {
-              setSelectedConnectionId(ds.connectionId);
-            } else {
-              // Connection doesn't exist, use first available
-              const firstConn = connectionNames[0];
-              if (firstConn) {
-                setSelectedConnectionId(firstConn.id);
-              }
-            }
-          } else if (connectionNames.length > 0) {
-            // No connection set, use first available
-            const firstConn = connectionNames[0];
-            if (firstConn) {
-              setSelectedConnectionId(firstConn.id);
+          
+          // Handle CSV connector if csv_connector_id exists
+          if (ds.csvConnectorId && connectors.length > 0) {
+            const csvConnector = connectors.find(c => c.type === 'csv' && c.csvConnectorId === ds.csvConnectorId);
+            if (csvConnector) {
+              setSelectedConnectorId(csvConnector.id);
+              setSelectedConnectorType('csv');
+              setConnectionType('Extract');
+              return;
             }
           }
+          
+          // Handle Snowflake connection if connectionId exists
+          if (ds.connectionId && connectors.length > 0) {
+            const snowflakeConnector = connectors.find(c => c.type === 'snowflake' && c.snowflakeConnectionId === ds.connectionId);
+            if (snowflakeConnector) {
+              setSelectedConnectorId(snowflakeConnector.id);
+              setSelectedConnectorType('snowflake');
+            } else if (connectors.length > 0) {
+              // Connection doesn't exist, use first available
+              const firstConn = connectors[0];
+              setSelectedConnectorId(firstConn.id);
+              setSelectedConnectorType(firstConn.type);
+            }
+          } else if (connectors.length > 0) {
+            // No connection set, use first available
+            const firstConn = connectors[0];
+            setSelectedConnectorId(firstConn.id);
+            setSelectedConnectorType(firstConn.type);
+          }
+          
           if (ds.connectionType) {
             setConnectionType(ds.connectionType);
           }
@@ -527,18 +573,17 @@ export default function AddDataSourceMui() {
       } catch (err) {
         // Data source might not exist yet (newly created), that's okay
         console.log('Data source details not found, using defaults');
-        // Set default connection if available
-        if (connectionNames.length > 0 && !selectedConnectionId) {
-          const firstConn = connectionNames[0];
-          if (firstConn) {
-            setSelectedConnectionId(firstConn.id);
-          }
+        // Set default connector if available
+        if (connectors.length > 0 && !selectedConnectorId) {
+          const firstConn = connectors[0];
+          setSelectedConnectorId(firstConn.id);
+          setSelectedConnectorType(firstConn.type);
         }
       }
     };
 
     loadDataSourceDetails();
-  }, [selectedDS, connectionNames]);
+  }, [selectedDS, connectors]);
 
   const getTableColumns = () => {
     if (!queryResult?.data || queryResult.data.length === 0) return [];
@@ -1121,7 +1166,7 @@ export default function AddDataSourceMui() {
                   <FormControl 
                     size="small" 
                     sx={{ 
-                      minWidth: 180,
+                      minWidth: 220,
                       '& .MuiOutlinedInput-root': {
                         '& fieldset': {
                           borderColor: 'rgba(102, 126, 234, 0.3)',
@@ -1138,35 +1183,80 @@ export default function AddDataSourceMui() {
                       },
                     }}
                   >
-                    <InputLabel id="connection-select-label">
-                      Connection
+                    <InputLabel id="connector-select-label">
+                      Connector
                     </InputLabel>
                     <Select
-                      labelId="connection-select-label"
-                      id="connection-select"
-                      value={selectedConnectionId}
-                      label="Connection"
+                      labelId="connector-select-label"
+                      id="connector-select"
+                      value={selectedConnectorId}
+                      label="Connector"
                       onChange={async (e) => {
-                        const newConnectionId = Number(e.target.value);
-                        setSelectedConnectionId(newConnectionId);
-                        // Save connection change to database
-                        if (selectedDS) {
+                        const newConnectorId = e.target.value;
+                        setSelectedConnectorId(newConnectorId);
+                        
+                        // Find the selected connector to get its type
+                        const selectedConn = connectors.find(c => c.id === newConnectorId);
+                        if (selectedConn) {
+                          setSelectedConnectorType(selectedConn.type);
+                          // CSV connectors only support Extract mode
+                          if (selectedConn.type === 'csv') {
+                            setConnectionType('Extract');
+                          }
+                        }
+                        
+                        // Save connector change to database
+                        if (selectedDS && selectedConn) {
                           try {
                             await axios.post(`${API_BASE_URL}/api/datasources`, {
                               dataSourceName: selectedDS,
-                              connectionId: newConnectionId,
-                              connectionType: connectionType,
+                              connectionId: selectedConn.type === 'snowflake' ? selectedConn.snowflakeConnectionId : null,
+                              csvConnectorId: selectedConn.type === 'csv' ? selectedConn.csvConnectorId : null,
+                              connectionType: selectedConn.type === 'csv' ? 'Extract' : connectionType,
                               query: sqlQuery || ''
                             });
                           } catch (err) {
-                            console.error('Failed to update connection', err);
+                            console.error('Failed to update connector', err);
                           }
                         }
                       }}
+                      renderValue={(selected) => {
+                        const connector = connectors.find(c => c.id === selected);
+                        if (!connector) return '';
+                        return (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span>{connector.name}</span>
+                            <Chip 
+                              label={connector.type === 'csv' ? 'CSV' : 'Snowflake'} 
+                              size="small" 
+                              sx={{ 
+                                height: 20,
+                                fontSize: '0.7rem',
+                                fontWeight: 600,
+                                bgcolor: connector.type === 'csv' ? '#10b981' : '#3B82F6', 
+                                color: 'white' 
+                              }} 
+                            />
+                          </Box>
+                        );
+                      }}
                     >
-                      {connectionNames.map((conn: any) => (
+                      {connectors.map((conn: any) => (
                         <MenuItem key={conn.id} value={conn.id}>
-                          {conn.connectionName}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', justifyContent: 'space-between' }}>
+                            <span>{conn.name}</span>
+                            <Chip 
+                              label={conn.type === 'csv' ? 'CSV' : 'Snowflake'} 
+                              size="small" 
+                              sx={{ 
+                                height: 20,
+                                fontSize: '0.65rem',
+                                fontWeight: 600,
+                                bgcolor: conn.type === 'csv' ? '#10b981' : '#3B82F6', 
+                                color: 'white' 
+                              }} 
+                            />
+                          </Box>
                         </MenuItem>
                       ))}
                     </Select>
@@ -1198,15 +1288,18 @@ export default function AddDataSourceMui() {
                       id="connection-type"
                       value={connectionType}
                       label="Type"
+                      disabled={selectedConnectorType === 'csv'} // CSV only supports Extract
                       onChange={async (e) => {
                         const newType = e.target.value;
                         setConnectionType(newType);
                         // Save connection type change to database
                         if (selectedDS) {
+                          const selectedConn = connectors.find(c => c.id === selectedConnectorId);
                           try {
                             await axios.post(`${API_BASE_URL}/api/datasources`, {
                               dataSourceName: selectedDS,
-                              connectionId: selectedConnectionId,
+                              connectionId: selectedConn?.type === 'snowflake' ? selectedConn.snowflakeConnectionId : null,
+                              csvConnectorId: selectedConn?.type === 'csv' ? selectedConn.csvConnectorId : null,
                               connectionType: newType,
                               query: sqlQuery || ''
                             });
@@ -1216,7 +1309,7 @@ export default function AddDataSourceMui() {
                         }
                       }}
                     >
-                      <MenuItem value="Live">Live</MenuItem>
+                      <MenuItem value="Live" disabled={selectedConnectorType === 'csv'}>Live</MenuItem>
                       <MenuItem value="Extract">Extract</MenuItem>
                     </Select>
                   </FormControl>
