@@ -28,6 +28,7 @@ const keyHashCache = new Map();
 let cacheAccessOrder = [];
 
 console.log(`⚡ Ultra-fast cache initialized (native Map, no compression, direct object references)`);
+console.log(`🔧 Process ID: ${process.pid} - All requests should hit this same process for cache to work`);
 
 // ============================================
 // CACHE KEY GENERATION
@@ -2834,6 +2835,7 @@ app.get('/api/cache/stats', (req, res) => {
     res.json({
       success: true,
       stats: {
+        processId: process.pid,
         keys: fastCache.size,
         maxKeys: MAX_CACHE_SIZE,
         totalRows: totalRows.toLocaleString(),
@@ -2842,7 +2844,8 @@ app.get('/api/cache/stats', (req, res) => {
         avgAccessPerKey: fastCache.size > 0 ? (totalAccessCount / fastCache.size).toFixed(1) : 0,
         ttl: CACHE_TTL,
         ttlMinutes: CACHE_TTL / 60,
-        type: 'Ultra-fast native Map (O(1) lookup, no compression, direct object references)'
+        type: 'Ultra-fast native Map (O(1) lookup, no compression, direct object references)',
+        uptime: Math.floor(process.uptime()) + ' seconds'
       }
     });
   } catch (err) {

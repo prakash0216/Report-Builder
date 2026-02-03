@@ -1,10 +1,12 @@
 ⚡ Ultra-fast cache initialized (native Map, no compression, direct object references)
+🔧 Process ID: 24552 - All requests should hit this same process for cache to work
 Directory ensured: D:\Report-Builder\backend\db\data
 ✅ DuckDB initialized at D:\Report-Builder\backend\db\data\chartBuilder.db with 8 threads
 ✅ DuckDB is connected
 ✅ Table 'dashboards' created successfully.
 ✅ Migration: Added new columns to dashboards table
 ✅ Table 'views' created successfully.
+✅ Migration: Added new columns to views table
 ✅ Table 'snow_flake_connections' created successfully.
 ✅ Table 'data_source_registry' created successfully.
 ✅ Table 'parameters' created successfully.
@@ -44,78 +46,27 @@ Directory ensured: D:\Report-Builder\backend\db\data
 ✅ Migration: Added dashboard_id to 'filters'
 ✅ Migration: Added dashboard_id to 'snow_flake_connections'
 ✅ Migration: Added dashboard_id to 'data_source_registry'
-ℹ️ MSL Extract parquet file not found at D:\Report-Builder\backend\db\parquet_files\ds_msl_extract.parquet, skipping seed.
+ℹ️ Data source 'msl_extract' already exists, skipping seed.
 ✅ All tables created and migrations completed.
 ⏰ Extract scheduler started (checking every hour)
-🚀 Server is running at http://localhost:\\.\pipe\15d8133f-05d1-4486-9d08-42cd59335c88
+🚀 Server is running at http://localhost:\\.\pipe\13d4eeab-aae1-4299-9494-deb5404d1b5f
 📊 [API /dashboards] raw rows: [
   {
-    id: 4,
-    name: 'test',
+    id: 1,
+    name: 'Market Share Library',
+    charts_count: 0,
+    views_count: 2,
+    child_charts: 8
+  },
+  {
+    id: 2,
+    name: 'Payer Control Library',
     charts_count: 0,
     views_count: 0,
     child_charts: 0
-  },
-  {
-    id: 1,
-    name: 'Market Share Library',
-    charts_count: 0,
-    views_count: 1,
-    child_charts: 1
   }
 ]
 📊 Dashboards with counts: [
-  { name: 'test', charts_count: 0, views_count: 0 },
-  { name: 'Market Share Library', charts_count: 1, views_count: 1 }
+  { name: 'Market Share Library', charts_count: 8, views_count: 2 },
+  { name: 'Payer Control Library', charts_count: 0, views_count: 0 }
 ]
-📊 [API /dashboards] raw rows: [
-  {
-    id: 4,
-    name: 'test',
-    charts_count: 0,
-    views_count: 0,
-    child_charts: 0
-  },
-  {
-    id: 1,
-    name: 'Market Share Library',
-    charts_count: 0,
-    views_count: 1,
-    child_charts: 1
-  }
-]
-📊 Dashboards with counts: [
-  { name: 'test', charts_count: 0, views_count: 0 },
-  { name: 'Market Share Library', charts_count: 1, views_count: 1 }
-]
-✅ Deleted dashboard 4 with all associated resources
-📊 [API /dashboards] raw rows: [
-  {
-    id: 1,
-    name: 'Market Share Library',
-    charts_count: 0,
-    views_count: 1,
-    child_charts: 1
-  }
-]
-📊 Dashboards with counts: [ { name: 'Market Share Library', charts_count: 1, views_count: 1 } ]
-📊 [API /dashboards] raw rows: [
-  {
-    id: 1,
-    name: 'Market Share Library',
-    charts_count: 0,
-    views_count: 1,
-    child_charts: 1
-  }
-]
-📊 Dashboards with counts: [ { name: 'Market Share Library', charts_count: 1, views_count: 1 } ]
-📊 [API /dashboards] raw rows: [
-  {
-    id: 1,
-    name: 'Market Share Library',
-    charts_count: 0,
-    views_count: 1,
-    child_charts: 1
-  }
-]
-📊 Dashboards with counts: [ { name: 'Market Share Library', charts_count: 1, views_count: 1 } ]

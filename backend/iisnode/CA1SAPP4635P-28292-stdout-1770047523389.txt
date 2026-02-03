@@ -1,10 +1,12 @@
 ⚡ Ultra-fast cache initialized (native Map, no compression, direct object references)
+🔧 Process ID: 28292 - All requests should hit this same process for cache to work
 Directory ensured: D:\Report-Builder\backend\db\data
 ✅ DuckDB initialized at D:\Report-Builder\backend\db\data\chartBuilder.db with 8 threads
 ✅ DuckDB is connected
 ✅ Table 'dashboards' created successfully.
 ✅ Migration: Added new columns to dashboards table
 ✅ Table 'views' created successfully.
+✅ Migration: Added new columns to views table
 ✅ Table 'snow_flake_connections' created successfully.
 ✅ Table 'data_source_registry' created successfully.
 ✅ Table 'parameters' created successfully.
@@ -44,7 +46,7 @@ Directory ensured: D:\Report-Builder\backend\db\data
 ✅ Migration: Added dashboard_id to 'filters'
 ✅ Migration: Added dashboard_id to 'snow_flake_connections'
 ✅ Migration: Added dashboard_id to 'data_source_registry'
-ℹ️ MSL Extract parquet file not found at D:\Report-Builder\backend\db\parquet_files\ds_msl_extract.parquet, skipping seed.
+ℹ️ Data source 'msl_extract' already exists, skipping seed.
 ✅ All tables created and migrations completed.
 ⏰ Extract scheduler started (checking every hour)
-🚀 Server is running at http://localhost:\\.\pipe\6829e071-be91-47ae-bc1e-5ac553e94373
+🚀 Server is running at http://localhost:\\.\pipe\35fa32dd-65d5-46e0-a527-265c58210e58

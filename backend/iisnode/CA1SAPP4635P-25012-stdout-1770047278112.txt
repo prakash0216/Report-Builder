@@ -1,0 +1,190 @@
+⚡ Ultra-fast cache initialized (native Map, no compression, direct object references)
+🔧 Process ID: 25012 - All requests should hit this same process for cache to work
+Directory ensured: D:\Report-Builder\backend\db\data
+✅ DuckDB initialized at D:\Report-Builder\backend\db\data\chartBuilder.db with 8 threads
+✅ DuckDB is connected
+✅ Table 'dashboards' created successfully.
+✅ Migration: Added new columns to dashboards table
+✅ Table 'views' created successfully.
+✅ Migration: Added new columns to views table
+✅ Table 'snow_flake_connections' created successfully.
+✅ Table 'data_source_registry' created successfully.
+✅ Table 'parameters' created successfully.
+✅ Migration: Added dashboard_id to parameters
+✅ Table 'calculations' created successfully.
+✅ Migration: Added dashboard_id to calculations
+✅ Migration: Added example column to predefined_functions
+✅ Table 'predefined_functions' created successfully.
+✅ Table 'filters' created successfully.
+✅ Migration: Added dashboard_id to filters
+✅ Table 'chart_configs' created successfully.
+✅ Table 'layouts' created successfully.
+✅ Table 'chart_visibility' created successfully.
+✅ Table 'card_dimension_conditions' created successfully.
+✅ Table 'filter_panel_state' created successfully.
+✅ Table 'card_filter_panel_state' created successfully.
+✅ Table 'tooltip_configs' created successfully.
+✅ Table 'child_card_configs' created successfully.
+✅ Child card configs columns migrated successfully.
+✅ Table 'child_card_tooltip_configs' created successfully.
+✅ Migration: Added columns to 'child_card_tooltip_configs'
+✅ Table 'materialized_views' created successfully.
+✅ Table 'favorites' created successfully.
+✅ Table 'users' created successfully.
+✅ Table 'user_sessions' created successfully.
+✅ Migration: Added view_id to 'chart_configs'
+✅ Migration: Added view_id to 'layouts'
+✅ Migration: Added view_id to 'chart_visibility'
+✅ Migration: Added view_id to 'card_dimension_conditions'
+✅ Migration: Added view_id to 'filter_panel_state'
+✅ Migration: Added view_id to 'card_filter_panel_state'
+✅ Migration: Added view_id to 'tooltip_configs'
+✅ Migration: Added view_id to 'child_card_configs'
+✅ Migration: Added view_id to 'child_card_tooltip_configs'
+✅ Migration: Added dashboard_id to 'parameters'
+✅ Migration: Added dashboard_id to 'calculations'
+✅ Migration: Added dashboard_id to 'filters'
+✅ Migration: Added dashboard_id to 'snow_flake_connections'
+✅ Migration: Added dashboard_id to 'data_source_registry'
+ℹ️ Data source 'msl_extract' already exists, skipping seed.
+✅ All tables created and migrations completed.
+⏰ Extract scheduler started (checking every hour)
+🚀 Server is running at http://localhost:\\.\pipe\ee777d0c-1640-4b0e-995b-fb391d6f4835
+💾 [saveFilterPanelStateToDb] dashboardId=1, activeFilters=11
+💾 CACHE MISS for msl_extract (limit: 10) - Executing query...
+🔄 Loading data from: msl_extract
+💾 CACHE MISS for msl_extract (limit: 10) - Executing query...
+🔄 Loading data from: msl_extract
+📊 Data source type: Extract
+✅ Added condition for MOP: MOP IN (10 values)
+✅ Added condition for PAYER_NAME: PAYER_NAME IN (1412 values)
+✅ Added condition for MARKET: MARKET IN (76 values)
+✅ Added condition for BRAND_GENERIC_FLAG: BRAND_GENERIC_FLAG IN (3 values)
+✅ Added condition for SPECIALTY_PROD_IND: SPECIALTY_PROD_IND IN (2 values)
+✅ Added condition for MAAS_PRI_SPCL_GRP: MAAS_PRI_SPCL_GRP IN (43 values)
+✅ Added condition for F_MONTH_2: F_MONTH_2 IN (8 values)
+🦆 Loading from DuckDB Extract
+📊 Data source type: Extract
+✅ Added condition for MOP: MOP IN (10 values)
+✅ Added condition for PAYER_NAME: PAYER_NAME IN (1412 values)
+✅ Added condition for MARKET: MARKET IN (76 values)
+✅ Added condition for BRAND_GENERIC_FLAG: BRAND_GENERIC_FLAG IN (3 values)
+✅ Added condition for SPECIALTY_PROD_IND: SPECIALTY_PROD_IND IN (2 values)
+✅ Added condition for MAAS_PRI_SPCL_GRP: MAAS_PRI_SPCL_GRP IN (43 values)
+✅ Added condition for F_MONTH_2: F_MONTH_2 IN (8 values)
+🦆 Loading from DuckDB Extract
+📁 Parquet path: D:\\Report-Builder\\backend\\db\\parquet_files\\ds_msl_extract.parquet
+📁 Parquet path: D:\\Report-Builder\\backend\\db\\parquet_files\\ds_msl_extract.parquet
+⚡ FAST PATH: Using materialized view: mv_msl_extract_f15dd703
+⚡ FAST PATH: Using materialized view: mv_msl_extract_f15dd703
+✅ Materialized view query completed in 0.04s (10 rows)
+✅ Query completed in 0.10s - Cached 10 rows (instant access ready)
+✅ Materialized view query completed in 0.05s (10 rows)
+✅ Query completed in 0.08s - Cached 10 rows (instant access ready)
+✅ [saveFilterPanelStateToDb] Saved 11 filters for dashboard 1
+💾 [saveFilterPanelStateToDb] dashboardId=1, activeFilters=11
+✅ [saveFilterPanelStateToDb] Saved 11 filters for dashboard 1
+✅ Pending filter panel state saved for dashboard 1
+💾 CACHE MISS for msl_extract (limit: none) - Executing query...
+🔄 Loading data from: msl_extract
+📊 Data source type: Extract
+✅ Added condition for MOP: MOP IN (10 values)
+✅ Added condition for PAYER_NAME: PAYER_NAME IN (1412 values)
+✅ Added condition for MARKET: MARKET IN (76 values)
+✅ Added condition for BRAND_GENERIC_FLAG: BRAND_GENERIC_FLAG IN (3 values)
+✅ Added condition for SPECIALTY_PROD_IND: SPECIALTY_PROD_IND IN (2 values)
+✅ Added condition for MAAS_PRI_SPCL_GRP: MAAS_PRI_SPCL_GRP IN (43 values)
+✅ Added condition for F_MONTH_2: F_MONTH_2 IN (8 values)
+🔗 Combined WHERE: filters + custom
+🦆 Loading from DuckDB Extract
+📁 Parquet path: D:\\Report-Builder\\backend\\db\\parquet_files\\ds_msl_extract.parquet
+⚡ FAST PATH: Using materialized view: mv_msl_extract_b3e33801
+✅ Materialized view query completed in 0.01s (80 rows)
+✅ Query completed in 0.03s - Cached 80 rows (instant access ready)
+💾 CACHE MISS for msl_extract (limit: none) - Executing query...
+🔄 Loading data from: msl_extract
+📊 Data source type: Extract
+✅ Added condition for MOP: MOP IN (10 values)
+✅ Added condition for PAYER_NAME: PAYER_NAME IN (1412 values)
+✅ Added condition for MARKET: MARKET IN (76 values)
+✅ Added condition for BRAND_GENERIC_FLAG: BRAND_GENERIC_FLAG IN (3 values)
+✅ Added condition for SPECIALTY_PROD_IND: SPECIALTY_PROD_IND IN (2 values)
+✅ Added condition for MAAS_PRI_SPCL_GRP: MAAS_PRI_SPCL_GRP IN (43 values)
+✅ Added condition for F_MONTH_2: F_MONTH_2 IN (8 values)
+🔗 Combined WHERE: filters + custom
+🦆 Loading from DuckDB Extract
+📁 Parquet path: D:\\Report-Builder\\backend\\db\\parquet_files\\ds_msl_extract.parquet
+⚡ FAST PATH: Using materialized view: mv_msl_extract_f1084fa3
+✅ Materialized view query completed in 0.01s (18 rows)
+✅ Query completed in 0.03s - Cached 18 rows (instant access ready)
+✅ Cache HIT for msl_extract (limit: none)
+⚡⚡ INSTANT CACHE HIT for msl_extract (80 rows, accessed 2x)
+✅ Cache HIT for msl_extract (limit: none)
+⚡⚡ INSTANT CACHE HIT for msl_extract (18 rows, accessed 2x)
+💾 CACHE MISS for msl_extract (limit: 50) - Executing query...
+🔄 Loading data from: msl_extract
+📊 Data source type: Extract
+✅ Added condition for MOP: MOP IN (10 values)
+✅ Added condition for PAYER_NAME: PAYER_NAME IN (1412 values)
+✅ Added condition for MARKET: MARKET IN (76 values)
+✅ Added condition for BRAND_GENERIC_FLAG: BRAND_GENERIC_FLAG IN (3 values)
+✅ Added condition for SPECIALTY_PROD_IND: SPECIALTY_PROD_IND IN (2 values)
+✅ Added condition for MAAS_PRI_SPCL_GRP: MAAS_PRI_SPCL_GRP IN (43 values)
+✅ Added condition for F_MONTH_2: F_MONTH_2 IN (8 values)
+🦆 Loading from DuckDB Extract
+📁 Parquet path: D:\\Report-Builder\\backend\\db\\parquet_files\\ds_msl_extract.parquet
+⚡ FAST PATH: Using materialized view: mv_msl_extract_41237b7f
+✅ Materialized view query completed in 0.01s (50 rows)
+✅ Query completed in 0.03s - Cached 50 rows (instant access ready)
+💾 CACHE MISS for msl_extract (limit: none) - Executing query...
+🔄 Loading data from: msl_extract
+📊 Data source type: Extract
+✅ Added condition for MOP: MOP IN (10 values)
+✅ Added condition for PAYER_NAME: PAYER_NAME IN (1412 values)
+✅ Added condition for MARKET: MARKET IN (76 values)
+✅ Added condition for BRAND_GENERIC_FLAG: BRAND_GENERIC_FLAG IN (3 values)
+✅ Added condition for SPECIALTY_PROD_IND: SPECIALTY_PROD_IND IN (2 values)
+✅ Added condition for MAAS_PRI_SPCL_GRP: MAAS_PRI_SPCL_GRP IN (43 values)
+✅ Added condition for F_MONTH_2: F_MONTH_2 IN (8 values)
+🔗 Combined WHERE: filters + custom
+🦆 Loading from DuckDB Extract
+📁 Parquet path: D:\\Report-Builder\\backend\\db\\parquet_files\\ds_msl_extract.parquet
+⚡ FAST PATH: Using materialized view: mv_msl_extract_f27d7429
+✅ Materialized view query completed in 0.01s (400 rows)
+✅ Query completed in 0.03s - Cached 400 rows (instant access ready)
+💾 CACHE MISS for msl_extract (limit: none) - Executing query...
+🔄 Loading data from: msl_extract
+📊 Data source type: Extract
+✅ Added condition for MOP: MOP IN (10 values)
+✅ Added condition for PAYER_NAME: PAYER_NAME IN (1412 values)
+✅ Added condition for MARKET: MARKET IN (76 values)
+✅ Added condition for BRAND_GENERIC_FLAG: BRAND_GENERIC_FLAG IN (3 values)
+✅ Added condition for SPECIALTY_PROD_IND: SPECIALTY_PROD_IND IN (2 values)
+✅ Added condition for MAAS_PRI_SPCL_GRP: MAAS_PRI_SPCL_GRP IN (43 values)
+✅ Added condition for F_MONTH_2: F_MONTH_2 IN (8 values)
+🔗 Combined WHERE: filters + custom
+🦆 Loading from DuckDB Extract
+📁 Parquet path: D:\\Report-Builder\\backend\\db\\parquet_files\\ds_msl_extract.parquet
+⚡ FAST PATH: Using materialized view: mv_msl_extract_cb084518
+✅ Materialized view query completed in 0.01s (88 rows)
+✅ Query completed in 0.03s - Cached 88 rows (instant access ready)
+✅ Cache HIT for msl_extract (limit: 10)
+⚡⚡ INSTANT CACHE HIT for msl_extract (10 rows, accessed 2x)
+💾 [saveFilterPanelStateToDb] dashboardId=1, activeFilters=11
+✅ [saveFilterPanelStateToDb] Saved 11 filters for dashboard 1
+✅ Cache HIT for msl_extract (limit: 10)
+⚡⚡ INSTANT CACHE HIT for msl_extract (10 rows, accessed 3x)
+✅ Cache HIT for msl_extract (limit: none)
+⚡⚡ INSTANT CACHE HIT for msl_extract (80 rows, accessed 3x)
+✅ Cache HIT for msl_extract (limit: none)
+⚡⚡ INSTANT CACHE HIT for msl_extract (80 rows, accessed 4x)
+✅ Cache HIT for msl_extract (limit: none)
+⚡⚡ INSTANT CACHE HIT for msl_extract (18 rows, accessed 3x)
+✅ Cache HIT for msl_extract (limit: none)
+⚡⚡ INSTANT CACHE HIT for msl_extract (18 rows, accessed 4x)
+✅ Cache HIT for msl_extract (limit: 50)
+⚡⚡ INSTANT CACHE HIT for msl_extract (50 rows, accessed 2x)
+✅ Cache HIT for msl_extract (limit: none)
+⚡⚡ INSTANT CACHE HIT for msl_extract (400 rows, accessed 2x)
+✅ Cache HIT for msl_extract (limit: none)
+⚡⚡ INSTANT CACHE HIT for msl_extract (88 rows, accessed 2x)

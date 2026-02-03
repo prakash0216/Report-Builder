@@ -1,0 +1,792 @@
+⚡ Ultra-fast cache initialized (native Map, no compression, direct object references)
+🔧 Process ID: 25704 - All requests should hit this same process for cache to work
+Directory ensured: D:\Report-Builder\backend\db\data
+✅ DuckDB initialized at D:\Report-Builder\backend\db\data\chartBuilder.db with 8 threads
+✅ DuckDB is connected
+✅ Table 'dashboards' created successfully.
+✅ Migration: Added new columns to dashboards table
+✅ Table 'views' created successfully.
+✅ Migration: Added new columns to views table
+✅ Table 'snow_flake_connections' created successfully.
+✅ Table 'data_source_registry' created successfully.
+✅ Table 'parameters' created successfully.
+✅ Migration: Added dashboard_id to parameters
+✅ Table 'calculations' created successfully.
+✅ Migration: Added dashboard_id to calculations
+✅ Migration: Added example column to predefined_functions
+✅ Table 'predefined_functions' created successfully.
+✅ Table 'filters' created successfully.
+✅ Migration: Added dashboard_id to filters
+✅ Table 'chart_configs' created successfully.
+✅ Table 'layouts' created successfully.
+✅ Table 'chart_visibility' created successfully.
+✅ Table 'card_dimension_conditions' created successfully.
+✅ Table 'filter_panel_state' created successfully.
+✅ Table 'card_filter_panel_state' created successfully.
+✅ Table 'tooltip_configs' created successfully.
+✅ Table 'child_card_configs' created successfully.
+✅ Child card configs columns migrated successfully.
+✅ Table 'child_card_tooltip_configs' created successfully.
+✅ Migration: Added columns to 'child_card_tooltip_configs'
+✅ Table 'materialized_views' created successfully.
+✅ Table 'favorites' created successfully.
+✅ Table 'users' created successfully.
+✅ Table 'user_sessions' created successfully.
+✅ Migration: Added view_id to 'chart_configs'
+✅ Migration: Added view_id to 'layouts'
+✅ Migration: Added view_id to 'chart_visibility'
+✅ Migration: Added view_id to 'card_dimension_conditions'
+✅ Migration: Added view_id to 'filter_panel_state'
+✅ Migration: Added view_id to 'card_filter_panel_state'
+✅ Migration: Added view_id to 'tooltip_configs'
+✅ Migration: Added view_id to 'child_card_configs'
+✅ Migration: Added view_id to 'child_card_tooltip_configs'
+✅ Migration: Added dashboard_id to 'parameters'
+✅ Migration: Added dashboard_id to 'calculations'
+✅ Migration: Added dashboard_id to 'filters'
+✅ Migration: Added dashboard_id to 'snow_flake_connections'
+✅ Migration: Added dashboard_id to 'data_source_registry'
+ℹ️ Data source 'msl_extract' already exists, skipping seed.
+✅ All tables created and migrations completed.
+⏰ Extract scheduler started (checking every hour)
+🚀 Server is running at http://localhost:\\.\pipe\9beb3007-ce34-4eb1-b3f0-2fb37f7e7d85
+💾 [saveFilterPanelStateToDb] dashboardId=1, activeFilters=11
+💾 CACHE MISS for msl_extract (limit: 10) - Executing query...
+🔄 Loading data from: msl_extract
+📊 Data source type: Extract
+✅ Added condition for MOP: MOP IN (10 values)
+✅ Added condition for PAYER_NAME: PAYER_NAME IN (1412 values)
+✅ Added condition for MARKET: MARKET IN (76 values)
+✅ Added condition for BRAND_GENERIC_FLAG: BRAND_GENERIC_FLAG IN (3 values)
+✅ Added condition for SPECIALTY_PROD_IND: SPECIALTY_PROD_IND IN (2 values)
+✅ Added condition for MAAS_PRI_SPCL_GRP: MAAS_PRI_SPCL_GRP IN (43 values)
+✅ Added condition for F_MONTH_2: F_MONTH_2 IN (8 values)
+🦆 Loading from DuckDB Extract
+📁 Parquet path: D:\\Report-Builder\\backend\\db\\parquet_files\\ds_msl_extract.parquet
+⚡ FAST PATH: Using materialized view: mv_msl_extract_f15dd703
+✅ Materialized view query completed in 0.02s (10 rows)
+✅ Query completed in 0.05s - Cached 10 rows (instant access ready)
+✅ [saveFilterPanelStateToDb] Saved 11 filters for dashboard 1
+💾 CACHE MISS for msl_extract (limit: none) - Executing query...
+🔄 Loading data from: msl_extract
+📊 Data source type: Extract
+✅ Added condition for MOP: MOP IN (10 values)
+✅ Added condition for PAYER_NAME: PAYER_NAME IN (1412 values)
+✅ Added condition for MARKET: MARKET IN (76 values)
+✅ Added condition for BRAND_GENERIC_FLAG: BRAND_GENERIC_FLAG IN (3 values)
+✅ Added condition for SPECIALTY_PROD_IND: SPECIALTY_PROD_IND IN (2 values)
+✅ Added condition for MAAS_PRI_SPCL_GRP: MAAS_PRI_SPCL_GRP IN (43 values)
+✅ Added condition for F_MONTH_2: F_MONTH_2 IN (8 values)
+🔗 Combined WHERE: filters + custom
+🦆 Loading from DuckDB Extract
+📁 Parquet path: D:\\Report-Builder\\backend\\db\\parquet_files\\ds_msl_extract.parquet
+⚡ FAST PATH: Using materialized view: mv_msl_extract_b3e33801
+✅ Materialized view query completed in 0.01s (80 rows)
+✅ Query completed in 0.02s - Cached 80 rows (instant access ready)
+💾 CACHE MISS for msl_extract (limit: none) - Executing query...
+🔄 Loading data from: msl_extract
+📊 Data source type: Extract
+✅ Added condition for MOP: MOP IN (10 values)
+✅ Added condition for PAYER_NAME: PAYER_NAME IN (1412 values)
+✅ Added condition for MARKET: MARKET IN (76 values)
+✅ Added condition for BRAND_GENERIC_FLAG: BRAND_GENERIC_FLAG IN (3 values)
+✅ Added condition for SPECIALTY_PROD_IND: SPECIALTY_PROD_IND IN (2 values)
+✅ Added condition for MAAS_PRI_SPCL_GRP: MAAS_PRI_SPCL_GRP IN (43 values)
+✅ Added condition for F_MONTH_2: F_MONTH_2 IN (8 values)
+🔗 Combined WHERE: filters + custom
+🦆 Loading from DuckDB Extract
+📁 Parquet path: D:\\Report-Builder\\backend\\db\\parquet_files\\ds_msl_extract.parquet
+⚡ FAST PATH: Using materialized view: mv_msl_extract_f1084fa3
+✅ Materialized view query completed in 0.01s (18 rows)
+✅ Query completed in 0.02s - Cached 18 rows (instant access ready)
+📊 [API /dashboards] raw rows: [
+  {
+    id: 2,
+    name: 'Payer Control Library',
+    charts_count: 0,
+    views_count: 0,
+    child_charts: 0
+  },
+  {
+    id: 1,
+    name: 'Market Share Review',
+    charts_count: 0,
+    views_count: 2,
+    child_charts: 8
+  }
+]
+📊 Dashboards with counts: [
+  { name: 'Payer Control Library', charts_count: 0, views_count: 0 },
+  { name: 'Market Share Review', charts_count: 8, views_count: 2 }
+]
+📊 [API /dashboards/:identifier/views] raw rows: [
+  {
+    id: 1,
+    name: 'Claim Volume',
+    charts_count: 0,
+    dashboard_id: 1,
+    child_charts: 8
+  },
+  {
+    id: 2,
+    name: 'Patient Provider Count',
+    charts_count: 0,
+    dashboard_id: 1,
+    child_charts: 0
+  }
+]
+📊 Views with counts: [
+  { name: 'Claim Volume', charts_count: 8 },
+  { name: 'Patient Provider Count', charts_count: 0 }
+]
+📥 [GET /api/chart-configs] viewId=1
+📥 [GET /api/chart-configs] Query: SELECT * FROM chart_configs WHERE view_id = 1 ORDER BY COALESCE(last_modified, created_at) DESC, created_at DESC
+📥 [GET /api/chart-configs] Found 0 configs
+📥 [GET /api/filter-panel-state] dashboardId=1, query=SELECT * FROM filter_panel_state WHERE is_active = true AND view_id = 1 ORDER BY COALESCE(display_order, 0), last_modified DESC
+📥 [GET /api/filter-panel-state] Found 11 active filters
+[child-card-configs] Raw DB rows: [
+  {
+    "id": 7,
+    "view_id": 1,
+    "parent_card_id": "7",
+    "is_container": true,
+    "container_layout": "custom",
+    "child_cards_json": "[{\"id\":\"7_child1\",\"type\":\"table\",\"template\":\"\",\"title\":\"\",\"titleMode\":\"simple\",\"titleTemplate\":\"\",\"showTitle\":false,\"layout\":{\"id\":\"7_child1\",\"x\":0,\"y\":0,\"w\":1,\"h\":1},\"visibilityVariable\":\"\",\"arrangementVariable\":\"\",\"dimensionConditions\":[],\"tableDataSource\":\"dsMslDataExtract\",\"tableSettings\":{\"displayMode\":\"pagination\",\"rowsPerPage\":10,\"sorting\":{\"enabled\":true,\"columns\":[{\"column\":\"MARKET\",\"direction\":\"asc\"},{\"column\":\"Paid_NBRx\",\"direction\":\"asc\"},{\"column\":\"Paid_TRX\",\"direction\":\"asc\"},{\"column\":\"Written_TRX\",\"direction\":\"asc\"},{\"column\":\"Projected_TRX\",\"direction\":\"asc\"}]},\"columns\":[],\"theme\":{\"headerBgColor\":\"#e0e7ff\",\"headerTextColor\":\"#1e293b\",\"rowBgColor\":\"#ffffff\",\"rowAltBgColor\":\"#f8fafc\",\"rowTextColor\":\"#475569\",\"borderColor\":\"#e2e8f0\",\"cellPadding\":\"normal\",\"fontSize\":\"medium\"},\"showHeader\":true,\"summaryRow\":{\"enabled\":true,\"calculations\":{\"Paid_NBRx\":\"sum\",\"Paid_TRX\":\"min\",\"Written_TRX\":\"avg\"}}}}]",
+    "enable_container_scroll": false,
+    "card_min_height": 800,
+    "gap": 0,
+    "use_dynamic_height": false,
+    "height_data_source": "",
+    "show_parent_title": false,
+    "parent_title_mode": "simple",
+    "parent_title": "",
+    "parent_title_template": "",
+    "visibility_variable": "",
+    "arrangement_variable": "",
+    "child_visibility_mode": "individual",
+    "created_at": "2026-01-30 08:23:23.613264",
+    "last_modified": "2026-01-30 08:24:04.18427"
+  },
+  {
+    "id": 6,
+    "view_id": 1,
+    "parent_card_id": "6",
+    "is_container": true,
+    "container_layout": "custom",
+    "child_cards_json": "[{\"id\":\"6_child1\",\"type\":\"chart\",\"template\":\"{\\r\\n  \\\"chart\\\": {\\r\\n    \\\"type\\\": \\\"bar\\\",\\r\\n    \\\"height\\\": 100\\r\\n  },\\r\\n  \\\"title\\\": {\\r\\n    \\\"text\\\": null\\r\\n  },\\r\\n  \\\"xAxis\\\": {\\r\\n    \\\"visible\\\": false\\r\\n  },\\r\\n  \\\"yAxis\\\": {\\r\\n    \\\"visible\\\": false\\r\\n  },\\r\\n  \\\"legend\\\": {\\r\\n    \\\"enabled\\\": true,\\r\\n    \\\"layout\\\": \\\"horizontal\\\",\\r\\n    \\\"align\\\": \\\"center\\\",\\r\\n    \\\"verticalAlign\\\": \\\"middle\\\",\\r\\n    \\\"symbolHeight\\\": 12,\\r\\n    \\\"symbolWidth\\\": 12,\\r\\n    \\\"symbolRadius\\\": 0\\r\\n  },\\r\\n  \\\"tooltip\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  },\\r\\n  \\\"credits\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  },\\r\\n  \\\"series\\\": ${legendData}\\r\\n}\",\"title\":\"\",\"titleMode\":\"simple\",\"titleTemplate\":\"\",\"showTitle\":false,\"layout\":{\"id\":\"6_child1\",\"x\":0,\"y\":0,\"w\":1,\"h\":1},\"visibilityVariable\":\"\",\"arrangementVariable\":\"\",\"dimensionConditions\":[]}]",
+    "enable_container_scroll": false,
+    "card_min_height": 800,
+    "gap": 0,
+    "use_dynamic_height": false,
+    "height_data_source": "",
+    "show_parent_title": false,
+    "parent_title_mode": "simple",
+    "parent_title": "",
+    "parent_title_template": "",
+    "visibility_variable": "",
+    "arrangement_variable": "",
+    "child_visibility_mode": "individual",
+    "created_at": "2026-01-30 08:18:34.547187",
+    "last_modified": "2026-01-30 08:24:04.168043"
+  },
+  {
+    "id": 5,
+    "view_id": 1,
+    "parent_card_id": "5",
+    "is_container": true,
+    "container_layout": "custom",
+    "child_cards_json": "[{\"id\":\"5_child1\",\"type\":\"chart\",\"template\":\"{\\r\\n  \\\"chart\\\": {\\r\\n    \\\"type\\\": \\\"bar\\\"\\r\\n  },\\r\\n  \\\"title\\\": {\\r\\n    \\\"text\\\": ${distributionTitle}\\r\\n  },\\r\\n  \\\"xAxis\\\": [\\r\\n    {\\r\\n      \\\"categories\\\": ${sumDistributionShareTrend},\\r\\n      \\\"title\\\": {\\r\\n        \\\"text\\\": ${metricVOlumeDistribution}\\r\\n      },\\r\\n      \\\"reversed\\\": true,\\r\\n      \\\"lineWidth\\\": 1,\\r\\n      \\\"labels\\\": {\\r\\n        \\\"style\\\": {\\r\\n          \\\"width\\\": \\\"400px\\\",\\r\\n          \\\"textOverflow\\\": \\\"ellipsis\\\"\\r\\n        }\\r\\n      }\\r\\n    },\\r\\n    {\\r\\n      \\\"categories\\\": ${distributionShareCategory},\\r\\n      \\\"title\\\": {\\r\\n        \\\"text\\\": \\\"\\\"\\r\\n      },\\r\\n      \\\"opposite\\\": false,\\r\\n      \\\"linkedTo\\\": 0,\\r\\n      \\\"lineWidth\\\": 0,\\r\\n      \\\"labels\\\": {\\r\\n        \\\"style\\\": {\\r\\n          \\\"width\\\": \\\"400px\\\",\\r\\n          \\\"textOverflow\\\": \\\"ellipsis\\\"\\r\\n        }\\r\\n      }\\r\\n    }\\r\\n  ],\\r\\n  \\\"colors\\\": [\\r\\n    \\\"#4A91C2\\\",\\r\\n    \\\"#9CAABB\\\"\\r\\n  ],\\r\\n  \\\"yAxis\\\": {\\r\\n    \\\"min\\\": 0,\\r\\n    \\\"max\\\": 100,\\r\\n    \\\"title\\\": {\\r\\n      \\\"text\\\": ${distributionBy},\\r\\n      \\\"align\\\": \\\"high\\\",\\r\\n      \\\"rotation\\\": 0,\\r\\n      \\\"offset\\\": 0,\\r\\n      \\\"x\\\": 10,\\r\\n      \\\"y\\\": -10\\r\\n    },\\r\\n    \\\"gridLineWidth\\\": 0\\r\\n  },\\r\\n  \\\"plotOptions\\\": {\\r\\n    \\\"series\\\": {\\r\\n      \\\"stacking\\\": \\\"normal\\\",\\r\\n      \\\"dataLabels\\\": {\\r\\n        \\\"enabled\\\": true,\\r\\n        \\\"format\\\": \\\"{y}%\\\"\\r\\n      }\\r\\n    }\\r\\n  },\\r\\n  \\\"credits\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  },\\r\\n  \\\"series\\\": ${distributionShareSeries}\\r\\n}\",\"title\":\"\",\"titleMode\":\"simple\",\"titleTemplate\":\"\",\"showTitle\":false,\"layout\":{\"id\":\"5_child1\",\"x\":0,\"y\":0,\"w\":1,\"h\":1},\"visibilityVariable\":\"\",\"arrangementVariable\":\"\",\"dimensionConditions\":[]}]",
+    "enable_container_scroll": false,
+    "card_min_height": 800,
+    "gap": 0,
+    "use_dynamic_height": false,
+    "height_data_source": "",
+    "show_parent_title": false,
+    "parent_title_mode": "simple",
+    "parent_title": "",
+    "parent_title_template": "",
+    "visibility_variable": "",
+    "arrangement_variable": "",
+    "child_visibility_mode": "individual",
+    "created_at": "2026-01-30 08:17:02.584715",
+    "last_modified": "2026-01-30 08:24:04.152695"
+  },
+  {
+    "id": 4,
+    "view_id": 1,
+    "parent_card_id": "4",
+    "is_container": true,
+    "container_layout": "custom",
+    "child_cards_json": "[{\"id\":\"4_child1\",\"type\":\"chart\",\"template\":\"{\\r\\n  \\\"title\\\": {\\r\\n    \\\"text\\\": ${topMetricSelector}\\r\\n  },\\r\\n  \\\"chart\\\": {\\r\\n    \\\"type\\\": \\\"line\\\",\\r\\n    \\\"backgroundColor\\\": \\\"#FFFFFF\\\"\\r\\n  },\\r\\n  \\\"xAxis\\\": {\\r\\n    \\\"categories\\\": ${shareTrendCategory},\\r\\n    \\\"gridLineWidth\\\": 0,\\r\\n    \\\"labels\\\": {\\r\\n      \\\"rotation\\\": -45,\\r\\n      \\\"align\\\": \\\"right\\\",\\r\\n      \\\"style\\\": {\\r\\n        \\\"fontSize\\\": \\\"12px\\\",\\r\\n        \\\"color\\\": \\\"#4A4A4A\\\",\\r\\n        \\\"fontFamily\\\": \\\"Tableau, Arial, sans-serif\\\"\\r\\n      }\\r\\n    },\\r\\n    \\\"lineColor\\\": \\\"#D3D3D3\\\",\\r\\n    \\\"tickColor\\\": \\\"#D3D3D3\\\"\\r\\n  },\\r\\n  \\\"yAxis\\\": {\\r\\n    \\\"gridLineWidth\\\": 0,\\r\\n    \\\"title\\\": {\\r\\n      \\\"text\\\": ${metricSelector},\\r\\n      \\\"style\\\": {\\r\\n        \\\"fontSize\\\": \\\"12px\\\",\\r\\n        \\\"color\\\": \\\"#4A4A4A\\\",\\r\\n        \\\"fontFamily\\\": \\\"Tableau, Arial, sans-serif\\\"\\r\\n      }\\r\\n    },\\r\\n    \\\"labels\\\": {\\r\\n      \\\"format\\\": \\\"{value}%\\\",\\r\\n      \\\"style\\\": {\\r\\n        \\\"fontSize\\\": \\\"12px\\\",\\r\\n        \\\"color\\\": \\\"#4A4A4A\\\",\\r\\n        \\\"fontFamily\\\": \\\"Tableau, Arial, sans-serif\\\"\\r\\n      }\\r\\n    },\\r\\n    \\\"lineColor\\\": \\\"#D3D3D3\\\"\\r\\n  },\\r\\n  \\\"legend\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  },\\r\\n  \\\"plotOptions\\\": {\\r\\n    \\\"line\\\": {\\r\\n      \\\"lineWidth\\\": 1.5,\\r\\n      \\\"marker\\\": {\\r\\n        \\\"enabled\\\": false,\\r\\n        \\\"states\\\": {\\r\\n          \\\"hover\\\": {\\r\\n            \\\"enabled\\\": true,\\r\\n            \\\"radius\\\": 3\\r\\n          }\\r\\n        }\\r\\n      },\\r\\n      \\\"states\\\": {\\r\\n        \\\"hover\\\": {\\r\\n          \\\"lineWidth\\\": 2\\r\\n        }\\r\\n      }\\r\\n    }\\r\\n  },\\r\\n  \\\"series\\\": ${shareTrendSeries},\\r\\n  \\\"tooltip\\\": {\\r\\n    \\\"shared\\\": true,\\r\\n    \\\"crosshairs\\\": [\\r\\n      true,\\r\\n      false\\r\\n    ],\\r\\n    \\\"headerFormat\\\": \\\"<b>{point.key}</b><br/>\\\",\\r\\n    \\\"pointFormat\\\": \\\"<span style='color:{series.color}'>{series.name}</span>: <b>{point.y}%</b><br/>\\\",\\r\\n    \\\"backgroundColor\\\": \\\"rgba(255,255,255,0.95)\\\",\\r\\n    \\\"borderColor\\\": \\\"#AAAAAA\\\",\\r\\n    \\\"borderRadius\\\": 3,\\r\\n    \\\"shadow\\\": true,\\r\\n    \\\"style\\\": {\\r\\n      \\\"fontSize\\\": \\\"12px\\\",\\r\\n      \\\"fontFamily\\\": \\\"Tableau, Arial, sans-serif\\\"\\r\\n    }\\r\\n  },\\r\\n  \\\"colors\\\": [\\r\\n    \\\"#7BAFD4\\\",\\r\\n    \\\"#C1DDEB\\\",\\r\\n    \\\"#6DB8C3\\\",\\r\\n    \\\"#5A7E4F\\\",\\r\\n    \\\"#9BBF8B\\\",\\r\\n    \\\"#C2E0DA\\\",\\r\\n    \\\"#A3A3A3\\\",\\r\\n    \\\"#6E7072\\\",\\r\\n    \\\"#DADADA\\\",\\r\\n    \\\"#F39C12\\\"\\r\\n  ],\\r\\n  \\\"credits\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  }\\r\\n}\",\"title\":\"\",\"titleMode\":\"simple\",\"titleTemplate\":\"\",\"showTitle\":false,\"layout\":{\"id\":\"4_child1\",\"x\":0,\"y\":0,\"w\":0.5,\"h\":1},\"visibilityVariable\":\"lineChart\",\"arrangementVariable\":\"\",\"dimensionConditions\":[{\"id\":\"1769778906692\",\"variableName\":\"lineChart\",\"expectedValue\":true,\"width\":1,\"height\":0.9166666666666666,\"priority\":1}]},{\"id\":\"4_child2\",\"type\":\"chart\",\"template\":\"{\\r\\n  \\\"title\\\": {\\r\\n    \\\"text\\\": ${topMetricSelector}\\r\\n  },\\r\\n  \\\"chart\\\": {\\r\\n    \\\"type\\\": \\\"column\\\",\\r\\n    \\\"backgroundColor\\\": \\\"#FFFFFF\\\"\\r\\n  },\\r\\n  \\\"xAxis\\\": {\\r\\n    \\\"categories\\\": ${shareTrendCategory},\\r\\n    \\\"labels\\\": {\\r\\n      \\\"rotation\\\": -45,\\r\\n      \\\"align\\\": \\\"right\\\",\\r\\n      \\\"style\\\": {\\r\\n        \\\"fontSize\\\": \\\"12px\\\",\\r\\n        \\\"color\\\": \\\"#4A4A4A\\\",\\r\\n        \\\"fontFamily\\\": \\\"Tableau, Arial, sans-serif\\\"\\r\\n      }\\r\\n    },\\r\\n    \\\"lineColor\\\": \\\"#D3D3D3\\\",\\r\\n    \\\"tickColor\\\": \\\"#D3D3D3\\\"\\r\\n  },\\r\\n  \\\"yAxis\\\": {\\r\\n    \\\"title\\\": {\\r\\n      \\\"text\\\": ${metricSelector\\r\\n      },\\r\\n      \\\"style\\\": {\\r\\n        \\\"fontSize\\\": \\\"12px\\\",\\r\\n        \\\"color\\\": \\\"#4A4A4A\\\",\\r\\n        \\\"fontFamily\\\": \\\"Tableau, Arial, sans-serif\\\"\\r\\n      }\\r\\n    },\\r\\n    \\\"labels\\\": {\\r\\n      \\\"format\\\": \\\"{value}%\\\",\\r\\n      \\\"style\\\": {\\r\\n        \\\"fontSize\\\": \\\"12px\\\",\\r\\n        \\\"color\\\": \\\"#4A4A4A\\\",\\r\\n        \\\"fontFamily\\\": \\\"Tableau, Arial, sans-serif\\\"\\r\\n      }\\r\\n    },\\r\\n    \\\"gridLineColor\\\": \\\"#F0F0F0\\\",\\r\\n    \\\"lineColor\\\": \\\"#D3D3D3\\\",\\r\\n    \\\"max\\\": 100\\r\\n  },\\r\\n  \\\"legend\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  },\\r\\n  \\\"plotOptions\\\": {\\r\\n    \\\"series\\\": {\\r\\n      \\\"stacking\\\": \\\"normal\\\",\\r\\n      \\\"dataLabels\\\": {\\r\\n        \\\"enabled\\\": false\\r\\n      }\\r\\n    },\\r\\n    \\\"column\\\": {\\r\\n      \\\"pointPadding\\\": 0.1,\\r\\n      \\\"borderWidth\\\": 0,\\r\\n      \\\"groupPadding\\\": 0.05\\r\\n    }\\r\\n  },\\r\\n  \\\"series\\\": ${shareTrendSeries},\\r\\n  \\\"tooltip\\\": {\\r\\n    \\\"shared\\\": true,\\r\\n    \\\"crosshairs\\\": [\\r\\n      true,\\r\\n      false\\r\\n    ],\\r\\n    \\\"headerFormat\\\": \\\"<b>{point.key}</b><br/>\\\",\\r\\n    \\\"pointFormat\\\": \\\"<span style='color:{series.color}'>{series.name}</span>: <b>{point.y}%</b><br/>\\\",\\r\\n    \\\"backgroundColor\\\": \\\"rgba(255,255,255,0.95)\\\",\\r\\n    \\\"borderColor\\\": \\\"#AAAAAA\\\",\\r\\n    \\\"borderRadius\\\": 3,\\r\\n    \\\"shadow\\\": true,\\r\\n    \\\"style\\\": {\\r\\n      \\\"fontSize\\\": \\\"12px\\\",\\r\\n      \\\"fontFamily\\\": \\\"Tableau, Arial, sans-serif\\\"\\r\\n    }\\r\\n  },\\r\\n  \\\"colors\\\": [\\r\\n    \\\"#7BAFD4\\\",\\r\\n    \\\"#C1DDEB\\\",\\r\\n    \\\"#6DB8C3\\\",\\r\\n    \\\"#5A7E4F\\\",\\r\\n    \\\"#9BBF8B\\\",\\r\\n    \\\"#C2E0DA\\\",\\r\\n    \\\"#A3A3A3\\\",\\r\\n    \\\"#6E7072\\\",\\r\\n    \\\"#DADADA\\\",\\r\\n    \\\"#F39C12\\\"\\r\\n  ],\\r\\n  \\\"credits\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  }\\r\\n}\",\"title\":\"\",\"titleMode\":\"simple\",\"titleTemplate\":\"\",\"showTitle\":false,\"layout\":{\"id\":\"4_child2\",\"x\":0.5,\"y\":0,\"w\":0.5,\"h\":1},\"visibilityVariable\":\"stackedChart\",\"arrangementVariable\":\"\",\"dimensionConditions\":[{\"id\":\"1769778932832\",\"variableName\":\"stackedChart\",\"expectedValue\":true,\"width\":1,\"height\":0.9166666666666666,\"priority\":1}]}]",
+    "enable_container_scroll": false,
+    "card_min_height": 800,
+    "gap": 0,
+    "use_dynamic_height": false,
+    "height_data_source": "",
+    "show_parent_title": false,
+    "parent_title_mode": "simple",
+    "parent_title": "",
+    "parent_title_template": "",
+    "visibility_variable": "",
+    "arrangement_variable": "",
+    "child_visibility_mode": "individual",
+    "created_at": "2026-01-30 08:12:35.397378",
+    "last_modified": "2026-01-30 08:24:04.133813"
+  },
+  {
+    "id": 3,
+    "view_id": 1,
+    "parent_card_id": "3",
+    "is_container": true,
+    "container_layout": "custom",
+    "child_cards_json": "[{\"id\":\"3_child1\",\"type\":\"chart\",\"template\":\"{\\r\\n  \\\"chart\\\": {\\r\\n    \\\"type\\\": \\\"bar\\\"\\r\\n  },\\r\\n  \\\"title\\\": {\\r\\n    \\\"text\\\": \\\"Paid NBRx\\\"\\r\\n  },\\r\\n  \\\"subtitle\\\": {\\r\\n    \\\"text\\\": null\\r\\n  },\\r\\n  \\\"xAxis\\\": {\\r\\n    \\\"categories\\\":${NBRxPayerName},\\r\\n    \\\"title\\\": {\\r\\n      \\\"text\\\": ${topDimensionSelector},\\r\\n      \\\"style\\\": {\\r\\n        \\\"fontWeight\\\": \\\"bold\\\",\\r\\n        \\\"fontSize\\\": \\\"20px\\\"\\r\\n      }\\r\\n    }\\r\\n  },\\r\\n  \\\"yAxis\\\": {\\r\\n    \\\"min\\\": 0,\\r\\n    \\\"title\\\": {\\r\\n      \\\"text\\\": null,\\r\\n      \\\"align\\\": \\\"high\\\"\\r\\n    },\\r\\n    \\\"labels\\\": {\\r\\n      \\\"overflow\\\": \\\"justify\\\",\\r\\n      \\\"enabled\\\": false\\r\\n    },\\r\\n    \\\"gridLineWidth\\\": 0\\r\\n  },\\r\\n  \\\"tooltip\\\": {\\r\\n    \\\"format\\\": \\\"The value for <b>{point.category}</b> is <b>{point.y}\\\"\\r\\n  },\\r\\n  \\\"colors\\\": [\\r\\n    \\\"#5d576b\\\"\\r\\n  ],\\r\\n  \\\"plotOptions\\\": {\\r\\n    \\\"bar\\\": {\\r\\n      \\\"dataLabels\\\": {\\r\\n        \\\"enabled\\\": true,\\r\\n        \\\"format\\\": \\\"{y}%\\\"\\r\\n      }\\r\\n    }\\r\\n  },\\r\\n  \\\"legend\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  },\\r\\n  \\\"credits\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  },\\r\\n  \\\"series\\\": [\\r\\n    {\\r\\n      \\\"name\\\": \\\"Paid NBRx\\\",\\r\\n      \\\"data\\\": ${NBRxPercentageDataWithDetails}\\r\\n    }\\r\\n  ]\\r\\n}\",\"title\":\"\",\"titleMode\":\"simple\",\"titleTemplate\":\"\",\"showTitle\":false,\"layout\":{\"id\":\"3_child1\",\"x\":0,\"y\":0,\"w\":0.25,\"h\":1},\"visibilityVariable\":\"\",\"arrangementVariable\":\"\",\"dimensionConditions\":[]},{\"id\":\"3_child2\",\"type\":\"chart\",\"template\":\"{\\r\\n  \\\"chart\\\": {\\r\\n    \\\"type\\\": \\\"bar\\\"\\r\\n  },\\r\\n  \\\"title\\\": {\\r\\n    \\\"text\\\": \\\"Paid TRx\\\"\\r\\n  },\\r\\n  \\\"subtitle\\\": {\\r\\n    \\\"text\\\": null\\r\\n  },\\r\\n  \\\"xAxis\\\": {\\r\\n    \\\"categories\\\": ${NBRxPayerName},\\r\\n    \\\"title\\\": {\\r\\n      \\\"text\\\": null\\r\\n    },\\r\\n    \\\"lineWidth\\\": 0,\\r\\n    \\\"tickLength\\\": 0,\\r\\n    \\\"gridLineWidth\\\": 0,\\r\\n    \\\"labels\\\": {\\r\\n      \\\"enabled\\\": false\\r\\n    }\\r\\n  },\\r\\n  \\\"yAxis\\\": {\\r\\n    \\\"min\\\": 0,\\r\\n    \\\"title\\\": {\\r\\n      \\\"text\\\": null,\\r\\n      \\\"align\\\": \\\"high\\\"\\r\\n    },\\r\\n    \\\"labels\\\": {\\r\\n      \\\"overflow\\\": \\\"justify\\\",\\r\\n      \\\"enabled\\\": false\\r\\n    },\\r\\n    \\\"gridLineWidth\\\": 0\\r\\n  },\\r\\n  \\\"tooltip\\\": {\\r\\n    \\\"valueSuffix\\\": \\\"%\\\"\\r\\n  },\\r\\n  \\\"colors\\\": [\\r\\n    \\\"#899CB9\\\"\\r\\n  ],\\r\\n  \\\"plotOptions\\\": {\\r\\n    \\\"bar\\\": {\\r\\n      \\\"dataLabels\\\": {\\r\\n        \\\"enabled\\\": true,\\r\\n        \\\"format\\\": \\\"{y}%\\\"\\r\\n      }\\r\\n    }\\r\\n  },\\r\\n  \\\"legend\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  },\\r\\n  \\\"credits\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  },\\r\\n  \\\"series\\\": [\\r\\n    {\\r\\n      \\\"name\\\": \\\"Paid TRx\\\",\\r\\n      \\\"data\\\": ${PaidTRxPercentageData}\\r\\n    }\\r\\n  ]\\r\\n}\",\"title\":\"\",\"titleMode\":\"simple\",\"titleTemplate\":\"\",\"showTitle\":false,\"layout\":{\"id\":\"3_child2\",\"x\":0.25,\"y\":0,\"w\":0.25,\"h\":1},\"visibilityVariable\":\"\",\"arrangementVariable\":\"\",\"dimensionConditions\":[]},{\"id\":\"3_child3\",\"type\":\"chart\",\"template\":\"{\\r\\n  \\\"chart\\\": {\\r\\n    \\\"type\\\": \\\"bar\\\"\\r\\n  },\\r\\n  \\\"title\\\": {\\r\\n    \\\"text\\\": \\\"Written TRx\\\"\\r\\n  },\\r\\n  \\\"xAxis\\\": {\\r\\n    \\\"categories\\\": ${NBRxPayerName},\\r\\n    \\\"title\\\": {\\r\\n      \\\"text\\\": null\\r\\n    },\\r\\n    \\\"lineWidth\\\": 0,\\r\\n    \\\"tickLength\\\": 0,\\r\\n    \\\"gridLineWidth\\\": 0,\\r\\n    \\\"labels\\\": {\\r\\n      \\\"enabled\\\": false\\r\\n    }\\r\\n  },\\r\\n  \\\"yAxis\\\": {\\r\\n    \\\"min\\\": 0,\\r\\n    \\\"title\\\": {\\r\\n      \\\"text\\\": null,\\r\\n      \\\"align\\\": \\\"high\\\"\\r\\n    },\\r\\n    \\\"labels\\\": {\\r\\n      \\\"overflow\\\": \\\"justify\\\",\\r\\n      \\\"enabled\\\": false\\r\\n    },\\r\\n    \\\"gridLineWidth\\\": 0\\r\\n  },\\r\\n  \\\"tooltip\\\": {\\r\\n    \\\"valueSuffix\\\": \\\"%\\\"\\r\\n  },\\r\\n  \\\"colors\\\": [\\r\\n    \\\"#A9AFD1\\\"\\r\\n  ],\\r\\n  \\\"plotOptions\\\": {\\r\\n    \\\"bar\\\": {\\r\\n      \\\"dataLabels\\\": {\\r\\n        \\\"enabled\\\": true,\\r\\n        \\\"format\\\": \\\"{y}%\\\"\\r\\n      }\\r\\n    }\\r\\n  },\\r\\n  \\\"legend\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  },\\r\\n  \\\"credits\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  },\\r\\n  \\\"series\\\": [\\r\\n    {\\r\\n      \\\"name\\\": \\\"Paid TRx\\\",\\r\\n      \\\"data\\\": ${WrittenTRxPercentageData}\\r\\n    }\\r\\n  ]\\r\\n}\",\"title\":\"\",\"titleMode\":\"simple\",\"titleTemplate\":\"\",\"showTitle\":false,\"layout\":{\"id\":\"3_child3\",\"x\":0.5,\"y\":0,\"w\":0.25,\"h\":1},\"visibilityVariable\":\"\",\"arrangementVariable\":\"\",\"dimensionConditions\":[]},{\"id\":\"3_child4\",\"type\":\"chart\",\"template\":\"{\\r\\n  \\\"chart\\\": {\\r\\n    \\\"type\\\": \\\"bar\\\"\\r\\n  },\\r\\n  \\\"title\\\": {\\r\\n    \\\"text\\\": \\\"Projected TRx\\\"\\r\\n  },\\r\\n  \\\"xAxis\\\": {\\r\\n    \\\"categories\\\": ${NBRxPayerName},\\r\\n    \\\"title\\\": {\\r\\n      \\\"text\\\": null\\r\\n    },\\r\\n    \\\"lineWidth\\\": 0,\\r\\n    \\\"tickLength\\\": 0,\\r\\n    \\\"gridLineWidth\\\": 0,\\r\\n    \\\"labels\\\": {\\r\\n      \\\"enabled\\\": false\\r\\n    }\\r\\n  },\\r\\n  \\\"yAxis\\\": {\\r\\n    \\\"min\\\": 0,\\r\\n    \\\"title\\\": {\\r\\n      \\\"text\\\": null,\\r\\n      \\\"align\\\": \\\"high\\\"\\r\\n    },\\r\\n    \\\"labels\\\": {\\r\\n      \\\"overflow\\\": \\\"justify\\\",\\r\\n      \\\"enabled\\\": false\\r\\n    },\\r\\n    \\\"gridLineWidth\\\": 0\\r\\n  },\\r\\n  \\\"tooltip\\\": {\\r\\n    \\\"valueSuffix\\\": \\\"%\\\"\\r\\n  },\\r\\n  \\\"plotOptions\\\": {\\r\\n    \\\"bar\\\": {\\r\\n      \\\"dataLabels\\\": {\\r\\n        \\\"enabled\\\": true,\\r\\n        \\\"format\\\": \\\"{y}%\\\"\\r\\n      }\\r\\n    }\\r\\n  },\\r\\n  \\\"legend\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  },\\r\\n  \\\"colors\\\": [\\r\\n    \\\"#8890BF\\\"\\r\\n  ],\\r\\n  \\\"credits\\\": {\\r\\n    \\\"enabled\\\": false\\r\\n  },\\r\\n  \\\"series\\\": [\\r\\n    {\\r\\n      \\\"name\\\": \\\"Projected TRx\\\",\\r\\n      \\\"data\\\": ${ProjectedTRxPercentageData}\\r\\n    }\\r\\n  ]\\r\\n}\",\"title\":\"\",\"titleMode\":\"simple\",\"titleTemplate\":\"\",\"showTitle\":false,\"layout\":{\"id\":\"3_child4\",\"x\":0.75,\"y\":0,\"w\":0.25,\"h\":1},\"visibilityVariable\":\"\",\"arrangementVariable\":\"\",\"dimensionConditions\":[]}]",
+    "enable_container_scroll": true,
+    "card_min_height": 800,
+    "gap": 0,
+    "use_dynamic_height": true,
+    "height_data_source": "chartHeight",
+    "show_parent_title": false,
+    "parent_title_mode": "simple",
+    "parent_title": "",
+    "parent_title_template": "",
+    "visibility_variable": "",
+    "arrangement_variable": "",
+    "child_visibility_mode": "individual",
+    "created_at": "2026-01-30 08:04:12.042713",
+    "last_modified": "2026-01-30 08:24:04.114461"
+  },
+  {
+    "id": 2,
+    "view_id": 1,
+    "parent_card_id": "2",
+    "is_container": true,
+    "container_layout": "custom",
+    "child_cards_json": "[{\"id\":\"2_child1\",\"type\":\"html\",\"template\":\"\",\"title\":\"\",\"titleMode\":\"simple\",\"titleTemplate\":\"\",\"showTitle\":false,\"layout\":{\"id\":\"2_child1\",\"x\":0,\"y\":0,\"w\":0.25,\"h\":1},\"visibilityVariable\":\"\",\"arrangementVariable\":\"\",\"dimensionConditions\":[],\"htmlContent\":\"<div\\r\\n  style=\\\"font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100%; width:100%, padding: 10px 12px; background: linear-gradient(135deg, #e8f1fb 0%, #f5f8fc 50%, #eef5fa 100%); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative;\\\">\\r\\n  <!-- SVG Icon at top-left -->\\r\\n  <div style=\\\"position: absolute; top: 12px; left: 12px;\\\">\\r\\n    <svg width=\\\"26\\\" height=\\\"26\\\" viewBox=\\\"0 0 24 24\\\" fill=\\\"none\\\" stroke=\\\"url(#gradient)\\\" stroke-width=\\\"2.5\\\"\\r\\n      stroke-linecap=\\\"round\\\" stroke-linejoin=\\\"round\\\">\\r\\n      <defs>\\r\\n        <linearGradient id=\\\"gradient\\\" x1=\\\"0%\\\" y1=\\\"0%\\\" x2=\\\"100%\\\" y2=\\\"100%\\\">\\r\\n          <stop offset=\\\"0%\\\" style=\\\"stop-color:#005691;stop-opacity:1\\\" />\\r\\n          <stop offset=\\\"100%\\\" style=\\\"stop-color:#0077b6;stop-opacity:1\\\" />\\r\\n        </linearGradient>\\r\\n      </defs>\\r\\n      <path d=\\\"M22 12h-4l-3 9L9 3l-3 9H2\\\"></path>\\r\\n    </svg>\\r\\n  </div>\\r\\n\\r\\n  <div\\r\\n    style=\\\"background: linear-gradient(135deg, #005691 0%, #0077b6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-size: 36px; font-weight: 600; text-align: center; line-height: 1;\\\">\\r\\n    Paid NBRx\\r\\n  </div>\\r\\n  <div style=\\\"color: #0077b6; font-size: 48px; font-weight: 700; text-align: center; line-height: 1;\\\">\\r\\n    ${NBRxSumFormated}\\r\\n  </div>\\r\\n</div>\"},{\"id\":\"2_child2\",\"type\":\"html\",\"template\":\"\",\"title\":\"\",\"titleMode\":\"simple\",\"titleTemplate\":\"\",\"showTitle\":false,\"layout\":{\"id\":\"2_child2\",\"x\":0.25,\"y\":0,\"w\":0.25,\"h\":1},\"visibilityVariable\":\"\",\"arrangementVariable\":\"\",\"dimensionConditions\":[],\"htmlContent\":\"<div\\r\\n  style=\\\"font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100%; width:100%, padding: 10px 12px; background: linear-gradient(135deg, #e8f1fb 0%, #f5f8fc 50%, #eef5fa 100%); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative;\\\">\\r\\n  <!-- SVG Icon at top-left -->\\r\\n  <div style=\\\"position: absolute; top: 12px; left: 12px;\\\">\\r\\n    <svg width=\\\"26\\\" height=\\\"26\\\" viewBox=\\\"0 0 24 24\\\" fill=\\\"none\\\" stroke=\\\"url(#gradient)\\\" stroke-width=\\\"2.5\\\"\\r\\n      stroke-linecap=\\\"round\\\" stroke-linejoin=\\\"round\\\">\\r\\n      <defs>\\r\\n        <linearGradient id=\\\"gradient\\\" x1=\\\"0%\\\" y1=\\\"0%\\\" x2=\\\"100%\\\" y2=\\\"100%\\\">\\r\\n          <stop offset=\\\"0%\\\" style=\\\"stop-color:#005691;stop-opacity:1\\\" />\\r\\n          <stop offset=\\\"100%\\\" style=\\\"stop-color:#0077b6;stop-opacity:1\\\" />\\r\\n        </linearGradient>\\r\\n      </defs>\\r\\n      <path d=\\\"M22 12h-4l-3 9L9 3l-3 9H2\\\"></path>\\r\\n    </svg>\\r\\n  </div>\\r\\n\\r\\n  <div\\r\\n    style=\\\"background: linear-gradient(135deg, #005691 0%, #0077b6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-size: 36px; font-weight: 600; text-align: center; line-height: 1;\\\">\\r\\n    Paid TRx\\r\\n  </div>\\r\\n  <div style=\\\"color: #0077b6; font-size: 48px; font-weight: 700; text-align: center; line-height: 1;\\\">\\r\\n    ${PaidTRxSumFormated}\\r\\n  </div>\\r\\n</div>\"},{\"id\":\"2_child3\",\"type\":\"html\",\"template\":\"\",\"title\":\"\",\"titleMode\":\"simple\",\"titleTemplate\":\"\",\"showTitle\":false,\"layout\":{\"id\":\"2_child3\",\"x\":0.5,\"y\":0,\"w\":0.25,\"h\":1},\"visibilityVariable\":\"\",\"arrangementVariable\":\"\",\"dimensionConditions\":[],\"htmlContent\":\"<div\\r\\n  style=\\\"font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100%; width:100%, padding: 10px 12px; background: linear-gradient(135deg, #e8f1fb 0%, #f5f8fc 50%, #eef5fa 100%); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative;\\\">\\r\\n  <!-- SVG Icon at top-left -->\\r\\n  <div style=\\\"position: absolute; top: 12px; left: 12px;\\\">\\r\\n    <svg width=\\\"26\\\" height=\\\"26\\\" viewBox=\\\"0 0 24 24\\\" fill=\\\"none\\\" stroke=\\\"url(#gradient)\\\" stroke-width=\\\"2.5\\\"\\r\\n      stroke-linecap=\\\"round\\\" stroke-linejoin=\\\"round\\\">\\r\\n      <defs>\\r\\n        <linearGradient id=\\\"gradient\\\" x1=\\\"0%\\\" y1=\\\"0%\\\" x2=\\\"100%\\\" y2=\\\"100%\\\">\\r\\n          <stop offset=\\\"0%\\\" style=\\\"stop-color:#005691;stop-opacity:1\\\" />\\r\\n          <stop offset=\\\"100%\\\" style=\\\"stop-color:#0077b6;stop-opacity:1\\\" />\\r\\n        </linearGradient>\\r\\n      </defs>\\r\\n      <path d=\\\"M22 12h-4l-3 9L9 3l-3 9H2\\\"></path>\\r\\n    </svg>\\r\\n  </div>\\r\\n\\r\\n  <div\\r\\n    style=\\\"background: linear-gradient(135deg, #005691 0%, #0077b6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-size: 36px; font-weight: 600; text-align: center; line-height: 1;\\\">\\r\\n    Written TRx\\r\\n  </div>\\r\\n  <div style=\\\"color: #0077b6; font-size: 48px; font-weight: 700; text-align: center; line-height: 1;\\\">\\r\\n    ${WrittenTRxSumFormated}\\r\\n  </div>\\r\\n</div>\"},{\"id\":\"2_child4\",\"type\":\"html\",\"template\":\"\",\"title\":\"\",\"titleMode\":\"simple\",\"titleTemplate\":\"\",\"showTitle\":false,\"layout\":{\"id\":\"2_child4\",\"x\":0.75,\"y\":0,\"w\":0.25,\"h\":1},\"visibilityVariable\":\"\",\"arrangementVariable\":\"\",\"dimensionConditions\":[],\"htmlContent\":\"<div\\r\\n  style=\\\"font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100%; width:100%, padding: 10px 12px; background: linear-gradient(135deg, #e8f1fb 0%, #f5f8fc 50%, #eef5fa 100%); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative;\\\">\\r\\n  <!-- SVG Icon at top-left -->\\r\\n  <div style=\\\"position: absolute; top: 12px; left: 12px;\\\">\\r\\n    <svg width=\\\"26\\\" height=\\\"26\\\" viewBox=\\\"0 0 24 24\\\" fill=\\\"none\\\" stroke=\\\"url(#gradient)\\\" stroke-width=\\\"2.5\\\"\\r\\n      stroke-linecap=\\\"round\\\" stroke-linejoin=\\\"round\\\">\\r\\n      <defs>\\r\\n        <linearGradient id=\\\"gradient\\\" x1=\\\"0%\\\" y1=\\\"0%\\\" x2=\\\"100%\\\" y2=\\\"100%\\\">\\r\\n          <stop offset=\\\"0%\\\" style=\\\"stop-color:#005691;stop-opacity:1\\\" />\\r\\n          <stop offset=\\\"100%\\\" style=\\\"stop-color:#0077b6;stop-opacity:1\\\" />\\r\\n        </linearGradient>\\r\\n      </defs>\\r\\n      <path d=\\\"M22 12h-4l-3 9L9 3l-3 9H2\\\"></path>\\r\\n    </svg>\\r\\n  </div>\\r\\n\\r\\n  <div\\r\\n    style=\\\"background: linear-gradient(135deg, #005691 0%, #0077b6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-size: 36px; font-weight: 600; text-align: center; line-height: 1;\\\">\\r\\n    Projected TRx\\r\\n  </div>\\r\\n  <div style=\\\"color: #0077b6; font-size: 48px; font-weight: 700; text-align: center; line-height: 1;\\\">\\r\\n    ${ProjectedTRxSumFormated}\\r\\n  </div>\\r\\n</div>\"}]",
+    "enable_container_scroll": false,
+    "card_min_height": 800,
+    "gap": 0,
+    "use_dynamic_height": false,
+    "height_data_source": "",
+    "show_parent_title": false,
+    "parent_title_mode": "simple",
+    "parent_title": "",
+    "parent_title_template": "",
+    "visibility_variable": "",
+    "arrangement_variable": "",
+    "child_visibility_mode": "individual",
+    "created_at": "2026-01-30 08:01:37.885197",
+    "last_modified": "2026-01-30 08:24:04.093791"
+  },
+  {
+    "id": 1,
+    "view_id": 1,
+    "parent_card_id": "1",
+    "is_container": true,
+    "container_layout": "custom",
+    "child_cards_json": "[{\"id\":\"1_child1\",\"type\":\"html\",\"template\":\"\",\"title\":\"\",\"titleMode\":\"simple\",\"titleTemplate\":\"\",\"showTitle\":false,\"layout\":{\"id\":\"1_child1\",\"x\":0,\"y\":0,\"w\":1,\"h\":1},\"visibilityVariable\":\"\",\"arrangementVariable\":\"\",\"dimensionConditions\":[],\"htmlContent\":\"<div\\r\\n  style=\\\"font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: clamp(16px, 3vw, 32px); background: linear-gradient(135deg, #e8f1fb 0%, #f5f8fc 50%, #eef5fa 100%); border-bottom: 1px solid #e5e7eb;height:100%\\\">\\r\\n  <div style=\\\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 24px;\\\">\\r\\n    <!-- Title and Description -->\\r\\n    <div style=\\\"flex: 1 1 300px; min-width: 0;\\\">\\r\\n      <h2\\r\\n        style=\\\"color: #1e293b; margin: 0 0 8px 0; font-size: clamp(20px, 4vw, 28px); font-weight: 700; letter-spacing: -0.5px; line-height: 1.2;\\\">\\r\\n        Market Share Library - Claim Volume</h2>\\r\\n      <p style=\\\"color: #64748b; margin: 0; font-size: clamp(13px, 2vw, 15px); line-height: 1.6;\\\">Customize market\\r\\n        parameters and compare Paid NBRx, Paid TRx, Written TRx, and Projected TRx across a variety of market sizing\\r\\n        dimensions</p>\\r\\n    </div>\\r\\n\\r\\n    <!-- Date Info -->\\r\\n    <div style=\\\"display: flex; flex-direction: column; gap: 10px; min-width: fit-content;\\\">\\r\\n      <div style=\\\"display: flex; align-items: center; justify-content: flex-end; gap: 8px;\\\">\\r\\n        <span style=\\\"color: #64748b; font-size: clamp(12px, 2vw, 13px); white-space: nowrap;\\\">Latest Data Month:</span>\\r\\n        <strong style=\\\"color: #0f172a; font-size: clamp(13px, 2vw, 14px); font-weight: 600; background: #dbeafe; padding: 4px 12px; border-radius: 6px; white-space: nowrap;\\\">Oct 2025</strong>\\r\\n      </div>\\r\\n      <div style=\\\"display: flex; align-items: center; justify-content: flex-end; gap: 8px;\\\">\\r\\n        <span style=\\\"color: #64748b; font-size: clamp(12px, 2vw, 13px); white-space: nowrap;\\\">Latest Refresh:</span>\\r\\n        <strong style=\\\"color: #0f172a; font-size: clamp(13px, 2vw, 14px); font-weight: 600; background: #dbeafe; padding: 4px 12px; border-radius: 6px; white-space: nowrap;\\\">November 18, 2025</strong>\\r\\n      </div>\\r\\n    </div>\\r\\n  </div>\\r\\n\\r\\n  <!-- Bottom Section -->\\r\\n  <div\\r\\n    style=\\\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-top: 20px; gap: 16px;\\\">\\r\\n    <!-- Data Source Info -->\\r\\n    <div\\r\\n      style=\\\"display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: clamp(12px, 2vw, 13px); flex: 1 1 auto;\\\">\\r\\n      <div style=\\\"display: flex; align-items: center; gap: 6px;\\\">\\r\\n        <span style=\\\"color: #64748b; white-space: nowrap;\\\">Data Source:</span>\\r\\n        <span style=\\\"background: linear-gradient(135deg, #005691 0%, #0077b6 100%); color: white; padding: 4px 10px; border-radius: 6px; font-weight: 600; font-size: clamp(11px, 2vw, 12px); white-space: nowrap;\\\">LAAD + XPT</span>\\r\\n      </div>\\r\\n      <div style=\\\"display: flex; align-items: center; gap: 6px;\\\">\\r\\n        <span style=\\\"color: #64748b; white-space: nowrap;\\\">Date Range:</span>\\r\\n        <span style=\\\"color: #1e293b; font-weight: 500; white-space: nowrap;\\\">Jan 2025 - Oct 2025</span>\\r\\n      </div>\\r\\n    </div>\\r\\n\\r\\n    <!-- Action Buttons -->\\r\\n    <div style=\\\"display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end;\\\">\\r\\n      <a href=\\\"mailto\\\"\\r\\n        style=\\\"background: white; color: #005691; text-decoration: none; font-size: clamp(12px, 2vw, 13px); font-weight: 500; padding: 8px 16px; border-radius: 8px; border: 1px solid #005691; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; white-space: nowrap;\\\"\\r\\n        onmouseover=\\\"this.style.background='#005691'; this.style.color='white';\\\"\\r\\n        onmouseout=\\\"this.style.background='white'; this.style.color='#005691';\\\">\\r\\n        📧 Contact Us\\r\\n      </a>\\r\\n      <a href=\\\"https://mma3.imshealth.com/MMA_GOLD/Combined_Market_Share_Library_Reference_Guide.pdf\\\"\\r\\n        style=\\\"background: white; color: #005691; text-decoration: none; font-size: clamp(12px, 2vw, 13px); font-weight: 500; padding: 8px 16px; border-radius: 8px; border: 1px solid #005691; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; white-space: nowrap;\\\"\\r\\n        onmouseover=\\\"this.style.background='#005691'; this.style.color='white';\\\"\\r\\n        onmouseout=\\\"this.style.background='white'; this.style.color='#005691';\\\">\\r\\n        📖 Reference Guide\\r\\n      </a>\\r\\n    </div>\\r\\n  </div>\\r\\n</div>\"}]",
+    "enable_container_scroll": false,
+    "card_min_height": 800,
+    "gap": 0,
+    "use_dynamic_height": false,
+    "height_data_source": "",
+    "show_parent_title": false,
+    "parent_title_mode": "simple",
+    "parent_title": "",
+    "parent_title_template": "",
+    "visibility_variable": "",
+    "arrangement_variable": "",
+    "child_visibility_mode": "individual",
+    "created_at": "2026-01-30 07:29:11.635598",
+    "last_modified": "2026-01-30 08:24:04.073606"
+  }
+]
+[child-card-configs] Processing 7: gap=0, type=number
+[child-card-configs] Processing 6: gap=0, type=number
+[child-card-configs] Processing 5: gap=0, type=number
+[child-card-configs] Processing 4: gap=0, type=number
+[child-card-configs] Processing 3: gap=0, type=number
+[child-card-configs] Processing 2: gap=0, type=number
+[child-card-configs] Processing 1: gap=0, type=number
+[child-card-configs] Returning result: {
+  "1": {
+    "isContainer": true,
+    "containerLayout": "custom",
+    "childCards": [
+      {
+        "id": "1_child1",
+        "type": "html",
+        "template": "",
+        "title": "",
+        "titleMode": "simple",
+        "titleTemplate": "",
+        "showTitle": false,
+        "layout": {
+          "id": "1_child1",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1
+        },
+        "visibilityVariable": "",
+        "arrangementVariable": "",
+        "dimensionConditions": [],
+        "htmlContent": "<div\r\n  style=\"font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: clamp(16px, 3vw, 32px); background: linear-gradient(135deg, #e8f1fb 0%, #f5f8fc 50%, #eef5fa 100%); border-bottom: 1px solid #e5e7eb;height:100%\">\r\n  <div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 24px;\">\r\n    <!-- Title and Description -->\r\n    <div style=\"flex: 1 1 300px; min-width: 0;\">\r\n      <h2\r\n        style=\"color: #1e293b; margin: 0 0 8px 0; font-size: clamp(20px, 4vw, 28px); font-weight: 700; letter-spacing: -0.5px; line-height: 1.2;\">\r\n        Market Share Library - Claim Volume</h2>\r\n      <p style=\"color: #64748b; margin: 0; font-size: clamp(13px, 2vw, 15px); line-height: 1.6;\">Customize market\r\n        parameters and compare Paid NBRx, Paid TRx, Written TRx, and Projected TRx across a variety of market sizing\r\n        dimensions</p>\r\n    </div>\r\n\r\n    <!-- Date Info -->\r\n    <div style=\"display: flex; flex-direction: column; gap: 10px; min-width: fit-content;\">\r\n      <div style=\"display: flex; align-items: center; justify-content: flex-end; gap: 8px;\">\r\n        <span style=\"color: #64748b; font-size: clamp(12px, 2vw, 13px); white-space: nowrap;\">Latest Data Month:</span>\r\n        <strong style=\"color: #0f172a; font-size: clamp(13px, 2vw, 14px); font-weight: 600; background: #dbeafe; padding: 4px 12px; border-radius: 6px; white-space: nowrap;\">Oct 2025</strong>\r\n      </div>\r\n      <div style=\"display: flex; align-items: center; justify-content: flex-end; gap: 8px;\">\r\n        <span style=\"color: #64748b; font-size: clamp(12px, 2vw, 13px); white-space: nowrap;\">Latest Refresh:</span>\r\n        <strong style=\"color: #0f172a; font-size: clamp(13px, 2vw, 14px); font-weight: 600; background: #dbeafe; padding: 4px 12px; border-radius: 6px; white-space: nowrap;\">November 18, 2025</strong>\r\n      </div>\r\n    </div>\r\n  </div>\r\n\r\n  <!-- Bottom Section -->\r\n  <div\r\n    style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-top: 20px; gap: 16px;\">\r\n    <!-- Data Source Info -->\r\n    <div\r\n      style=\"display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: clamp(12px, 2vw, 13px); flex: 1 1 auto;\">\r\n      <div style=\"display: flex; align-items: center; gap: 6px;\">\r\n        <span style=\"color: #64748b; white-space: nowrap;\">Data Source:</span>\r\n        <span style=\"background: linear-gradient(135deg, #005691 0%, #0077b6 100%); color: white; padding: 4px 10px; border-radius: 6px; font-weight: 600; font-size: clamp(11px, 2vw, 12px); white-space: nowrap;\">LAAD + XPT</span>\r\n      </div>\r\n      <div style=\"display: flex; align-items: center; gap: 6px;\">\r\n        <span style=\"color: #64748b; white-space: nowrap;\">Date Range:</span>\r\n        <span style=\"color: #1e293b; font-weight: 500; white-space: nowrap;\">Jan 2025 - Oct 2025</span>\r\n      </div>\r\n    </div>\r\n\r\n    <!-- Action Buttons -->\r\n    <div style=\"display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end;\">\r\n      <a href=\"mailto\"\r\n        style=\"background: white; color: #005691; text-decoration: none; font-size: clamp(12px, 2vw, 13px); font-weight: 500; padding: 8px 16px; border-radius: 8px; border: 1px solid #005691; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; white-space: nowrap;\"\r\n        onmouseover=\"this.style.background='#005691'; this.style.color='white';\"\r\n        onmouseout=\"this.style.background='white'; this.style.color='#005691';\">\r\n        📧 Contact Us\r\n      </a>\r\n      <a href=\"https://mma3.imshealth.com/MMA_GOLD/Combined_Market_Share_Library_Reference_Guide.pdf\"\r\n        style=\"background: white; color: #005691; text-decoration: none; font-size: clamp(12px, 2vw, 13px); font-weight: 500; padding: 8px 16px; border-radius: 8px; border: 1px solid #005691; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; white-space: nowrap;\"\r\n        onmouseover=\"this.style.background='#005691'; this.style.color='white';\"\r\n        onmouseout=\"this.style.background='white'; this.style.color='#005691';\">\r\n        📖 Reference Guide\r\n      </a>\r\n    </div>\r\n  </div>\r\n</div>"
+      }
+    ],
+    "enableContainerScroll": false,
+    "cardMinHeight": 800,
+    "gap": 0,
+    "useDynamicHeight": false,
+    "heightDataSource": "",
+    "showParentTitle": false,
+    "parentTitleMode": "simple",
+    "parentTitle": "",
+    "parentTitleTemplate": "",
+    "visibilityVariable": "",
+    "arrangementVariable": "",
+    "childVisibilityMode": "individual"
+  },
+  "2": {
+    "isContainer": true,
+    "containerLayout": "custom",
+    "childCards": [
+      {
+        "id": "2_child1",
+        "type": "html",
+        "template": "",
+        "title": "",
+        "titleMode": "simple",
+        "titleTemplate": "",
+        "showTitle": false,
+        "layout": {
+          "id": "2_child1",
+          "x": 0,
+          "y": 0,
+          "w": 0.25,
+          "h": 1
+        },
+        "visibilityVariable": "",
+        "arrangementVariable": "",
+        "dimensionConditions": [],
+        "htmlContent": "<div\r\n  style=\"font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100%; width:100%, padding: 10px 12px; background: linear-gradient(135deg, #e8f1fb 0%, #f5f8fc 50%, #eef5fa 100%); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative;\">\r\n  <!-- SVG Icon at top-left -->\r\n  <div style=\"position: absolute; top: 12px; left: 12px;\">\r\n    <svg width=\"26\" height=\"26\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"url(#gradient)\" stroke-width=\"2.5\"\r\n      stroke-linecap=\"round\" stroke-linejoin=\"round\">\r\n      <defs>\r\n        <linearGradient id=\"gradient\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\">\r\n          <stop offset=\"0%\" style=\"stop-color:#005691;stop-opacity:1\" />\r\n          <stop offset=\"100%\" style=\"stop-color:#0077b6;stop-opacity:1\" />\r\n        </linearGradient>\r\n      </defs>\r\n      <path d=\"M22 12h-4l-3 9L9 3l-3 9H2\"></path>\r\n    </svg>\r\n  </div>\r\n\r\n  <div\r\n    style=\"background: linear-gradient(135deg, #005691 0%, #0077b6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-size: 36px; font-weight: 600; text-align: center; line-height: 1;\">\r\n    Paid NBRx\r\n  </div>\r\n  <div style=\"color: #0077b6; font-size: 48px; font-weight: 700; text-align: center; line-height: 1;\">\r\n    ${NBRxSumFormated}\r\n  </div>\r\n</div>"
+      },
+      {
+        "id": "2_child2",
+        "type": "html",
+        "template": "",
+        "title": "",
+        "titleMode": "simple",
+        "titleTemplate": "",
+        "showTitle": false,
+        "layout": {
+          "id": "2_child2",
+          "x": 0.25,
+          "y": 0,
+          "w": 0.25,
+          "h": 1
+        },
+        "visibilityVariable": "",
+        "arrangementVariable": "",
+        "dimensionConditions": [],
+        "htmlContent": "<div\r\n  style=\"font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100%; width:100%, padding: 10px 12px; background: linear-gradient(135deg, #e8f1fb 0%, #f5f8fc 50%, #eef5fa 100%); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative;\">\r\n  <!-- SVG Icon at top-left -->\r\n  <div style=\"position: absolute; top: 12px; left: 12px;\">\r\n    <svg width=\"26\" height=\"26\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"url(#gradient)\" stroke-width=\"2.5\"\r\n      stroke-linecap=\"round\" stroke-linejoin=\"round\">\r\n      <defs>\r\n        <linearGradient id=\"gradient\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\">\r\n          <stop offset=\"0%\" style=\"stop-color:#005691;stop-opacity:1\" />\r\n          <stop offset=\"100%\" style=\"stop-color:#0077b6;stop-opacity:1\" />\r\n        </linearGradient>\r\n      </defs>\r\n      <path d=\"M22 12h-4l-3 9L9 3l-3 9H2\"></path>\r\n    </svg>\r\n  </div>\r\n\r\n  <div\r\n    style=\"background: linear-gradient(135deg, #005691 0%, #0077b6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-size: 36px; font-weight: 600; text-align: center; line-height: 1;\">\r\n    Paid TRx\r\n  </div>\r\n  <div style=\"color: #0077b6; font-size: 48px; font-weight: 700; text-align: center; line-height: 1;\">\r\n    ${PaidTRxSumFormated}\r\n  </div>\r\n</div>"
+      },
+      {
+        "id": "2_child3",
+        "type": "html",
+        "template": "",
+        "title": "",
+        "titleMode": "simple",
+        "titleTemplate": "",
+        "showTitle": false,
+        "layout": {
+          "id": "2_child3",
+          "x": 0.5,
+          "y": 0,
+          "w": 0.25,
+          "h": 1
+        },
+        "visibilityVariable": "",
+        "arrangementVariable": "",
+        "dimensionConditions": [],
+        "htmlContent": "<div\r\n  style=\"font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100%; width:100%, padding: 10px 12px; background: linear-gradient(135deg, #e8f1fb 0%, #f5f8fc 50%, #eef5fa 100%); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative;\">\r\n  <!-- SVG Icon at top-left -->\r\n  <div style=\"position: absolute; top: 12px; left: 12px;\">\r\n    <svg width=\"26\" height=\"26\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"url(#gradient)\" stroke-width=\"2.5\"\r\n      stroke-linecap=\"round\" stroke-linejoin=\"round\">\r\n      <defs>\r\n        <linearGradient id=\"gradient\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\">\r\n          <stop offset=\"0%\" style=\"stop-color:#005691;stop-opacity:1\" />\r\n          <stop offset=\"100%\" style=\"stop-color:#0077b6;stop-opacity:1\" />\r\n        </linearGradient>\r\n      </defs>\r\n      <path d=\"M22 12h-4l-3 9L9 3l-3 9H2\"></path>\r\n    </svg>\r\n  </div>\r\n\r\n  <div\r\n    style=\"background: linear-gradient(135deg, #005691 0%, #0077b6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-size: 36px; font-weight: 600; text-align: center; line-height: 1;\">\r\n    Written TRx\r\n  </div>\r\n  <div style=\"color: #0077b6; font-size: 48px; font-weight: 700; text-align: center; line-height: 1;\">\r\n    ${WrittenTRxSumFormated}\r\n  </div>\r\n</div>"
+      },
+      {
+        "id": "2_child4",
+        "type": "html",
+        "template": "",
+        "title": "",
+        "titleMode": "simple",
+        "titleTemplate": "",
+        "showTitle": false,
+        "layout": {
+          "id": "2_child4",
+          "x": 0.75,
+          "y": 0,
+          "w": 0.25,
+          "h": 1
+        },
+        "visibilityVariable": "",
+        "arrangementVariable": "",
+        "dimensionConditions": [],
+        "htmlContent": "<div\r\n  style=\"font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100%; width:100%, padding: 10px 12px; background: linear-gradient(135deg, #e8f1fb 0%, #f5f8fc 50%, #eef5fa 100%); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative;\">\r\n  <!-- SVG Icon at top-left -->\r\n  <div style=\"position: absolute; top: 12px; left: 12px;\">\r\n    <svg width=\"26\" height=\"26\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"url(#gradient)\" stroke-width=\"2.5\"\r\n      stroke-linecap=\"round\" stroke-linejoin=\"round\">\r\n      <defs>\r\n        <linearGradient id=\"gradient\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\">\r\n          <stop offset=\"0%\" style=\"stop-color:#005691;stop-opacity:1\" />\r\n          <stop offset=\"100%\" style=\"stop-color:#0077b6;stop-opacity:1\" />\r\n        </linearGradient>\r\n      </defs>\r\n      <path d=\"M22 12h-4l-3 9L9 3l-3 9H2\"></path>\r\n    </svg>\r\n  </div>\r\n\r\n  <div\r\n    style=\"background: linear-gradient(135deg, #005691 0%, #0077b6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-size: 36px; font-weight: 600; text-align: center; line-height: 1;\">\r\n    Projected TRx\r\n  </div>\r\n  <div style=\"color: #0077b6; font-size: 48px; font-weight: 700; text-align: center; line-height: 1;\">\r\n    ${ProjectedTRxSumFormated}\r\n  </div>\r\n</div>"
+      }
+    ],
+    "enableContainerScroll": false,
+    "cardMinHeight": 800,
+    "gap": 0,
+    "useDynamicHeight": false,
+    "heightDataSource": "",
+    "showParentTitle": false,
+    "parentTitleMode": "simple",
+    "parentTitle": "",
+    "parentTitleTemplate": "",
+    "visibilityVariable": "",
+    "arrangementVariable": "",
+    "childVisibilityMode": "individual"
+  },
+  "3": {
+    "isContainer": true,
+    "containerLayout": "custom",
+    "childCards": [
+      {
+        "id": "3_child1",
+        "type": "chart",
+        "template": "{\r\n  \"chart\": {\r\n    \"type\": \"bar\"\r\n  },\r\n  \"title\": {\r\n    \"text\": \"Paid NBRx\"\r\n  },\r\n  \"subtitle\": {\r\n    \"text\": null\r\n  },\r\n  \"xAxis\": {\r\n    \"categories\":${NBRxPayerName},\r\n    \"title\": {\r\n      \"text\": ${topDimensionSelector},\r\n      \"style\": {\r\n        \"fontWeight\": \"bold\",\r\n        \"fontSize\": \"20px\"\r\n      }\r\n    }\r\n  },\r\n  \"yAxis\": {\r\n    \"min\": 0,\r\n    \"title\": {\r\n      \"text\": null,\r\n      \"align\": \"high\"\r\n    },\r\n    \"labels\": {\r\n      \"overflow\": \"justify\",\r\n      \"enabled\": false\r\n    },\r\n    \"gridLineWidth\": 0\r\n  },\r\n  \"tooltip\": {\r\n    \"format\": \"The value for <b>{point.category}</b> is <b>{point.y}\"\r\n  },\r\n  \"colors\": [\r\n    \"#5d576b\"\r\n  ],\r\n  \"plotOptions\": {\r\n    \"bar\": {\r\n      \"dataLabels\": {\r\n        \"enabled\": true,\r\n        \"format\": \"{y}%\"\r\n      }\r\n    }\r\n  },\r\n  \"legend\": {\r\n    \"enabled\": false\r\n  },\r\n  \"credits\": {\r\n    \"enabled\": false\r\n  },\r\n  \"series\": [\r\n    {\r\n      \"name\": \"Paid NBRx\",\r\n      \"data\": ${NBRxPercentageDataWithDetails}\r\n    }\r\n  ]\r\n}",
+        "title": "",
+        "titleMode": "simple",
+        "titleTemplate": "",
+        "showTitle": false,
+        "layout": {
+          "id": "3_child1",
+          "x": 0,
+          "y": 0,
+          "w": 0.25,
+          "h": 1
+        },
+        "visibilityVariable": "",
+        "arrangementVariable": "",
+        "dimensionConditions": []
+      },
+      {
+        "id": "3_child2",
+        "type": "chart",
+        "template": "{\r\n  \"chart\": {\r\n    \"type\": \"bar\"\r\n  },\r\n  \"title\": {\r\n    \"text\": \"Paid TRx\"\r\n  },\r\n  \"subtitle\": {\r\n    \"text\": null\r\n  },\r\n  \"xAxis\": {\r\n    \"categories\": ${NBRxPayerName},\r\n    \"title\": {\r\n      \"text\": null\r\n    },\r\n    \"lineWidth\": 0,\r\n    \"tickLength\": 0,\r\n    \"gridLineWidth\": 0,\r\n    \"labels\": {\r\n      \"enabled\": false\r\n    }\r\n  },\r\n  \"yAxis\": {\r\n    \"min\": 0,\r\n    \"title\": {\r\n      \"text\": null,\r\n      \"align\": \"high\"\r\n    },\r\n    \"labels\": {\r\n      \"overflow\": \"justify\",\r\n      \"enabled\": false\r\n    },\r\n    \"gridLineWidth\": 0\r\n  },\r\n  \"tooltip\": {\r\n    \"valueSuffix\": \"%\"\r\n  },\r\n  \"colors\": [\r\n    \"#899CB9\"\r\n  ],\r\n  \"plotOptions\": {\r\n    \"bar\": {\r\n      \"dataLabels\": {\r\n        \"enabled\": true,\r\n        \"format\": \"{y}%\"\r\n      }\r\n    }\r\n  },\r\n  \"legend\": {\r\n    \"enabled\": false\r\n  },\r\n  \"credits\": {\r\n    \"enabled\": false\r\n  },\r\n  \"series\": [\r\n    {\r\n      \"name\": \"Paid TRx\",\r\n      \"data\": ${PaidTRxPercentageData}\r\n    }\r\n  ]\r\n}",
+        "title": "",
+        "titleMode": "simple",
+        "titleTemplate": "",
+        "showTitle": false,
+        "layout": {
+          "id": "3_child2",
+          "x": 0.25,
+          "y": 0,
+          "w": 0.25,
+          "h": 1
+        },
+        "visibilityVariable": "",
+        "arrangementVariable": "",
+        "dimensionConditions": []
+      },
+      {
+        "id": "3_child3",
+        "type": "chart",
+        "template": "{\r\n  \"chart\": {\r\n    \"type\": \"bar\"\r\n  },\r\n  \"title\": {\r\n    \"text\": \"Written TRx\"\r\n  },\r\n  \"xAxis\": {\r\n    \"categories\": ${NBRxPayerName},\r\n    \"title\": {\r\n      \"text\": null\r\n    },\r\n    \"lineWidth\": 0,\r\n    \"tickLength\": 0,\r\n    \"gridLineWidth\": 0,\r\n    \"labels\": {\r\n      \"enabled\": false\r\n    }\r\n  },\r\n  \"yAxis\": {\r\n    \"min\": 0,\r\n    \"title\": {\r\n      \"text\": null,\r\n      \"align\": \"high\"\r\n    },\r\n    \"labels\": {\r\n      \"overflow\": \"justify\",\r\n      \"enabled\": false\r\n    },\r\n    \"gridLineWidth\": 0\r\n  },\r\n  \"tooltip\": {\r\n    \"valueSuffix\": \"%\"\r\n  },\r\n  \"colors\": [\r\n    \"#A9AFD1\"\r\n  ],\r\n  \"plotOptions\": {\r\n    \"bar\": {\r\n      \"dataLabels\": {\r\n        \"enabled\": true,\r\n        \"format\": \"{y}%\"\r\n      }\r\n    }\r\n  },\r\n  \"legend\": {\r\n    \"enabled\": false\r\n  },\r\n  \"credits\": {\r\n    \"enabled\": false\r\n  },\r\n  \"series\": [\r\n    {\r\n      \"name\": \"Paid TRx\",\r\n      \"data\": ${WrittenTRxPercentageData}\r\n    }\r\n  ]\r\n}",
+        "title": "",
+        "titleMode": "simple",
+        "titleTemplate": "",
+        "showTitle": false,
+        "layout": {
+          "id": "3_child3",
+          "x": 0.5,
+          "y": 0,
+          "w": 0.25,
+          "h": 1
+        },
+        "visibilityVariable": "",
+        "arrangementVariable": "",
+        "dimensionConditions": []
+      },
+      {
+        "id": "3_child4",
+        "type": "chart",
+        "template": "{\r\n  \"chart\": {\r\n    \"type\": \"bar\"\r\n  },\r\n  \"title\": {\r\n    \"text\": \"Projected TRx\"\r\n  },\r\n  \"xAxis\": {\r\n    \"categories\": ${NBRxPayerName},\r\n    \"title\": {\r\n      \"text\": null\r\n    },\r\n    \"lineWidth\": 0,\r\n    \"tickLength\": 0,\r\n    \"gridLineWidth\": 0,\r\n    \"labels\": {\r\n      \"enabled\": false\r\n    }\r\n  },\r\n  \"yAxis\": {\r\n    \"min\": 0,\r\n    \"title\": {\r\n      \"text\": null,\r\n      \"align\": \"high\"\r\n    },\r\n    \"labels\": {\r\n      \"overflow\": \"justify\",\r\n      \"enabled\": false\r\n    },\r\n    \"gridLineWidth\": 0\r\n  },\r\n  \"tooltip\": {\r\n    \"valueSuffix\": \"%\"\r\n  },\r\n  \"plotOptions\": {\r\n    \"bar\": {\r\n      \"dataLabels\": {\r\n        \"enabled\": true,\r\n        \"format\": \"{y}%\"\r\n      }\r\n    }\r\n  },\r\n  \"legend\": {\r\n    \"enabled\": false\r\n  },\r\n  \"colors\": [\r\n    \"#8890BF\"\r\n  ],\r\n  \"credits\": {\r\n    \"enabled\": false\r\n  },\r\n  \"series\": [\r\n    {\r\n      \"name\": \"Projected TRx\",\r\n      \"data\": ${ProjectedTRxPercentageData}\r\n    }\r\n  ]\r\n}",
+        "title": "",
+        "titleMode": "simple",
+        "titleTemplate": "",
+        "showTitle": false,
+        "layout": {
+          "id": "3_child4",
+          "x": 0.75,
+          "y": 0,
+          "w": 0.25,
+          "h": 1
+        },
+        "visibilityVariable": "",
+        "arrangementVariable": "",
+        "dimensionConditions": []
+      }
+    ],
+    "enableContainerScroll": true,
+    "cardMinHeight": 800,
+    "gap": 0,
+    "useDynamicHeight": true,
+    "heightDataSource": "chartHeight",
+    "showParentTitle": false,
+    "parentTitleMode": "simple",
+    "parentTitle": "",
+    "parentTitleTemplate": "",
+    "visibilityVariable": "",
+    "arrangementVariable": "",
+    "childVisibilityMode": "individual"
+  },
+  "4": {
+    "isContainer": true,
+    "containerLayout": "custom",
+    "childCards": [
+      {
+        "id": "4_child1",
+        "type": "chart",
+        "template": "{\r\n  \"title\": {\r\n    \"text\": ${topMetricSelector}\r\n  },\r\n  \"chart\": {\r\n    \"type\": \"line\",\r\n    \"backgroundColor\": \"#FFFFFF\"\r\n  },\r\n  \"xAxis\": {\r\n    \"categories\": ${shareTrendCategory},\r\n    \"gridLineWidth\": 0,\r\n    \"labels\": {\r\n      \"rotation\": -45,\r\n      \"align\": \"right\",\r\n      \"style\": {\r\n        \"fontSize\": \"12px\",\r\n        \"color\": \"#4A4A4A\",\r\n        \"fontFamily\": \"Tableau, Arial, sans-serif\"\r\n      }\r\n    },\r\n    \"lineColor\": \"#D3D3D3\",\r\n    \"tickColor\": \"#D3D3D3\"\r\n  },\r\n  \"yAxis\": {\r\n    \"gridLineWidth\": 0,\r\n    \"title\": {\r\n      \"text\": ${metricSelector},\r\n      \"style\": {\r\n        \"fontSize\": \"12px\",\r\n        \"color\": \"#4A4A4A\",\r\n        \"fontFamily\": \"Tableau, Arial, sans-serif\"\r\n      }\r\n    },\r\n    \"labels\": {\r\n      \"format\": \"{value}%\",\r\n      \"style\": {\r\n        \"fontSize\": \"12px\",\r\n        \"color\": \"#4A4A4A\",\r\n        \"fontFamily\": \"Tableau, Arial, sans-serif\"\r\n      }\r\n    },\r\n    \"lineColor\": \"#D3D3D3\"\r\n  },\r\n  \"legend\": {\r\n    \"enabled\": false\r\n  },\r\n  \"plotOptions\": {\r\n    \"line\": {\r\n      \"lineWidth\": 1.5,\r\n      \"marker\": {\r\n        \"enabled\": false,\r\n        \"states\": {\r\n          \"hover\": {\r\n            \"enabled\": true,\r\n            \"radius\": 3\r\n          }\r\n        }\r\n      },\r\n      \"states\": {\r\n        \"hover\": {\r\n          \"lineWidth\": 2\r\n        }\r\n      }\r\n    }\r\n  },\r\n  \"series\": ${shareTrendSeries},\r\n  \"tooltip\": {\r\n    \"shared\": true,\r\n    \"crosshairs\": [\r\n      true,\r\n      false\r\n    ],\r\n    \"headerFormat\": \"<b>{point.key}</b><br/>\",\r\n    \"pointFormat\": \"<span style='color:{series.color}'>{series.name}</span>: <b>{point.y}%</b><br/>\",\r\n    \"backgroundColor\": \"rgba(255,255,255,0.95)\",\r\n    \"borderColor\": \"#AAAAAA\",\r\n    \"borderRadius\": 3,\r\n    \"shadow\": true,\r\n    \"style\": {\r\n      \"fontSize\": \"12px\",\r\n      \"fontFamily\": \"Tableau, Arial, sans-serif\"\r\n    }\r\n  },\r\n  \"colors\": [\r\n    \"#7BAFD4\",\r\n    \"#C1DDEB\",\r\n    \"#6DB8C3\",\r\n    \"#5A7E4F\",\r\n    \"#9BBF8B\",\r\n    \"#C2E0DA\",\r\n    \"#A3A3A3\",\r\n    \"#6E7072\",\r\n    \"#DADADA\",\r\n    \"#F39C12\"\r\n  ],\r\n  \"credits\": {\r\n    \"enabled\": false\r\n  }\r\n}",
+        "title": "",
+        "titleMode": "simple",
+        "titleTemplate": "",
+        "showTitle": false,
+        "layout": {
+          "id": "4_child1",
+          "x": 0,
+          "y": 0,
+          "w": 0.5,
+          "h": 1
+        },
+        "visibilityVariable": "lineChart",
+        "arrangementVariable": "",
+        "dimensionConditions": [
+          {
+            "id": "1769778906692",
+            "variableName": "lineChart",
+            "expectedValue": true,
+            "width": 1,
+            "height": 0.9166666666666666,
+            "priority": 1
+          }
+        ]
+      },
+      {
+        "id": "4_child2",
+        "type": "chart",
+        "template": "{\r\n  \"title\": {\r\n    \"text\": ${topMetricSelector}\r\n  },\r\n  \"chart\": {\r\n    \"type\": \"column\",\r\n    \"backgroundColor\": \"#FFFFFF\"\r\n  },\r\n  \"xAxis\": {\r\n    \"categories\": ${shareTrendCategory},\r\n    \"labels\": {\r\n      \"rotation\": -45,\r\n      \"align\": \"right\",\r\n      \"style\": {\r\n        \"fontSize\": \"12px\",\r\n        \"color\": \"#4A4A4A\",\r\n        \"fontFamily\": \"Tableau, Arial, sans-serif\"\r\n      }\r\n    },\r\n    \"lineColor\": \"#D3D3D3\",\r\n    \"tickColor\": \"#D3D3D3\"\r\n  },\r\n  \"yAxis\": {\r\n    \"title\": {\r\n      \"text\": ${metricSelector\r\n      },\r\n      \"style\": {\r\n        \"fontSize\": \"12px\",\r\n        \"color\": \"#4A4A4A\",\r\n        \"fontFamily\": \"Tableau, Arial, sans-serif\"\r\n      }\r\n    },\r\n    \"labels\": {\r\n      \"format\": \"{value}%\",\r\n      \"style\": {\r\n        \"fontSize\": \"12px\",\r\n        \"color\": \"#4A4A4A\",\r\n        \"fontFamily\": \"Tableau, Arial, sans-serif\"\r\n      }\r\n    },\r\n    \"gridLineColor\": \"#F0F0F0\",\r\n    \"lineColor\": \"#D3D3D3\",\r\n    \"max\": 100\r\n  },\r\n  \"legend\": {\r\n    \"enabled\": false\r\n  },\r\n  \"plotOptions\": {\r\n    \"series\": {\r\n      \"stacking\": \"normal\",\r\n      \"dataLabels\": {\r\n        \"enabled\": false\r\n      }\r\n    },\r\n    \"column\": {\r\n      \"pointPadding\": 0.1,\r\n      \"borderWidth\": 0,\r\n      \"groupPadding\": 0.05\r\n    }\r\n  },\r\n  \"series\": ${shareTrendSeries},\r\n  \"tooltip\": {\r\n    \"shared\": true,\r\n    \"crosshairs\": [\r\n      true,\r\n      false\r\n    ],\r\n    \"headerFormat\": \"<b>{point.key}</b><br/>\",\r\n    \"pointFormat\": \"<span style='color:{series.color}'>{series.name}</span>: <b>{point.y}%</b><br/>\",\r\n    \"backgroundColor\": \"rgba(255,255,255,0.95)\",\r\n    \"borderColor\": \"#AAAAAA\",\r\n    \"borderRadius\": 3,\r\n    \"shadow\": true,\r\n    \"style\": {\r\n      \"fontSize\": \"12px\",\r\n      \"fontFamily\": \"Tableau, Arial, sans-serif\"\r\n    }\r\n  },\r\n  \"colors\": [\r\n    \"#7BAFD4\",\r\n    \"#C1DDEB\",\r\n    \"#6DB8C3\",\r\n    \"#5A7E4F\",\r\n    \"#9BBF8B\",\r\n    \"#C2E0DA\",\r\n    \"#A3A3A3\",\r\n    \"#6E7072\",\r\n    \"#DADADA\",\r\n    \"#F39C12\"\r\n  ],\r\n  \"credits\": {\r\n    \"enabled\": false\r\n  }\r\n}",
+        "title": "",
+        "titleMode": "simple",
+        "titleTemplate": "",
+        "showTitle": false,
+        "layout": {
+          "id": "4_child2",
+          "x": 0.5,
+          "y": 0,
+          "w": 0.5,
+          "h": 1
+        },
+        "visibilityVariable": "stackedChart",
+        "arrangementVariable": "",
+        "dimensionConditions": [
+          {
+            "id": "1769778932832",
+            "variableName": "stackedChart",
+            "expectedValue": true,
+            "width": 1,
+            "height": 0.9166666666666666,
+            "priority": 1
+          }
+        ]
+      }
+    ],
+    "enableContainerScroll": false,
+    "cardMinHeight": 800,
+    "gap": 0,
+    "useDynamicHeight": false,
+    "heightDataSource": "",
+    "showParentTitle": false,
+    "parentTitleMode": "simple",
+    "parentTitle": "",
+    "parentTitleTemplate": "",
+    "visibilityVariable": "",
+    "arrangementVariable": "",
+    "childVisibilityMode": "individual"
+  },
+  "5": {
+    "isContainer": true,
+    "containerLayout": "custom",
+    "childCards": [
+      {
+        "id": "5_child1",
+        "type": "chart",
+        "template": "{\r\n  \"chart\": {\r\n    \"type\": \"bar\"\r\n  },\r\n  \"title\": {\r\n    \"text\": ${distributionTitle}\r\n  },\r\n  \"xAxis\": [\r\n    {\r\n      \"categories\": ${sumDistributionShareTrend},\r\n      \"title\": {\r\n        \"text\": ${metricVOlumeDistribution}\r\n      },\r\n      \"reversed\": true,\r\n      \"lineWidth\": 1,\r\n      \"labels\": {\r\n        \"style\": {\r\n          \"width\": \"400px\",\r\n          \"textOverflow\": \"ellipsis\"\r\n        }\r\n      }\r\n    },\r\n    {\r\n      \"categories\": ${distributionShareCategory},\r\n      \"title\": {\r\n        \"text\": \"\"\r\n      },\r\n      \"opposite\": false,\r\n      \"linkedTo\": 0,\r\n      \"lineWidth\": 0,\r\n      \"labels\": {\r\n        \"style\": {\r\n          \"width\": \"400px\",\r\n          \"textOverflow\": \"ellipsis\"\r\n        }\r\n      }\r\n    }\r\n  ],\r\n  \"colors\": [\r\n    \"#4A91C2\",\r\n    \"#9CAABB\"\r\n  ],\r\n  \"yAxis\": {\r\n    \"min\": 0,\r\n    \"max\": 100,\r\n    \"title\": {\r\n      \"text\": ${distributionBy},\r\n      \"align\": \"high\",\r\n      \"rotation\": 0,\r\n      \"offset\": 0,\r\n      \"x\": 10,\r\n      \"y\": -10\r\n    },\r\n    \"gridLineWidth\": 0\r\n  },\r\n  \"plotOptions\": {\r\n    \"series\": {\r\n      \"stacking\": \"normal\",\r\n      \"dataLabels\": {\r\n        \"enabled\": true,\r\n        \"format\": \"{y}%\"\r\n      }\r\n    }\r\n  },\r\n  \"credits\": {\r\n    \"enabled\": false\r\n  },\r\n  \"series\": ${distributionShareSeries}\r\n}",
+        "title": "",
+        "titleMode": "simple",
+        "titleTemplate": "",
+        "showTitle": false,
+        "layout": {
+          "id": "5_child1",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1
+        },
+        "visibilityVariable": "",
+        "arrangementVariable": "",
+        "dimensionConditions": []
+      }
+    ],
+    "enableContainerScroll": false,
+    "cardMinHeight": 800,
+    "gap": 0,
+    "useDynamicHeight": false,
+    "heightDataSource": "",
+    "showParentTitle": false,
+    "parentTitleMode": "simple",
+    "parentTitle": "",
+    "parentTitleTemplate": "",
+    "visibilityVariable": "",
+    "arrangementVariable": "",
+    "childVisibilityMode": "individual"
+  },
+  "6": {
+    "isContainer": true,
+    "containerLayout": "custom",
+    "childCards": [
+      {
+        "id": "6_child1",
+        "type": "chart",
+        "template": "{\r\n  \"chart\": {\r\n    \"type\": \"bar\",\r\n    \"height\": 100\r\n  },\r\n  \"title\": {\r\n    \"text\": null\r\n  },\r\n  \"xAxis\": {\r\n    \"visible\": false\r\n  },\r\n  \"yAxis\": {\r\n    \"visible\": false\r\n  },\r\n  \"legend\": {\r\n    \"enabled\": true,\r\n    \"layout\": \"horizontal\",\r\n    \"align\": \"center\",\r\n    \"verticalAlign\": \"middle\",\r\n    \"symbolHeight\": 12,\r\n    \"symbolWidth\": 12,\r\n    \"symbolRadius\": 0\r\n  },\r\n  \"tooltip\": {\r\n    \"enabled\": false\r\n  },\r\n  \"credits\": {\r\n    \"enabled\": false\r\n  },\r\n  \"series\": ${legendData}\r\n}",
+        "title": "",
+        "titleMode": "simple",
+        "titleTemplate": "",
+        "showTitle": false,
+        "layout": {
+          "id": "6_child1",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1
+        },
+        "visibilityVariable": "",
+        "arrangementVariable": "",
+        "dimensionConditions": []
+      }
+    ],
+    "enableContainerScroll": false,
+    "cardMinHeight": 800,
+    "gap": 0,
+    "useDynamicHeight": false,
+    "heightDataSource": "",
+    "showParentTitle": false,
+    "parentTitleMode": "simple",
+    "parentTitle": "",
+    "parentTitleTemplate": "",
+    "visibilityVariable": "",
+    "arrangementVariable": "",
+    "childVisibilityMode": "individual"
+  },
+  "7": {
+    "isContainer": true,
+    "containerLayout": "custom",
+    "childCards": [
+      {
+        "id": "7_child1",
+        "type": "table",
+        "template": "",
+        "title": "",
+        "titleMode": "simple",
+        "titleTemplate": "",
+        "showTitle": false,
+        "layout": {
+          "id": "7_child1",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1
+        },
+        "visibilityVariable": "",
+        "arrangementVariable": "",
+        "dimensionConditions": [],
+        "tableDataSource": "dsMslDataExtract",
+        "tableSettings": {
+          "displayMode": "pagination",
+          "rowsPerPage": 10,
+          "sorting": {
+            "enabled": true,
+            "columns": [
+              {
+                "column": "MARKET",
+                "direction": "asc"
+              },
+              {
+                "column": "Paid_NBRx",
+                "direction": "asc"
+              },
+              {
+                "column": "Paid_TRX",
+                "direction": "asc"
+              },
+              {
+                "column": "Written_TRX",
+                "direction": "asc"
+              },
+              {
+                "column": "Projected_TRX",
+                "direction": "asc"
+              }
+            ]
+          },
+          "columns": [],
+          "theme": {
+            "headerBgColor": "#e0e7ff",
+            "headerTextColor": "#1e293b",
+            "rowBgColor": "#ffffff",
+            "rowAltBgColor": "#f8fafc",
+            "rowTextColor": "#475569",
+            "borderColor": "#e2e8f0",
+            "cellPadding": "normal",
+            "fontSize": "medium"
+          },
+          "showHeader": true,
+          "summaryRow": {
+            "enabled": true,
+            "calculations": {
+              "Paid_NBRx": "sum",
+              "Paid_TRX": "min",
+              "Written_TRX": "avg"
+            }
+          }
+        }
+      }
+    ],
+    "enableContainerScroll": false,
+    "cardMinHeight": 800,
+    "gap": 0,
+    "useDynamicHeight": false,
+    "heightDataSource": "",
+    "showParentTitle": false,
+    "parentTitleMode": "simple",
+    "parentTitle": "",
+    "parentTitleTemplate": "",
+    "visibilityVariable": "",
+    "arrangementVariable": "",
+    "childVisibilityMode": "individual"
+  }
+}
+✅ Cache HIT for msl_extract (limit: 10)
+⚡⚡ INSTANT CACHE HIT for msl_extract (10 rows, accessed 2x)
+💾 [saveFilterPanelStateToDb] dashboardId=1, activeFilters=11
+✅ [saveFilterPanelStateToDb] Saved 11 filters for dashboard 1
+✅ Cache HIT for msl_extract (limit: none)
+⚡⚡ INSTANT CACHE HIT for msl_extract (80 rows, accessed 2x)
+✅ Cache HIT for msl_extract (limit: none)
+⚡⚡ INSTANT CACHE HIT for msl_extract (18 rows, accessed 2x)
+✅ Cache HIT for msl_extract (limit: 10)
+⚡⚡ INSTANT CACHE HIT for msl_extract (10 rows, accessed 3x)
+💾 [saveFilterPanelStateToDb] dashboardId=1, activeFilters=11
+✅ [saveFilterPanelStateToDb] Saved 11 filters for dashboard 1
+✅ Cache HIT for msl_extract (limit: none)
+⚡⚡ INSTANT CACHE HIT for msl_extract (80 rows, accessed 3x)
+✅ Cache HIT for msl_extract (limit: none)
+⚡⚡ INSTANT CACHE HIT for msl_extract (18 rows, accessed 3x)

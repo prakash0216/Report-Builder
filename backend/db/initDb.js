@@ -922,12 +922,21 @@ async function seedMslExtractDataSource() {
       return;
     }
     
-    // Find snowflake1 connection
-    const connections = await dbClient.query(`SELECT id FROM snow_flake_connections WHERE connectionName='snowflake1' LIMIT 1`);
+    // Find any existing snowflake connection to use
+    let connections = await dbClient.query(`SELECT id FROM snow_flake_connections WHERE connectionName='snowflake1' LIMIT 1`);
+    
+    // If snowflake1 not found, try to get any connection
     if (connections.length === 0) {
-      console.log(`⚠️ Connection 'snowflake1' not found, will use connection_id=1 for MSL extract seed.`);
+      connections = await dbClient.query(`SELECT id FROM snow_flake_connections LIMIT 1`);
     }
-    const connectionId = connections.length > 0 ? connections[0].id : 1;
+    
+    if (connections.length === 0) {
+      console.log(`⚠️ No Snowflake connections found. Skipping MSL extract seed - you'll need to create a connection first.`);
+      return;
+    }
+    
+    const connectionId = connections[0].id;
+    console.log(`ℹ️ Using connection_id=${connectionId} for MSL extract seed.`);
     
     const query = `SELECT
                     SUM(NBRX_ELIGIBLE) + SUM(NBRX_NON_ELIGIBLE) AS "Paid NBRx",

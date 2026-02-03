@@ -1,0 +1,7 @@
+(node:22096) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+DuckDB run error: Binder Error: Table "data_source_registry" does not have a column with name "las_modified"
+
+Did you mean: "last_modified"
+DuckDB run error: Constraint Error: Duplicate key "view_id: 1, breakpoint: lg, chart_id: 1" violates unique constraint.
+Error saving layouts: [Error: Constraint Error: Duplicate key "view_id: 1, breakpoint: lg, chart_id: 1" violates unique constraint.]

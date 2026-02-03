@@ -1,4 +1,4 @@
-(node:20020) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+(node:27816) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)
 DuckDB run error: Binder Error: Table "data_source_registry" does not have a column with name "las_modified"
 
