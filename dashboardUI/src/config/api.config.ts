@@ -1,8 +1,8 @@
 // Centralized API configuration
-// In development: uses http://localhost:8008 (from .env.development)
-// In production: uses empty string for relative URLs (from .env.production)
+// In development with proxy: set REACT_APP_API_BASE_URL= (empty) so requests go to dev server (e.g. 8080) and get proxied to backend (3002).
+// In production: empty string = relative URLs; or set full backend URL.
 
-export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || '';
+export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL?.trim() ?? '';
 
 // Export a helper for building API URLs
 export const getApiUrl = (endpoint: string): string => {

@@ -500,9 +500,13 @@ const DashboardManagement: React.FC = () => {
           triggerCalculation: newTriggerCalculation || null,
         }),
       });
-      
-      const data = await response.json();
-      
+
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(text || `Create failed (${response.status})`);
+      }
+      const data = text ? JSON.parse(text) : {};
+
       if (data.success && data.dashboard) {
         const db = data.dashboard;
         const newDashboard: Dashboard = {
@@ -589,9 +593,13 @@ const DashboardManagement: React.FC = () => {
           triggerCalculation: editTriggerCalculation || null,
         }),
       });
-      
-      const data = await response.json();
-      
+
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(text || `Update failed (${response.status})`);
+      }
+      const data = text ? JSON.parse(text) : {};
+
       if (data.success && data.dashboard) {
         const db = data.dashboard;
         setDashboards(

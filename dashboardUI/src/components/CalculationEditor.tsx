@@ -1,4 +1,5 @@
 // dashboardUI/src/components/CalculationEditor.tsx
+/* eslint-disable no-template-curly-in-string */
 import React, { useRef, useEffect } from 'react';
 import Editor, { OnMount, BeforeMount, Monaco } from '@monaco-editor/react';
 import { useRecoilValue } from 'recoil';
@@ -129,7 +130,6 @@ export function CalculationEditor({
         if (atMatch) {
           const searchTerm = atMatch[1].toLowerCase();
           const suggestions: languages.CompletionItem[] = [];
-          const word = model.getWordUntilPosition(position);
           // Range must include the @ symbol so it gets replaced
           const range = {
             startLineNumber: position.lineNumber,
@@ -429,7 +429,6 @@ export function CalculationEditor({
           const objectName = dotMatch[1];
           const methodPrefix = dotMatch[2].toLowerCase();
           const suggestions: languages.CompletionItem[] = [];
-          const word = model.getWordUntilPosition(position);
           const range = {
             startLineNumber: position.lineNumber,
             endLineNumber: position.lineNumber,
@@ -555,12 +554,6 @@ export function CalculationEditor({
           const prefix = globalMatch[1];
           const methodPrefix = globalMatch[2].toLowerCase();
           const word = model.getWordUntilPosition(position);
-          const range = {
-            startLineNumber: position.lineNumber,
-            endLineNumber: position.lineNumber,
-            startColumn: position.column - methodPrefix.length,
-            endColumn: position.column
-          };
           const suggestions: languages.CompletionItem[] = [];
 
           if (prefix === 'Math' && methodPrefix === '') {
@@ -618,6 +611,7 @@ export function CalculationEditor({
     if (monacoRef.current) {
       registerCompletionProvider(monacoRef.current);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterNames, parameterNames, variableNames, paramFilters, dataSourceFilters, hookFilters, predefinedFunctions]);
 
   // Cleanup on unmount

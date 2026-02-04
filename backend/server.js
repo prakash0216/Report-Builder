@@ -6,6 +6,7 @@ import path from 'path';
 import csvParser from 'csv-parser';
 import iconv from 'iconv-lite';
 import dotenv from 'dotenv';
+import os from 'os';
 
 // Load environment-specific .env file
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -2918,14 +2919,35 @@ async function _getDataBasedOnDataSourceName(dataSourceName, queryObject) {
   }
 }
 
+// Track recent cache operations for debugging
+const recentCacheOps = [];
+const MAX_CACHE_OPS_LOG = 50;
+
+function logCacheOp(operation, dataSourceName, cacheKey, details = {}) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    operation,
+    dataSourceName,
+    cacheKey: cacheKey.substring(0, 60) + '...',
+    cacheSize: fastCache.size,
+    ...details
+  };
+  recentCacheOps.unshift(entry);
+  if (recentCacheOps.length > MAX_CACHE_OPS_LOG) {
+    recentCacheOps.pop();
+  }
+  console.log(`🔍 [CACHE ${operation}] ${dataSourceName} | Key: ${cacheKey.substring(0, 40)}... | Size: ${fastCache.size}`);
+}
+
 async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
   const cacheKey = generateCacheKey(dataSourceName, queryObject);
-  // console.log(`🔑 Cache key generated: ${cacheKey.substring(0, 80)}... (limit: ${queryObject.limit || 'none'})`);
+  console.log(`🔑 Cache key: ${cacheKey} (limit: ${queryObject.limit || 'none'})`);
   
   const cached = fastCache.get(cacheKey);
   
   if (cached) {
     if (cached.expiresAt > Date.now()) {
+      logCacheOp('HIT', dataSourceName, cacheKey, { accessCount: cached.accessCount + 1 });
       console.log(`✅ Cache HIT for ${dataSourceName} (limit: ${queryObject.limit || 'none'})`);
       const index = cacheAccessOrder.indexOf(cacheKey);
       if (index > -1) cacheAccessOrder.splice(index, 1);
@@ -2938,12 +2960,14 @@ async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
       console.log(`⚡⚡ INSTANT CACHE HIT for ${dataSourceName} (${rowCount.toLocaleString()} rows, accessed ${cached.accessCount}x)`);
       return cached.data;
     } else {
+      logCacheOp('EXPIRED', dataSourceName, cacheKey);
       fastCache.delete(cacheKey);
       const index = cacheAccessOrder.indexOf(cacheKey);
       if (index > -1) cacheAccessOrder.splice(index, 1);
     }
   }
   
+  logCacheOp('MISS', dataSourceName, cacheKey);
   console.log(`💾 CACHE MISS for ${dataSourceName} (limit: ${queryObject.limit || 'none'}) - Executing query...`);
   const queryStartTime = Date.now();
   
@@ -2963,6 +2987,7 @@ async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     cacheAccessOrder.push(cacheKey);
     
     const rowCount = Array.isArray(data) ? data.length : 0;
+    logCacheOp('SET', dataSourceName, cacheKey, { rowCount, queryTime: queryElapsed });
     console.log(`✅ Query completed in ${queryElapsed}s - Cached ${rowCount.toLocaleString()} rows (instant access ready)`);
     
     return data;
@@ -3497,6 +3522,65 @@ app.get('/api/cache/keys', (req, res) => {
     });
   } catch (err) {
     console.error('❌ Error getting cache keys:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// View recent cache operations for debugging
+app.get('/api/cache/operations', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      processId: process.pid,
+      cacheSize: fastCache.size,
+      recentOperations: recentCacheOps,
+      summary: {
+        hits: recentCacheOps.filter(op => op.operation === 'HIT').length,
+        misses: recentCacheOps.filter(op => op.operation === 'MISS').length,
+        sets: recentCacheOps.filter(op => op.operation === 'SET').length,
+        expired: recentCacheOps.filter(op => op.operation === 'EXPIRED').length
+      }
+    });
+  } catch (err) {
+    console.error('❌ Error getting cache operations:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
+// CACHE DEBUG ENDPOINT - For diagnosing cross-system cache issues
+// ============================================
+app.get('/api/cache/debug', (req, res) => {
+  try {
+    const clientIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+    const serverHostname = os.hostname();
+    
+    // Log every request for debugging
+    console.log(`🔍 Cache debug request from IP: ${clientIP}`);
+    console.log(`   Process ID: ${process.pid}`);
+    console.log(`   Cache size: ${fastCache.size}`);
+    console.log(`   Server hostname: ${serverHostname}`);
+    
+    res.json({
+      success: true,
+      debug: {
+        processId: process.pid,
+        serverHostname: serverHostname,
+        clientIP: clientIP,
+        cacheSize: fastCache.size,
+        cacheKeys: Array.from(fastCache.keys()).slice(0, 10), // First 10 keys
+        uptime: Math.floor(process.uptime()) + ' seconds',
+        memoryUsage: {
+          heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + ' MB',
+          heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + ' MB',
+          rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + ' MB'
+        },
+        timestamp: new Date().toISOString(),
+        nodeVersion: process.version
+      }
+    });
+  } catch (err) {
+    console.error('❌ Error in cache debug:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -5409,6 +5493,8 @@ app.put('/api/dashboards/:id', async (req, res) => {
     embedLink,
     triggerCalculation
   } = req.body;
+
+  console.log('📝 [API /dashboards/:id] updates:', req.body);
   
   try {
     const updates = [];
