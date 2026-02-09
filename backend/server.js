@@ -45,9 +45,47 @@ const MAX_CACHE_SIZE = 500; // Maximum number of cached queries
 
 const fastCache = new Map();
 const keyHashCache = new Map();
-let cacheAccessOrder = [];
+const cacheAccessOrderMap = new Map(); // LRU ordering (key -> lastAccessed)
+const inflightCache = new Map(); // Deduplicate concurrent requests per key
+
+// ============================================
+// PREDEFINED FUNCTIONS CACHE (for /api/calculate)
+// ============================================
+const FUNCTIONS_CACHE_TTL_MS = 60 * 1000; // 1 minute
+const predefinedFunctionsCache = new Map();
+
+async function getPredefinedFunctionsCode(dashboardId) {
+  const cacheKey = dashboardId ? `dash:${dashboardId}` : 'global';
+  const cached = predefinedFunctionsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.code;
+  }
+
+  let functionsQuery = 'SELECT * FROM predefined_functions WHERE is_enabled = true AND (dashboard_id IS NULL';
+  if (dashboardId) {
+    functionsQuery += ` OR dashboard_id = ${parseInt(dashboardId)}`;
+  }
+  functionsQuery += ')';
+
+  const functions = await dbClient.query(functionsQuery);
+  let code = '';
+  if (functions && functions.length > 0) {
+    code = functions.map(fn => {
+      const params = fn.parameters_json ? JSON.parse(fn.parameters_json) : [];
+      const paramNames = params.map(p => p.name).join(', ');
+      return `function ${fn.name}(${paramNames}) {\n${fn.body}\n}`;
+    }).join('\n\n');
+  }
+
+  predefinedFunctionsCache.set(cacheKey, {
+    code,
+    expiresAt: Date.now() + FUNCTIONS_CACHE_TTL_MS,
+  });
+  return code;
+}
 
 console.log(`⚡ Ultra-fast cache initialized (native Map, no compression, direct object references)`);
+console.log(`📦 Cache size on startup: ${fastCache.size} entries (should be 0 after restart)`);
 console.log(`🔧 Process ID: ${process.pid} - All requests should hit this same process for cache to work`);
 
 // ============================================
@@ -87,8 +125,7 @@ function cleanExpiredCache() {
   for (const [key, value] of fastCache.entries()) {
     if (value.expiresAt < now) {
       fastCache.delete(key);
-      const index = cacheAccessOrder.indexOf(key);
-      if (index > -1) cacheAccessOrder.splice(index, 1);
+      cacheAccessOrderMap.delete(key);
       cleaned++;
     }
   }
@@ -102,10 +139,10 @@ setInterval(cleanExpiredCache, 5 * 60 * 1000);
 
 function evictLRU() {
   if (fastCache.size < MAX_CACHE_SIZE) return;
-  
-  if (cacheAccessOrder.length > 0) {
-    const lruKey = cacheAccessOrder.shift();
+  if (cacheAccessOrderMap.size > 0) {
+    const lruKey = cacheAccessOrderMap.keys().next().value;
     fastCache.delete(lruKey);
+    cacheAccessOrderMap.delete(lruKey);
     console.log(`🗑️  Evicted LRU cache entry: ${lruKey.substring(0, 50)}...`);
   }
 }
@@ -479,8 +516,7 @@ app.put('/api/datasources/:name/query', async (req, res) => {
     for (const key of fastCache.keys()) {
       if (key.startsWith(prefix)) {
         fastCache.delete(key);
-        const index = cacheAccessOrder.indexOf(key);
-        if (index > -1) cacheAccessOrder.splice(index, 1);
+        cacheAccessOrderMap.delete(key);
         clearedCount++;
       }
     }
@@ -506,8 +542,7 @@ app.post('/api/remove-data-source', async (req, res) => {
     for (const key of fastCache.keys()) {
       if (key.startsWith(prefix)) {
         fastCache.delete(key);
-        const index = cacheAccessOrder.indexOf(key);
-        if (index > -1) cacheAccessOrder.splice(index, 1);
+        cacheAccessOrderMap.delete(key);
         clearedCount++;
       }
     }
@@ -842,6 +877,7 @@ app.post('/api/predefined-functions', async (req, res) => {
         WHERE name='${escapedName}'${dashboardId ? ` AND dashboard_id=${parseInt(dashboardId)}` : ''}`;
       await dbClient.run(updateQuery);
       console.log(`✅ Predefined function updated: ${name}`);
+      predefinedFunctionsCache.clear();
       res.json({ success: true, message: 'Function updated successfully', id: functionId });
     } else {
       // Insert new function
@@ -853,6 +889,7 @@ app.post('/api/predefined-functions', async (req, res) => {
          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
       await dbClient.run(insertQuery);
       console.log(`✅ Predefined function added: ${name} (dashboardId: ${dashboardId || 'global'})`);
+      predefinedFunctionsCache.clear();
       res.json({ success: true, message: 'Function added successfully', id: functionId });
     }
   } catch (err) {
@@ -926,6 +963,7 @@ app.post('/api/predefined-functions/bulk', async (req, res) => {
     }
     
     console.log(`✅ Predefined functions bulk saved: ${savedCount}/${functions.length} functions (${isGlobal ? 'GLOBAL' : `dashboardId: ${actualDashboardId}`})`);
+    predefinedFunctionsCache.clear();
     res.json({ success: true, message: `${functions.length} functions saved successfully` });
   } catch (err) {
     console.error('❌ Error bulk saving predefined functions:', err);
@@ -977,6 +1015,7 @@ app.put('/api/predefined-functions/:id', async (req, res) => {
     
     await dbClient.run(updateQuery);
     console.log(`✅ Predefined function updated: id=${id}`);
+    predefinedFunctionsCache.clear();
     res.json({ success: true, message: 'Function updated successfully' });
   } catch (err) {
     console.error('❌ Error updating predefined function:', err);
@@ -1001,6 +1040,7 @@ app.delete('/api/predefined-functions/:id', async (req, res) => {
     const deleteQuery = `DELETE FROM predefined_functions WHERE function_id='${id.replace(/'/g, "''")}'`;
     await dbClient.run(deleteQuery);
     console.log(`✅ Predefined function deleted: id=${id}`);
+    predefinedFunctionsCache.clear();
     res.json({ success: true, message: 'Function deleted successfully' });
   } catch (err) {
     console.error('❌ Error deleting predefined function:', err);
@@ -2673,8 +2713,7 @@ function clearCacheForDataSource(dataSourceName) {
   
   for (const key of keysToDelete) {
     fastCache.delete(key);
-    const index = cacheAccessOrder.indexOf(key);
-    if (index > -1) cacheAccessOrder.splice(index, 1);
+    cacheAccessOrderMap.delete(key);
     cleared++;
   }
   
@@ -2949,9 +2988,8 @@ async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     if (cached.expiresAt > Date.now()) {
       logCacheOp('HIT', dataSourceName, cacheKey, { accessCount: cached.accessCount + 1 });
       console.log(`✅ Cache HIT for ${dataSourceName} (limit: ${queryObject.limit || 'none'})`);
-      const index = cacheAccessOrder.indexOf(cacheKey);
-      if (index > -1) cacheAccessOrder.splice(index, 1);
-      cacheAccessOrder.push(cacheKey);
+      cacheAccessOrderMap.delete(cacheKey);
+      cacheAccessOrderMap.set(cacheKey, Date.now());
       
       cached.accessCount++;
       cached.lastAccessed = Date.now();
@@ -2962,16 +3000,21 @@ async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
     } else {
       logCacheOp('EXPIRED', dataSourceName, cacheKey);
       fastCache.delete(cacheKey);
-      const index = cacheAccessOrder.indexOf(cacheKey);
-      if (index > -1) cacheAccessOrder.splice(index, 1);
+      cacheAccessOrderMap.delete(cacheKey);
     }
+  }
+  
+  // Deduplicate concurrent misses for the same key
+  if (inflightCache.has(cacheKey)) {
+    logCacheOp('HIT', dataSourceName, cacheKey, { inflight: true });
+    return await inflightCache.get(cacheKey);
   }
   
   logCacheOp('MISS', dataSourceName, cacheKey);
   console.log(`💾 CACHE MISS for ${dataSourceName} (limit: ${queryObject.limit || 'none'}) - Executing query...`);
   const queryStartTime = Date.now();
-  
-  try {
+
+  const inflightPromise = (async () => {
     const data = await _getDataBasedOnDataSourceName(dataSourceName, queryObject);
     const queryElapsed = ((Date.now() - queryStartTime) / 1000).toFixed(2);
     
@@ -2984,20 +3027,215 @@ async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
       lastAccessed: Date.now()
     });
     
-    cacheAccessOrder.push(cacheKey);
+    cacheAccessOrderMap.set(cacheKey, Date.now());
     
     const rowCount = Array.isArray(data) ? data.length : 0;
     logCacheOp('SET', dataSourceName, cacheKey, { rowCount, queryTime: queryElapsed });
     console.log(`✅ Query completed in ${queryElapsed}s - Cached ${rowCount.toLocaleString()} rows (instant access ready)`);
     
     return data;
+  })();
+
+  inflightCache.set(cacheKey, inflightPromise);
+
+  try {
+    return await inflightPromise;
   } catch (error) {
     console.error(`❌ Query failed for ${dataSourceName}:`, error.message);
     throw error;
+  } finally {
+    inflightCache.delete(cacheKey);
   }
 }
 
+// ============================================
+// BATCH CALCULATE ENDPOINT - Execute multiple calculations in ONE request
+// Eliminates N HTTP round-trips → 1 HTTP round-trip
+// ============================================
+app.post('/api/calculate-batch', async (req, res) => {
+  const batchStartTime = Date.now();
+  const { calculations, existingVariables, existingParameters, existingFilters, dashboardId } = req.body;
+  
+  if (!Array.isArray(calculations) || calculations.length === 0) {
+    return res.status(400).json({ message: 'Missing or empty calculations array' });
+  }
+
+  console.log(`🚀 [Batch Calculate] Starting batch of ${calculations.length} calculations...`);
+
+  try {
+    // 🔥 Fetch predefined functions ONCE for the entire batch
+    let predefinedFunctionsCode = '';
+    try {
+      predefinedFunctionsCode = await getPredefinedFunctionsCode(dashboardId);
+    } catch (fnErr) {
+      console.warn('[Batch Calculate] Could not load predefined functions:', fnErr.message);
+    }
+
+    // 🔥 Built-in utility functions (same as single endpoint)
+    const builtInFunctions = `
+function formatCurrency(value, symbol, decimals) {
+  const sym = symbol || '$';
+  const dec = decimals !== undefined ? decimals : 2;
+  if (value === null || value === undefined || isNaN(value)) return sym + '0.00';
+  const num = Number(value);
+  const formatted = Math.abs(num).toFixed(dec).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');
+  return num < 0 ? '-' + sym + formatted : sym + formatted;
+}
+function formatPercentage(value, decimals, multiply) {
+  const dec = decimals !== undefined ? decimals : 1;
+  const mult = multiply !== false;
+  if (value === null || value === undefined || isNaN(value)) return '0%';
+  const num = mult ? Number(value) * 100 : Number(value);
+  return num.toFixed(dec) + '%';
+}
+function formatNumber(value, decimals) {
+  const dec = decimals !== undefined ? decimals : 0;
+  if (value === null || value === undefined || isNaN(value)) return '0';
+  const num = Number(value);
+  return num.toFixed(dec).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');
+}
+function calculateGrowth(current, previous) {
+  if (previous === 0 || previous === null || previous === undefined) return 0;
+  if (current === null || current === undefined) return 0;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+function safeNumber(value, defaultValue) {
+  const def = defaultValue !== undefined ? defaultValue : 0;
+  if (value === null || value === undefined || value === '') return def;
+  const num = Number(value);
+  return isNaN(num) ? def : num;
+}
+function sumArray(arr, key) {
+  if (!Array.isArray(arr)) return 0;
+  if (key) return arr.reduce((sum, item) => sum + (Number(item[key]) || 0), 0);
+  return arr.reduce((sum, val) => sum + (Number(val) || 0), 0);
+}
+function avgArray(arr, key) {
+  if (!Array.isArray(arr) || arr.length === 0) return 0;
+  const sum = key 
+    ? arr.reduce((s, item) => s + (Number(item[key]) || 0), 0)
+    : arr.reduce((s, val) => s + (Number(val) || 0), 0);
+  return sum / arr.length;
+}
+function filterArray(arr, key, value) {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter(item => item[key] === value);
+}
+function groupBy(arr, key) {
+  if (!Array.isArray(arr)) return {};
+  return arr.reduce((groups, item) => {
+    const groupKey = item[key];
+    if (!groups[groupKey]) groups[groupKey] = [];
+    groups[groupKey].push(item);
+    return groups;
+  }, {});
+}
+function truncateText(text, maxLength, suffix) {
+  const max = maxLength || 50;
+  const suf = suffix !== undefined ? suffix : '...';
+  if (!text || typeof text !== 'string') return '';
+  if (text.length <= max) return text;
+  return text.substring(0, max - suf.length) + suf;
+}
+function formatDate(dateValue, format) {
+  if (!dateValue) return '';
+  const date = new Date(dateValue);
+  if (isNaN(date.getTime())) return '';
+  const fmt = format || 'short';
+  if (fmt === 'iso') return date.toISOString().split('T')[0];
+  if (fmt === 'long') return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  if (fmt === 'short') return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return date.toLocaleDateString();
+}
+function isValidValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string' && value.trim() === '') return false;
+  if (Array.isArray(value) && value.length === 0) return false;
+  return true;
+}
+`;
+
+    // 🔥 Build the shared context ONCE (not per-calculation)
+    const baseVariables = { ...existingVariables, ...existingParameters, ...existingFilters };
+    
+    // Track calculated variables for dependency chaining
+    const calculatedVariables = {};
+    const results = [];
+
+    for (const calc of calculations) {
+      const calcStart = Date.now();
+      const { logic, variableName } = calc;
+      
+      if (!logic || !variableName) {
+        results.push({ variableName: variableName || 'unknown', success: false, error: 'Missing logic or variableName' });
+        continue;
+      }
+
+      try {
+        // Merge base variables with already-calculated ones from this batch
+        const allAvailableVariables = { ...baseVariables, ...calculatedVariables };
+
+        // Normalize context
+        const normalizedContext = Object.create(null);
+        for (const [name, value] of Object.entries(allAvailableVariables)) {
+          if (value && typeof value === 'object' && value.values !== undefined && value.isAll !== undefined) {
+            const arr = Array.isArray(value.values) ? [...value.values] : [];
+            arr.isAll = value.isAll;
+            arr.total = value.total;
+            arr.columnName = value.columnName;
+            normalizedContext[name] = arr;
+          } else {
+            normalizedContext[name] = value;
+          }
+        }
+
+        const contextKeys = Object.keys(normalizedContext);
+        const contextDestructure = contextKeys.length > 0
+          ? `const { ${contextKeys.join(', ')} } = context;`
+          : '';
+
+        const funcString = `(async function(dsConnect, context) {
+          ${builtInFunctions}
+          ${predefinedFunctionsCode}
+          ${contextDestructure}
+          return (async () => {
+            ${logic}
+          })();
+        })`;
+
+        const cal = eval(funcString);
+        const result = await cal(getDataBasedOnDataSourceName, normalizedContext);
+        
+        // Store result for dependency chaining
+        calculatedVariables[variableName] = result;
+        
+        const calcMs = Date.now() - calcStart;
+        results.push({ variableName, value: result, success: true });
+        
+        if (calcMs > 10) {
+          console.log(`⏱️ [Batch] ${variableName}: ${calcMs}ms`);
+        }
+      } catch (err) {
+        const calcMs = Date.now() - calcStart;
+        console.error(`❌ [Batch] ${variableName} FAILED after ${calcMs}ms: ${err.message}`);
+        results.push({ variableName, success: false, error: err.message });
+      }
+    }
+
+    const totalMs = Date.now() - batchStartTime;
+    const successCount = results.filter(r => r.success).length;
+    console.log(`✅ [Batch Calculate] Completed ${successCount}/${calculations.length} in ${totalMs}ms (avg ${(totalMs / calculations.length).toFixed(1)}ms/calc)`);
+    
+    res.json({ results, success: true, totalMs });
+  } catch (err) {
+    const totalMs = Date.now() - batchStartTime;
+    console.error(`❌ [Batch Calculate] FAILED after ${totalMs}ms: ${err.message}`);
+    return res.status(500).json({ message: 'Batch calculation error: ' + err.message });
+  }
+});
+
 app.post('/api/calculate', async (req, res) => {
+  const calcStartTime = Date.now();
   const { logic, existingVariables, existingParameters, variableName, existingFilters, dashboardId } = req.body;
   if (!logic || !variableName) {
     return res.status(400).json({ message: 'Missing logic or variableName' });
@@ -3006,25 +3244,10 @@ app.post('/api/calculate', async (req, res) => {
   const allAvailableVariables = { ...existingVariables, ...existingParameters, ...existingFilters };
 
   try {
-    // 🔥 Fetch predefined functions (global + dashboard-specific if provided)
+    // 🔥 Fetch predefined functions (cached)
     let predefinedFunctionsCode = '';
     try {
-      // Load all global functions + dashboard-specific if dashboardId is provided
-      let functionsQuery = 'SELECT * FROM predefined_functions WHERE is_enabled = true AND (dashboard_id IS NULL';
-      if (dashboardId) {
-        functionsQuery += ` OR dashboard_id = ${parseInt(dashboardId)}`;
-      }
-      functionsQuery += ')';
-      const functions = await dbClient.query(functionsQuery);
-      
-      if (functions && functions.length > 0) {
-        predefinedFunctionsCode = functions.map(fn => {
-          const params = fn.parameters_json ? JSON.parse(fn.parameters_json) : [];
-          const paramNames = params.map(p => p.name).join(', ');
-          return `function ${fn.name}(${paramNames}) {\n${fn.body}\n}`;
-        }).join('\n\n');
-        console.log(`📦 [Calculate] Loaded ${functions.length} predefined functions (global + dashboard-specific)`);
-      }
+      predefinedFunctionsCode = await getPredefinedFunctionsCode(dashboardId);
     } catch (fnErr) {
       console.warn('[Calculate] Could not load predefined functions:', fnErr.message);
       // Continue without predefined functions
@@ -3139,50 +3362,49 @@ function isValidValue(value) {
 }
 `;
 
-    const variableDeclarations = Object.entries(allAvailableVariables)
-    .map(([name, value]) => {
-      let serialized;
-      
+    // 🔥 PERF: Avoid JSON.stringify for huge variables on every calculation
+    const normalizedContext = Object.create(null);
+    for (const [name, value] of Object.entries(allAvailableVariables)) {
       if (value && typeof value === 'object' && value.values !== undefined && value.isAll !== undefined) {
-        const arrayStr = JSON.stringify(value.values);
-        serialized = `(function() {
-          const arr = ${arrayStr};
-          arr.isAll = ${value.isAll};
-          arr.total = ${value.total};
-          arr.columnName = ${JSON.stringify(value.columnName)};
-          return arr;
-        })()`;
-      } 
-      else if (value === undefined) {
-        serialized = 'undefined';
-      } else if (value === null) {
-        serialized = 'null';
-      } else if (typeof value === 'string' && value === '') {
-        serialized = '""';
+        const arr = Array.isArray(value.values) ? [...value.values] : [];
+        arr.isAll = value.isAll;
+        arr.total = value.total;
+        arr.columnName = value.columnName;
+        normalizedContext[name] = arr;
       } else {
-        serialized = JSON.stringify(value);
+        normalizedContext[name] = value;
       }
-      
-      return `const ${name} = ${serialized};`;
-    })
-    .join('\n');
+    }
 
-    // 🔥 Combine: built-in functions + user predefined functions + variables + user logic
-    const funcString = `(async function(dsConnect) {
+    const contextKeys = Object.keys(normalizedContext);
+    const contextDestructure = contextKeys.length > 0
+      ? `const { ${contextKeys.join(', ')} } = context;`
+      : '';
+
+    // 🔥 Combine: built-in functions + user predefined functions + logic (no JSON stringify)
+    const funcString = `(async function(dsConnect, context) {
       ${builtInFunctions}
       ${predefinedFunctionsCode}
-      ${variableDeclarations}
+      ${contextDestructure}
       return (async () => {
         ${logic}
       })();
     })`;
 
     const cal = eval(funcString);
-    const result = await cal(getDataBasedOnDataSourceName);
+    const evalTime = Date.now();
+    const result = await cal(getDataBasedOnDataSourceName, normalizedContext);
+    const execTime = Date.now();
+
+    const totalMs = execTime - calcStartTime;
+    const evalMs = evalTime - calcStartTime;
+    const runMs = execTime - evalTime;
+    console.log(`⏱️ [Calculate] ${variableName}: total=${totalMs}ms (setup=${evalMs}ms, exec=${runMs}ms)`);
 
     res.json({ value: result, success: true });
   } catch (err) {
-    console.error(`Error in /api/calculate: ${err.message}`);
+    const totalMs = Date.now() - calcStartTime;
+    console.error(`❌ [Calculate] ${variableName} FAILED after ${totalMs}ms: ${err.message}`);
     return res.status(400).json({ message: 'Error evaluating logic: ' + err.message });
   }
 });
@@ -3231,8 +3453,7 @@ app.post("/api/rename-data-source",async(req,res)=>{
     for (const key of fastCache.keys()) {
       if (key.startsWith(prefix)) {
         fastCache.delete(key);
-        const index = cacheAccessOrder.indexOf(key);
-        if (index > -1) cacheAccessOrder.splice(index, 1);
+        cacheAccessOrderMap.delete(key);
         clearedCount++;
       }
     }
@@ -3473,8 +3694,9 @@ app.post('/api/cache/clear', (req, res) => {
   try {
     const keysBefore = fastCache.size;
     fastCache.clear();
-    cacheAccessOrder = [];
+    cacheAccessOrderMap.clear();
     keyHashCache.clear();
+    inflightCache.clear();
     console.log(`🗑️  Cache cleared - Removed ${keysBefore} keys`);
     res.json({ 
       success: true, 
@@ -3495,8 +3717,7 @@ app.post('/api/cache/clear/:dataSourceName', (req, res) => {
     for (const key of fastCache.keys()) {
       if (key.startsWith(prefix)) {
         fastCache.delete(key);
-        const index = cacheAccessOrder.indexOf(key);
-        if (index > -1) cacheAccessOrder.splice(index, 1);
+        cacheAccessOrderMap.delete(key);
         clearedCount++;
       }
     }
