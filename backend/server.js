@@ -4410,12 +4410,10 @@ app.get('/api/child-card-configs', async (req, res) => {
     query += ' ORDER BY COALESCE(last_modified, created_at) DESC';
     
     const configs = await dbClient.query(query);
-    console.log('[child-card-configs] Raw DB rows:', JSON.stringify(configs, null, 2));
     const result = {};
     
     if (configs && Array.isArray(configs)) {
       configs.forEach(row => {
-        console.log(`[child-card-configs] Processing ${row.parent_card_id}: gap=${row.gap}, type=${typeof row.gap}`);
         result[row.parent_card_id] = {
           isContainer: row.is_container,
           containerLayout: row.container_layout || 'grid',
@@ -4436,7 +4434,7 @@ app.get('/api/child-card-configs', async (req, res) => {
       });
     }
     
-    console.log('[child-card-configs] Returning result:', JSON.stringify(result, null, 2));
+    console.log(`[child-card-configs] Loaded ${Object.keys(result).length} parent configs for viewId=${viewId || 'all'}`);
     res.json({ success: true, configs: result });
   } catch (err) {
     console.error('Error fetching child card configs:', err.message || err);

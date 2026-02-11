@@ -29,73 +29,31 @@ import {
 } from '../recoil/ViewContext';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
+import { useDashboardContext } from '../context/DashboardContext';
 
 import { API_BASE_URL } from '../config/api.config';
 
 // Re-export dataLoadedState for backwards compatibility
 export { dataLoadedState } from '../recoil/initializationState';
 
+// Prevent duplicate initialization calls in React.StrictMode remount cycles.
+const initInFlightByViewKey = new Map<string, Promise<void>>();
+const lastInitCompletedAtByViewKey = new Map<string, number>();
+const STRICT_MODE_DEDUPE_WINDOW_MS = 2000;
+
 // Component to preload all data at app startup - now view-aware
 export const DataInitializer: React.FC = () => {
   const setDataLoaded = useSetRecoilState(dataLoadedState);
+  const setCurrentViewContext = useSetRecoilState(currentViewContextState);
   const { dashboardName: dashboardSlug, viewName: viewSlug } = useParams<{ dashboardName?: string; viewName?: string }>();
+  const {
+    dashboardId: contextDashboardId,
+    viewId: contextViewId,
+    isLoading: contextLoading,
+    errorType: contextErrorType,
+  } = useDashboardContext();
   const lastLoadedViewRef = useRef<string | null>(null);
   const lastLoadedDashboardRef = useRef<number | null>(null);
-
-  // Fetch dashboard and view IDs from slugs
-  // Returns { dashboardId, viewId, error } where error indicates if resource was not found
-  const fetchViewContext = useRecoilCallback(({ set }) => async (): Promise<{ 
-    dashboardId: number | null; 
-    viewId: number | null; 
-    error: 'dashboard_not_found' | 'view_not_found' | null;
-  }> => {
-    if (!dashboardSlug || !viewSlug) {
-      // Not on a view page, clear context
-      setCurrentViewId(null);
-      setCurrentDashboardId(null);
-      set(currentViewContextState, {
-        dashboardId: null,
-        dashboardSlug: null,
-        viewId: null,
-        viewSlug: null,
-      });
-      return { dashboardId: null, viewId: null, error: null };
-    }
-
-    try {
-      // Get dashboard ID from slug
-      const dashboardRes = await axios.get(`${API_BASE_URL}/api/dashboards/${dashboardSlug}`);
-      if (!dashboardRes.data.success || !dashboardRes.data.dashboard) {
-        console.error(`❌ [Data Initializer] Dashboard not found: "${dashboardSlug}"`);
-        return { dashboardId: null, viewId: null, error: 'dashboard_not_found' };
-      }
-      const dashboardId = dashboardRes.data.dashboard.id;
-      
-      // Get view ID from slug
-      const viewRes = await axios.get(`${API_BASE_URL}/api/dashboards/${dashboardSlug}/views/${viewSlug}`);
-      if (!viewRes.data.success || !viewRes.data.view) {
-        console.error(`❌ [Data Initializer] View not found: "${viewSlug}" in dashboard "${dashboardSlug}"`);
-        return { dashboardId, viewId: null, error: 'view_not_found' };
-      }
-      const viewId = viewRes.data.view.id;
-
-      // Update global context
-      setCurrentViewId(viewId);
-      setCurrentDashboardId(dashboardId);
-      set(currentViewContextState, {
-        dashboardId,
-        dashboardSlug,
-        viewId,
-        viewSlug,
-      });
-
-      console.log(`✅ [Data Initializer] Context set: dashboardId=${dashboardId}, viewId=${viewId}`);
-      return { dashboardId, viewId, error: null };
-    } catch (err) {
-      console.error('Failed to fetch view context:', err);
-      return { dashboardId: null, viewId: null, error: null };
-    }
-  }, [dashboardSlug, viewSlug]);
 
   const initializeAllData = useRecoilCallback(({ set, snapshot }) => async (viewId: number | null, dashboardId: number | null) => {
     const viewIdParam = viewId ? `?viewId=${viewId}` : '';
@@ -168,24 +126,19 @@ export const DataInitializer: React.FC = () => {
       // 2. Load all parameter names and values (dashboard-scoped)
       console.log('📊 [Data Initializer] Loading parameters...');
       try {
-        const paramsResponse = await axios.get(`${API_BASE_URL}/api/parameters/names${dashboardIdParam}`);
-        if (paramsResponse.data.success && paramsResponse.data.parameterNames) {
-          const paramNames = paramsResponse.data.parameterNames;
+        // Single bulk request instead of N+1 calls (/parameters/names + /parameters/:name).
+        const paramsResponse = await axios.get(`${API_BASE_URL}/api/dashboards/${dashboardId}/parameters`);
+        if (paramsResponse.data.success && paramsResponse.data.parameters) {
+          const parameters = paramsResponse.data.parameters;
+          const paramNames = parameters.map((p: any) => p.name);
           set(parameterNamesState, paramNames);
-          console.log(`✅ [Data Initializer] Loaded ${paramNames.length} parameter names`);
-          
-          // Load each parameter value
-          for (const paramName of paramNames) {
-            try {
-              const paramValueResponse = await axios.get(`${API_BASE_URL}/api/parameters/${paramName}`);
-              if (paramValueResponse.data.success && paramValueResponse.data.value !== undefined) {
-                set(parameterAtomFamily(paramName), paramValueResponse.data.value);
-              }
-            } catch (err) {
-              // Silently skip individual parameter errors
+          console.log(`✅ [Data Initializer] Loaded ${paramNames.length} parameters in one request`);
+
+          for (const param of parameters) {
+            if (param?.name) {
+              set(parameterAtomFamily(param.name), param.value ?? '');
             }
           }
-          console.log(`✅ [Data Initializer] Loaded all parameter values`);
         }
       } catch (err) {
         console.warn('⚠️ [Data Initializer] Failed to load parameters:', err);
@@ -398,6 +351,55 @@ export const DataInitializer: React.FC = () => {
       
       console.log(`🔍 [DataInitializer] Route params: dashboardSlug="${dashboardSlug}", viewSlug="${viewSlug}"`);
       console.log(`🔍 [DataInitializer] View key: "${viewKey}"`);
+      console.log(`🔍 [DataInitializer] Context: loading=${contextLoading}, dashboardId=${contextDashboardId}, viewId=${contextViewId}, error=${contextErrorType}`);
+
+      // Wait for DashboardProvider to resolve dashboard/view context first.
+      if (contextLoading) {
+        return;
+      }
+
+      // Not on a view page, clear context and stop.
+      if (!dashboardSlug || !viewSlug) {
+        setCurrentViewId(null);
+        setCurrentDashboardId(null);
+        setCurrentViewContext({
+          dashboardId: null,
+          dashboardSlug: null,
+          viewId: null,
+          viewSlug: null,
+        });
+        setDataLoaded(true);
+        return;
+      }
+
+      // Dashboard/view not found - don't initialize downstream data.
+      if (contextErrorType === 'dashboard_not_found' || contextErrorType === 'view_not_found') {
+        console.error(`🚫 [DataInitializer] Skipping initialization due to context error: ${contextErrorType}`);
+        setCurrentViewId(null);
+        setCurrentDashboardId(null);
+        setCurrentViewContext({
+          dashboardId: null,
+          dashboardSlug: null,
+          viewId: null,
+          viewSlug: null,
+        });
+        setDataLoaded(true);
+        return;
+      }
+
+      if (contextDashboardId === null || contextViewId === null) {
+        console.warn(`⚠️ [DataInitializer] Missing context IDs, skipping initialization`);
+        setCurrentViewId(null);
+        setCurrentDashboardId(null);
+        setCurrentViewContext({
+          dashboardId: null,
+          dashboardSlug: null,
+          viewId: null,
+          viewSlug: null,
+        });
+        setDataLoaded(true);
+        return;
+      }
       
       // 🔥 ALWAYS reload data when visiting a view to ensure:
       // 1. Filter values are reset to defaults
@@ -407,30 +409,42 @@ export const DataInitializer: React.FC = () => {
       // 🔥 Set dataLoaded to false BEFORE starting to load
       // This shows loading indicator in the UI
       setDataLoaded(false);
-      
-      // Fetch view context (dashboard/view IDs from slugs)
-      console.log(`📡 [DataInitializer] Fetching view context...`);
-      const { dashboardId, viewId, error } = await fetchViewContext();
-      console.log(`📡 [DataInitializer] Got context: dashboardId=${dashboardId}, viewId=${viewId}, error=${error}`);
-      
-      // 🔥 CRITICAL: Do NOT initialize data if dashboard or view doesn't exist
-      // This prevents database corruption from invalid routes
-      if (error) {
-        console.error(`🚫 [DataInitializer] Skipping data initialization due to error: ${error}`);
-        // Mark data as "loaded" to prevent infinite loading state, but don't actually load data
+
+      // Sync route context for other modules that read these globals/atoms.
+      setCurrentViewId(contextViewId);
+      setCurrentDashboardId(contextDashboardId);
+      setCurrentViewContext({
+        dashboardId: contextDashboardId,
+        dashboardSlug: dashboardSlug || null,
+        viewId: contextViewId,
+        viewSlug: viewSlug || null,
+      });
+
+      // StrictMode mount/unmount/remount can trigger duplicate init calls for same view key.
+      const inFlight = initInFlightByViewKey.get(viewKey);
+      if (inFlight) {
+        console.log(`⏳ [DataInitializer] Reusing in-flight init for "${viewKey}"`);
+        await inFlight;
+        return;
+      }
+
+      const lastCompletedAt = lastInitCompletedAtByViewKey.get(viewKey);
+      if (lastCompletedAt && Date.now() - lastCompletedAt < STRICT_MODE_DEDUPE_WINDOW_MS) {
+        console.log(`⏭️ [DataInitializer] Skipping duplicate init for "${viewKey}" (${Date.now() - lastCompletedAt}ms since last run)`);
         setDataLoaded(true);
         return;
       }
-      
-      // Only initialize data if we have valid dashboard and view IDs
-      if (viewId === null || dashboardId === null) {
-        console.warn(`⚠️ [DataInitializer] Missing viewId or dashboardId, skipping initialization`);
-        setDataLoaded(true);
-        return;
-      }
-      
-      // Initialize data with the current view context
-      await initializeAllData(viewId, dashboardId);
+
+      const initPromise = initializeAllData(contextViewId, contextDashboardId)
+        .then(() => {
+          lastInitCompletedAtByViewKey.set(viewKey, Date.now());
+        })
+        .finally(() => {
+          initInFlightByViewKey.delete(viewKey);
+        });
+
+      initInFlightByViewKey.set(viewKey, initPromise);
+      await initPromise;
       
       // Update refs for dashboard-level optimizations (filter panel state)
       lastLoadedViewRef.current = viewKey;
@@ -438,7 +452,17 @@ export const DataInitializer: React.FC = () => {
     };
 
     initialize();
-  }, [dashboardSlug, viewSlug, fetchViewContext, initializeAllData, setDataLoaded]);
+  }, [
+    dashboardSlug,
+    viewSlug,
+    contextDashboardId,
+    contextViewId,
+    contextLoading,
+    contextErrorType,
+    initializeAllData,
+    setCurrentViewContext,
+    setDataLoaded,
+  ]);
 
   return null; // This component doesn't render anything
 };
