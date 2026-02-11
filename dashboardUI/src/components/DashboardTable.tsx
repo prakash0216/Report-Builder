@@ -27,6 +27,9 @@ interface DashboardTableProps {
   dataSource: string;
   settings?: TableSettings;
   directData?: any[];  // Optional: directly pass data instead of using dataSource variable
+  onRowClick?: (rowData: Record<string, any>, rowIndex: number, columns: string[]) => void;  // onClick action callback
+  highlightEnabled?: boolean;        // Whether row highlighting on click is enabled
+  highlightedRowIndex?: number | null; // Which row (in displayedData) is currently highlighted
 }
 
 const safeParse = (value: string): any => {
@@ -58,7 +61,7 @@ const getFontSize = (size: 'small' | 'medium' | 'large'): string => {
 // Lazy load batch size
 const LAZY_LOAD_BATCH_SIZE = 50;
 
-export default function DashboardTable({ dataSource, settings, directData }: DashboardTableProps) {
+export default function DashboardTable({ dataSource, settings, directData, onRowClick, highlightEnabled, highlightedRowIndex }: DashboardTableProps) {
   const tableSettings: TableSettings = settings || defaultTableSettings;
   const theme = tableSettings.theme || defaultTableTheme;
   
@@ -420,39 +423,59 @@ export default function DashboardTable({ dataSource, settings, directData }: Das
           </TableHead>
           )}
           <TableBody>
-            {displayedData.map((row: any, rowIdx: number) => (
-              <TableRow 
-                key={rowIdx} 
-                hover
-                sx={{
-                  backgroundColor: rowIdx % 2 === 0 ? theme.rowBgColor : theme.rowAltBgColor,
-                  '&:hover': {
-                    bgcolor: `${theme.headerBgColor}22 !important`,
-                  },
-                }}
-              >
-                {columns.map((col) => (
-                  <TableCell 
-                    key={col}
-                    sx={{ 
-                      fontSize: getFontSize(theme.fontSize),
-                      py: getCellPadding(theme.cellPadding),
-                      px: getCellPadding(theme.cellPadding) + 0.5,
-                      color: theme.rowTextColor,
-                      borderBottom: `1px solid ${theme.borderColor}`,
-                      maxWidth: 250,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {typeof row[col] === 'object' 
-                      ? JSON.stringify(row[col]) 
-                      : String(row[col] ?? '')}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
+            {displayedData.map((row: any, rowIdx: number) => {
+              const isHighlighted = highlightEnabled && highlightedRowIndex === rowIdx;
+              return (
+                <TableRow 
+                  key={rowIdx} 
+                  hover
+                  onClick={onRowClick ? () => onRowClick(row, rowIdx, columns) : undefined}
+                  sx={{
+                    backgroundColor: isHighlighted
+                      ? 'rgba(59, 130, 246, 0.15) !important'
+                      : rowIdx % 2 === 0 ? theme.rowBgColor : theme.rowAltBgColor,
+                    cursor: onRowClick ? 'pointer' : 'default',
+                    transition: 'background-color 0.15s ease',
+                    '&:hover': {
+                      bgcolor: isHighlighted
+                        ? 'rgba(59, 130, 246, 0.22) !important'
+                        : `${theme.headerBgColor}22 !important`,
+                    },
+                    ...(isHighlighted ? {
+                      outline: '2px solid rgba(59, 130, 246, 0.4)',
+                      outlineOffset: '-2px',
+                      borderRadius: '2px',
+                    } : {}),
+                    // Dim non-highlighted rows when a row is highlighted
+                    ...(highlightEnabled && highlightedRowIndex !== null && highlightedRowIndex !== undefined && !isHighlighted ? {
+                      opacity: 0.45,
+                    } : {}),
+                  }}
+                >
+                  {columns.map((col) => (
+                    <TableCell 
+                      key={col}
+                      sx={{ 
+                        fontSize: getFontSize(theme.fontSize),
+                        py: getCellPadding(theme.cellPadding),
+                        px: getCellPadding(theme.cellPadding) + 0.5,
+                        color: isHighlighted ? '#1e40af' : theme.rowTextColor,
+                        fontWeight: isHighlighted ? 600 : 'inherit',
+                        borderBottom: `1px solid ${theme.borderColor}`,
+                        maxWidth: 250,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {typeof row[col] === 'object' 
+                        ? JSON.stringify(row[col]) 
+                        : String(row[col] ?? '')}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              );
+            })}
             {/* Lazy load trigger row */}
             {hasMoreRows && (
               <TableRow ref={loadMoreTriggerRef}>

@@ -12,6 +12,7 @@ import { chartVisibilityVariableState } from '../recoil/DashboardVisibility';
 import { cardDimensionConditionsState } from '../recoil/Carddimensionstate ';
 import { filterPositionsState, activeFilterIdsState } from './FilterPanel';
 import { tooltipConfigState } from '../recoil/TooltipConfigState';
+import { onClickConfigState } from '../recoil/OnClickConfigState';
 import { childCardConfigState } from '../recoil/ChildCardState';
 import { predefinedFunctionsState } from '../recoil/PredefinedFunctionsState';
 import { 
@@ -116,6 +117,7 @@ export const DataInitializer: React.FC = () => {
     set(chartVisibilityVariableState, {});
     set(cardDimensionConditionsState, {});
     set(tooltipConfigState, {});
+    set(onClickConfigState, {});
     set(childCardConfigState, {});
     
     // NOTE: Filter panel state is DASHBOARD-scoped, so we DON'T clear it when switching views
@@ -344,7 +346,21 @@ export const DataInitializer: React.FC = () => {
         console.warn('⚠️ [Data Initializer] Failed to load tooltip configs:', err);
       }
 
-      // 10. Load child card configs (VIEW-SCOPED)
+      // 10. Load onClick configs (VIEW-SCOPED)
+      console.log('📊 [Data Initializer] Loading onClick configs...');
+      try {
+        const onClickResponse = await axios.get(`${API_BASE_URL}/api/onclick-configs${viewIdParam}`);
+        if (onClickResponse.data.success && onClickResponse.data.configs) {
+          const configs = onClickResponse.data.configs;
+          set(onClickConfigState, configs);
+          updateLastValue('onClickConfigState', configs);
+          console.log(`✅ [Data Initializer] Loaded onClick configs for ${Object.keys(configs).length} charts`);
+        }
+      } catch (err) {
+        console.warn('⚠️ [Data Initializer] Failed to load onClick configs:', err);
+      }
+
+      // 11. Load child card configs (VIEW-SCOPED)
       console.log('📊 [Data Initializer] Loading child card configs...');
       try {
         const childCardResponse = await axios.get(`${API_BASE_URL}/api/child-card-configs${viewIdParam}`);

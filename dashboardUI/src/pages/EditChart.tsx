@@ -53,10 +53,11 @@ import { CardArrangement } from '../components/CardArrangement';
 import Others from '../components/Others';
 import ChildCardConfigTab from '../components/ChildCardConfigTab';
 import MultiCardTooltipConfigTab from '../components/MultiCardTooltipConfigTab';
-import { ViewModule as ViewModuleIcon, TouchApp as TouchAppIcon } from '@mui/icons-material';
+import OnClickConfigTab from '../components/OnClickConfigTab';
+import { ViewModule as ViewModuleIcon, TouchApp as TouchAppIcon, Mouse as MouseIcon } from '@mui/icons-material';
 
 // Define the available tabs
-type TabKey = 'parameters' | 'filters' | 'hooks' | 'others' | 'tooltipConfig' | 'childCards';
+type TabKey = 'parameters' | 'filters' | 'hooks' | 'others' | 'tooltipConfig' | 'childCards' | 'onClickActions';
 
 // Tab configuration
 interface Tab {
@@ -311,6 +312,13 @@ const EditChart: React.FC = () => {
       icon: TouchAppIcon,
       component: MultiCardTooltipConfigTab,
       color: '#f59e0b'
+    },
+    {
+      key: 'onClickActions',
+      label: 'onClick Actions',
+      icon: MouseIcon,
+      component: OnClickConfigTab,
+      color: '#ef4444'
     },
     {
       key: 'hooks',

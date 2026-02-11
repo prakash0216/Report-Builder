@@ -40,6 +40,8 @@ interface ChartWithTooltipProps {
   chartId: string;
   options: Highcharts.Options;
   showExport?: boolean;
+  onPointClick?: (pointData: any) => void;          // onClick action callback
+  onChartBackgroundClick?: () => void;               // Click outside point → reset
 }
 
 // Extract point data from Highcharts point object
@@ -67,7 +69,9 @@ const extractPointData = (point: any) => {
 const ChartWithTooltip: React.FC<ChartWithTooltipProps> = ({ 
   chartId, 
   options, 
-  showExport = false 
+  showExport = false,
+  onPointClick,
+  onChartBackgroundClick,
 }) => {
   const chartRef = useRef<HighchartsReact.RefObject>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -191,8 +195,10 @@ const ChartWithTooltip: React.FC<ChartWithTooltipProps> = ({
       ? { enabled: false }
       : options.tooltip;
 
-    // Merge plotOptions to add point events for custom tooltip
-    const plotOptions = isTooltipEnabled
+    // Build point events: tooltip hover + onClick actions
+    const needsCustomPointEvents = isTooltipEnabled || onPointClick;
+    
+    const plotOptions = needsCustomPointEvents
       ? {
           ...options.plotOptions,
           series: {
@@ -201,46 +207,58 @@ const ChartWithTooltip: React.FC<ChartWithTooltipProps> = ({
               ...options.plotOptions?.series?.point,
               events: {
                 ...options.plotOptions?.series?.point?.events,
-                mouseOver: function(this: any, e: any) {
-                  // Get the actual mouse event - try multiple ways
-                  let clientX = 0;
-                  let clientY = 0;
-                  
-                  // Try to get from browserEvent first
-                  if (e.browserEvent) {
-                    clientX = e.browserEvent.clientX;
-                    clientY = e.browserEvent.clientY;
-                  } else if ((window as any).event) {
-                    // Fallback to window.event
-                    clientX = (window as any).event.clientX;
-                    clientY = (window as any).event.clientY;
-                  } else if (e.chartX !== undefined && e.chartY !== undefined) {
-                    // Use chart coordinates as fallback
-                    const chart = this.series?.chart;
-                    if (chart && chart.container) {
-                      const rect = chart.container.getBoundingClientRect();
-                      clientX = rect.left + e.chartX;
-                      clientY = rect.top + e.chartY;
+                // Tooltip hover handlers
+                ...(isTooltipEnabled ? {
+                  mouseOver: function(this: any, e: any) {
+                    let clientX = 0;
+                    let clientY = 0;
+                    
+                    if (e.browserEvent) {
+                      clientX = e.browserEvent.clientX;
+                      clientY = e.browserEvent.clientY;
+                    } else if ((window as any).event) {
+                      clientX = (window as any).event.clientX;
+                      clientY = (window as any).event.clientY;
+                    } else if (e.chartX !== undefined && e.chartY !== undefined) {
+                      const chart = this.series?.chart;
+                      if (chart && chart.container) {
+                        const rect = chart.container.getBoundingClientRect();
+                        clientX = rect.left + e.chartX;
+                        clientY = rect.top + e.chartY;
+                      }
                     }
-                  }
-                  
-                  handleShowTooltip({ clientX, clientY } as MouseEvent, this);
-                  
-                  // Call original handler if exists
-                  const originalHandler = options.plotOptions?.series?.point?.events?.mouseOver;
-                  if (typeof originalHandler === 'function') {
-                    originalHandler.call(this, e);
-                  }
-                },
-                mouseOut: function(this: any, e: any) {
-                  handleHideTooltip();
-                  
-                  // Call original handler if exists
-                  const originalHandler = options.plotOptions?.series?.point?.events?.mouseOut;
-                  if (typeof originalHandler === 'function') {
-                    originalHandler.call(this, e);
-                  }
-                },
+                    
+                    handleShowTooltip({ clientX, clientY } as MouseEvent, this);
+                    
+                    const originalHandler = options.plotOptions?.series?.point?.events?.mouseOver;
+                    if (typeof originalHandler === 'function') {
+                      originalHandler.call(this, e);
+                    }
+                  },
+                  mouseOut: function(this: any, e: any) {
+                    handleHideTooltip();
+                    
+                    const originalHandler = options.plotOptions?.series?.point?.events?.mouseOut;
+                    if (typeof originalHandler === 'function') {
+                      originalHandler.call(this, e);
+                    }
+                  },
+                } : {}),
+                // onClick action handler
+                ...(onPointClick ? {
+                  click: function(this: any, e: any) {
+                    const pointData = extractPointData(this);
+                    if (pointData) {
+                      (pointData as any)._chartOptions = options; // Attach chart config for extractionType='config'
+                      onPointClick(pointData);
+                    }
+                    
+                    const originalHandler = options.plotOptions?.series?.point?.events?.click;
+                    if (typeof originalHandler === 'function') {
+                      originalHandler.call(this, e);
+                    }
+                  },
+                } : {}),
               },
             },
           },
@@ -256,6 +274,23 @@ const ChartWithTooltip: React.FC<ChartWithTooltipProps> = ({
         backgroundColor: '#FFFFFF',
         style: {
           fontFamily: 'inherit',
+        },
+        events: {
+          ...options.chart?.events,
+          // Detect clicks on chart background (not on a data point) → trigger reset
+          ...(onChartBackgroundClick ? {
+            click: function(this: any, e: any) {
+              // Only trigger reset if the click was NOT on a data point
+              // Highcharts sets e.point when a point is clicked via chart events
+              if (!(e as any).point) {
+                onChartBackgroundClick();
+              }
+              const originalHandler = options.chart?.events?.click;
+              if (typeof originalHandler === 'function') {
+                originalHandler.call(this, e);
+              }
+            },
+          } : {}),
         },
       },
       credits: {
@@ -276,7 +311,7 @@ const ChartWithTooltip: React.FC<ChartWithTooltipProps> = ({
         ...options.responsive?.rules && { rules: options.responsive.rules }
       }
     };
-  }, [options, showExport, isTooltipEnabled, handleShowTooltip, handleHideTooltip]);
+  }, [options, showExport, isTooltipEnabled, handleShowTooltip, handleHideTooltip, onPointClick, onChartBackgroundClick]);
 
   // Chart callback for initial sizing
   const handleChartCallback = useCallback((chart: Highcharts.Chart) => {
@@ -345,6 +380,8 @@ const arePropsEqual = (
 ): boolean => {
   if (prevProps.chartId !== nextProps.chartId) return false;
   if (prevProps.showExport !== nextProps.showExport) return false;
+  if (prevProps.onPointClick !== nextProps.onPointClick) return false;
+  if (prevProps.onChartBackgroundClick !== nextProps.onChartBackgroundClick) return false;
   
   if (!prevProps.options && !nextProps.options) return true;
   if (!prevProps.options || !nextProps.options) return false;

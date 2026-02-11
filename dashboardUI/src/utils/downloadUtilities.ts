@@ -37,7 +37,244 @@ export interface ChartRef {
   tableTheme?: TableThemeForExport;
 }
 
+export interface ExportFilterSummaryItem {
+  name: string;
+  value: string;
+}
+
+export interface DashboardImageExportOptions {
+  dashboardName?: string;
+  viewName?: string;
+  filters?: ExportFilterSummaryItem[];
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sanitizeFileName = (name: string) => name.replace(/[<>:"/\\|?*]/g, '').trim();
+
+const ensureOpaqueCanvas = (sourceCanvas: HTMLCanvasElement, background = '#FFFFFF'): HTMLCanvasElement => {
+  const opaqueCanvas = document.createElement('canvas');
+  opaqueCanvas.width = sourceCanvas.width;
+  opaqueCanvas.height = sourceCanvas.height;
+  const ctx = opaqueCanvas.getContext('2d');
+  if (!ctx) return sourceCanvas;
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, opaqueCanvas.width, opaqueCanvas.height);
+  ctx.drawImage(sourceCanvas, 0, 0);
+  return opaqueCanvas;
+};
+
+const splitTextByWidth = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number
+): string[] => {
+  const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return ['All'];
+
+  const words = normalized.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+
+  const pushHardWrappedWord = (word: string) => {
+    let segment = '';
+    for (const char of word) {
+      const test = `${segment}${char}`;
+      if (ctx.measureText(test).width <= maxWidth) {
+        segment = test;
+      } else {
+        if (segment) lines.push(segment);
+        segment = char;
+      }
+    }
+    return segment;
+  };
+
+  for (const word of words) {
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+    if (ctx.measureText(candidate).width <= maxWidth) {
+      currentLine = candidate;
+      continue;
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+      currentLine = '';
+    }
+
+    if (ctx.measureText(word).width <= maxWidth) {
+      currentLine = word;
+      continue;
+    }
+
+    currentLine = pushHardWrappedWord(word);
+  }
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines.length > 0 ? lines : ['All'];
+};
+
+const getExportMeta = (fileName: string, options?: DashboardImageExportOptions) => {
+  const dashboardName = (options?.dashboardName || fileName || 'Dashboard').trim();
+  const viewName = (options?.viewName || '').trim();
+  const filters: ExportFilterSummaryItem[] = Array.isArray(options?.filters) ? (options?.filters || []) : [];
+  const exportedAt = new Date().toLocaleString();
+  return { dashboardName, viewName, filters, exportedAt };
+};
+
+const composeTableauStyleDashboardCanvas = (
+  baseCanvas: HTMLCanvasElement,
+  fallbackTitle: string,
+  options?: DashboardImageExportOptions
+): HTMLCanvasElement => {
+  const { dashboardName: dashboardTitle, viewName, filters, exportedAt } = getExportMeta(fallbackTitle, options);
+
+  const pagePadding = 24;
+  const headerHeight = 96;
+  const contentX = pagePadding;
+  const contentY = headerHeight + pagePadding;
+  const panelGap = filters.length > 0 ? 20 : 0;
+  const panelWidth = filters.length > 0
+    ? Math.min(360, Math.max(280, Math.floor(baseCanvas.width * 0.22)))
+    : 0;
+  const panelX = contentX + baseCanvas.width + panelGap;
+  const panelY = contentY;
+
+  // Estimate panel height from text so the panel looks neat and Tableau-like.
+  let estimatedPanelHeight = 150;
+  if (filters.length > 0) {
+    const measureCanvas = document.createElement('canvas');
+    const measureCtx = measureCanvas.getContext('2d');
+    if (measureCtx) {
+      estimatedPanelHeight = 62; // panel header + top spacing
+      measureCtx.font = '12px Arial';
+      const valueMaxWidth = panelWidth - 28;
+      filters.forEach((filter) => {
+        const lines = splitTextByWidth(measureCtx, filter.value || 'All', valueMaxWidth);
+        estimatedPanelHeight += 15 + (lines.length * 17) + 6; // name + value lines + gap
+      });
+      estimatedPanelHeight += 16;
+    }
+  }
+
+  const panelHeight = filters.length > 0
+    ? Math.max(140, Math.min(baseCanvas.height, estimatedPanelHeight))
+    : 0;
+
+  const finalWidth = contentX + baseCanvas.width + (filters.length > 0 ? panelGap + panelWidth : 0) + pagePadding;
+  const finalHeight = Math.max(
+    contentY + baseCanvas.height + pagePadding,
+    panelY + panelHeight + pagePadding
+  );
+
+  const finalCanvas = document.createElement('canvas');
+  finalCanvas.width = finalWidth;
+  finalCanvas.height = finalHeight;
+  const ctx = finalCanvas.getContext('2d');
+  if (!ctx) return baseCanvas;
+
+  // Page background
+  ctx.fillStyle = '#F8FAFC';
+  ctx.fillRect(0, 0, finalWidth, finalHeight);
+
+  // Header strip
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, finalWidth, headerHeight);
+  ctx.strokeStyle = '#E2E8F0';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, headerHeight - 0.5);
+  ctx.lineTo(finalWidth, headerHeight - 0.5);
+  ctx.stroke();
+
+  // Header text
+  ctx.fillStyle = '#0F172A';
+  ctx.font = '700 30px Arial';
+  ctx.fillText(dashboardTitle, pagePadding, 38);
+
+  if (viewName) {
+    ctx.fillStyle = '#334155';
+    ctx.font = '600 18px Arial';
+    ctx.fillText(`View: ${viewName}`, pagePadding, 64);
+  }
+
+  ctx.fillStyle = '#64748B';
+  ctx.font = '12px Arial';
+  ctx.fillText(`Exported: ${exportedAt}`, pagePadding, 84);
+
+  // Main dashboard image frame
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(contentX - 1, contentY - 1, baseCanvas.width + 2, baseCanvas.height + 2);
+  ctx.strokeStyle = '#CBD5E1';
+  ctx.strokeRect(contentX - 1, contentY - 1, baseCanvas.width + 2, baseCanvas.height + 2);
+  ctx.drawImage(baseCanvas, contentX, contentY);
+
+  // Right-side filter panel (Tableau-like)
+  if (filters.length > 0) {
+    const panelBottom = panelY + panelHeight;
+    const panelInnerX = panelX + 14;
+    const panelInnerMaxWidth = panelWidth - 28;
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+    ctx.strokeStyle = '#CBD5E1';
+    ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+
+    ctx.fillStyle = '#0F172A';
+    ctx.font = '700 16px Arial';
+    ctx.fillText('Applied Filters', panelInnerX, panelY + 24);
+
+    ctx.strokeStyle = '#E2E8F0';
+    ctx.beginPath();
+    ctx.moveTo(panelInnerX, panelY + 34.5);
+    ctx.lineTo(panelX + panelWidth - 14, panelY + 34.5);
+    ctx.stroke();
+
+    let cursorY = panelY + 52;
+    for (let i = 0; i < filters.length; i++) {
+      const filter = filters[i];
+      if (cursorY + 28 > panelBottom - 10) {
+        const remaining = filters.length - i;
+        ctx.fillStyle = '#64748B';
+        ctx.font = 'italic 12px Arial';
+        ctx.fillText(`... ${remaining} more`, panelInnerX, panelBottom - 10);
+        break;
+      }
+
+      const filterName = String(filter.name || `Filter ${i + 1}`).trim();
+      const filterValue = String(filter.value || 'All').trim();
+
+      ctx.fillStyle = '#334155';
+      ctx.font = '600 12px Arial';
+      ctx.fillText(filterName, panelInnerX, cursorY);
+      cursorY += 15;
+
+      ctx.fillStyle = '#475569';
+      ctx.font = '12px Arial';
+      const lines = splitTextByWidth(ctx, filterValue, panelInnerMaxWidth);
+      for (const line of lines) {
+        if (cursorY + 12 > panelBottom - 10) {
+          ctx.fillStyle = '#64748B';
+          ctx.font = 'italic 12px Arial';
+          ctx.fillText('...', panelInnerX, panelBottom - 10);
+          cursorY = panelBottom; // stop rendering further lines/filters
+          break;
+        }
+        ctx.fillText(line, panelInnerX, cursorY);
+        cursorY += 17;
+      }
+
+      if (cursorY >= panelBottom) {
+        break;
+      }
+      cursorY += 6;
+    }
+  }
+
+  return finalCanvas;
+};
 
 // 🔥 OPTIMIZED: Reduced retries and wait times for faster exports
 const getChartWithRetry = async (container: HTMLElement, maxRetries = 3): Promise<Highcharts.Chart | null> => {
@@ -193,37 +430,51 @@ const captureVisibleAreaAsPng = async (el: HTMLElement): Promise<string | null> 
 export const exportDashboardAsImage = async (
   rootEl: HTMLElement,
   format: 'png' | 'jpeg',
-  fileName: string
+  fileName: string,
+  options?: DashboardImageExportOptions
 ) => {
   try {
+    // Store original styles so we can restore them
+    const originalOverflow = rootEl.style.overflow;
+    const originalWidth = rootEl.style.width;
+    const originalHeight = rootEl.style.height;
+    const originalMaxHeight = rootEl.style.maxHeight;
+    const originalPosition = rootEl.style.position;
+
     // Store original scroll position
     const originalScrollTop = window.scrollY;
     const originalScrollLeft = window.scrollX;
     
-    // Scroll to top to capture from beginning
+    // 🔥 FIX: Temporarily expand the root element to its full scroll dimensions
+    // This ensures html2canvas can see ALL content, not just the visible viewport
+    const scrollWidth = rootEl.scrollWidth;
+    const scrollHeight = rootEl.scrollHeight;
+    
+    rootEl.style.overflow = 'visible';
+    rootEl.style.width = `${scrollWidth}px`;
+    rootEl.style.height = `${scrollHeight}px`;
+    rootEl.style.maxHeight = 'none';
+    
+    // Scroll to top-left to capture from beginning
     window.scrollTo(0, 0);
     
-    // Brief wait for scroll to complete
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Brief wait for layout to settle after style changes
+    await new Promise(resolve => setTimeout(resolve, 200));
     
-    // Get the full dimensions of the content
-    const rect = rootEl.getBoundingClientRect();
-    const scrollWidth = rootEl.scrollWidth || rect.width;
-    const scrollHeight = rootEl.scrollHeight || rect.height;
+    // Re-measure after expansion (may have changed)
+    const expandedWidth = rootEl.scrollWidth;
+    const expandedHeight = rootEl.scrollHeight;
     
-    // Calculate dimensions - use full scroll dimensions but cap to prevent crashes
-    const maxDimension = 8000; // Maximum canvas dimension to prevent crashes
-    const width = Math.min(Math.ceil(scrollWidth), maxDimension);
-    const height = Math.min(Math.ceil(scrollHeight), maxDimension);
+    // Cap to prevent canvas memory crashes
+    const maxDimension = 10000;
+    const width = Math.min(Math.ceil(expandedWidth), maxDimension);
+    const height = Math.min(Math.ceil(expandedHeight), maxDimension);
     
-    console.log(`[Export] Capturing dashboard: ${width}x${height}`);
-    
-    // Use scale of 1 to prevent memory issues with large dashboards
-    const scale = 1;
+    console.log(`[Export] Capturing dashboard: ${width}x${height} (scroll: ${scrollWidth}x${scrollHeight})`);
     
     const canvas = await html2canvas(rootEl, {
       backgroundColor: '#f8fafc',
-      scale: scale,
+      scale: 1,
       useCORS: true,
       allowTaint: true,
       logging: false,
@@ -231,10 +482,26 @@ export const exportDashboardAsImage = async (
       scrollY: 0,
       width: width,
       height: height,
-      windowWidth: width,
-      windowHeight: height,
-      // Clone the document and wait for images/SVGs to load
+      windowWidth: Math.max(width, window.innerWidth),
+      windowHeight: Math.max(height, window.innerHeight),
       onclone: (clonedDoc: Document) => {
+        // Force the cloned root element to its full scroll dimensions
+        const allElements = clonedDoc.querySelectorAll('*');
+        allElements.forEach((el) => {
+          const htmlEl = el as HTMLElement;
+          const style = htmlEl.style;
+          const computedStyle = clonedDoc.defaultView?.getComputedStyle(htmlEl);
+          
+          // Remove overflow:hidden/auto from all containers so content is fully visible
+          if (computedStyle?.overflow === 'hidden' || computedStyle?.overflow === 'auto' ||
+              computedStyle?.overflowX === 'hidden' || computedStyle?.overflowY === 'hidden' ||
+              computedStyle?.overflowX === 'auto' || computedStyle?.overflowY === 'auto') {
+            style.overflow = 'visible';
+            style.overflowX = 'visible';
+            style.overflowY = 'visible';
+          }
+        });
+        
         // Force all Highcharts containers to be visible in the clone
         const charts = clonedDoc.querySelectorAll('.highcharts-container');
         charts.forEach((chart) => {
@@ -244,6 +511,13 @@ export const exportDashboardAsImage = async (
         const cards = clonedDoc.querySelectorAll('[data-chart-id]');
         cards.forEach((card) => {
           (card as HTMLElement).style.overflow = 'visible';
+        });
+        // Ensure the react-grid-layout wrapper is also expanded
+        const gridLayouts = clonedDoc.querySelectorAll('.react-grid-layout');
+        gridLayouts.forEach((grid) => {
+          const gridEl = grid as HTMLElement;
+          gridEl.style.overflow = 'visible';
+          gridEl.style.width = '100%';
         });
       },
       ignoreElements: (element: Element) => {
@@ -257,22 +531,41 @@ export const exportDashboardAsImage = async (
       },
     });
 
+    // Restore original styles immediately
+    rootEl.style.overflow = originalOverflow;
+    rootEl.style.width = originalWidth;
+    rootEl.style.height = originalHeight;
+    rootEl.style.maxHeight = originalMaxHeight;
+    rootEl.style.position = originalPosition;
+    
     // Restore original scroll position
     window.scrollTo(originalScrollLeft, originalScrollTop);
 
+    const composedCanvas = composeTableauStyleDashboardCanvas(canvas, fileName, options);
+    const outputCanvas = format === 'jpeg'
+      ? ensureOpaqueCanvas(composedCanvas, '#FFFFFF')
+      : composedCanvas;
+
     const dataUrl =
       format === 'jpeg'
-        ? canvas.toDataURL('image/jpeg', 0.92)
-        : canvas.toDataURL('image/png');
+        ? outputCanvas.toDataURL('image/jpeg', 0.92)
+        : outputCanvas.toDataURL('image/png');
 
     const link = document.createElement('a');
-    link.download = `${fileName.replace(/[^a-z0-9]/gi, '_')}.${format}`;
+    link.download = `${sanitizeFileName(fileName)}.${format}`;
     link.href = dataUrl;
     link.click();
     
     console.log('[Export] Dashboard image exported successfully');
   } catch (err) {
     console.error('Dashboard image export failed:', err);
+    // Attempt to restore styles even on error
+    try {
+      rootEl.style.overflow = '';
+      rootEl.style.width = '';
+      rootEl.style.height = '';
+      rootEl.style.maxHeight = '';
+    } catch { /* ignore */ }
     alert('Image export failed. The dashboard may be too large. Try exporting as PDF instead.');
   }
 };
@@ -381,7 +674,7 @@ export const exportAllAsJPEG = async (chartRefs: ChartRef[]) => {
 };
 
 // 🔥 OPTIMIZED: Fast SVG export with better chart detection
-export const exportAllAsSVG = async (chartRefs: ChartRef[]) => {
+export const exportAllAsSVG = async (chartRefs: ChartRef[], fileName = 'Dashboard') => {
   console.log('[SVG Export] Starting with', chartRefs.length, 'cards');
   let exported = 0;
   
@@ -401,7 +694,7 @@ export const exportAllAsSVG = async (chartRefs: ChartRef[]) => {
       const blob = new Blob([svg], { type: 'image/svg+xml' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.download = `${ref.title || ref.chartId}.svg`;
+      link.download = `${fileName} - ${ref.title || ref.chartId}.svg`;
       link.href = url;
       link.click();
       URL.revokeObjectURL(url);
@@ -414,14 +707,63 @@ export const exportAllAsSVG = async (chartRefs: ChartRef[]) => {
 };
 
 // 🔥 OPTIMIZED: Fast PDF export with better handling of large charts
-export const exportAllAsPDF = async (chartRefs: ChartRef[], fileName = 'Dashboard') => {
+export const exportAllAsPDF = async (
+  chartRefs: ChartRef[],
+  fileName = 'Dashboard',
+  options?: DashboardImageExportOptions
+) => {
   console.log('[PDF Export] Starting with', chartRefs.length, 'cards');
+  const { dashboardName, viewName, filters, exportedAt } = getExportMeta(fileName, options);
   const pdf = new jsPDF('p', 'mm', 'a4');
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 10;
   let y = margin;
   let cardsExported = 0;
+
+  // Add export summary block (Tableau-style metadata + applied filters)
+  pdf.setFontSize(16);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text(dashboardName, margin, y + 4);
+  y += 8;
+
+  if (viewName) {
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`View: ${viewName}`, margin, y + 2);
+    y += 6;
+  }
+
+  pdf.setFontSize(9);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(`Exported: ${exportedAt}`, margin, y + 2);
+  y += 6;
+
+  pdf.setFontSize(11);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Applied Filters', margin, y + 2);
+  y += 5;
+
+  const maxTextWidth = pageWidth - margin * 2;
+  pdf.setFontSize(9);
+  pdf.setFont('helvetica', 'normal');
+  if (filters.length === 0) {
+    pdf.text('All (no active filter restrictions)', margin, y + 2);
+    y += 6;
+  } else {
+    for (const filter of filters) {
+      const line = `${filter.name || 'Filter'}: ${filter.value || 'All'}`;
+      const wrapped = (pdf as any).splitTextToSize(line, maxTextWidth) as string[];
+      const textHeight = Math.max(4, wrapped.length * 4);
+      if (y + textHeight > pageHeight - margin) {
+        pdf.addPage();
+        y = margin;
+      }
+      pdf.text(wrapped, margin, y + 2);
+      y += textHeight + 1;
+    }
+  }
+  y += 3;
 
   for (let i = 0; i < chartRefs.length; i++) {
     const ref = chartRefs[i];
@@ -504,13 +846,35 @@ export const exportAllAsPDF = async (chartRefs: ChartRef[], fileName = 'Dashboar
   }
 
   console.log(`[PDF Export] Complete - exported ${cardsExported} of ${chartRefs.length} cards`);
-  pdf.save(`${fileName.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+  pdf.save(`${sanitizeFileName(fileName)}.pdf`);
 };
 
 // 🔥 OPTIMIZED: Fast CSV export - no waiting, direct data extraction
-export const exportAllAsCSV = async (chartRefs: ChartRef[]) => {
+export const exportAllAsCSV = async (
+  chartRefs: ChartRef[],
+  fileName = 'Dashboard',
+  options?: DashboardImageExportOptions
+) => {
   console.log('[CSV Export] Starting with', chartRefs.length, 'cards');
+  const { dashboardName, viewName, filters, exportedAt } = getExportMeta(fileName, options);
+  const toCsvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
   const sections: string[] = [];
+
+  // Add export summary header
+  sections.push(`${toCsvCell('Dashboard')},${toCsvCell(dashboardName)}`);
+  sections.push(`${toCsvCell('View')},${toCsvCell(viewName || 'N/A')}`);
+  sections.push(`${toCsvCell('Exported At')},${toCsvCell(exportedAt)}`);
+  sections.push('');
+  sections.push(`${toCsvCell('Applied Filters')}`);
+  if (filters.length === 0) {
+    sections.push(`${toCsvCell('All (no active filter restrictions)')}`);
+  } else {
+    sections.push(`${toCsvCell('Filter Name')},${toCsvCell('Value')}`);
+    filters.forEach((filter) => {
+      sections.push(`${toCsvCell(filter.name || 'Filter')},${toCsvCell(filter.value || 'All')}`);
+    });
+  }
+  sections.push('');
 
   for (const ref of chartRefs) {
     try {
@@ -601,7 +965,7 @@ export const exportAllAsCSV = async (chartRefs: ChartRef[]) => {
   const blob = new Blob([finalCsv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.download = 'dashboard.csv';
+  link.download = `${sanitizeFileName(fileName)}.csv`;
   link.href = url;
   link.click();
   URL.revokeObjectURL(url);
@@ -609,10 +973,48 @@ export const exportAllAsCSV = async (chartRefs: ChartRef[]) => {
 };
 
 // 🔥 OPTIMIZED: Fast Excel export - minimal waiting, direct data extraction
-export const exportAllAsExcel = async (chartRefs: ChartRef[], fileName = 'Dashboard') => {
+export const exportAllAsExcel = async (
+  chartRefs: ChartRef[],
+  fileName = 'Dashboard',
+  options?: DashboardImageExportOptions
+) => {
   console.log('[Excel Export] Starting with', chartRefs.length, 'cards');
+  const { dashboardName, viewName, filters, exportedAt } = getExportMeta(fileName, options);
   const XLSX: any = await loadXLSX();
   const workbook = XLSX.utils.book_new();
+
+  // Summary sheet with export context + applied filters
+  const summaryRows: any[][] = [
+    ['Dashboard', dashboardName],
+    ['View', viewName || 'N/A'],
+    ['Exported At', exportedAt],
+    [],
+    ['Applied Filters'],
+  ];
+  if (filters.length === 0) {
+    summaryRows.push(['All (no active filter restrictions)']);
+  } else {
+    summaryRows.push(['Filter Name', 'Value']);
+    filters.forEach((filter) => {
+      summaryRows.push([filter.name || 'Filter', filter.value || 'All']);
+    });
+  }
+  const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
+  XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+  const usedSheetNames = new Set<string>(['Summary']);
+
+  const getUniqueSheetName = (baseName: string) => {
+    const normalized = (baseName || 'Sheet').substring(0, 31) || 'Sheet';
+    let candidate = normalized;
+    let suffix = 1;
+    while (usedSheetNames.has(candidate)) {
+      const token = `_${suffix}`;
+      candidate = `${normalized.substring(0, Math.max(1, 31 - token.length))}${token}`;
+      suffix++;
+    }
+    usedSheetNames.add(candidate);
+    return candidate;
+  };
 
   for (const ref of chartRefs) {
     try {
@@ -677,12 +1079,12 @@ export const exportAllAsExcel = async (chartRefs: ChartRef[], fileName = 'Dashbo
       
       if (!sheet) sheet = XLSX.utils.aoa_to_sheet([['No Data']]);
       const safeName = (ref.title || ref.chartId).substring(0, 31).replace(/[\\/:*?[\]]/g, '_');
-      XLSX.utils.book_append_sheet(workbook, sheet, safeName || 'Sheet');
+      XLSX.utils.book_append_sheet(workbook, sheet, getUniqueSheetName(safeName || 'Sheet'));
     } catch (err) {
       console.warn('Excel export failed for', ref.chartId, err);
     }
   }
-  XLSX.writeFile(workbook, `${fileName.replace(/[^a-z0-9]/gi, '_')}.xlsx`);
+  XLSX.writeFile(workbook, `${sanitizeFileName(fileName)}.xlsx`);
   console.log('[Excel Export] Complete');
 };
 
@@ -825,7 +1227,7 @@ export const exportAllAsPPT = async (chartRefs: ChartRef[], fileName = 'Dashboar
     }
   }
 
-  const outputFileName = `${fileName.replace(/[^a-z0-9]/gi, '_')}.pptx`;
+  const outputFileName = `${sanitizeFileName(fileName)}.pptx`;
   try {
     await pptx.writeFile({ fileName: outputFileName });
   } catch {

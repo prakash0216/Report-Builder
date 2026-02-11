@@ -47,12 +47,16 @@ interface ParentCardContainerProps {
   parentCardId: string;
   config: ParentCardConfig;
   showExport?: boolean;
+  onPointClick?: (pointData: any) => void;
+  onChartBackgroundClick?: () => void;
 }
 
 const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
   parentCardId,
   config,
   showExport = false,
+  onPointClick,
+  onChartBackgroundClick,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -440,6 +444,8 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
                     gap={0}
                     showExport={showExport}
                     isFullSizePreview={true}
+                    onPointClick={onPointClick}
+                    onChartBackgroundClick={onChartBackgroundClick}
                   />
                 </Box>
               );
@@ -541,6 +547,8 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
               parentHeight={dimensions.height - parentTitleHeight}
               gap={config.gap}
               showExport={showExport}
+              onPointClick={onPointClick}
+              onChartBackgroundClick={onChartBackgroundClick}
             />
           );
         })}

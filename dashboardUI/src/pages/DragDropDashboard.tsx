@@ -17,12 +17,16 @@ import FilterPanel, { filterPanelExpandedState } from "../components/FilterPanel
 import CardFilterPanel from "../components/CardFilterPanel";
 import DashboardTable from "../components/DashboardTable";
 import { tooltipConfigState } from "../recoil/TooltipConfigState";
+import { onClickConfigState } from "../recoil/OnClickConfigState";
+import { onClickSnapshotState } from "../recoil/OnClickSnapshotState";
+import { useOnClickActions } from "../hooks/useOnClickActions";
 import { childCardConfigState } from "../recoil/ChildCardState";
 import { childCardTooltipConfigState } from "../recoil/ChildCardTooltipState";
 import ParentCardContainer from "../components/ParentCardContainer";
 import { variableUpdateTriggerState, variableNamesState } from '../recoil/Variabletracker';
 import { variableAtomFamily } from '../recoil/VariableFamily';
-import { filterNamesState } from '../recoil/FiltersFamily';
+import { filterConfigFamily, filterNamesState } from '../recoil/FiltersFamily';
+import { liveFilterFamily } from '../recoil/LiveFilterFamily';
 import { isChartVisibleSelector, chartDynamicDimensionsSelector, chartVisibilityVariableState } from '../recoil/DashboardVisibility';
 import { IsEditModeState } from "../recoil/IsEditeMode";
 import { dahboardNameMain } from "../recoil/DashboardName";
@@ -210,6 +214,8 @@ export default function DropDragDashboard() {
 
   const [chartConfigs, setChartConfigs] = useRecoilState<Record<string, ChartConfigData>>(chartConfigState);
   const tooltipConfigs = useRecoilValue(tooltipConfigState);
+  const clickSnapshot = useRecoilValue(onClickSnapshotState);
+  const { onClickConfigs, handleChartClick, handleReset: handleOnClickReset, isOnClickEnabled } = useOnClickActions();
   const [childCardConfigs, setChildCardConfigs] = useRecoilState(childCardConfigState);
   const [tooltipConfigsForChildCards, setTooltipConfigsForChildCards] = useRecoilState(childCardTooltipConfigState);
   const variableUpdateTrigger = useRecoilValue(variableUpdateTriggerState);
@@ -524,6 +530,57 @@ export default function DropDragDashboard() {
     }
     return variables;
   }, [variableNames]);
+
+  const collectActiveFilters = useRecoilCallback(({ snapshot }) => async (): Promise<Array<{ name: string; value: string }>> => {
+    const filters: Array<{ name: string; value: string }> = [];
+
+    const toDisplayLabel = (item: any): string => {
+      if (item && typeof item === 'object') {
+        if (item.label !== undefined && item.label !== null) return String(item.label);
+        if (item.value !== undefined && item.value !== null) return String(item.value);
+      }
+      return String(item ?? '');
+    };
+
+    for (const filterVarName of filterNames) {
+      try {
+        const cfgLoadable = snapshot.getLoadable(filterConfigFamily(filterVarName));
+        if (cfgLoadable.state !== 'hasValue' || !cfgLoadable.contents) {
+          continue;
+        }
+
+        const config = cfgLoadable.contents;
+        const selectedLoadable = snapshot.getLoadable(liveFilterFamily(filterVarName));
+        const selectedValues = selectedLoadable.state === 'hasValue' && Array.isArray(selectedLoadable.contents)
+          ? selectedLoadable.contents
+          : [];
+        const availableOptions = Array.isArray(config.availableOptions) ? config.availableOptions : [];
+
+        let displayValue = 'All';
+        if (selectedValues.length === 1) {
+          displayValue = toDisplayLabel(selectedValues[0]);
+        } else if (selectedValues.length > 1) {
+          const isAllSelected = availableOptions.length > 0 && selectedValues.length === availableOptions.length;
+          if (isAllSelected) {
+            displayValue = 'All';
+          } else if (selectedValues.length <= 3) {
+            displayValue = selectedValues.map(toDisplayLabel).join(', ');
+          } else {
+            displayValue = `${selectedValues.length} selected`;
+          }
+        }
+
+        filters.push({
+          name: config.displayName || config.paramName || filterVarName,
+          value: displayValue || 'All',
+        });
+      } catch {
+        // Skip malformed or transient filter values during export.
+      }
+    }
+
+    return filters;
+  }, [filterNames]);
 
   const getChartVisibility = useRecoilCallback(({ snapshot }) => async (): Promise<Record<string, boolean>> => {
     const visibilityMap: Record<string, boolean> = {};
@@ -1054,14 +1111,23 @@ export default function DropDragDashboard() {
     if (isDownloading || visibleCharts.length === 0) return;
     setIsDownloading(true);
     
+    // Build proper file name: "Dashboard Name - View Name"
+    const exportFileName = `${currentDashboardName} - ${currentViewName}`;
+    
     // Small delay to let the loading overlay render before heavy processing
     await new Promise(resolve => setTimeout(resolve, 50));
     
     try {
       const refs = collectChartRefs();
-      
+      let exportFilters: Array<{ name: string; value: string }> = [];
+      const normalizedFormat = format.toLowerCase();
+      const formatsWithFilterSummary = new Set(['png', 'jpeg', 'pdf', 'csv', 'xls', 'pptx-editable']);
+      if (formatsWithFilterSummary.has(normalizedFormat)) {
+        exportFilters = await collectActiveFilters();
+      }
+
       // For image exports, wait for all charts to be fully rendered
-      if (format === 'png' || format === 'jpeg') {
+      if (normalizedFormat === 'png' || normalizedFormat === 'jpeg') {
         // Quick wait for Highcharts to finish rendering
         await new Promise(resolve => setTimeout(resolve, 300));
         
@@ -1079,34 +1145,44 @@ export default function DropDragDashboard() {
         // Brief wait after reflow
         await new Promise(resolve => setTimeout(resolve, 200));
       }
+
+      const exportMeta = {
+        dashboardName: currentDashboardName,
+        viewName: currentViewName,
+        filters: exportFilters,
+      };
       
-      switch (format.toLowerCase()) {
+      switch (normalizedFormat) {
         case 'png':
           // Export entire dashboard as single PNG image
           if (dashboardGridRef.current) {
-            await exportDashboardAsImage(dashboardGridRef.current, 'png', dashboardName);
+            await exportDashboardAsImage(dashboardGridRef.current, 'png', exportFileName, {
+              ...exportMeta,
+            });
           }
           break;
         case 'jpeg':
           // Export entire dashboard as single JPEG image
           if (dashboardGridRef.current) {
-            await exportDashboardAsImage(dashboardGridRef.current, 'jpeg', dashboardName);
+            await exportDashboardAsImage(dashboardGridRef.current, 'jpeg', exportFileName, {
+              ...exportMeta,
+            });
           }
           break;
         case 'pdf':
-          await exportAllAsPDF(refs, dashboardName);
+          await exportAllAsPDF(refs, exportFileName, exportMeta);
           break;
         case 'svg':
-          await exportAllAsSVG(refs);
+          await exportAllAsSVG(refs, exportFileName);
           break;
         case 'csv':
-          await exportAllAsCSV(refs);
+          await exportAllAsCSV(refs, exportFileName, exportMeta);
           break;
         case 'xls':
-          await exportAllAsExcel(refs, dashboardName);
+          await exportAllAsExcel(refs, exportFileName, exportMeta);
           break;
         case 'pptx-editable':
-          await exportDashboardPPTXEditable(refs, dashboardName);
+          await exportDashboardPPTXEditable(refs, exportFileName, exportMeta);
           break;
         default:
           console.warn('Unknown format', format);
@@ -1118,7 +1194,7 @@ export default function DropDragDashboard() {
       setIsDownloading(false);
       setDownloadMenuAnchor(null);
     }
-  }, [collectChartRefs, isDownloading, visibleCharts.length, dashboardName]);
+  }, [collectChartRefs, collectActiveFilters, isDownloading, visibleCharts.length, currentDashboardName, currentViewName]);
 
   // 🔥 PERFORMANCE FIX: Remove variableUpdateTrigger from key
   // Including it caused entire grid to remount on every calculation update
@@ -1501,6 +1577,33 @@ export default function DropDragDashboard() {
             pointerEvents: 'none' 
           }}
         >
+          {/* Per-card onClick Reset button — shown beside filter button when this card triggered a click drill-down */}
+          {clickSnapshot.active && clickSnapshot.sourceParentCardId === item.i && 
+           clickSnapshot.sourceChartId && onClickConfigs[clickSnapshot.sourceChartId]?.showResetButton && (
+            <button
+              type="button"
+              className="non-draggable-filter-btn group relative p-1.5 px-2.5 rounded-lg text-xs font-semibold transition-all duration-200 border backdrop-blur-sm whitespace-nowrap bg-red-100 text-red-700 border-red-300 hover:bg-red-200 hover:text-red-800 hover:border-red-400"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleOnClickReset();
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+              }}
+              title="Reset click filter — restore original values"
+              style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+            >
+              <span className="flex items-center gap-1">
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <polyline points="1 4 1 10 7 10"></polyline>
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+                Reset
+              </span>
+            </button>
+          )}
           {showFilterButton && (
             <button
               type="button"
@@ -1612,6 +1715,8 @@ export default function DropDragDashboard() {
                   parentCardId={item.i}
                   config={containerConfig}
                   showExport={isEditMode ? false : true}
+                  onPointClick={isOnClickEnabled(item.i) ? (pointData: any) => handleChartClick(item.i, pointData) : undefined}
+                  onChartBackgroundClick={isOnClickEnabled(item.i) && clickSnapshot.active ? handleOnClickReset : undefined}
                 />
               </div>
             </div>
@@ -1626,9 +1731,16 @@ export default function DropDragDashboard() {
               </div>
             </div>
           ) : chartConfig ? (
-            // Use ChartWithTooltip if tooltip is enabled for this chart, otherwise use ResizableChart
-            tooltipConfigs[item.i]?.enabled ? (
-              <ChartWithTooltip key={item.i} chartId={item.i} options={chartConfig} showExport={isEditMode ? false : true} />
+            // Use ChartWithTooltip if tooltip or onClick is enabled, otherwise use ResizableChart
+            (tooltipConfigs[item.i]?.enabled || isOnClickEnabled(item.i)) ? (
+              <ChartWithTooltip
+                key={item.i}
+                chartId={item.i}
+                options={chartConfig}
+                showExport={isEditMode ? false : true}
+                onPointClick={isOnClickEnabled(item.i) ? (pointData: any) => handleChartClick(item.i, pointData) : undefined}
+                onChartBackgroundClick={isOnClickEnabled(item.i) && clickSnapshot.active ? handleOnClickReset : undefined}
+              />
             ) : (
               <ResizableChart key={item.i} options={chartConfig} showExport={isEditMode ? false : true} />
             )
@@ -2524,6 +2636,8 @@ export default function DropDragDashboard() {
           </Paper>
         </Box>
       </Box>
+
+      {/* onClick Reset button is now per-card, rendered beside the filter button in renderChartContent */}
 
       {/* Download Menu */}
       <Menu

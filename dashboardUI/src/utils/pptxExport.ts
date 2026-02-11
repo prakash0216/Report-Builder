@@ -2,8 +2,10 @@ import Highcharts from 'highcharts';
 // @ts-ignore
 import html2canvas from 'html2canvas';
 import { ChartRef, TableData, TableThemeForExport } from './downloadUtilities';
+import type { DashboardImageExportOptions } from './downloadUtilities';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sanitizeFileName = (name: string) => name.replace(/[<>:"/\\|?*]/g, '').trim();
 
 // 🔥 OPTIMIZED: Reduced retries and wait times
 const getChartWithRetry = async (container: HTMLElement, maxRetries = 3): Promise<Highcharts.Chart | null> => {
@@ -520,8 +522,16 @@ const loadPptx = async (): Promise<any> => {
   return pptxLoadPromise;
 };
 
-export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileName = 'Dashboard') => {
+export const exportDashboardPPTXEditable = async (
+  chartRefs: ChartRef[],
+  fileName = 'Dashboard',
+  options?: DashboardImageExportOptions
+) => {
   console.log('[PPTX Export] Starting editable PPTX export with', chartRefs.length, 'charts');
+  const dashboardName = (options?.dashboardName || fileName || 'Dashboard').trim();
+  const viewName = (options?.viewName || '').trim();
+  const filters = Array.isArray(options?.filters) ? (options?.filters || []) : [];
+  const exportedAt = new Date().toLocaleString();
   
   if (!chartRefs || chartRefs.length === 0) {
     console.warn('[PPTX Export] No charts to export');
@@ -568,6 +578,87 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
   console.log('[PPTX Export] Created pptx instance:', pptx);
   console.log('[PPTX Export] pptx.addSlide:', typeof pptx?.addSlide);
   const slideMargin = 0.4;
+
+  // Summary slide with export context + applied filters
+  const summarySlide = pptx.addSlide();
+  summarySlide.addText(dashboardName, {
+    x: 0.4,
+    y: 0.3,
+    w: 9.2,
+    h: 0.5,
+    fontSize: 24,
+    bold: true,
+    color: '0F172A',
+  });
+  if (viewName) {
+    summarySlide.addText(`View: ${viewName}`, {
+      x: 0.4,
+      y: 0.9,
+      w: 9.2,
+      h: 0.3,
+      fontSize: 14,
+      bold: true,
+      color: '334155',
+    });
+  }
+  summarySlide.addText(`Exported: ${exportedAt}`, {
+    x: 0.4,
+    y: viewName ? 1.22 : 0.92,
+    w: 9.2,
+    h: 0.25,
+    fontSize: 10,
+    color: '64748B',
+  });
+  summarySlide.addText('Applied Filters', {
+    x: 0.4,
+    y: viewName ? 1.7 : 1.45,
+    w: 9.2,
+    h: 0.3,
+    fontSize: 14,
+    bold: true,
+    color: '1E293B',
+  });
+
+  let filterY = viewName ? 2.05 : 1.8;
+  if (filters.length === 0) {
+    summarySlide.addText('All (no active filter restrictions)', {
+      x: 0.5,
+      y: filterY,
+      w: 9,
+      h: 0.3,
+      fontSize: 12,
+      color: '475569',
+      bullet: { indent: 14 },
+    });
+  } else {
+    const maxFiltersOnSummary = 18;
+    for (let i = 0; i < filters.length; i++) {
+      if (i >= maxFiltersOnSummary) {
+        summarySlide.addText(`... ${filters.length - i} more`, {
+          x: 0.5,
+          y: filterY,
+          w: 9,
+          h: 0.25,
+          fontSize: 11,
+          color: '64748B',
+          italic: true,
+        });
+        break;
+      }
+
+      const filter = filters[i];
+      summarySlide.addText(`${filter.name || 'Filter'}: ${filter.value || 'All'}`, {
+        x: 0.5,
+        y: filterY,
+        w: 9,
+        h: 0.28,
+        fontSize: 11,
+        color: '475569',
+        bullet: { indent: 14 },
+      });
+      filterY += 0.3;
+    }
+  }
 
   for (const ref of chartRefs) {
     const slide = pptx.addSlide();
@@ -865,7 +956,7 @@ export const exportDashboardPPTXEditable = async (chartRefs: ChartRef[], fileNam
     }
   }
 
-  const outputFileName = `${fileName.replace(/[^a-z0-9]/gi, '_')}.pptx`;
+  const outputFileName = `${sanitizeFileName(fileName)}.pptx`;
   console.log('[PPTX Export] Writing file:', outputFileName);
   
   try {

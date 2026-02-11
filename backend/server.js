@@ -4241,6 +4241,156 @@ app.delete('/api/tooltip-configs/:chartId', async (req, res) => {
 });
 
 // ============================================
+// ONCLICK CONFIG ENDPOINTS (Chart Click → Filter)
+// ============================================
+
+/**
+ * Get all onClick configs
+ * GET /api/onclick-configs
+ * Query params: viewId (optional) - filter by view
+ */
+app.get('/api/onclick-configs', async (req, res) => {
+  try {
+    const { viewId } = req.query;
+    
+    let query = 'SELECT * FROM onclick_configs';
+    if (viewId) {
+      query += ` WHERE view_id = ${parseInt(viewId)}`;
+    }
+    query += ' ORDER BY COALESCE(last_modified, created_at) DESC';
+    
+    const configs = await dbClient.query(query);
+    const result = {};
+    if (configs && Array.isArray(configs)) {
+      configs.forEach(row => {
+        result[row.chart_id] = {
+          enabled: row.enabled === true,
+          dataMapping: row.data_mapping_json ? JSON.parse(row.data_mapping_json) : [],
+          calculations: row.calculations_json ? JSON.parse(row.calculations_json) : [],
+          resetOnClickOutside: row.reset_on_click_outside !== false,
+          showResetButton: row.show_reset_button !== false,
+          highlightClicked: row.highlight_clicked === true,
+        };
+      });
+    }
+    res.json({ success: true, configs: result });
+  } catch (err) {
+    console.error('Error fetching onClick configs:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get onClick config for a specific chart
+ * GET /api/onclick-configs/:chartId
+ */
+app.get('/api/onclick-configs/:chartId', async (req, res) => {
+  try {
+    const { chartId } = req.params;
+    const configs = await dbClient.query(`SELECT * FROM onclick_configs WHERE chart_id='${chartId.replace(/'/g, "''")}'`);
+    if (configs.length === 0) {
+      return res.json({ success: true, config: null });
+    }
+    const row = configs[0];
+    res.json({
+      success: true,
+      config: {
+        enabled: row.enabled === true,
+        dataMapping: row.data_mapping_json ? JSON.parse(row.data_mapping_json) : [],
+        calculations: row.calculations_json ? JSON.parse(row.calculations_json) : [],
+        resetOnClickOutside: row.reset_on_click_outside !== false,
+        showResetButton: row.show_reset_button !== false,
+        highlightClicked: row.highlight_clicked === true,
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching onClick config:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Save onClick config
+ * POST /api/onclick-configs
+ */
+app.post('/api/onclick-configs', async (req, res) => {
+  try {
+    const { chartId, viewId, config } = req.body;
+    if (!chartId || !config) {
+      return res.status(400).json({ success: false, error: 'chartId and config are required' });
+    }
+
+    const viewIdValue = viewId ? parseInt(viewId) : null;
+    const escapedChartId = chartId.replace(/'/g, "''");
+    const escapedDataMappingJson = config.dataMapping ? JSON.stringify(config.dataMapping).replace(/'/g, "''") : '[]';
+    const escapedCalculationsJson = config.calculations ? JSON.stringify(config.calculations).replace(/'/g, "''") : '[]';
+
+    // Check existing with viewId scope
+    let existingQuery = `SELECT id FROM onclick_configs WHERE chart_id='${escapedChartId}'`;
+    if (viewIdValue) {
+      existingQuery += ` AND view_id = ${viewIdValue}`;
+    }
+    const existing = await dbClient.query(existingQuery);
+    
+    if (existing.length > 0) {
+      // Update existing
+      let updateQuery = `
+        UPDATE onclick_configs SET
+          enabled = ${config.enabled ? 'true' : 'false'},
+          data_mapping_json = '${escapedDataMappingJson}',
+          calculations_json = '${escapedCalculationsJson}',
+          reset_on_click_outside = ${config.resetOnClickOutside !== false ? 'true' : 'false'},
+          show_reset_button = ${config.showResetButton !== false ? 'true' : 'false'},
+          highlight_clicked = ${config.highlightClicked ? 'true' : 'false'},
+          last_modified = CURRENT_TIMESTAMP
+        WHERE chart_id='${escapedChartId}'`;
+      if (viewIdValue) {
+        updateQuery += ` AND view_id = ${viewIdValue}`;
+      }
+      await dbClient.run(updateQuery);
+      res.json({ success: true, message: 'onClick config updated' });
+    } else {
+      // Insert new
+      await dbClient.run(`
+        INSERT INTO onclick_configs (
+          chart_id, view_id, enabled, data_mapping_json, calculations_json,
+          reset_on_click_outside, show_reset_button, highlight_clicked, created_at
+        ) VALUES (
+          '${escapedChartId}',
+          ${viewIdValue || 'NULL'},
+          ${config.enabled ? 'true' : 'false'},
+          '${escapedDataMappingJson}',
+          '${escapedCalculationsJson}',
+          ${config.resetOnClickOutside !== false ? 'true' : 'false'},
+          ${config.showResetButton !== false ? 'true' : 'false'},
+          ${config.highlightClicked ? 'true' : 'false'},
+          CURRENT_TIMESTAMP
+        )
+      `);
+      res.json({ success: true, message: 'onClick config created' });
+    }
+  } catch (err) {
+    console.error('Error saving onClick config:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Delete onClick config
+ * DELETE /api/onclick-configs/:chartId
+ */
+app.delete('/api/onclick-configs/:chartId', async (req, res) => {
+  try {
+    const { chartId } = req.params;
+    await dbClient.run(`DELETE FROM onclick_configs WHERE chart_id='${chartId.replace(/'/g, "''")}'`);
+    res.json({ success: true, message: 'onClick config deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting onClick config:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================
 // CHILD CARD CONFIG ENDPOINTS (Multi-Card Containers)
 // ============================================
 

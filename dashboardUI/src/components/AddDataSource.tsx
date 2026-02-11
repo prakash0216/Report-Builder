@@ -1771,7 +1771,7 @@ ORDER BY created_at DESC;
                   />
                 </Box>
 
-                <Box
+                {/* <Box
                   sx={{
                     position: 'absolute',
                     bottom: 12,
@@ -1788,7 +1788,7 @@ ORDER BY created_at DESC;
                   }}
                 >
                   Ctrl + Enter to execute
-                </Box>
+                </Box> */}
               </Box>
             </Paper>
 

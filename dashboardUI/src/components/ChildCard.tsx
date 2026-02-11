@@ -5,6 +5,8 @@ import { ChildCardConfig } from '../recoil/ChildCardState';
 import { variableAtomFamily } from '../recoil/VariableFamily';
 import { variableNamesState, variableUpdateTriggerState } from '../recoil/Variabletracker';
 import { childCardTooltipConfigState } from '../recoil/ChildCardTooltipState';
+import { onClickConfigState } from '../recoil/OnClickConfigState';
+import { onClickSnapshotState } from '../recoil/OnClickSnapshotState';
 import ResizableChart from './ResizableChart';
 import DashboardTable from './DashboardTable';
 import ChildCardTooltip, { ChildCardTooltipRef } from './ChildCardTooltip';
@@ -17,6 +19,8 @@ interface ChildCardProps {
   gap?: number;
   showExport?: boolean;
   isFullSizePreview?: boolean;   // 🔥 When true, render at 100% size without layout positioning
+  onPointClick?: (pointData: any) => void;           // onClick action callback
+  onChartBackgroundClick?: () => void;               // Click outside point → reset
 }
 
 // 🔥 FIXED: Match the replaceVariableReferences from DragDropDashboard.tsx exactly
@@ -172,9 +176,13 @@ const ChildCard: React.FC<ChildCardProps> = ({
   gap = 8,
   showExport = false,
   isFullSizePreview = false, // 🔥 NEW: Full-size preview mode
+  onPointClick,
+  onChartBackgroundClick,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<ChildCardTooltipRef>(null);
+  const highlightChartRef = useRef<any>(null); // Stores the Highcharts chart instance for highlight reset
+  const [highlightedRowIndex, setHighlightedRowIndex] = useState<number | null>(null);
   
   // Get all variables for template replacement
   const variables = useAllVariables();
@@ -184,7 +192,52 @@ const ChildCard: React.FC<ChildCardProps> = ({
   const tooltipConfigs = useRecoilValue(childCardTooltipConfigState);
   const tooltipConfig = childCardKey ? tooltipConfigs[childCardKey] : undefined;
   const isTooltipEnabled = tooltipConfig?.enabled ?? false;
-  
+
+  // 🔥 onClick highlight configuration
+  const onClickConfigs = useRecoilValue(onClickConfigState);
+  const clickSnapshot = useRecoilValue(onClickSnapshotState);
+  const onClickConfig = childCardKey ? onClickConfigs[childCardKey] : undefined;
+  // highlightEnabled: config says highlight is on (used for allowPointSelect + dimming states)
+  const highlightEnabled = !!(onClickConfig?.enabled && onClickConfig?.highlightClicked);
+  // shouldHighlight kept for backward compat — true when an active drill-down is from this chart
+  const shouldHighlight = highlightEnabled && clickSnapshot.active && clickSnapshot.sourceChartId === childCardKey;
+
+  // 🔥 Clear visual highlight (chart or table) when:
+  //   1. Snapshot resets (Reset button clicked → active becomes false)
+  //   2. A different card/chart is clicked (sourceChartId changes away from this card)
+  const isThisChildHighlighted = clickSnapshot.active && clickSnapshot.sourceChartId === childCardKey;
+  useEffect(() => {
+    if (!highlightEnabled) return;
+    if (isThisChildHighlighted) return; // This child is currently highlighted — don't clear
+
+    // Clear chart highlight (for chart-type child cards)
+    const chart = highlightChartRef.current;
+    if (chart) {
+      try {
+        chart.series.forEach((s: any) => {
+          // Reset series-level opacity (for line/spline/area charts)
+          if (s.group) s.group.attr({ opacity: 1 });
+          if (s.markerGroup) s.markerGroup.attr({ opacity: 1 });
+          // Reset point-level opacity and selection (for bar/column/pie charts)
+          s.points?.forEach((p: any) => {
+            if (p.selected) p.select(false, false);
+            if (p.graphic) p.graphic.css({ opacity: 1 });
+          });
+        });
+        console.log(`🔄 [Highlight Reset] Cleared chart highlight for ${childCardKey}`);
+      } catch (err) {
+        // Silently ignore — chart may have been destroyed
+      }
+      highlightChartRef.current = null; // Clear the ref after reset
+    }
+
+    // Clear table row highlight (for table-type child cards)
+    if (highlightedRowIndex !== null) {
+      setHighlightedRowIndex(null);
+      console.log(`🔄 [Highlight Reset] Cleared table row highlight for ${childCardKey}`);
+    }
+  }, [isThisChildHighlighted, highlightEnabled, childCardKey, highlightedRowIndex]);
+
   // Calculate dimensions based on layout (only used when not in full-size preview mode)
   const dimensions = useMemo(() => {
     // 🔥 In full-size preview mode, don't calculate layout dimensions
@@ -346,52 +399,250 @@ const ChildCard: React.FC<ChildCardProps> = ({
     }
   }, []);
 
-  // 🔥 Enhanced chart options with tooltip events
+  // 🔥 Table row click handler — constructs a pointData-like object for useOnClickActions
+  const handleTableRowClick = useCallback((rowData: Record<string, any>, rowIndex: number, columns: string[]) => {
+    const childConfigKey = parentCardId ? `${parentCardId}_${config.id}` : config.id;
+    const isHighlightOn = onClickConfigs[childConfigKey]?.highlightClicked && onClickConfigs[childConfigKey]?.enabled;
+
+    // Set highlight
+    if (isHighlightOn) {
+      setHighlightedRowIndex(rowIndex);
+    }
+
+    if (onPointClick) {
+      // Build a pointData-like object carrying all row information
+      const pointData = {
+        // Standard point-like fields (mapped to row data for convenience)
+        x: rowIndex,
+        y: null,
+        name: null,
+        category: null,
+        color: null,
+        percentage: null,
+        total: null,
+        index: rowIndex,
+        series: {
+          name: config.tableDataSource || '',
+          index: 0,
+          type: 'table',
+        },
+        options: rowData,
+        // Table-specific fields
+        _rowData: rowData,        // Full row object: { columnName: value, ... }
+        _rowIndex: rowIndex,      // Index of the clicked row
+        _columns: columns,        // Array of visible column names
+        // Internal metadata for config lookup
+        _configKey: childConfigKey,
+        _chartOptions: null,      // Not applicable for tables
+        _isTableClick: true,      // Flag to differentiate from chart clicks
+      };
+      onPointClick(pointData);
+    }
+  }, [onPointClick, parentCardId, config.id, config.tableDataSource, onClickConfigs]);
+
+  // 🔥 Enhanced chart options with tooltip events, onClick actions, and highlight
   const enhancedChartOptions = useMemo(() => {
-    if (!chartOptions || !isTooltipEnabled) return chartOptions;
+    if (!chartOptions) return chartOptions;
     
-    // Add point events for tooltip
+    const needsEnhancement = isTooltipEnabled || onPointClick || shouldHighlight;
+    if (!needsEnhancement) return chartOptions;
+    
+    // Build point events object
+    const pointEvents: Record<string, any> = {
+      ...chartOptions.plotOptions?.series?.point?.events,
+    };
+
+    // Tooltip hover handlers
+    if (isTooltipEnabled) {
+      pointEvents.mouseOver = function(this: any, e: any) {
+        let clientX = 0;
+        let clientY = 0;
+        
+        if (e.browserEvent) {
+          clientX = e.browserEvent.clientX;
+          clientY = e.browserEvent.clientY;
+        } else if ((window as any).event) {
+          clientX = (window as any).event.clientX;
+          clientY = (window as any).event.clientY;
+        } else if (e.chartX !== undefined && e.chartY !== undefined) {
+          const chart = this.series?.chart;
+          if (chart && chart.container) {
+            const rect = chart.container.getBoundingClientRect();
+            clientX = rect.left + e.chartX;
+            clientY = rect.top + e.chartY;
+          }
+        }
+        
+        handleShowTooltip({ clientX, clientY }, this);
+      };
+      pointEvents.mouseOut = function(this: any) {
+        handleHideTooltip();
+      };
+    }
+
+    // onClick action handler — includes child card config key for proper config lookup
+    {
+      const childConfigKey = parentCardId ? `${parentCardId}_${config.id}` : config.id;
+      const isHighlightOn = onClickConfigs[childConfigKey]?.highlightClicked && onClickConfigs[childConfigKey]?.enabled;
+
+      if (onPointClick || isHighlightOn) {
+        pointEvents.click = function(this: any) {
+          // Highlight: select the clicked point and dim others within this chart only
+          if (isHighlightOn) {
+            const chart = this.series?.chart;
+            if (chart) {
+              // Store chart ref for reset via useEffect
+              highlightChartRef.current = chart;
+              const clickedSeriesIndex = this.series?.index;
+              // For line/spline/area charts: highlight the clicked series, dim others
+              // For bar/column/pie charts: highlight the clicked point, dim others
+              const isLineLike = ['line', 'spline', 'area', 'areaspline'].includes(this.series?.type);
+
+              if (isLineLike) {
+                // Dim all series except the one containing the clicked point
+                chart.series.forEach((s: any) => {
+                  const isClickedSeries = s.index === clickedSeriesIndex;
+                  // Set series-level opacity via the SVG group
+                  if (s.group) {
+                    s.group.attr({ opacity: isClickedSeries ? 1 : 0.15 });
+                  }
+                  if (s.markerGroup) {
+                    s.markerGroup.attr({ opacity: isClickedSeries ? 1 : 0.15 });
+                  }
+                });
+                // Select the clicked point for visual marker
+                chart.series.forEach((s: any) => {
+                  s.points?.forEach((p: any) => {
+                    if (p.selected) p.select(false, false);
+                  });
+                });
+                this.select(true, false);
+              } else {
+                // Bar/column/pie: dim individual points
+                chart.series.forEach((s: any) => {
+                  s.points?.forEach((p: any) => {
+                    if (p.selected) p.select(false, false);
+                  });
+                });
+                this.select(true, false);
+                chart.series.forEach((s: any) => {
+                  s.points?.forEach((p: any) => {
+                    if (p.graphic) {
+                      p.graphic.css({ opacity: p.selected ? 1 : 0.2 });
+                    }
+                  });
+                });
+              }
+            }
+          }
+
+          if (onPointClick) {
+            const pointData = {
+              x: this.x,
+              y: this.y,
+              name: this.name,
+              category: this.category,
+              color: this.color,
+              percentage: this.percentage,
+              total: this.total,
+              index: this.index,
+              series: {
+                name: this.series?.name,
+                index: this.series?.index,
+                type: this.series?.type,
+              },
+              options: this.options,
+              _configKey: childConfigKey, // internal: used by useOnClickActions to look up the right config
+              _chartOptions: chartOptions, // internal: full chart config for extractionType='config'
+            };
+            onPointClick(pointData);
+          }
+        };
+      }
+    }
+    
+    // Build highlight-related options — enabled based on config, not snapshot state
+    // This ensures allowPointSelect and dimming are always active when the feature is on
+    const highlightOptions = highlightEnabled ? {
+      allowPointSelect: true,
+      cursor: 'pointer',
+      marker: {
+        ...chartOptions.plotOptions?.series?.marker,
+        states: {
+          ...chartOptions.plotOptions?.series?.marker?.states,
+          select: {
+            enabled: true,
+            radius: 6,
+            lineWidth: 2,
+            lineColor: '#333',
+            fillColor: undefined, // Keep original color
+          },
+        },
+      },
+      states: {
+        ...chartOptions.plotOptions?.series?.states,
+        select: {
+          enabled: true,
+          color: undefined, // Keep original color
+          borderColor: '#333',
+          borderWidth: 2,
+        },
+        inactive: {
+          opacity: 0.15,
+        },
+      },
+    } : {};
+
     return {
       ...chartOptions,
-      tooltip: { enabled: false }, // Disable default tooltip
+      ...(isTooltipEnabled ? { tooltip: { enabled: false } } : {}),
+      chart: {
+        ...chartOptions.chart,
+        events: {
+          ...chartOptions.chart?.events,
+          ...(onChartBackgroundClick || highlightEnabled ? {
+            click: function(this: any, e: any) {
+              if (!(e as any).point) {
+                // Reset highlight: restore all series/point opacities when clicking background
+                if (highlightEnabled) {
+                  this.series.forEach((s: any) => {
+                    // Reset series-level opacity (for line/spline/area charts)
+                    if (s.group) {
+                      s.group.attr({ opacity: 1 });
+                    }
+                    if (s.markerGroup) {
+                      s.markerGroup.attr({ opacity: 1 });
+                    }
+                    // Reset point-level opacity (for bar/column/pie charts)
+                    s.points?.forEach((p: any) => {
+                      if (p.selected) p.select(false, false);
+                      if (p.graphic) {
+                        p.graphic.css({ opacity: 1 });
+                      }
+                    });
+                  });
+                }
+                if (onChartBackgroundClick) {
+                  onChartBackgroundClick();
+                }
+              }
+            },
+          } : {}),
+        },
+      },
       plotOptions: {
         ...chartOptions.plotOptions,
         series: {
           ...chartOptions.plotOptions?.series,
+          ...highlightOptions,
           point: {
             ...chartOptions.plotOptions?.series?.point,
-            events: {
-              ...chartOptions.plotOptions?.series?.point?.events,
-              mouseOver: function(this: any, e: any) {
-                let clientX = 0;
-                let clientY = 0;
-                
-                if (e.browserEvent) {
-                  clientX = e.browserEvent.clientX;
-                  clientY = e.browserEvent.clientY;
-                } else if ((window as any).event) {
-                  clientX = (window as any).event.clientX;
-                  clientY = (window as any).event.clientY;
-                } else if (e.chartX !== undefined && e.chartY !== undefined) {
-                  const chart = this.series?.chart;
-                  if (chart && chart.container) {
-                    const rect = chart.container.getBoundingClientRect();
-                    clientX = rect.left + e.chartX;
-                    clientY = rect.top + e.chartY;
-                  }
-                }
-                
-                handleShowTooltip({ clientX, clientY }, this);
-              },
-              mouseOut: function(this: any) {
-                handleHideTooltip();
-              },
-            },
+            events: pointEvents,
           },
         },
       },
     };
-  }, [chartOptions, isTooltipEnabled, handleShowTooltip, handleHideTooltip]);
+  }, [chartOptions, isTooltipEnabled, handleShowTooltip, handleHideTooltip, onPointClick, onChartBackgroundClick, highlightEnabled, shouldHighlight, onClickConfigs, parentCardId, config.id]);
 
   // Render HTML content
   const htmlContent = useMemo(() => {
@@ -462,11 +713,12 @@ const ChildCard: React.FC<ChildCardProps> = ({
           );
         }
         
-        // 🔥 Render the chart with optional tooltip
+        // 🔥 Render the chart with optional tooltip and/or onClick actions
+        const useEnhanced = isTooltipEnabled || onPointClick || highlightEnabled;
         return (
           <>
             <ResizableChart
-              options={isTooltipEnabled ? enhancedChartOptions : chartOptions}
+              options={useEnhanced ? enhancedChartOptions : chartOptions}
               showExport={showExport}
             />
             {isTooltipEnabled && childCardKey && (
@@ -479,7 +731,7 @@ const ChildCard: React.FC<ChildCardProps> = ({
           </>
         );
 
-      case 'table':
+      case 'table': {
         if (!config.tableDataSource) {
           return (
             <Box
@@ -495,12 +747,21 @@ const ChildCard: React.FC<ChildCardProps> = ({
             </Box>
           );
         }
+        const tableConfigKey = parentCardId ? `${parentCardId}_${config.id}` : '';
+        const tableOnClickConfig = tableConfigKey ? onClickConfigs[tableConfigKey] : undefined;
+        const tableClickEnabled = !!(tableOnClickConfig?.enabled);
+        const tableHighlightEnabled = !!(tableOnClickConfig?.enabled && tableOnClickConfig?.highlightClicked);
+        const isThisTableHighlighted = clickSnapshot.active && clickSnapshot.sourceChartId === tableConfigKey;
         return (
           <DashboardTable
             dataSource={config.tableDataSource}
             settings={config.tableSettings}
+            onRowClick={tableClickEnabled ? handleTableRowClick : undefined}
+            highlightEnabled={tableHighlightEnabled && isThisTableHighlighted}
+            highlightedRowIndex={tableHighlightEnabled && isThisTableHighlighted ? highlightedRowIndex : null}
           />
         );
+      }
 
       case 'html':
         if (!htmlContent) {

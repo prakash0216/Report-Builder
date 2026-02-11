@@ -447,6 +447,7 @@ CREATE SEQUENCE IF NOT EXISTS card_dimension_conditions_seq START 1;
 CREATE SEQUENCE IF NOT EXISTS filter_panel_state_seq START 1;
 CREATE SEQUENCE IF NOT EXISTS card_filter_panel_state_seq START 1;
 CREATE SEQUENCE IF NOT EXISTS tooltip_configs_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS onclick_configs_seq START 1;
 `;
 
 // Chart configs table (scoped to view - view-specific resource)
@@ -673,6 +674,34 @@ async function createTooltipConfigsTable() {
     console.log("✅ Table 'tooltip_configs' created successfully.");
   } catch (err) {
     console.error("❌ Error creating table 'tooltip_configs':", err.message);
+  }
+}
+
+// onClick configs table (scoped to view - view-specific resource)
+const onClickConfigsTable = `
+CREATE TABLE IF NOT EXISTS onclick_configs (
+  id INTEGER PRIMARY KEY DEFAULT NEXTVAL('onclick_configs_seq'),
+  view_id INTEGER,
+  chart_id TEXT NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT false,
+  data_mapping_json TEXT,
+  calculations_json TEXT,
+  reset_on_click_outside BOOLEAN DEFAULT true,
+  show_reset_button BOOLEAN DEFAULT true,
+  highlight_clicked BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_modified TIMESTAMP,
+  UNIQUE(view_id, chart_id)
+);
+`;
+
+async function createOnClickConfigsTable() {
+  try {
+    await dbClient.run(`CREATE SEQUENCE IF NOT EXISTS onclick_configs_seq START 1;`);
+    await dbClient.run(onClickConfigsTable);
+    console.log("✅ Table 'onclick_configs' created successfully.");
+  } catch (err) {
+    console.error("❌ Error creating table 'onclick_configs':", err.message);
   }
 }
 
@@ -929,6 +958,7 @@ async function migrateViewIdColumns() {
     'filter_panel_state',
     'card_filter_panel_state',
     'tooltip_configs',
+    'onclick_configs',
     'child_card_configs',
     'child_card_tooltip_configs'
   ];
@@ -1071,6 +1101,7 @@ const createTables = async () => {
   await createFilterPanelStateTable();
   await createCardFilterPanelStateTable();
   await createTooltipConfigsTable();
+  await createOnClickConfigsTable();
   await createChildCardConfigsTable();
   await createChildCardTooltipConfigsTable();
   await createMaterializedViewsTable();
@@ -1114,6 +1145,7 @@ export {
   createFilterPanelStateTable,
   createCardFilterPanelStateTable,
   createTooltipConfigsTable,
+  createOnClickConfigsTable,
   createChildCardConfigsTable,
   createChildCardTooltipConfigsTable,
   createMaterializedViewsTable,
