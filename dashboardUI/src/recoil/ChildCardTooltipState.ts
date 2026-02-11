@@ -272,6 +272,9 @@ export const childCardTooltipConfigState = atom<{[childCardKey: string]: ChildCa
     ({ onSet }) => {
       let timeoutId: NodeJS.Timeout;
       onSet((newValue, oldValue, isReset) => {
+        // 🔥 FIX: Always cancel pending timeout first to prevent cross-view saves
+        clearTimeout(timeoutId);
+        
         if (shouldBlockSave()) {
           updateLastValue(ATOM_KEY, newValue);
           return;
@@ -281,7 +284,6 @@ export const childCardTooltipConfigState = atom<{[childCardKey: string]: ChildCa
           return;
         }
         
-        clearTimeout(timeoutId);
         timeoutId = setTimeout(async () => {
           try {
             // Save all configs at once

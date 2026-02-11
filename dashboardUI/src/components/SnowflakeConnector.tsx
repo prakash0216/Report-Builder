@@ -899,6 +899,7 @@ const ConnectorManager: React.FC = () => {
               • Upload a CSV file to create a connector that can be queried like a database<br />
               • Once uploaded, the CSV data is stored in DuckDB for fast SQL queries<br />
               • Use the connector in <strong>Add Data Source</strong> to create data sources with SQL queries<br />
+              • Max 1Gb file size allowed.
             </Typography>
           </Alert>
 

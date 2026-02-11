@@ -186,6 +186,9 @@ export const childCardConfigState = atom<{[parentCardId: string]: ParentCardConf
     ({ onSet }) => {
       let timeoutId: NodeJS.Timeout;
       onSet((newValue, oldValue, isReset) => {
+        // 🔥 FIX: Always cancel pending timeout first to prevent cross-view saves
+        clearTimeout(timeoutId);
+        
         if (shouldBlockSave()) {
           updateLastValue(ATOM_KEY, newValue);
           return;
@@ -195,18 +198,19 @@ export const childCardConfigState = atom<{[parentCardId: string]: ParentCardConf
           return;
         }
         
-        clearTimeout(timeoutId);
+        // 🔥 FIX: Capture viewId NOW (at set time), not later in the timeout
+        const capturedViewId = getCurrentViewId();
+        
         timeoutId = setTimeout(async () => {
           try {
-            const viewId = getCurrentViewId();
             for (const [parentCardId, config] of Object.entries(newValue)) {
               await axios.post(`${API_BASE_URL}/api/child-card-configs`, {
                 parentCardId,
-                viewId,
+                viewId: capturedViewId,
                 config,
               });
             }
-            console.log(`✅ ChildCardConfig: Saved ${Object.keys(newValue).length} parent configs (viewId: ${viewId})`);
+            console.log(`✅ ChildCardConfig: Saved ${Object.keys(newValue).length} parent configs (viewId: ${capturedViewId})`);
           } catch (error) {
             console.error('❌ ChildCardConfig: Failed to save:', error);
           }

@@ -19,6 +19,9 @@ export const chartConfigState = atom<{[id:string]:any}>({
             // Save chart configs to API when they change (debounced)
             let timeoutId: NodeJS.Timeout;
             onSet((newValue, oldValue, isReset) => {
+                // 🔥 FIX: Always cancel pending timeout first to prevent cross-view saves
+                clearTimeout(timeoutId);
+                
                 // Skip saving during initialization
                 if (shouldBlockSave()) {
                     updateLastValue(ATOM_KEY, newValue);
@@ -30,18 +33,18 @@ export const chartConfigState = atom<{[id:string]:any}>({
                     return;
                 }
                 
-                clearTimeout(timeoutId);
+                // 🔥 FIX: Capture viewId NOW (at set time), not later in the timeout
+                const capturedViewId = getCurrentViewId();
+                
                 timeoutId = setTimeout(async () => {
                     try {
-                        const viewId = getCurrentViewId();
-                        console.log(`💾 [ChartConfig SAVE] viewId=${viewId}, saving ${Object.keys(newValue).length} configs`);
+                        console.log(`💾 [ChartConfig SAVE] viewId=${capturedViewId}, saving ${Object.keys(newValue).length} configs`);
                         
                         // Save each chart config individually with viewId
                         for (const [chartId, config] of Object.entries(newValue)) {
-                            console.log(`💾 [ChartConfig SAVE] Saving chartId="${chartId}" with viewId=${viewId}`);
                             await axios.post(`${API_BASE_URL}/api/chart-configs`, {
                                 chartId,
-                                viewId, // Include viewId to scope to current view
+                                viewId: capturedViewId,
                                 template: config.template,
                                 type: config.type,
                                 processed: config.processed,
@@ -50,7 +53,7 @@ export const chartConfigState = atom<{[id:string]:any}>({
                                 tableSettings: config.tableSettings,
                             });
                         }
-                        console.log(`✅ ChartConfig: Saved ${Object.keys(newValue).length} configs (viewId: ${viewId})`);
+                        console.log(`✅ ChartConfig: Saved ${Object.keys(newValue).length} configs (viewId: ${capturedViewId})`);
                     } catch (error) {
                         console.error('❌ ChartConfig: Failed to save:', error);
                     }

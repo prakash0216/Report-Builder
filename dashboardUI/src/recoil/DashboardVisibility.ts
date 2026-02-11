@@ -22,6 +22,9 @@ export const chartVisibilityVariableState = atom<Record<string, string>>({
       // Save chart visibility to API when it changes (debounced)
       let timeoutId: NodeJS.Timeout;
       onSet((newValue, oldValue, isReset) => {
+        // 🔥 FIX: Always cancel pending timeout first to prevent cross-view saves
+        clearTimeout(timeoutId);
+        
         // Skip saving during initialization
         if (shouldBlockSave()) {
           updateLastValue(ATOM_KEY, newValue);
@@ -33,21 +36,21 @@ export const chartVisibilityVariableState = atom<Record<string, string>>({
           return;
         }
         
-        clearTimeout(timeoutId);
+        // 🔥 FIX: Capture viewId NOW (at set time), not later in the timeout
+        const capturedViewId = getCurrentViewId();
+        
         if (isReset) {
           // If reset, clear all visibility
-          const viewId = getCurrentViewId();
-          axios.post(`${API_BASE_URL}/api/chart-visibility`, { visibility: {}, viewId })
+          axios.post(`${API_BASE_URL}/api/chart-visibility`, { visibility: {}, viewId: capturedViewId })
             .catch(error => console.error('Failed to reset chart visibility:', error));
         } else {
           timeoutId = setTimeout(async () => {
             try {
-              const viewId = getCurrentViewId();
               await axios.post(`${API_BASE_URL}/api/chart-visibility`, {
                 visibility: newValue,
-                viewId,
+                viewId: capturedViewId,
               });
-              console.log(`✅ ChartVisibility: Saved visibility (viewId: ${viewId})`);
+              console.log(`✅ ChartVisibility: Saved visibility (viewId: ${capturedViewId})`);
             } catch (error) {
               console.error('❌ ChartVisibility: Failed to save:', error);
             }

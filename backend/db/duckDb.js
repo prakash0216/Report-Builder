@@ -31,6 +31,7 @@ class DuckDBClient {
   async init() {
     const dbDir = path.resolve(__dirname, './data');
     const dbPath = path.join(dbDir, DB_NAME);
+    this.dbPath = dbPath;
 
     try {
       await fs.mkdir(dbDir, { recursive: true });
@@ -40,6 +41,10 @@ class DuckDBClient {
       throw err;
     }
 
+    await this.openConnection(dbPath);
+  }
+
+  async openConnection(dbPath) {
     try {
       this.db = await DuckDBInstance.create(dbPath, {
         threads: Math.min(8, os.cpus().length),
@@ -69,7 +74,7 @@ class DuckDBClient {
       throw err;
     }
   }
-  
+
   // Periodic checkpoint as safety net (not blocking writes)
   startPeriodicCheckpoint() {
     const intervalMs = CHECKPOINT_INTERVAL_MIN * 60 * 1000;
@@ -118,24 +123,10 @@ class DuckDBClient {
     }
   }
 
-  async query(sql, params = [], maxRetries = 3) {
+  async query(sql, params = []) {
     await this.ready;
-    let lastError;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const reader = await this.connection.runAndReadAll(sql, params);
-        return reader.getRowObjectsJson();
-      } catch (err) {
-        lastError = err;
-        if (attempt < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 50 * attempt));
-        }
-      }
-    }
-    
-    console.error(`DuckDB query failed:`, lastError.message);
-    throw lastError;
+    const reader = await this.connection.runAndReadAll(sql, params);
+    return reader.getRowObjectsJson();
   }
 
   async queryParquet(sql, params = []) {
@@ -144,25 +135,9 @@ class DuckDBClient {
     return reader.getRowObjectsJson();
   }
 
-  async run(sql, params = [], maxRetries = 3) {
+  async run(sql, params = []) {
     await this.ready;
-    let lastError;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        await this.connection.runAndReadAll(sql, params);
-        return;
-      } catch (err) {
-        lastError = err;
-        console.warn(`DuckDB run attempt ${attempt} failed:`, err.message);
-        if (attempt < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 100 * attempt));
-        }
-      }
-    }
-    
-    console.error('DuckDB run error after retries:', lastError.message);
-    throw lastError;
+    await this.connection.run(sql, ...params);
   }
 
   // Manual checkpoint if needed

@@ -172,11 +172,23 @@ const upload=multer({
 })
 
 // CSV Upload multer configuration
-const csvUploadStorage = multer.memoryStorage();
+const csvUploadTempDir = path.join(os.tmpdir(), 'dragdrop_csv_uploads');
+if (!fs.existsSync(csvUploadTempDir)) {
+  fs.mkdirSync(csvUploadTempDir, { recursive: true });
+}
+
+const csvUploadStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, csvUploadTempDir),
+  filename: (_req, file, cb) => {
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_');
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    cb(null, `${unique}-${safeName}`);
+  },
+});
 const csvUpload = multer({
   storage: csvUploadStorage,
   limits: {
-    fileSize: 1024 * 1024 * 1024, // 100MB limit
+    fileSize: 1024 * 1024 * 1024, // 1GB limit
   },
   fileFilter: (req, file, cb) => {
     const allowedExtensions = ['.csv'];
@@ -1523,6 +1535,7 @@ app.post('/api/upload-csv-connector', csvUpload.single('csvFile'), async (req, r
   // Validate connector name (no special characters except underscore)
   const sanitizedName = connectorName.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
   const duckdbTableName = `csv_${sanitizedName}`;
+  const uploadedFilePath = file?.path;
 
   try {
     // Check if connector name already exists
@@ -1536,42 +1549,14 @@ app.post('/api/upload-csv-connector', csvUpload.single('csvFile'), async (req, r
       });
     }
 
-    // Parse CSV from buffer
-    const csvContent = file.buffer.toString('utf-8');
-    const lines = csvContent.split(/\r?\n/).filter(line => line.trim());
-    
-    if (lines.length < 2) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'CSV file must have at least a header row and one data row' 
+    if (!uploadedFilePath) {
+      return res.status(400).json({
+        success: false,
+        error: 'CSV upload path missing. Please try again.',
       });
     }
 
-    // Parse headers (first line)
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-    
-    // Sanitize column names for DuckDB
-    const sanitizedHeaders = headers.map(h => {
-      // Replace spaces and special chars with underscore, remove quotes
-      return h.replace(/[^a-zA-Z0-9]/g, '_').replace(/^_+|_+$/g, '') || 'column';
-    });
-
-    // Create unique column names (handle duplicates)
-    const columnNames = [];
-    const seenNames = new Map();
-    for (const name of sanitizedHeaders) {
-      if (seenNames.has(name)) {
-        const count = seenNames.get(name) + 1;
-        seenNames.set(name, count);
-        columnNames.push(`${name}_${count}`);
-      } else {
-        seenNames.set(name, 1);
-        columnNames.push(name);
-      }
-    }
-
-    console.log(`📁 Uploading CSV: ${file.originalname} -> ${duckdbTableName}`);
-    console.log(`📊 Columns: ${columnNames.join(', ')}`);
+    console.log(`📁 Uploading CSV: ${file.originalname} (${(file.size / (1024 * 1024)).toFixed(2)} MB) -> ${duckdbTableName}`);
 
     // Drop existing table if exists
     try {
@@ -1580,45 +1565,46 @@ app.post('/api/upload-csv-connector', csvUpload.single('csvFile'), async (req, r
       console.log(`ℹ️ Table ${duckdbTableName} did not exist or could not be dropped`);
     }
 
-    // Create table with TEXT columns (DuckDB will handle type inference)
-    const createTableSQL = `CREATE TABLE ${duckdbTableName} (${columnNames.map(col => `"${col}" TEXT`).join(', ')})`;
-    await dbClient.run(createTableSQL);
-    console.log(`✅ Created table ${duckdbTableName}`);
+    const escapedCsvPath = uploadedFilePath.replace(/\\/g, '/').replace(/'/g, "''");
 
-    // Parse and insert data rows
-    let rowCount = 0;
-    const batchSize = 1000;
-    let batch = [];
+    // Use DuckDB's native CSV reader for large files (fast + memory-safe).
+    await dbClient.run(`
+      CREATE TABLE ${duckdbTableName} AS
+      SELECT * FROM read_csv_auto(
+        '${escapedCsvPath}',
+        header = true,
+        all_varchar = true,
+        normalize_names = true,
+        ignore_errors = true,
+        null_padding = true
+      )
+    `);
+    console.log(`✅ Created table ${duckdbTableName} from CSV`);
 
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
+    // Get row count
+    const countResult = await dbClient.query(`SELECT COUNT(*) AS row_count FROM ${duckdbTableName}`);
+    const rowCount = Number(countResult?.[0]?.row_count ?? countResult?.[0]?.count ?? 0);
 
-      // Simple CSV parsing (handles basic cases, not complex quoted fields)
-      const values = parseCSVLine(line);
-      
-      if (values.length === columnNames.length) {
-        batch.push(values);
-        rowCount++;
-
-        if (batch.length >= batchSize) {
-          await insertCSVBatch(duckdbTableName, columnNames, batch);
-          batch = [];
-        }
-      }
+    if (rowCount === 0) {
+      await dbClient.run(`DROP TABLE IF EXISTS ${duckdbTableName}`);
+      return res.status(400).json({
+        success: false,
+        error: 'CSV could not be parsed into rows. Please check delimiter/encoding.',
+      });
     }
 
-    // Insert remaining batch
-    if (batch.length > 0) {
-      await insertCSVBatch(duckdbTableName, columnNames, batch);
-    }
+    // Read normalized DuckDB columns for metadata.
+    const tableInfo = await dbClient.query(`PRAGMA table_info('${duckdbTableName}')`);
+    const columnNames = tableInfo
+      .map((col) => col.name || col.column_name || col.column)
+      .filter(Boolean);
 
-    console.log(`✅ Inserted ${rowCount} rows into ${duckdbTableName}`);
+    console.log(`📊 Parsed ${columnNames.length} columns, ${rowCount} rows`);
 
     // Store columns info as JSON
-    const columnsJson = JSON.stringify(columnNames.map((name, idx) => ({
+    const columnsJson = JSON.stringify(columnNames.map((name) => ({
       name,
-      originalName: headers[idx],
+      originalName: name,
       type: 'TEXT'
     })));
 
@@ -1651,58 +1637,17 @@ app.post('/api/upload-csv-connector', csvUpload.single('csvFile'), async (req, r
       // Ignore cleanup errors
     }
     res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Helper function to parse a CSV line (handles quoted values)
-function parseCSVLine(line) {
-  const values = [];
-  let current = '';
-  let inQuotes = false;
-  
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    const nextChar = line[i + 1];
-    
-    if (char === '"' && !inQuotes) {
-      inQuotes = true;
-    } else if (char === '"' && inQuotes) {
-      if (nextChar === '"') {
-        current += '"';
-        i++; // Skip next quote
-      } else {
-        inQuotes = false;
+  } finally {
+    // Always cleanup uploaded temp file
+    if (uploadedFilePath) {
+      try {
+        fs.unlinkSync(uploadedFilePath);
+      } catch {
+        // Ignore temp-file cleanup errors
       }
-    } else if (char === ',' && !inQuotes) {
-      values.push(current.trim());
-      current = '';
-    } else {
-      current += char;
     }
   }
-  values.push(current.trim());
-  
-  return values;
-}
-
-// Helper function to insert batch of CSV rows
-async function insertCSVBatch(tableName, columns, rows) {
-  if (rows.length === 0) return;
-  
-  const values = rows.map(row => {
-    const escapedValues = row.map(val => {
-      if (val === null || val === undefined || val === '') {
-        return 'NULL';
-      }
-      // Escape single quotes
-      return `'${String(val).replace(/'/g, "''")}'`;
-    });
-    return `(${escapedValues.join(', ')})`;
-  }).join(', ');
-  
-  const insertSQL = `INSERT INTO ${tableName} ("${columns.join('", "')}") VALUES ${values}`;
-  await dbClient.run(insertSQL);
-}
+});
 
 /**
  * Get all CSV connectors
@@ -3959,6 +3904,11 @@ app.post('/api/chart-configs', async (req, res) => {
       return res.status(400).json({ success: false, error: 'chartId and type are required' });
     }
 
+    // 🔥 SAFETY: Warn if no viewId provided (saves should always be scoped)
+    if (!viewId) {
+      console.warn(`⚠️ [POST /api/chart-configs] No viewId for chartId="${chartId}" — saving unscoped`);
+    }
+
     const processedJson = processed ? JSON.stringify(processed) : null;
     const tableSettingsJson = tableSettings ? JSON.stringify(tableSettings) : null;
     
@@ -4462,6 +4412,11 @@ app.post('/api/child-card-configs', async (req, res) => {
       return res.status(400).json({ success: false, error: 'parentCardId and config are required' });
     }
 
+    // 🔥 SAFETY: Warn if no viewId provided (saves should always be scoped)
+    if (!viewId) {
+      console.warn(`⚠️ [POST /api/child-card-configs] No viewId for parentCardId="${parentCardId}" — saving unscoped`);
+    }
+
     const viewIdValue = viewId ? parseInt(viewId) : null;
     const escapedParentCardId = parentCardId.replace(/'/g, "''");
     const escapedContainerLayout = (config.containerLayout || 'grid').replace(/'/g, "''");
@@ -4499,7 +4454,7 @@ app.post('/api/child-card-configs', async (req, res) => {
           arrangement_variable = '${escapedArrangementVariable}',
           child_visibility_mode = '${(config.childVisibilityMode || 'all').replace(/'/g, "''")}',
           last_modified = CURRENT_TIMESTAMP
-        WHERE parent_card_id = '${escapedParentCardId}'
+        WHERE parent_card_id = '${escapedParentCardId}'${viewIdValue ? ` AND view_id = ${viewIdValue}` : ''}
       `);
     } else {
       // Insert new
@@ -4809,6 +4764,10 @@ app.post('/api/layouts', async (req, res) => {
     }
 
     const viewIdValue = viewId ? parseInt(viewId) : null;
+
+    if (!viewIdValue) {
+      console.warn('⚠️ [POST /api/layouts] No viewId provided — saving unscoped layouts');
+    }
 
     // Delete existing layouts for breakpoints we're updating (scoped to view if provided)
     const breakpoints = ['lg', 'md', 'sm', 'xs', 'xxs'];

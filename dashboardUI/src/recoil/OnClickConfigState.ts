@@ -83,6 +83,9 @@ export const onClickConfigState = atom<Record<string, OnClickConfig>>({
     ({ onSet }) => {
       let timeoutId: NodeJS.Timeout;
       onSet((newValue, oldValue, isReset) => {
+        // 🔥 FIX: Always cancel pending timeout first to prevent cross-view saves
+        clearTimeout(timeoutId);
+        
         // Skip saving during initialization
         if (shouldBlockSave()) {
           updateLastValue(ATOM_KEY, newValue);
@@ -94,19 +97,20 @@ export const onClickConfigState = atom<Record<string, OnClickConfig>>({
           return;
         }
         
-        clearTimeout(timeoutId);
+        // 🔥 FIX: Capture viewId NOW (at set time), not later in the timeout
+        const capturedViewId = getCurrentViewId();
+        
         timeoutId = setTimeout(async () => {
           try {
-            const viewId = getCurrentViewId();
             // Save each onClick config individually
             for (const [chartId, config] of Object.entries(newValue)) {
               await axios.post(`${API_BASE_URL}/api/onclick-configs`, {
                 chartId,
-                viewId,
+                viewId: capturedViewId,
                 config,
               });
             }
-            console.log(`✅ OnClickConfig: Saved ${Object.keys(newValue).length} configs (viewId: ${viewId})`);
+            console.log(`✅ OnClickConfig: Saved ${Object.keys(newValue).length} configs (viewId: ${capturedViewId})`);
           } catch (error) {
             console.error('❌ OnClickConfig: Failed to save:', error);
           }

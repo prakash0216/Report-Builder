@@ -29,6 +29,9 @@ export const cardDimensionConditionsState = atom<Record<string, DimensionConditi
       // Save card dimension conditions to API when they change (debounced)
       let timeoutId: NodeJS.Timeout;
       onSet(async (newValue, oldValue, isReset) => {
+        // 🔥 FIX: Always cancel pending timeout first to prevent cross-view saves
+        clearTimeout(timeoutId);
+        
         if (isReset) {
           return;
         }
@@ -44,19 +47,20 @@ export const cardDimensionConditionsState = atom<Record<string, DimensionConditi
           return;
         }
         
-        clearTimeout(timeoutId);
+        // 🔥 FIX: Capture viewId NOW (at set time), not later in the timeout
+        const capturedViewId = getCurrentViewId();
+        
         timeoutId = setTimeout(async () => {
           try {
-            const viewId = getCurrentViewId();
             // Save conditions for each chart
             for (const [chartId, conditions] of Object.entries(newValue)) {
               await axios.post(`${API_BASE_URL}/api/card-dimension-conditions`, {
                 chartId,
-                viewId,
+                viewId: capturedViewId,
                 conditions: conditions || [],
               });
             }
-            console.log(`✅ CardDimensions: Saved conditions (viewId: ${viewId})`);
+            console.log(`✅ CardDimensions: Saved conditions (viewId: ${capturedViewId})`);
           } catch (error) {
             console.error('❌ CardDimensions: Failed to save:', error);
           }

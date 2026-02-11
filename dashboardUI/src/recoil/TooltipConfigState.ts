@@ -73,6 +73,9 @@ export const tooltipConfigState = atom<{[chartId: string]: TooltipConfig}>({
     ({ onSet }) => {
       let timeoutId: NodeJS.Timeout;
       onSet((newValue, oldValue, isReset) => {
+        // 🔥 FIX: Always cancel pending timeout first to prevent cross-view saves
+        clearTimeout(timeoutId);
+        
         // Skip saving during initialization
         if (shouldBlockSave()) {
           updateLastValue(ATOM_KEY, newValue);
@@ -84,19 +87,20 @@ export const tooltipConfigState = atom<{[chartId: string]: TooltipConfig}>({
           return;
         }
         
-        clearTimeout(timeoutId);
+        // 🔥 FIX: Capture viewId NOW (at set time), not later in the timeout
+        const capturedViewId = getCurrentViewId();
+        
         timeoutId = setTimeout(async () => {
           try {
-            const viewId = getCurrentViewId();
             // Save each tooltip config individually
             for (const [chartId, config] of Object.entries(newValue)) {
               await axios.post(`${API_BASE_URL}/api/tooltip-configs`, {
                 chartId,
-                viewId,
+                viewId: capturedViewId,
                 config,
               });
             }
-            console.log(`✅ TooltipConfig: Saved ${Object.keys(newValue).length} configs (viewId: ${viewId})`);
+            console.log(`✅ TooltipConfig: Saved ${Object.keys(newValue).length} configs (viewId: ${capturedViewId})`);
           } catch (error) {
             console.error('❌ TooltipConfig: Failed to save:', error);
           }

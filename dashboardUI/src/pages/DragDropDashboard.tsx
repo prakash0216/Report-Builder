@@ -28,6 +28,7 @@ import { variableAtomFamily } from '../recoil/VariableFamily';
 import { filterConfigFamily, filterNamesState } from '../recoil/FiltersFamily';
 import { liveFilterFamily } from '../recoil/LiveFilterFamily';
 import { isChartVisibleSelector, chartDynamicDimensionsSelector, chartVisibilityVariableState } from '../recoil/DashboardVisibility';
+import { getCurrentViewId } from '../recoil/ViewContext';
 import { IsEditModeState } from "../recoil/IsEditeMode";
 import { dahboardNameMain } from "../recoil/DashboardName";
 import {
@@ -484,11 +485,12 @@ export default function DropDragDashboard() {
       console.log(`✅ Created default layouts for ${chartIds.length} charts`);
       setLayouts(defaultLayouts);
       
-      // Save layouts to database
+      // Save layouts to database (with viewId to scope to current view)
+      const currentViewId = getCurrentViewId();
       fetch(`${API_BASE_URL}/api/layouts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ layouts: defaultLayouts })
+        body: JSON.stringify({ layouts: defaultLayouts, viewId: currentViewId })
       }).catch(err => {
         console.warn('Failed to save default layouts:', err);
       });

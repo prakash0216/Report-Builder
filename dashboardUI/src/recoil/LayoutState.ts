@@ -26,6 +26,9 @@ export const layoutState = atom<{ [key: string]: Layout[] }>({
             // Save layouts to API when they change (debounced)
             let timeoutId: NodeJS.Timeout;
             onSet((newValue, oldValue, isReset) => {
+                // 🔥 FIX: Always cancel pending timeout first to prevent cross-view saves
+                clearTimeout(timeoutId);
+                
                 // Skip saving during initialization
                 if (shouldBlockSave()) {
                     updateLastValue(ATOM_KEY, newValue);
@@ -37,18 +40,19 @@ export const layoutState = atom<{ [key: string]: Layout[] }>({
                     return;
                 }
                 
-                clearTimeout(timeoutId);
+                // 🔥 FIX: Capture viewId NOW (at set time), not later in the timeout
+                const capturedViewId = getCurrentViewId();
+                
                 timeoutId = setTimeout(async () => {
                     try {
-                        const viewId = getCurrentViewId();
                         const totalItems = Object.values(newValue).reduce((sum, arr) => sum + (arr?.length || 0), 0);
-                        console.log(`💾 [LayoutState SAVE] viewId=${viewId}, saving ${totalItems} layout items`);
+                        console.log(`💾 [LayoutState SAVE] viewId=${capturedViewId}, saving ${totalItems} layout items`);
                         
                         await axios.post(`${API_BASE_URL}/api/layouts`, {
                             layouts: newValue,
-                            viewId, // Include viewId to scope to current view
+                            viewId: capturedViewId,
                         });
-                        console.log(`✅ LayoutState: Saved layouts (viewId: ${viewId})`);
+                        console.log(`✅ LayoutState: Saved layouts (viewId: ${capturedViewId})`);
                     } catch (error) {
                         console.error('❌ LayoutState: Failed to save:', error);
                     }
