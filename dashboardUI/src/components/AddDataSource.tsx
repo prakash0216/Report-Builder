@@ -36,6 +36,7 @@ import {
   AccordionDetails,
   Divider,
   Chip,
+  InputAdornment,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -48,6 +49,10 @@ import {
   Check as CheckIcon,
   Close as CloseIcon,
   Schedule as ScheduleIcon,
+  Search as SearchIcon,
+  Storage as StorageIcon,
+  TableChart as TableChartIcon,
+  ContentCopy as ContentCopyIcon,
 } from '@mui/icons-material';
 import { API_BASE_URL } from '../config/api.config';
 
@@ -64,6 +69,18 @@ interface AlertState {
   show: boolean;
   message: string;
   severity: 'success' | 'error' | 'warning' | 'info';
+}
+
+interface ConnectorColumn {
+  name: string;
+  type: string;
+  table: string;
+  nullable?: boolean;
+}
+
+interface ConnectorTable {
+  name: string;
+  columns: ConnectorColumn[];
 }
 
 export default function AddDataSourceMui() {
@@ -109,10 +126,20 @@ export default function AddDataSourceMui() {
   
   // Monaco Editor ref
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<Monaco | null>(null);
+  const completionDisposableRef = useRef<any>(null);
+
+  // Connector columns state
+  const [connectorTables, setConnectorTables] = useState<ConnectorTable[]>([]);
+  const [isLoadingColumns, setIsLoadingColumns] = useState<boolean>(false);
+  const [columnsExpanded, setColumnsExpanded] = useState<boolean>(true);
+  const [columnSearchTerm, setColumnSearchTerm] = useState<string>('');
+  const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({});
 
   // Monaco Editor mount handler
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
     
     // Register SQL keywords for autocomplete
     monaco.languages.registerCompletionItemProvider('sql', {
@@ -205,11 +232,118 @@ export default function AddDataSourceMui() {
       },
     });
     
+    // Register @ trigger for column name autocomplete
+    registerColumnCompletionProvider(monaco);
+    
     // Add Ctrl+Enter command to execute query
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       executeQuery();
     });
   };
+
+  // Register (or re-register) the @ column completion provider
+  const connectorTablesRef = useRef<ConnectorTable[]>([]);
+  connectorTablesRef.current = connectorTables;
+
+  // Register a single persistent @ completion provider that reads from the ref at invocation time.
+  // This avoids issues with disposal timing and Monaco lifecycle.
+  const registerColumnCompletionProvider = (monaco: Monaco) => {
+    // Only register once — the provider reads connectorTablesRef.current dynamically
+    if (completionDisposableRef.current) return;
+    
+    completionDisposableRef.current = monaco.languages.registerCompletionItemProvider('sql', {
+      triggerCharacters: ['@'],
+      provideCompletionItems: (model, position) => {
+        const textUntilPosition = model.getValueInRange({
+          startLineNumber: position.lineNumber,
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column,
+        });
+        
+        // Check if @ was typed (match the @ itself plus any partial text after it)
+        const atMatch = textUntilPosition.match(/@([\w.]*)$/);
+        if (!atMatch) return { suggestions: [] };
+        
+        const filterPrefix = atMatch[1] || '';
+        // Range covers @ + any text after it, so selecting a suggestion replaces @...
+        const replaceStart = position.column - filterPrefix.length - 1; // -1 for @
+        
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: replaceStart,
+          endColumn: position.column,
+        };
+        
+        const currentTables = connectorTablesRef.current;
+        if (!currentTables || currentTables.length === 0) return { suggestions: [] };
+        
+        const suggestions: any[] = [];
+        
+        // Add table name suggestions
+        currentTables.forEach((table) => {
+          suggestions.push({
+            label: table.name,
+            kind: monaco.languages.CompletionItemKind.Module,
+            insertText: table.name,
+            range,
+            filterText: '@' + table.name,
+            detail: `Table (${table.columns.length} columns)`,
+            documentation: `Table: ${table.name}\nColumns: ${table.columns.map(c => c.name).join(', ')}`,
+            sortText: '0_' + table.name,
+          });
+        });
+        
+        // Add column suggestions grouped by table
+        currentTables.forEach((table) => {
+          table.columns.forEach((col) => {
+            const qualifiedName = currentTables.length > 1 
+              ? `${table.name}.${col.name}` 
+              : col.name;
+            suggestions.push({
+              label: qualifiedName,
+              kind: monaco.languages.CompletionItemKind.Field,
+              insertText: qualifiedName,
+              range,
+              filterText: '@' + qualifiedName,
+              detail: `${col.type}${col.nullable ? ' (nullable)' : ''} — ${table.name}`,
+              documentation: `Column: ${col.name}\nType: ${col.type}\nTable: ${table.name}`,
+              sortText: '1_' + table.name + '_' + col.name,
+            });
+            
+            // Also add just the column name (without table prefix) for convenience
+            if (currentTables.length > 1) {
+              suggestions.push({
+                label: col.name,
+                kind: monaco.languages.CompletionItemKind.Field,
+                insertText: col.name,
+                range,
+                filterText: '@' + col.name,
+                detail: `${col.type} — ${table.name}`,
+                sortText: '2_' + col.name,
+              });
+            }
+          });
+        });
+        
+        return { suggestions };
+      },
+    });
+  };
+
+  // Ensure the provider is registered once Monaco is available
+  useEffect(() => {
+    if (monacoRef.current) {
+      registerColumnCompletionProvider(monacoRef.current);
+    }
+    return () => {
+      if (completionDisposableRef.current) {
+        completionDisposableRef.current.dispose();
+        completionDisposableRef.current = null;
+      }
+    };
+  }, []);
 
   const showAlert = (
     message: string,
@@ -255,6 +389,43 @@ export default function AddDataSourceMui() {
   useEffect(() => {
     fetchConnectors();
   }, []);
+
+  // Fetch columns whenever the selected connector changes
+  const fetchConnectorColumns = async (connectorId: string | number) => {
+    if (!connectorId) {
+      setConnectorTables([]);
+      return;
+    }
+    // Clear old tables immediately so old suggestions are disposed
+    setConnectorTables([]);
+    setIsLoadingColumns(true);
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/connector-columns/${connectorId}`);
+      if (response.data.success) {
+        const tables = response.data.tables || [];
+        setConnectorTables(tables);
+        // Auto-expand all tables
+        const expanded: Record<string, boolean> = {};
+        tables.forEach((t: ConnectorTable) => { expanded[t.name] = true; });
+        setExpandedTables(expanded);
+      } else {
+        setConnectorTables([]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch connector columns:', err);
+      setConnectorTables([]);
+    } finally {
+      setIsLoadingColumns(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedConnectorId) {
+      fetchConnectorColumns(selectedConnectorId);
+    } else {
+      setConnectorTables([]);
+    }
+  }, [selectedConnectorId]);
 
   // Fetch schedule when Extract data source is selected
   useEffect(() => {
@@ -1681,6 +1852,234 @@ export default function AddDataSourceMui() {
                 )} */}
 
               </Box>
+
+              {/* Available Columns Panel */}
+              {(connectorTables.length > 0 || isLoadingColumns) && (
+                <Box
+                  sx={{
+                    border: '1px solid rgba(102, 126, 234, 0.2)',
+                    borderRadius: 2,
+                    overflow: 'hidden',
+                    mb: 0,
+                  }}
+                >
+                  {/* Header - clickable to collapse */}
+                  <Box
+                    onClick={() => setColumnsExpanded(!columnsExpanded)}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      px: 2,
+                      py: 1,
+                      cursor: 'pointer',
+                      background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.06) 0%, rgba(118, 75, 162, 0.06) 100%)',
+                      '&:hover': {
+                        background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                      },
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <StorageIcon sx={{ color: '#3B82F6', fontSize: 18 }} />
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#3B82F6', fontSize: '0.8rem' }}>
+                        Available Columns
+                      </Typography>
+                      {connectorTables.length > 0 && (
+                        <Chip
+                          label={`${connectorTables.reduce((sum, t) => sum + t.columns.length, 0)} columns`}
+                          size="small"
+                          sx={{
+                            height: 20,
+                            fontSize: '0.65rem',
+                            fontWeight: 600,
+                            bgcolor: 'rgba(59, 130, 246, 0.1)',
+                            color: '#3B82F6',
+                          }}
+                        />
+                      )}
+                      <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.7rem', ml: 1 }}>
+                        Type <strong>@</strong> in editor for suggestions
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {isLoadingColumns && <CircularProgress size={14} sx={{ color: '#3B82F6' }} />}
+                      {columnsExpanded ? (
+                        <ExpandMoreIcon sx={{ color: '#94a3b8', fontSize: 20 }} />
+                      ) : (
+                        <ChevronRightIcon sx={{ color: '#94a3b8', fontSize: 20 }} />
+                      )}
+                    </Box>
+                  </Box>
+
+                  {/* Collapsible Content */}
+                  <Collapse in={columnsExpanded}>
+                    <Box sx={{ p: 1.5, pt: 1 }}>
+                      {/* Search */}
+                      <TextField
+                        size="small"
+                        fullWidth
+                        placeholder="Search columns..."
+                        value={columnSearchTerm}
+                        onChange={(e) => setColumnSearchTerm(e.target.value)}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <SearchIcon sx={{ fontSize: 16, color: '#94a3b8' }} />
+                            </InputAdornment>
+                          ),
+                          endAdornment: columnSearchTerm ? (
+                            <InputAdornment position="end">
+                              <IconButton size="small" onClick={() => setColumnSearchTerm('')}>
+                                <ClearIcon sx={{ fontSize: 14 }} />
+                              </IconButton>
+                            </InputAdornment>
+                          ) : null,
+                        }}
+                        sx={{
+                          mb: 1,
+                          '& .MuiOutlinedInput-root': {
+                            height: 32,
+                            fontSize: '0.8rem',
+                            '& fieldset': { borderColor: 'rgba(102, 126, 234, 0.2)' },
+                            '&:hover fieldset': { borderColor: '#3B82F6' },
+                            '&.Mui-focused fieldset': { borderColor: '#3B82F6' },
+                          },
+                        }}
+                      />
+
+                      {/* Loading indicator */}
+                      {isLoadingColumns && connectorTables.length === 0 && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, py: 3 }}>
+                          <CircularProgress size={20} sx={{ color: '#3B82F6' }} />
+                          <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.8rem' }}>
+                            Fetching columns from connector...
+                          </Typography>
+                        </Box>
+                      )}
+
+                      {/* Tables & Columns */}
+                      <Box sx={{ maxHeight: 200, overflow: 'auto', pr: 0.5 }}>
+                        {connectorTables.map((table) => {
+                          const filteredCols = table.columns.filter((col) =>
+                            !columnSearchTerm || 
+                            col.name.toLowerCase().includes(columnSearchTerm.toLowerCase()) ||
+                            col.type.toLowerCase().includes(columnSearchTerm.toLowerCase()) ||
+                            table.name.toLowerCase().includes(columnSearchTerm.toLowerCase())
+                          );
+                          if (filteredCols.length === 0 && columnSearchTerm) return null;
+                          const isExpanded = expandedTables[table.name] !== false;
+                          
+                          return (
+                            <Box key={table.name} sx={{ mb: 0.5 }}>
+                              {/* Table header */}
+                              <Box
+                                onClick={() => setExpandedTables(prev => ({ ...prev, [table.name]: !isExpanded }))}
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 0.5,
+                                  py: 0.3,
+                                  px: 0.5,
+                                  cursor: 'pointer',
+                                  borderRadius: 1,
+                                  '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.05)' },
+                                }}
+                              >
+                                {isExpanded ? (
+                                  <ExpandMoreIcon sx={{ fontSize: 14, color: '#64748b' }} />
+                                ) : (
+                                  <ChevronRightIcon sx={{ fontSize: 14, color: '#64748b' }} />
+                                )}
+                                <TableChartIcon sx={{ fontSize: 14, color: '#3B82F6' }} />
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: '#334155', fontSize: '0.75rem' }}>
+                                  {table.name}
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.65rem' }}>
+                                  ({(columnSearchTerm ? filteredCols : table.columns).length})
+                                </Typography>
+                              </Box>
+
+                              {/* Columns */}
+                              <Collapse in={isExpanded}>
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, pl: 3.5, py: 0.5 }}>
+                                  {(columnSearchTerm ? filteredCols : table.columns).map((col) => (
+                                    <Tooltip
+                                      key={col.name}
+                                      title={
+                                        <Box>
+                                          <Typography variant="caption" sx={{ fontWeight: 700 }}>{col.name}</Typography>
+                                          <br />
+                                          <Typography variant="caption">Type: {col.type}</Typography>
+                                          <br />
+                                          <Typography variant="caption">Click to copy to clipboard</Typography>
+                                        </Box>
+                                      }
+                                      arrow
+                                      placement="top"
+                                    >
+                                      <Chip
+                                        label={
+                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
+                                            <span>{col.name}</span>
+                                            <Typography
+                                              component="span"
+                                              sx={{
+                                                fontSize: '0.55rem',
+                                                color: '#94a3b8',
+                                                fontWeight: 500,
+                                                textTransform: 'uppercase',
+                                              }}
+                                            >
+                                              {col.type}
+                                            </Typography>
+                                          </Box>
+                                        }
+                                        size="small"
+                                        onClick={() => {
+                                          // Insert column name into editor at cursor position
+                                          if (editorRef.current) {
+                                            const editor = editorRef.current;
+                                            const selection = editor.getSelection();
+                                            if (selection) {
+                                              editor.executeEdits('column-insert', [{
+                                                range: selection,
+                                                text: col.name,
+                                                forceMoveMarkers: true,
+                                              }]);
+                                              editor.focus();
+                                            }
+                                          } else {
+                                            // Fallback: copy to clipboard
+                                            navigator.clipboard.writeText(col.name);
+                                          }
+                                        }}
+                                        sx={{
+                                          height: 24,
+                                          fontSize: '0.7rem',
+                                          fontWeight: 600,
+                                          fontFamily: '"Fira Code", monospace',
+                                          bgcolor: 'rgba(59, 130, 246, 0.06)',
+                                          border: '1px solid rgba(59, 130, 246, 0.15)',
+                                          color: '#334155',
+                                          cursor: 'pointer',
+                                          '&:hover': {
+                                            bgcolor: 'rgba(59, 130, 246, 0.12)',
+                                            borderColor: '#3B82F6',
+                                          },
+                                        }}
+                                      />
+                                    </Tooltip>
+                                  ))}
+                                </Box>
+                              </Collapse>
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    </Box>
+                  </Collapse>
+                </Box>
+              )}
 
               {/* Monaco SQL Editor */}
               <Box

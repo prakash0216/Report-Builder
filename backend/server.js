@@ -1859,6 +1859,164 @@ app.get('/api/all-connections', async (req, res) => {
 }
 );
 
+/**
+ * Get columns/schema for a connector (Snowflake or CSV)
+ * GET /api/connector-columns/:connectorId
+ * 
+ * For CSV connectors (id starts with "csv_"):
+ *   - Reads columns from DuckDB PRAGMA table_info
+ * For Snowflake connectors:
+ *   - Connects to Snowflake and queries INFORMATION_SCHEMA.COLUMNS
+ *   - Returns all tables and their columns in the configured schema
+ */
+app.get('/api/connector-columns/:connectorId', async (req, res) => {
+  const { connectorId } = req.params;
+  
+  try {
+    // Determine connector type
+    const isCsv = typeof connectorId === 'string' && connectorId.startsWith('csv_');
+    
+    if (isCsv) {
+      // ---- CSV Connector ----
+      const csvId = parseInt(connectorId.replace('csv_', ''));
+      const connectors = await dbClient.query(
+        `SELECT id, connector_name, duckdb_table_name, columns_json FROM csv_connectors WHERE id=${csvId}`
+      );
+      
+      if (connectors.length === 0) {
+        return res.status(404).json({ success: false, error: 'CSV connector not found' });
+      }
+      
+      const { duckdb_table_name, columns_json, connector_name } = connectors[0];
+      
+      // Get actual columns with types from DuckDB
+      let columns = [];
+      try {
+        const tableInfo = await dbClient.query(`PRAGMA table_info('${duckdb_table_name}')`);
+        columns = tableInfo.map(col => ({
+          name: col.name,
+          type: col.type || 'VARCHAR',
+          table: duckdb_table_name,
+        }));
+      } catch (pragmaErr) {
+        // Fallback to stored columns_json
+        if (columns_json) {
+          const parsed = JSON.parse(columns_json);
+          columns = parsed.map(col => ({
+            name: typeof col === 'string' ? col : col.name,
+            type: typeof col === 'string' ? 'VARCHAR' : (col.type || 'VARCHAR'),
+            table: duckdb_table_name,
+          }));
+        }
+      }
+      
+      res.json({
+        success: true,
+        connectorType: 'csv',
+        connectorName: connector_name,
+        tables: [{ name: duckdb_table_name, columns }],
+      });
+      
+    } else {
+      // ---- Snowflake Connector ----
+      const sfId = parseInt(connectorId);
+      const connectionDetails = await dbClient.query(
+        `SELECT * FROM snow_flake_connections WHERE id=${sfId}`
+      );
+      
+      if (connectionDetails.length === 0) {
+        return res.status(404).json({ success: false, error: 'Snowflake connection not found' });
+      }
+      
+      const conn = connectionDetails[0];
+      
+      // Build Snowflake connection
+      const privateKeyBuffer = Buffer.from(conn.privateKey, 'base64');
+      const privateKeyObject = crypto.createPrivateKey({
+        key: privateKeyBuffer,
+        format: 'der',
+        type: 'pkcs8',
+      });
+      const privateKeyPemBuffer = privateKeyObject.export({
+        format: 'pem',
+        type: 'pkcs8',
+      });
+      
+      const sfConnection = snowflake.createConnection({
+        account: conn.account,
+        username: conn.username,
+        authenticator: conn.authenticator,
+        privateKey: privateKeyPemBuffer,
+        warehouse: conn.warehouse,
+        database: conn.database,
+        schema: conn.schema,
+      });
+      
+      // Connect and query INFORMATION_SCHEMA
+      sfConnection.connect((err, connection) => {
+        if (err) {
+          console.error('❌ Failed to connect to Snowflake for schema discovery:', err.message);
+          return res.status(500).json({ success: false, error: `Snowflake connection failed: ${err.message}` });
+        }
+        
+        const schemaQuery = `
+          SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE, ORDINAL_POSITION
+          FROM ${conn.database}.INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = '${conn.schema}'
+          ORDER BY TABLE_NAME, ORDINAL_POSITION
+        `;
+        
+        connection.execute({
+          sqlText: schemaQuery,
+          complete: (err, stmt, rows) => {
+            sfConnection.destroy();
+            
+            if (err) {
+              console.error('❌ Failed to query Snowflake schema:', err.message);
+              return res.status(500).json({ success: false, error: `Schema query failed: ${err.message}` });
+            }
+            
+            // Group columns by table
+            const tableMap = {};
+            for (const row of rows) {
+              const tableName = row.TABLE_NAME;
+              if (!tableMap[tableName]) {
+                tableMap[tableName] = [];
+              }
+              tableMap[tableName].push({
+                name: row.COLUMN_NAME,
+                type: row.DATA_TYPE,
+                nullable: row.IS_NULLABLE === 'YES',
+                position: row.ORDINAL_POSITION,
+                table: tableName,
+              });
+            }
+            
+            const tables = Object.entries(tableMap).map(([name, columns]) => ({
+              name,
+              columns,
+            }));
+            
+            console.log(`✅ Snowflake schema discovery: ${tables.length} tables, ${rows.length} columns`);
+            
+            res.json({
+              success: true,
+              connectorType: 'snowflake',
+              connectorName: conn.connectionName || conn.connectionname,
+              database: conn.database,
+              schema: conn.schema,
+              tables,
+            });
+          },
+        });
+      });
+    }
+  } catch (err) {
+    console.error('❌ Error fetching connector columns:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/api/execute-query', async (req, res) => {
   const { connectionId, connectionType, dataSourceName, query, connectorType, csvConnectorId } = req.body;
 

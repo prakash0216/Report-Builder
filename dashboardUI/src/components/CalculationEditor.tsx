@@ -236,6 +236,34 @@ export function CalculationEditor({
             }
           });
 
+          // Add dsConnect helper function
+          if ('dsconnect'.includes(searchTerm) || 'dsC'.toLowerCase().includes(searchTerm)) {
+            suggestions.push({
+              label: 'fn: dsConnect',
+              kind: monaco.languages.CompletionItemKind.Function,
+              insertText: [
+                'await dsConnect("${1:dataSourceName}", {',
+                '  columns: [${2}],',
+                '  filters: {',
+                '    ${3:COLUMN_NAME}: ${4:filterVariable}',
+                '  },',
+                '  groupBy: [${5}],',
+                '  orderBy: [${6}],',
+                '  limit: ${7:10}',
+                '})'
+              ].join('\n'),
+              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              detail: '🔌 Query Data Source',
+              documentation: {
+                value: `**dsConnect - Query Data Source**\n\nExecute a query against a registered data source.\n\n**Usage:**\n\`\`\`javascript\nconst result = await dsConnect("dataSourceName", {\n  columns: ["col1", "col2"],\n  filters: {\n    COLUMN_NAME: filterVariable\n  },\n  groupBy: ["col1"],\n  orderBy: ["col1"],\n  limit: 10\n});\n\`\`\`\n\n**Parameters:**\n- \`dataSourceName\`: Name of the data source\n- \`options\`: Query configuration\n  - \`columns\`: Columns to select\n  - \`filters\`: Filter conditions\n  - \`groupBy\`: Group by columns\n  - \`orderBy\`: Order by columns\n  - \`limit\`: Maximum rows to return`,
+                isTrusted: true
+              },
+              range,
+              sortText: `5_dsConnect`,
+              filterText: `@dsConnect @dsconnect`,
+            });
+          }
+
           // Add Predefined Functions (🔥 NEW)
           predefinedFunctions.forEach((fn) => {
             if (fn.name.toLowerCase().includes(searchTerm) || 
