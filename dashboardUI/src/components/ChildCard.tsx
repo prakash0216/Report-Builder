@@ -10,6 +10,7 @@ import { onClickSnapshotState } from '../recoil/OnClickSnapshotState';
 import ResizableChart from './ResizableChart';
 import DashboardTable from './DashboardTable';
 import ChildCardTooltip, { ChildCardTooltipRef } from './ChildCardTooltip';
+import { replaceVariableReferencesAsync } from '../utils/variableResolver';
 
 interface ChildCardProps {
   config: ChildCardConfig;
@@ -144,26 +145,8 @@ function useAllVariables(): Record<string, any> {
   // 🔥 Update variables when trigger changes (matching DragDropDashboard behavior)
   React.useEffect(() => {
     const vars = getAllVariables();
-    console.log(`📦 [ChildCard] Got ${Object.keys(vars).length} variables`);
     setVariables(vars);
   }, [getAllVariables, variableNames, variableUpdateTrigger]);
-  
-  // Also update periodically to catch changes
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      const vars = getAllVariables();
-      setVariables(prev => {
-        const newStr = JSON.stringify(vars);
-        const prevStr = JSON.stringify(prev);
-        if (newStr !== prevStr) {
-          return vars;
-        }
-        return prev;
-      });
-    }, 500);
-    
-    return () => clearInterval(interval);
-  }, [getAllVariables]);
   
   return variables;
 }
@@ -261,7 +244,8 @@ const ChildCard: React.FC<ChildCardProps> = ({
   const [chartOptions, setChartOptions] = useState<any>(null);
   const [chartError, setChartError] = useState<string | null>(null);
 
-  // Parse chart template and create options - with robust error handling
+  // 🦆 DuckDB-WASM Phase 3: Parse chart template asynchronously.
+  // Only the variables this chart references are fetched from DuckDB-WASM.
   useEffect(() => {
     if (config.type !== 'chart') {
       setChartOptions(null);
@@ -283,74 +267,87 @@ const ChildCard: React.FC<ChildCardProps> = ({
       return;
     }
 
-    try {
-      const replacedTemplate = replaceVariables(config.template, variables);
-      const parsed = JSON.parse(replacedTemplate);
-      
-      // Validate that chart type is valid to prevent Highcharts error #17
-      const chartType = parsed?.chart?.type;
-      if (chartType !== undefined && chartType !== null && chartType.toString().trim() === '') {
-        setChartOptions(null);
-        setChartError('Empty chart type');
-        return;
-      }
-      
-      // Check if chart type is a valid Highcharts type
-      const validChartTypes = ['line', 'spline', 'area', 'areaspline', 'column', 'bar', 'pie', 'scatter', 'gauge', 'arearange', 'areasplinerange', 'columnrange', 'bubble', 'boxplot', 'errorbar', 'waterfall', 'funnel', 'pyramid', 'heatmap', 'treemap', 'sankey', 'sunburst', 'organization', 'networkgraph', 'packedbubble', 'lollipop', 'dumbbell', 'timeline', 'venn', 'wordcloud', 'polygon', 'streamgraph', 'variablepie', 'dependencywheel', 'vector', 'windbarb', 'xrange', 'item', 'solidgauge'];
-      if (chartType && !validChartTypes.includes(chartType)) {
-        setChartOptions(null);
-        setChartError(`Unknown chart type: ${chartType}`);
-        return;
-      }
-      
-      // Ensure series exists and has valid data
-      if (!parsed?.series || !Array.isArray(parsed.series)) {
-        setChartOptions(null);
-        setChartError('No series data defined');
-        return;
-      }
+    let cancelled = false;
 
-      // 🔥 CRITICAL: Validate series data to prevent Highcharts crash
-      for (let i = 0; i < parsed.series.length; i++) {
-        const series = parsed.series[i];
-        if (series.data === null || series.data === undefined) {
-          setChartOptions(null);
-          setChartError(`Series ${i + 1} has no data (waiting for variable)`);
-          return;
-        }
-        if (!Array.isArray(series.data)) {
-          setChartOptions(null);
-          setChartError(`Series ${i + 1} data must be an array`);
-          return;
-        }
-      }
+    const resolveAndParse = async () => {
+      try {
+        const replacedTemplate = await replaceVariableReferencesAsync(config.template!, variables);
+        if (cancelled) return;
 
-      // 🔥 CRITICAL: Validate xAxis categories if present
-      if (parsed.xAxis?.categories !== undefined) {
-        if (parsed.xAxis.categories === null || !Array.isArray(parsed.xAxis.categories)) {
+        const parsed = JSON.parse(replacedTemplate);
+        
+        // Validate that chart type is valid to prevent Highcharts error #17
+        const chartType = parsed?.chart?.type;
+        if (chartType !== undefined && chartType !== null && chartType.toString().trim() === '') {
           setChartOptions(null);
-          setChartError('xAxis categories must be an array (waiting for variable)');
+          setChartError('Empty chart type');
           return;
         }
+        
+        // Check if chart type is a valid Highcharts type
+        const validChartTypes = ['line', 'spline', 'area', 'areaspline', 'column', 'bar', 'pie', 'scatter', 'gauge', 'arearange', 'areasplinerange', 'columnrange', 'bubble', 'boxplot', 'errorbar', 'waterfall', 'funnel', 'pyramid', 'heatmap', 'treemap', 'sankey', 'sunburst', 'organization', 'networkgraph', 'packedbubble', 'lollipop', 'dumbbell', 'timeline', 'venn', 'wordcloud', 'polygon', 'streamgraph', 'variablepie', 'dependencywheel', 'vector', 'windbarb', 'xrange', 'item', 'solidgauge'];
+        if (chartType && !validChartTypes.includes(chartType)) {
+          setChartOptions(null);
+          setChartError(`Unknown chart type: ${chartType}`);
+          return;
+        }
+        
+        // Ensure series exists and has valid data
+        if (!parsed?.series || !Array.isArray(parsed.series)) {
+          setChartOptions(null);
+          setChartError('No series data defined');
+          return;
+        }
+
+        // 🔥 CRITICAL: Validate series data to prevent Highcharts crash
+        for (let i = 0; i < parsed.series.length; i++) {
+          const series = parsed.series[i];
+          if (series.data === null || series.data === undefined) {
+            setChartOptions(null);
+            setChartError(`Series ${i + 1} has no data (waiting for variable)`);
+            return;
+          }
+          if (!Array.isArray(series.data)) {
+            setChartOptions(null);
+            setChartError(`Series ${i + 1} data must be an array`);
+            return;
+          }
+        }
+
+        // 🔥 CRITICAL: Validate xAxis categories if present
+        if (parsed.xAxis?.categories !== undefined) {
+          if (parsed.xAxis.categories === null || !Array.isArray(parsed.xAxis.categories)) {
+            setChartOptions(null);
+            setChartError('xAxis categories must be an array (waiting for variable)');
+            return;
+          }
+        }
+        
+        // 🔥 Check if container scroll is enabled (passed from ParentCardContainer)
+        const containerScrollEnabled = (config as any).__containerScroll || false;
+        
+        // For container scroll mode, remove any chart-level scroll constraints
+        if (containerScrollEnabled && parsed.xAxis) {
+          delete parsed.xAxis.min;
+          delete parsed.xAxis.max;
+          delete parsed.xAxis.scrollbar;
+        }
+        
+        // All validations passed - set the chart options
+        if (!cancelled) {
+          setChartOptions(parsed);
+          setChartError(null);
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          setChartOptions(null);
+          setChartError(error.message || 'Invalid JSON');
+        }
       }
-      
-      // 🔥 Check if container scroll is enabled (passed from ParentCardContainer)
-      const containerScrollEnabled = (config as any).__containerScroll || false;
-      
-      // For container scroll mode, remove any chart-level scroll constraints
-      if (containerScrollEnabled && parsed.xAxis) {
-        delete parsed.xAxis.min;
-        delete parsed.xAxis.max;
-        delete parsed.xAxis.scrollbar;
-      }
-      
-      // All validations passed - set the chart options
-      setChartOptions(parsed);
-      setChartError(null);
-    } catch (error: any) {
-      setChartOptions(null);
-      setChartError(error.message || 'Invalid JSON');
-    }
+    };
+
+    resolveAndParse();
+    return () => { cancelled = true; };
   }, [config.type, config.template, variables]);
 
   // 🔥 Tooltip handlers
@@ -644,10 +641,18 @@ const ChildCard: React.FC<ChildCardProps> = ({
     };
   }, [chartOptions, isTooltipEnabled, handleShowTooltip, handleHideTooltip, onPointClick, onChartBackgroundClick, highlightEnabled, shouldHighlight, onClickConfigs, parentCardId, config.id]);
 
-  // Render HTML content
-  const htmlContent = useMemo(() => {
-    if (config.type !== 'html' || !config.htmlContent) return null;
-    return replaceVariables(config.htmlContent, variables);
+  // 🦆 DuckDB-WASM Phase 3: Render HTML content asynchronously
+  const [htmlContent, setHtmlContent] = useState<string | null>(null);
+  useEffect(() => {
+    if (config.type !== 'html' || !config.htmlContent) {
+      setHtmlContent(null);
+      return;
+    }
+    let cancelled = false;
+    replaceVariableReferencesAsync(config.htmlContent, variables).then((html) => {
+      if (!cancelled) setHtmlContent(html);
+    });
+    return () => { cancelled = true; };
   }, [config.type, config.htmlContent, variables]);
 
   // Render content based on type

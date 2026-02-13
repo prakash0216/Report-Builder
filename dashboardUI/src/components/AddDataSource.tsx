@@ -53,6 +53,7 @@ import {
   Storage as StorageIcon,
   TableChart as TableChartIcon,
   ContentCopy as ContentCopyIcon,
+  FilterList as FilterListIcon,
 } from '@mui/icons-material';
 import { API_BASE_URL } from '../config/api.config';
 
@@ -135,6 +136,8 @@ export default function AddDataSourceMui() {
   const [columnsExpanded, setColumnsExpanded] = useState<boolean>(true);
   const [columnSearchTerm, setColumnSearchTerm] = useState<string>('');
   const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({});
+  // Selected table for @ autocomplete filtering — '' means "All Tables"
+  const [selectedTableForAutocomplete, setSelectedTableForAutocomplete] = useState<string>('');
 
   // Monaco Editor mount handler
   const handleEditorDidMount: OnMount = (editor, monaco) => {
@@ -244,6 +247,8 @@ export default function AddDataSourceMui() {
   // Register (or re-register) the @ column completion provider
   const connectorTablesRef = useRef<ConnectorTable[]>([]);
   connectorTablesRef.current = connectorTables;
+  const selectedTableRef = useRef<string>('');
+  selectedTableRef.current = selectedTableForAutocomplete;
 
   // Register a single persistent @ completion provider that reads from the ref at invocation time.
   // This avoids issues with disposal timing and Monaco lifecycle.
@@ -276,13 +281,19 @@ export default function AddDataSourceMui() {
           endColumn: position.column,
         };
         
-        const currentTables = connectorTablesRef.current;
-        if (!currentTables || currentTables.length === 0) return { suggestions: [] };
+        const allTables = connectorTablesRef.current;
+        if (!allTables || allTables.length === 0) return { suggestions: [] };
+        
+        // Filter tables based on selected table for autocomplete
+        const selectedTbl = selectedTableRef.current;
+        const currentTables = selectedTbl
+          ? allTables.filter(t => t.name === selectedTbl)
+          : allTables;
         
         const suggestions: any[] = [];
         
-        // Add table name suggestions
-        currentTables.forEach((table) => {
+        // Add table name suggestions (always show all tables for reference)
+        allTables.forEach((table) => {
           suggestions.push({
             label: table.name,
             kind: monaco.languages.CompletionItemKind.Module,
@@ -295,7 +306,7 @@ export default function AddDataSourceMui() {
           });
         });
         
-        // Add column suggestions grouped by table
+        // Add column suggestions — only from the selected table (or all if none selected)
         currentTables.forEach((table) => {
           table.columns.forEach((col) => {
             const qualifiedName = currentTables.length > 1 
@@ -425,6 +436,8 @@ export default function AddDataSourceMui() {
     } else {
       setConnectorTables([]);
     }
+    // Reset selected table filter when connector changes
+    setSelectedTableForAutocomplete('');
   }, [selectedConnectorId]);
 
   // Fetch schedule when Extract data source is selected
@@ -1898,7 +1911,7 @@ export default function AddDataSourceMui() {
                         />
                       )}
                       <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.7rem', ml: 1 }}>
-                        Type <strong>@</strong> in editor for suggestions
+                        Type <strong>@</strong> in editor{selectedTableForAutocomplete ? ` — filtered to ${selectedTableForAutocomplete}` : ' for suggestions'}
                       </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1946,6 +1959,50 @@ export default function AddDataSourceMui() {
                           },
                         }}
                       />
+
+                      {/* Table filter dropdown for @ autocomplete */}
+                      {connectorTables.length > 1 && (
+                        <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+                          <Select
+                            value={selectedTableForAutocomplete}
+                            onChange={(e) => setSelectedTableForAutocomplete(e.target.value as string)}
+                            displayEmpty
+                            startAdornment={
+                              <InputAdornment position="start">
+                                <FilterListIcon sx={{ fontSize: 16, color: selectedTableForAutocomplete ? '#3B82F6' : '#94a3b8' }} />
+                              </InputAdornment>
+                            }
+                            sx={{
+                              height: 32,
+                              fontSize: '0.8rem',
+                              '& .MuiOutlinedInput-notchedOutline': { borderColor: selectedTableForAutocomplete ? '#3B82F6' : 'rgba(102, 126, 234, 0.2)' },
+                              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#3B82F6' },
+                              '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#3B82F6' },
+                              bgcolor: selectedTableForAutocomplete ? 'rgba(59, 130, 246, 0.04)' : 'transparent',
+                            }}
+                          >
+                            <MenuItem value="" sx={{ fontSize: '0.8rem' }}>
+                              <em>All Tables — @ shows all columns</em>
+                            </MenuItem>
+                            {connectorTables.map((table) => (
+                              <MenuItem key={table.name} value={table.name} sx={{ fontSize: '0.8rem' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <TableChartIcon sx={{ fontSize: 14, color: '#3B82F6' }} />
+                                  <span>{table.name}</span>
+                                  <Typography component="span" sx={{ fontSize: '0.65rem', color: '#94a3b8', ml: 'auto' }}>
+                                    ({table.columns.length} cols)
+                                  </Typography>
+                                </Box>
+                              </MenuItem>
+                            ))}
+                          </Select>
+                          {selectedTableForAutocomplete && (
+                            <Typography variant="caption" sx={{ color: '#3B82F6', fontSize: '0.65rem', mt: 0.3, ml: 0.5 }}>
+                              @ suggestions filtered to <strong>{selectedTableForAutocomplete}</strong> columns only
+                            </Typography>
+                          )}
+                        </FormControl>
+                      )}
 
                       {/* Loading indicator */}
                       {isLoadingColumns && connectorTables.length === 0 && (

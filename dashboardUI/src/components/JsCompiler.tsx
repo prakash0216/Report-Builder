@@ -7,6 +7,7 @@ import * as BabelParser from '@babel/parser';
 import { useRecoilValue, useRecoilCallback, useSetRecoilState } from 'recoil';
 import { dataSourceAtomFamily } from '../recoil/DataSourceFamily';
 import { variableAtomFamily } from '../recoil/VariableFamily';
+import VariableStorageService from '../services/VariableStorageService';
 import { variableNamesState, variableUpdateTriggerState } from '../recoil/Variabletracker';
 import { dataSourceNamesState } from '../recoil/DataSourceTracker';
 
@@ -160,7 +161,7 @@ const JsCompiler = () => {
     return variableValues;
   });
 
-  const runCode = useRecoilCallback(({ set }) => () => {
+  const runCode = useRecoilCallback(({ set }) => async () => {
     try {
       const transpiled = Babel.transform(code, { presets: ['env'] }).code || '';
       const logs: string[] = [];
@@ -223,15 +224,17 @@ const JsCompiler = () => {
       const func = new Function(...Object.keys(sandbox), wrappedCode);
       func(...Object.values(sandbox));
 
-      // Update variable atoms and track variable names
+      // 🦆 DuckDB-WASM: store results via VariableStorageService
+      const varStorage = VariableStorageService.getInstance();
       const updatedVarNames: string[] = [];
-      topLevelVars.forEach((varName) => {
+      for (const varName of topLevelVars) {
         const value = resultCollector[varName];
         if (value !== undefined) {
-          set(variableAtomFamily(varName), JSON.stringify(value));
+          const { recoilValue } = await varStorage.storeVariable(varName, value);
+          set(variableAtomFamily(varName), recoilValue);
           updatedVarNames.push(varName);
         }
-      });
+      }
 
       // Update the set of all variable names
       setVariableNames(prevNames => {

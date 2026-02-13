@@ -2,6 +2,7 @@ backend/db/data/
 backend/db/parquet_files/
 .cursor
 dashboardUI/src/reference/
+implementations/
 
 # Environment files (may contain secrets)
 backend/.env.production

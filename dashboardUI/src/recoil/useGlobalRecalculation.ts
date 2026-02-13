@@ -7,6 +7,8 @@ import {
 } from 'recoil';
 import { variableNamesState, variableUpdateTriggerState } from '../recoil/Variabletracker';
 import { variableAtomFamily } from '../recoil/VariableFamily';
+import { isDuckDBRef } from '../services/VariableStorageService';
+import VariableStorageService from '../services/VariableStorageService';
 import { storedLogicsState, StoredLogic } from '../recoil/StoredLogic';
 import { parameterAtomFamily } from '../recoil/ParameterFamliy';
 import { filterConfigFamily, filterNamesState } from '../recoil/FiltersFamily';
@@ -98,15 +100,21 @@ export const useGlobalRecalculation = () => {
       } catch (err) { /* skip */ }
     }
 
-    // 🔥 PERFORMANCE: Pre-fetch ALL variable values once (not per-calculation)
+    // 🦆 DuckDB-WASM: Pre-fetch ALL variable values once (not per-calculation)
+    // Large datasets are resolved from WASM memory; small ones from Recoil.
     const varNamesArray = Array.from(currentVariableNames);
+    const varStorage = VariableStorageService.getInstance();
     for (let i = 0; i < varNamesArray.length; i++) {
       const varName = varNamesArray[i];
       try {
         const rawValue = snapshot.getLoadable(variableAtomFamily(varName)).contents;
         const parsedValue = safeParse(rawValue);
         if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
-          allVariables[varName] = parsedValue;
+          if (isDuckDBRef(parsedValue)) {
+            allVariables[varName] = await varStorage.resolveVariableByName(varName, rawValue);
+          } else {
+            allVariables[varName] = parsedValue;
+          }
         }
       } catch (err) { /* skip */ }
     }
@@ -137,11 +145,30 @@ export const useGlobalRecalculation = () => {
       variableName: logic.variableName,
     }));
 
+    // 🦆 Phase 4: Split variables into refs (server-cached) vs inline (small)
+    // Large variables that went through the server are already cached there —
+    // we only need to send their names, not the full data.
+    const variableRefs: string[] = [];
+    const inlineVariables: Record<string, any> = {};
+    const SIZE_THRESHOLD = 50_000; // ~50 KB JSON threshold
+
+    for (const [name, value] of Object.entries(baseContext.allVariables)) {
+      const jsonLen = Array.isArray(value) && value.length > 100
+        ? JSON.stringify(value).length
+        : 0;
+      if (jsonLen > SIZE_THRESHOLD) {
+        variableRefs.push(name); // server already has it
+      } else {
+        inlineVariables[name] = value;
+      }
+    }
+
     const requestBody = JSON.stringify({
       calculations,
-      existingVariables: baseContext.allVariables,
+      existingVariables: inlineVariables,
       existingParameters: baseContext.allParameters,
       existingFilters: baseContext.allFilters,
+      variableRefs,
     });
     
     const serializeMs = (performance.now() - serializeStart).toFixed(0);
@@ -149,12 +176,47 @@ export const useGlobalRecalculation = () => {
 
     try {
       const fetchStart = performance.now();
-      const response = await fetch(`${API_BASE_URL}/api/calculate-batch`, {
+      let response = await fetch(`${API_BASE_URL}/api/calculate-batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: requestBody,
       });
-      const fetchMs = (performance.now() - fetchStart).toFixed(0);
+      let fetchMs = (performance.now() - fetchStart).toFixed(0);
+
+      // 🦆 Cache-miss handling: if the server doesn't have some variables
+      // in its cache (e.g. after IIS recycle), it returns 449 with the list
+      // of missing names. We retry once, sending full data for those variables.
+      if (response.status === 449) {
+        const cacheMissData = await response.json();
+        const missingNames: string[] = cacheMissData.missingVariables || [];
+        console.warn(`⚠️ [Batch] Server cache miss for: ${missingNames.join(', ')} — retrying with full data`);
+
+        // Move missing variables from refs → inline
+        const retryInline = { ...inlineVariables };
+        const retryRefs = variableRefs.filter(n => !missingNames.includes(n));
+        for (const name of missingNames) {
+          if (baseContext.allVariables[name] !== undefined) {
+            retryInline[name] = baseContext.allVariables[name];
+          }
+        }
+
+        const retryBody = JSON.stringify({
+          calculations,
+          existingVariables: retryInline,
+          existingParameters: baseContext.allParameters,
+          existingFilters: baseContext.allFilters,
+          variableRefs: retryRefs,
+        });
+
+        console.log(`📦 [Batch] Retry payload: ${(retryBody.length / 1024).toFixed(1)}KB (sending ${missingNames.length} variables inline)`);
+        const retryStart = performance.now();
+        response = await fetch(`${API_BASE_URL}/api/calculate-batch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: retryBody,
+        });
+        fetchMs = (performance.now() - retryStart).toFixed(0);
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -207,15 +269,26 @@ export const useGlobalRecalculation = () => {
       if (cancellationToken.cancelled) break;
       try {
         const mergedVariables = { ...baseContext.allVariables, ...calculatedVariables };
+
+        // 🦆 Phase 4: Same ref-splitting for fallback individual requests
+        const refs: string[] = [];
+        const inline: Record<string, any> = {};
+        for (const [n, v] of Object.entries(mergedVariables)) {
+          const len = Array.isArray(v) && v.length > 100 ? JSON.stringify(v).length : 0;
+          if (len > 50_000) refs.push(n);
+          else inline[n] = v;
+        }
+
         const response = await fetch(`${API_BASE_URL}/api/calculate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             logic: logic.logic,
-            existingVariables: mergedVariables,
+            existingVariables: inline,
             existingParameters: baseContext.allParameters,
             existingFilters: baseContext.allFilters,
             variableName: logic.variableName,
+            variableRefs: refs,
           }),
         });
         if (!response.ok) throw new Error(`HTTP error ${response.status}`);
@@ -232,14 +305,17 @@ export const useGlobalRecalculation = () => {
   };
 
   // Batch update all variables in Recoil at once (single React re-render)
+  // 🦆 DuckDB-WASM: large datasets are offloaded to WASM memory automatically.
   const batchUpdateVariables = useRecoilCallback(({ set, snapshot }) => async (
     updates: Array<{ variableName: string; value: any }>
   ) => {
     const currentVarNames = await snapshot.getPromise(variableNamesState);
     const newVarNames = new Set(currentVarNames);
+    const varStorage = VariableStorageService.getInstance();
     
     for (const { variableName, value } of updates) {
-      set(variableAtomFamily(variableName), JSON.stringify(value));
+      const { recoilValue } = await varStorage.storeVariable(variableName, value);
+      set(variableAtomFamily(variableName), recoilValue);
       newVarNames.add(variableName);
     }
     

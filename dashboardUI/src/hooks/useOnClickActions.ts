@@ -7,6 +7,8 @@ import { useRecoilValue, useRecoilCallback } from 'recoil';
 import { onClickConfigState, OnClickConfig } from '../recoil/OnClickConfigState';
 import { onClickSnapshotState, OnClickSnapshot } from '../recoil/OnClickSnapshotState';
 import { variableAtomFamily } from '../recoil/VariableFamily';
+import { isDuckDBRef } from '../services/VariableStorageService';
+import VariableStorageService from '../services/VariableStorageService';
 import { variableNamesState, variableUpdateTriggerState } from '../recoil/Variabletracker';
 import { parameterAtomFamily } from '../recoil/ParameterFamliy';
 import { filterConfigFamily, filterNamesState } from '../recoil/FiltersFamily';
@@ -66,6 +68,8 @@ export const useOnClickActions = () => {
   const processingRef = useRef(false);
 
   // Gather all context (same pattern as useGlobalRecalculation's getCalculationContext)
+  // 🔥 PERF: Split variables into inline (small) and refs (large DuckDB) to avoid
+  // pulling 100K+ row datasets from WASM just to send them over HTTP.
   const getCalculationContext = useRecoilCallback(({ snapshot }) => async () => {
     const currentFilterNames = await snapshot.getPromise(filterNamesState);
     const currentParameterNames = await snapshot.getPromise(parameterNamesState);
@@ -74,6 +78,7 @@ export const useOnClickActions = () => {
     const allParameters: Record<string, any> = {};
     const allFilters: Record<string, any> = {};
     const allVariables: Record<string, any> = {};
+    const variableRefs: string[] = [];
 
     // Get parameters
     const filterNamesSet = new Set(currentFilterNames);
@@ -100,19 +105,35 @@ export const useOnClickActions = () => {
       } catch (err) { /* skip */ }
     }
 
-    // Get all variable values
+    // 🦆 DuckDB-WASM: For large variables stored in WASM, DON'T pull them out.
+    // Instead, send just the variable name as a "ref" — the backend server cache
+    // already has the data from the initial calculation. This avoids the expensive
+    // SELECT * FROM huge_table → JSON.stringify → HTTP POST round-trip on every click.
+    const SIZE_THRESHOLD = 50_000; // ~50 KB
     const varNamesArray = Array.from(currentVariableNames);
     for (const varName of varNamesArray) {
       try {
         const rawValue = snapshot.getLoadable(variableAtomFamily(varName)).contents;
         const parsedValue = safeParse(rawValue);
         if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
-          allVariables[varName] = parsedValue;
+          if (isDuckDBRef(parsedValue)) {
+            // Large DuckDB variable — send as ref (server cache should have it)
+            variableRefs.push(varName);
+          } else {
+            // Small variable — check size and decide
+            const jsonLen = Array.isArray(parsedValue) && parsedValue.length > 100
+              ? JSON.stringify(parsedValue).length : 0;
+            if (jsonLen > SIZE_THRESHOLD) {
+              variableRefs.push(varName);
+            } else {
+              allVariables[varName] = parsedValue;
+            }
+          }
         }
       } catch (err) { /* skip */ }
     }
 
-    return { allParameters, allFilters, allVariables };
+    return { allParameters, allFilters, allVariables, variableRefs };
   });
 
   // Main handler: called when a chart point is clicked
@@ -227,10 +248,10 @@ export const useOnClickActions = () => {
             variableName: c.targetVariable,
           }));
 
-          console.log(`⚡ [onClick] Sending ${calculations.length} calculations to backend...`);
+          console.log(`⚡ [onClick] Sending ${calculations.length} calculations to backend (${context.variableRefs.length} variable refs)...`);
 
           const fetchStart = performance.now();
-          const response = await fetch(`${API_BASE_URL}/api/calculate-batch`, {
+          let response = await fetch(`${API_BASE_URL}/api/calculate-batch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -238,8 +259,46 @@ export const useOnClickActions = () => {
               existingVariables: enrichedVariables,
               existingParameters: context.allParameters,
               existingFilters: context.allFilters,
+              variableRefs: context.variableRefs,
             }),
           });
+
+          // 🦆 Cache-miss handling: if the server doesn't have some variables,
+          // resolve them from DuckDB-WASM and retry with full data inline.
+          if (response.status === 449) {
+            const cacheMissData = await response.json();
+            const missingNames: string[] = cacheMissData.missingVariables || [];
+            console.warn(`⚠️ [onClick] Server cache miss for: ${missingNames.join(', ')} — retrying with full data`);
+
+            const varStorage = VariableStorageService.getInstance();
+            const retryInline = { ...enrichedVariables };
+            const retryRefs = context.variableRefs.filter((n: string) => !missingNames.includes(n));
+            for (const name of missingNames) {
+              try {
+                const rawValue = snapshot.getLoadable(variableAtomFamily(name)).contents;
+                const parsedValue = safeParse(rawValue);
+                if (isDuckDBRef(parsedValue)) {
+                  retryInline[name] = await varStorage.resolveVariableByName(name, rawValue);
+                } else {
+                  retryInline[name] = parsedValue;
+                }
+              } catch (err) {
+                console.warn(`[onClick] Failed to resolve missing variable ${name}:`, err);
+              }
+            }
+
+            response = await fetch(`${API_BASE_URL}/api/calculate-batch`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                calculations,
+                existingVariables: retryInline,
+                existingParameters: context.allParameters,
+                existingFilters: context.allFilters,
+                variableRefs: retryRefs,
+              }),
+            });
+          }
 
           if (!response.ok) {
             const errorData = await response.json();
@@ -258,16 +317,19 @@ export const useOnClickActions = () => {
 
             let successCount = 0;
             const newCustomVarNames: string[] = [];
+            const varStorageOnClick = VariableStorageService.getInstance();
             for (const r of batchResult.results) {
               if (r.success) {
-                const calculatedValue = typeof r.value === 'string' ? r.value : JSON.stringify(r.value);
-                set(variableAtomFamily(r.variableName), calculatedValue);
+                // 🦆 DuckDB-WASM: offload large onClick results to WASM
+                const parsedOnClickValue = typeof r.value === 'string' ? safeParse(r.value) : r.value;
+                const { recoilValue: onClickRecoilVal } = await varStorageOnClick.storeVariable(r.variableName, parsedOnClickValue);
+                set(variableAtomFamily(r.variableName), onClickRecoilVal);
                 successCount++;
                 // Track custom variables that need to be registered
                 if (customVarNames.has(r.variableName)) {
                   newCustomVarNames.push(r.variableName);
                 }
-                console.log(`  ✅ ${r.variableName}${customVarNames.has(r.variableName) ? ' (new)' : ''} = ${calculatedValue.substring(0, 100)}${calculatedValue.length > 100 ? '...' : ''}`);
+                console.log(`  ✅ ${r.variableName}${customVarNames.has(r.variableName) ? ' (new)' : ''} = ${onClickRecoilVal.substring(0, 100)}${onClickRecoilVal.length > 100 ? '...' : ''}`);
               } else {
                 console.error(`  ❌ ${r.variableName}: ${r.error}`);
               }

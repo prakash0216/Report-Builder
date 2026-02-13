@@ -5,6 +5,8 @@ import { ParentCardConfig } from '../recoil/ChildCardState';
 import ChildCard from './ChildCard';
 import { variableAtomFamily } from '../recoil/VariableFamily';
 import { variableUpdateTriggerState, variableNamesState } from '../recoil/Variabletracker';
+import { isDuckDBRef } from '../services/VariableStorageService';
+import VariableStorageService from '../services/VariableStorageService';
 
 // 🔥 HTML variable replacement for parent titles
 const replaceHtmlVariables = (template: string, variables: Record<string, any>): string => {
@@ -87,10 +89,30 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
     return vars;
   }, [variableNames]);
   
-  // Update variables when trigger changes
+  // 🦆 DuckDB-WASM Phase 3: Update variables when trigger changes,
+  // resolving DuckDB refs for small scalars used in titles.
   useEffect(() => {
     const vars = getAllVariables();
-    setVariables(vars);
+
+    // Resolve DuckDB refs (titles only use small scalar values)
+    const resolve = async () => {
+      const varStorage = VariableStorageService.getInstance();
+      const resolved: Record<string, any> = { ...vars };
+
+      for (const [name, value] of Object.entries(vars)) {
+        if (isDuckDBRef(value)) {
+          try {
+            resolved[name] = await varStorage.resolveVariableByName(name, JSON.stringify(value));
+          } catch {
+            // Keep ref as fallback — title will show metadata but not crash
+          }
+        }
+      }
+
+      setVariables(resolved);
+    };
+
+    resolve();
   }, [getAllVariables, variableNames, variableUpdateTrigger]);
 
   // Handle container resize

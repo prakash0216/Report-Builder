@@ -88,6 +88,7 @@ import {
 } from '../utils/downloadUtilities';
 import { exportDashboardPPTXEditable } from '../utils/pptxExport';
 import { API_BASE_URL } from '../config/api.config';
+import { replaceVariableReferencesAsync } from '../utils/variableResolver';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -824,54 +825,75 @@ export default function DropDragDashboard() {
     getChartDimensions().then(setChartDimensions);
   }, [getChartDimensions, filterNames, variableUpdateTrigger]);
 
-  // Process chart configs with variable replacement (no caching - causes stale data)
-  const processedChartConfigs = useMemo(() => {
-    const processed: Record<string, any> = {};
+  // 🦆 DuckDB-WASM Phase 3: Process chart configs asynchronously.
+  // Only the variables each chart actually references are fetched from
+  // DuckDB-WASM — no more loading ALL 100K-row datasets into JS memory.
+  const [processedChartConfigs, setProcessedChartConfigs] = useState<Record<string, any>>({});
 
-    Object.entries(chartConfigs).forEach(([id, config]) => {
-      if (!config) {
-        processed[id] = null;
-        return;
-      }
+  useEffect(() => {
+    let cancelled = false;
 
-      if (config.type === 'html' && config.htmlContent) {
-        try {
-          const htmlWithVariables = replaceVariableReferences(config.htmlContent, availableVariables);
-          processed[id] = { html: htmlWithVariables, type: 'html' };
-        } catch (error) {
-          processed[id] = { html: config.htmlContent, type: 'html' };
+    const processCharts = async () => {
+      const processed: Record<string, any> = {};
+
+      for (const [id, config] of Object.entries(chartConfigs)) {
+        if (cancelled) return;
+
+        if (!config) {
+          processed[id] = null;
+          continue;
         }
-        return;
-      }
 
-      if (config.type === 'table' || config.type === 'tableChart') {
-        processed[id] = null;
-        return;
-      }
+        if (config.type === 'html' && config.htmlContent) {
+          try {
+            const htmlWithVariables = await replaceVariableReferencesAsync(
+              config.htmlContent,
+              availableVariables
+            );
+            processed[id] = { html: htmlWithVariables, type: 'html' };
+          } catch (error) {
+            processed[id] = { html: config.htmlContent, type: 'html' };
+          }
+          continue;
+        }
 
-      let configToProcess = null;
+        if (config.type === 'table' || config.type === 'tableChart') {
+          processed[id] = null;
+          continue;
+        }
 
-      if (config.template) {
-        configToProcess = config.template;
-      } else if (typeof config === 'object' && config !== null) {
-        const { _lastRefresh, htmlContent, type, ...rest } = config;
-        configToProcess = JSON.stringify(rest);
-      }
+        let configToProcess: string | null = null;
 
-      if (configToProcess) {
-        try {
-          const configWithVariables = replaceVariableReferences(configToProcess, availableVariables);
-          const parsedConfig = JSON.parse(configWithVariables);
-          processed[id] = parsedConfig;
-        } catch (error) {
+        if (config.template) {
+          configToProcess = config.template;
+        } else if (typeof config === 'object' && config !== null) {
+          const { _lastRefresh, htmlContent, type, ...rest } = config;
+          configToProcess = JSON.stringify(rest);
+        }
+
+        if (configToProcess) {
+          try {
+            const configWithVariables = await replaceVariableReferencesAsync(
+              configToProcess,
+              availableVariables
+            );
+            const parsedConfig = JSON.parse(configWithVariables);
+            processed[id] = parsedConfig;
+          } catch (error) {
+            processed[id] = null;
+          }
+        } else {
           processed[id] = null;
         }
-      } else {
-        processed[id] = null;
       }
-    });
 
-    return processed;
+      if (!cancelled) {
+        setProcessedChartConfigs(processed);
+      }
+    };
+
+    processCharts();
+    return () => { cancelled = true; };
   }, [chartConfigs, availableVariables]);
 
   // Initialize idRef from database on mount
@@ -1198,13 +1220,16 @@ export default function DropDragDashboard() {
     }
   }, [collectChartRefs, collectActiveFilters, isDownloading, visibleCharts.length, currentDashboardName, currentViewName]);
 
-  // 🔥 PERFORMANCE FIX: Remove variableUpdateTrigger from key
-  // Including it caused entire grid to remount on every calculation update
-  // Charts already update via their props changing, no need to remount
+  // 🔥 PERFORMANCE FIX: The grid key should only change when the SET of visible
+  // charts changes (add/remove cards) or the breakpoint changes — NOT when
+  // isEditMode toggles.  Including isEditMode caused the entire grid to unmount
+  // and remount (destroying & recreating every chart), which is why charts
+  // appeared to "flash" or "come twice" when switching Edit → Save.
+  // Draggable/resizable behaviour is already controlled via props on the grid.
   const gridStateKey = useMemo(() => {
     const visibleIds = visibleCharts.map(c => c.i).sort().join(',');
-    return `${currentBreakpoint}-${visibleIds}-${isEditMode ? 'edit' : 'view'}`;
-  }, [currentBreakpoint, visibleCharts, isEditMode]);
+    return `${currentBreakpoint}-${visibleIds}`;
+  }, [currentBreakpoint, visibleCharts]);
 
   const getCleanLayouts = useCallback(() => {
     const clean: { [key: string]: Layout[] } = {};

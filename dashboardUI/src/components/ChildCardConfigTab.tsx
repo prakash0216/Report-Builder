@@ -1976,13 +1976,19 @@ export default function ChildCardConfigTab() {
   const [isDraggingFab, setIsDraggingFab] = useState<boolean>(false);
   const fabDragStartRef = useRef<{ x: number; y: number; fabX: number; fabY: number } | null>(null);
 
-  // Helper to get table columns
+  // Helper to get table columns (handles both plain arrays and DuckDB refs)
   const getTableColumns = React.useCallback(async (varName: string, snapshot: any) => {
     try {
       const loadable = snapshot.getLoadable(variableAtomFamily(varName));
       if (loadable.state === 'hasValue') {
         const value = loadable.contents;
         const data = typeof value === 'string' ? JSON.parse(value) : value;
+
+        // Check if this is a DuckDB-WASM reference
+        if (data && typeof data === 'object' && data.__duckdb__ === true && Array.isArray(data.columns)) {
+          return data.columns as string[];
+        }
+
         if (Array.isArray(data) && data.length > 0) {
           return Object.keys(data[0]);
         }

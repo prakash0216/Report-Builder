@@ -44,6 +44,9 @@ import {
 
 import { variableNamesState, variableUpdateTriggerState } from '../recoil/Variabletracker';
 import { variableAtomFamily } from '../recoil/VariableFamily';
+import { isDuckDBRef } from '../services/VariableStorageService';
+import VariableStorageService from '../services/VariableStorageService';
+import BrowserDuckDB from '../services/BrowserDuckDB';
 import { storedLogicsState, StoredLogic } from '../recoil/StoredLogic';
 import { parameterAtomFamily } from '../recoil/ParameterFamliy';
 import { filterConfigFamily } from '../recoil/FiltersFamily';
@@ -120,6 +123,10 @@ function VariableChipWithTooltip({
     const filterConfig = useRecoilValue(filterConfigFamily(name));
     const liveFilterValue = useRecoilValue(liveFilterFamily(name));
     
+    // DuckDB-WASM preview state
+    const [duckPreview, setDuckPreview] = React.useState<any[] | null>(null);
+    const [duckRowCount, setDuckRowCount] = React.useState<number>(0);
+
     // Get the appropriate value based on type
     const getRawValue = () => {
         if (type === 'variable') return variableValue;
@@ -130,10 +137,42 @@ function VariableChipWithTooltip({
     
     const rawValue = getRawValue();
     const parsedValue = safeParse(rawValue);
+    const isRef = isDuckDBRef(parsedValue);
+
+    // Fetch preview from DuckDB-WASM for offloaded variables
+    React.useEffect(() => {
+        if (!isRef || type !== 'variable') {
+            setDuckPreview(null);
+            setDuckRowCount(0);
+            return;
+        }
+        let cancelled = false;
+        const db = BrowserDuckDB.getInstance();
+        if (!db.isReady()) return;
+        db.queryVariable(name, { limit: 5, offset: 0 })
+            .then((rows) => {
+                if (!cancelled) {
+                    setDuckPreview(rows);
+                    setDuckRowCount((parsedValue as any).rows || rows.length);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setDuckPreview(null);
+            });
+        return () => { cancelled = true; };
+    }, [isRef, name, type, parsedValue]);
     
     const getDisplayValue = () => {
         if (parsedValue === undefined || parsedValue === null || parsedValue === '') {
             return '(empty)';
+        }
+        // DuckDB-WASM backed variable — show preview rows
+        if (isRef && duckPreview) {
+            const preview = duckPreview.slice(0, 5);
+            return JSON.stringify(preview, null, 2) + (duckRowCount > 5 ? `\n... +${duckRowCount - 5} more rows (stored in DuckDB-WASM)` : '');
+        }
+        if (isRef) {
+            return `🦆 DuckDB-WASM: ${(parsedValue as any).rows?.toLocaleString() || '?'} rows × ${(parsedValue as any).columns?.length || '?'} columns\n(loading preview...)`;
         }
         if (Array.isArray(parsedValue)) {
             const preview = parsedValue.slice(0, 5);
@@ -148,6 +187,7 @@ function VariableChipWithTooltip({
 
     const getTypeLabel = () => {
         if (parsedValue === undefined || parsedValue === null) return 'empty';
+        if (isRef) return `DuckDB [${(parsedValue as any).rows?.toLocaleString() || '?'} rows]`;
         if (Array.isArray(parsedValue)) return `Array[${parsedValue.length}]`;
         if (typeof parsedValue === 'object') return 'Object';
         if (typeof parsedValue === 'number') return 'Number';
@@ -250,9 +290,9 @@ function VariableChipWithTooltip({
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.6rem' }}>
                             📋 Click to copy
                         </Typography>
-                        {Array.isArray(parsedValue) && (
+                        {(Array.isArray(parsedValue) || isRef) && (
                             <Typography variant="caption" sx={{ color: getTypeColor(), fontSize: '0.6rem', fontWeight: 600 }}>
-                                {parsedValue.length} items
+                                {isRef ? `${duckRowCount.toLocaleString()} rows (WASM)` : `${parsedValue.length} items`}
                             </Typography>
                         )}
                     </Box>
@@ -309,12 +349,51 @@ function VariableChipWithTooltip({
 function VariableDisplay({ name }: { name: string }) {
     const rawValue = useRecoilValue(variableAtomFamily(name));
     const parsedValue = safeParse(rawValue);
-    const displayString = typeof parsedValue === 'object'
-        ? JSON.stringify(parsedValue, null, 2)
-        : String(parsedValue);
+    const isRef = isDuckDBRef(parsedValue);
+
+    // DuckDB-WASM preview state
+    const [duckPreview, setDuckPreview] = React.useState<any[] | null>(null);
+    const [duckRowCount, setDuckRowCount] = React.useState<number>(0);
+    const [duckColumns, setDuckColumns] = React.useState<string[]>([]);
+
+    React.useEffect(() => {
+        if (!isRef) {
+            setDuckPreview(null);
+            setDuckRowCount(0);
+            setDuckColumns([]);
+            return;
+        }
+        let cancelled = false;
+        const db = BrowserDuckDB.getInstance();
+        if (!db.isReady()) return;
+        const ref = parsedValue as any;
+        setDuckRowCount(ref.rows || 0);
+        setDuckColumns(ref.columns || []);
+        db.queryVariable(name, { limit: 5, offset: 0 })
+            .then((rows) => {
+                if (!cancelled) setDuckPreview(rows);
+            })
+            .catch(() => {
+                if (!cancelled) setDuckPreview(null);
+            });
+        return () => { cancelled = true; };
+    }, [isRef, name, parsedValue]);
+
+    const displayString = (() => {
+        if (isRef && duckPreview) {
+            return JSON.stringify(duckPreview, null, 2) + (duckRowCount > 5 ? `\n... +${(duckRowCount - 5).toLocaleString()} more rows (stored in DuckDB-WASM)` : '');
+        }
+        if (isRef) {
+            return `🦆 DuckDB-WASM: ${(parsedValue as any).rows?.toLocaleString() || '?'} rows × ${(parsedValue as any).columns?.length || '?'} columns\nColumns: ${duckColumns.join(', ')}\n(loading preview...)`;
+        }
+        return typeof parsedValue === 'object'
+            ? JSON.stringify(parsedValue, null, 2)
+            : String(parsedValue);
+    })();
     const truncatedDisplay = truncateText(displayString, 250);
 
     const getType = () => {
+        if (isRef) return 'duckdb';
         if (Array.isArray(parsedValue)) return 'array';
         if (parsedValue === null) return 'null';
         return typeof parsedValue;
@@ -322,6 +401,12 @@ function VariableDisplay({ name }: { name: string }) {
 
     const getTypeInfo = () => {
         const type = getType();
+        if (type === 'duckdb') {
+            return {
+                label: `🦆 DuckDB (${duckRowCount.toLocaleString()} rows)`,
+                gradient: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
+            };
+        }
         if (type === 'array') {
             return {
                 label: `Array (${parsedValue.length})`,
@@ -753,18 +838,25 @@ export default function Hooks() {
                     const allVariables: Record<string, any> = {};
                     const allParameters: Record<string, any> = {};
                     const allFilters: Record<string, any> = {};
+                    const varStorage = VariableStorageService.getInstance();
 
-                    variableNames.forEach((varName) => {
+                    // 🦆 DuckDB-WASM: resolve variables — large datasets live
+                    // in WASM memory; small ones stay in Recoil as before.
+                    for (const varName of Array.from(variableNames)) {
                         try {
                             const rawValue = snapshot.getLoadable(variableAtomFamily(varName)).contents;
                             const parsedValue = safeParse(rawValue);
                             if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
-                                allVariables[varName] = parsedValue;
+                                if (isDuckDBRef(parsedValue)) {
+                                    allVariables[varName] = await varStorage.resolveVariableByName(varName, rawValue);
+                                } else {
+                                    allVariables[varName] = parsedValue;
+                                }
                             }
                         } catch (err) {
                             console.warn(`[Hooks] Failed to load variable ${varName}:`, err);
                         }
-                    });
+                    }
 
                     const filterNamesSet = new Set(filterNames);
 
@@ -824,18 +916,67 @@ export default function Hooks() {
                     console.log(`📦 [Hooks] Fresh filters:`, Object.keys(allFilters));
 
                     const dashboardId = getCurrentDashboardId();
-                    const response = await fetch(`${API_BASE_URL}/api/calculate`, {
+
+                    // 🦆 Phase 4: Split variables into refs (server-cached) vs inline (small)
+                    const variableRefs: string[] = [];
+                    const inlineVariables: Record<string, any> = {};
+                    const SIZE_THRESHOLD = 50_000; // ~50 KB
+                    for (const [n, v] of Object.entries(allVariables)) {
+                        const jsonLen = Array.isArray(v) && v.length > 100
+                            ? JSON.stringify(v).length : 0;
+                        if (jsonLen > SIZE_THRESHOLD) {
+                            variableRefs.push(n);
+                        } else {
+                            inlineVariables[n] = v;
+                        }
+                    }
+
+                    let response = await fetch(`${API_BASE_URL}/api/calculate`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             logic: logic.logic,
-                            existingVariables: allVariables,
+                            existingVariables: inlineVariables,
                             existingParameters: allParameters,
                             existingFilters: allFilters,
                             variableName: logic.variableName,
-                            dashboardId, // 🔥 Include dashboardId for predefined functions
+                            dashboardId,
+                            variableRefs,
                         }),
                     });
+
+                    // 🦆 Cache-miss handling: if the server doesn't have some
+                    // variables in its cache (e.g. after IIS recycle), it returns
+                    // 449 with the list of missing names. We retry once, sending
+                    // the full data for those variables inline.
+                    if (response.status === 449) {
+                        const cacheMissData = await response.json();
+                        const missingNames: string[] = cacheMissData.missingVariables || [];
+                        console.warn(`⚠️ [Hooks] Server cache miss for: ${missingNames.join(', ')} — retrying with full data`);
+
+                        // Move missing variables from refs → inline
+                        const retryInline = { ...inlineVariables };
+                        const retryRefs = variableRefs.filter(n => !missingNames.includes(n));
+                        for (const name of missingNames) {
+                            if (allVariables[name] !== undefined) {
+                                retryInline[name] = allVariables[name];
+                            }
+                        }
+
+                        response = await fetch(`${API_BASE_URL}/api/calculate`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                logic: logic.logic,
+                                existingVariables: retryInline,
+                                existingParameters: allParameters,
+                                existingFilters: allFilters,
+                                variableName: logic.variableName,
+                                dashboardId,
+                                variableRefs: retryRefs,
+                            }),
+                        });
+                    }
 
                     if (!response.ok) {
                         const errorData = await response.json();
@@ -850,7 +991,10 @@ export default function Hooks() {
                         Array.isArray(calculatedValue) ? `Array with ${calculatedValue.length} items` : calculatedValue
                     );
 
-                    set(variableAtomFamily(logic.variableName), JSON.stringify(calculatedValue));
+                    // 🦆 DuckDB-WASM: store via VariableStorageService. Large
+                    // arrays go to WASM memory; small values go to Recoil.
+                    const { recoilValue } = await varStorage.storeVariable(logic.variableName, calculatedValue);
+                    set(variableAtomFamily(logic.variableName), recoilValue);
 
                     setVariableNames((prev) => {
                         const newSet = new Set(prev);
@@ -931,18 +1075,24 @@ export default function Hooks() {
                     const allVariables: Record<string, any> = {};
                     const allParameters: Record<string, any> = {};
                     const allFilters: Record<string, any> = {};
+                    const varStorage = VariableStorageService.getInstance();
 
-                    variableNames.forEach((varName) => {
+                    // 🦆 DuckDB-WASM: resolve variables from WASM or Recoil
+                    for (const varName of Array.from(variableNames)) {
                         try {
                             const rawValue = snapshot.getLoadable(variableAtomFamily(varName)).contents;
                             const parsedValue = safeParse(rawValue);
                             if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
-                                allVariables[varName] = parsedValue;
+                                if (isDuckDBRef(parsedValue)) {
+                                    allVariables[varName] = await varStorage.resolveVariableByName(varName, rawValue);
+                                } else {
+                                    allVariables[varName] = parsedValue;
+                                }
                             }
                         } catch (err) {
                             console.warn(`[Hooks] Failed to load variable ${varName}:`, err);
                         }
-                    });
+                    }
 
                     const filterNamesSet = new Set(filterNames);
 
@@ -996,16 +1146,32 @@ export default function Hooks() {
                       });
 
                     const calcDashboardId = getCurrentDashboardId();
+
+                    // 🦆 Phase 4: Split variables into refs vs inline
+                    const calcVariableRefs: string[] = [];
+                    const calcInlineVars: Record<string, any> = {};
+                    const CALC_SIZE_THRESHOLD = 50_000;
+                    for (const [n, v] of Object.entries(allVariables)) {
+                        const jsonLen = Array.isArray(v) && v.length > 100
+                            ? JSON.stringify(v).length : 0;
+                        if (jsonLen > CALC_SIZE_THRESHOLD) {
+                            calcVariableRefs.push(n);
+                        } else {
+                            calcInlineVars[n] = v;
+                        }
+                    }
+
                     const response = await fetch(`${API_BASE_URL}/api/calculate`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             logic: calculationLogic,
-                            existingVariables: allVariables,
+                            existingVariables: calcInlineVars,
                             existingParameters: allParameters,
                             existingFilters: allFilters,
                             variableName,
-                            dashboardId: calcDashboardId, // 🔥 Include dashboardId for predefined functions
+                            dashboardId: calcDashboardId,
+                            variableRefs: calcVariableRefs,
                         }),
                     });
 
@@ -1017,7 +1183,9 @@ export default function Hooks() {
                     const result = await response.json();
                     const calculatedValue = typeof result.value === 'string' ? safeParse(result.value) : result.value;
 
-                    setVariableAtom(variableName, JSON.stringify(calculatedValue));
+                    // 🦆 DuckDB-WASM: store via VariableStorageService
+                    const { recoilValue: calcRecoilValue } = await varStorage.storeVariable(variableName, calculatedValue);
+                    setVariableAtom(variableName, calcRecoilValue);
 
                     setVariableNames((prev) => {
                         const newSet = new Set(prev);
@@ -1213,6 +1381,9 @@ export default function Hooks() {
 
                     // Reset variable atom
                     reset(variableAtomFamily(logicToDelete.variableName));
+
+                    // 🦆 DuckDB-WASM: also drop from WASM memory
+                    VariableStorageService.getInstance().dropVariable(logicToDelete.variableName).catch(() => {});
 
                     // Remove from variable names
                     setVariableNames((prev) => {

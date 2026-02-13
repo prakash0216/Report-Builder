@@ -41,7 +41,7 @@ const PORT = process.env.PORT || 3002;
 // ULTRA-FAST CACHE CONFIGURATION
 // ============================================
 const CACHE_TTL = parseInt(process.env.CACHE_TTL) || 259200; // 3 days default
-const MAX_CACHE_SIZE = 500; // Maximum number of cached queries
+const MAX_CACHE_SIZE = 150; // Maximum number of cached queries (reduced from 500 to limit memory)
 
 const fastCache = new Map();
 const keyHashCache = new Map();
@@ -53,6 +53,108 @@ const inflightCache = new Map(); // Deduplicate concurrent requests per key
 // ============================================
 const FUNCTIONS_CACHE_TTL_MS = 60 * 1000; // 1 minute
 const predefinedFunctionsCache = new Map();
+
+// ============================================
+// 🦆 SERVER-SIDE VARIABLE CACHE (Phase 4)
+// Stores the latest calculation results so the frontend can send
+// variable NAMES instead of full data in subsequent requests.
+// This reduces HTTP body size from hundreds of MB to a few KB.
+//
+// ⚠️  MEMORY-SAFE: The cache has a hard ceiling (default 1.5 GB).
+//     When the ceiling is reached, the oldest entries are evicted
+//     (LRU). Individual variables > 500 MB are NOT cached at all
+//     to prevent a single variable from blowing the budget.
+// ============================================
+
+const SERVER_CACHE_MAX_BYTES = 512 * 1024 * 1024;         // 512 MB hard ceiling (safe for 8 GB heap)
+const SERVER_CACHE_SINGLE_VAR_MAX = 200 * 1024 * 1024;   // 200 MB per variable max
+
+const serverVariableCache = new Map();   // variableName → { value, sizeBytes, ts }
+let serverCacheTotalBytes = 0;           // running total of estimated bytes
+
+/** Rough estimate of the in-memory size of a JS value (bytes). */
+function estimateBytes(value) {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'string') return value.length * 2; // UTF-16
+  if (typeof value === 'number' || typeof value === 'boolean') return 8;
+  // For arrays/objects, use JSON.stringify length as a proxy (cheaper than deep walk)
+  try {
+    const json = typeof value === 'string' ? value : JSON.stringify(value);
+    return json.length * 2; // UTF-16 chars → bytes
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Store a calculated variable value on the server.
+ * Called after each successful calculation.
+ * Respects memory ceiling — evicts LRU entries when needed.
+ */
+function cacheVariable(variableName, value) {
+  const sizeBytes = estimateBytes(value);
+
+  // Don't cache extremely large single variables
+  if (sizeBytes > SERVER_CACHE_SINGLE_VAR_MAX) {
+    console.log(`⚠️ [Variable Cache] "${variableName}" too large (${(sizeBytes / 1024 / 1024).toFixed(1)} MB) — skipping cache`);
+    // If it was previously cached, remove it
+    if (serverVariableCache.has(variableName)) {
+      const old = serverVariableCache.get(variableName);
+      serverCacheTotalBytes -= old.sizeBytes;
+      serverVariableCache.delete(variableName);
+    }
+    return;
+  }
+
+  // If this variable is already cached, subtract old size first
+  if (serverVariableCache.has(variableName)) {
+    const old = serverVariableCache.get(variableName);
+    serverCacheTotalBytes -= old.sizeBytes;
+    serverVariableCache.delete(variableName); // delete + re-insert to move to end (LRU)
+  }
+
+  // Evict oldest entries until we have room
+  while (serverCacheTotalBytes + sizeBytes > SERVER_CACHE_MAX_BYTES && serverVariableCache.size > 0) {
+    const oldestKey = serverVariableCache.keys().next().value;
+    const oldest = serverVariableCache.get(oldestKey);
+    serverCacheTotalBytes -= oldest.sizeBytes;
+    serverVariableCache.delete(oldestKey);
+    console.log(`🗑️ [Variable Cache] Evicted "${oldestKey}" (${(oldest.sizeBytes / 1024 / 1024).toFixed(1)} MB) — LRU eviction`);
+  }
+
+  serverVariableCache.set(variableName, { value, sizeBytes, ts: Date.now() });
+  serverCacheTotalBytes += sizeBytes;
+}
+
+/**
+ * Resolve variable references from the server-side cache.
+ * Returns { resolved: { name→value }, missing: string[] }.
+ * Missing names are reported so the caller can request a retry with full data.
+ */
+function resolveVariableRefs(variableRefs) {
+  const resolved = {};
+  const missing = [];
+  if (!Array.isArray(variableRefs)) return { resolved, missing };
+  for (const name of variableRefs) {
+    if (serverVariableCache.has(name)) {
+      resolved[name] = serverVariableCache.get(name).value;
+    } else {
+      missing.push(name);
+    }
+  }
+  return { resolved, missing };
+}
+
+/** Clear the variable cache (e.g. on dashboard switch). */
+function clearVariableCache() {
+  const count = serverVariableCache.size;
+  const mb = (serverCacheTotalBytes / 1024 / 1024).toFixed(1);
+  serverVariableCache.clear();
+  serverCacheTotalBytes = 0;
+  if (count > 0) {
+    console.log(`🗑️ [Variable Cache] Cleared ${count} cached variables (${mb} MB freed)`);
+  }
+}
 
 async function getPredefinedFunctionsCode(dashboardId) {
   const cacheKey = dashboardId ? `dash:${dashboardId}` : 'global';
@@ -3157,13 +3259,34 @@ async function getDataBasedOnDataSourceName(dataSourceName, queryObject) {
 // ============================================
 app.post('/api/calculate-batch', async (req, res) => {
   const batchStartTime = Date.now();
-  const { calculations, existingVariables, existingParameters, existingFilters, dashboardId } = req.body;
+  const { calculations, existingVariables, existingParameters, existingFilters, dashboardId, variableRefs } = req.body;
   
   if (!Array.isArray(calculations) || calculations.length === 0) {
     return res.status(400).json({ message: 'Missing or empty calculations array' });
   }
 
   console.log(`🚀 [Batch Calculate] Starting batch of ${calculations.length} calculations...`);
+
+  // 🦆 Phase 4: If frontend sent variableRefs (just names) instead of full data,
+  // resolve them from the server-side cache. This avoids sending hundreds of MB
+  // over the wire — the request body drops from 500MB to ~2KB.
+  let resolvedVariables = existingVariables || {};
+  if (Array.isArray(variableRefs) && variableRefs.length > 0) {
+    const { resolved: fromCache, missing } = resolveVariableRefs(variableRefs);
+    console.log(`🦆 [Batch] Resolved ${Object.keys(fromCache).length}/${variableRefs.length} variables from server cache`);
+    if (missing.length > 0) {
+      // Tell the frontend which variables are NOT in the server cache
+      console.warn(`⚠️ [Batch] Cache miss for ${missing.length} variable(s): ${missing.join(', ')}`);
+      return res.status(449).json({
+        success: false,
+        cacheMiss: true,
+        missingVariables: missing,
+        message: `Server cache does not have: ${missing.join(', ')}. Please resend with full data.`,
+      });
+    }
+    // Merge: inline vars (if any) take precedence over cache
+    resolvedVariables = { ...fromCache, ...(existingVariables || {}) };
+  }
 
   try {
     // 🔥 Fetch predefined functions ONCE for the entire batch
@@ -3259,7 +3382,7 @@ function isValidValue(value) {
 `;
 
     // 🔥 Build the shared context ONCE (not per-calculation)
-    const baseVariables = { ...existingVariables, ...existingParameters, ...existingFilters };
+    const baseVariables = { ...resolvedVariables, ...existingParameters, ...existingFilters };
     
     // Track calculated variables for dependency chaining
     const calculatedVariables = {};
@@ -3325,9 +3448,17 @@ function isValidValue(value) {
       }
     }
 
+    // 🦆 Phase 4: Cache all successful results on the server
+    for (const r of results) {
+      if (r.success) {
+        cacheVariable(r.variableName, r.value);
+      }
+    }
+
     const totalMs = Date.now() - batchStartTime;
     const successCount = results.filter(r => r.success).length;
     console.log(`✅ [Batch Calculate] Completed ${successCount}/${calculations.length} in ${totalMs}ms (avg ${(totalMs / calculations.length).toFixed(1)}ms/calc)`);
+    console.log(`🦆 [Variable Cache] ${serverVariableCache.size} variables cached on server (${(serverCacheTotalBytes / 1024 / 1024).toFixed(1)} MB)`);
     
     res.json({ results, success: true, totalMs });
   } catch (err) {
@@ -3339,12 +3470,30 @@ function isValidValue(value) {
 
 app.post('/api/calculate', async (req, res) => {
   const calcStartTime = Date.now();
-  const { logic, existingVariables, existingParameters, variableName, existingFilters, dashboardId } = req.body;
+  const { logic, existingVariables, existingParameters, variableName, existingFilters, dashboardId, variableRefs } = req.body;
   if (!logic || !variableName) {
     return res.status(400).json({ message: 'Missing logic or variableName' });
   }
 
-  const allAvailableVariables = { ...existingVariables, ...existingParameters, ...existingFilters };
+  // 🦆 Phase 4: Resolve variable refs from server cache if provided
+  let resolvedVariables = existingVariables || {};
+  if (Array.isArray(variableRefs) && variableRefs.length > 0) {
+    const { resolved: fromCache, missing } = resolveVariableRefs(variableRefs);
+    if (missing.length > 0) {
+      // Tell the frontend which variables are NOT in the server cache
+      // so it can retry with the full data for those variables.
+      console.warn(`⚠️ [Calculate] Cache miss for ${missing.length} variable(s): ${missing.join(', ')}`);
+      return res.status(449).json({
+        success: false,
+        cacheMiss: true,
+        missingVariables: missing,
+        message: `Server cache does not have: ${missing.join(', ')}. Please resend with full data.`,
+      });
+    }
+    resolvedVariables = { ...fromCache, ...(existingVariables || {}) };
+  }
+
+  const allAvailableVariables = { ...resolvedVariables, ...existingParameters, ...existingFilters };
 
   try {
     // 🔥 Fetch predefined functions (cached)
@@ -3504,12 +3653,49 @@ function isValidValue(value) {
     const runMs = execTime - evalTime;
     console.log(`⏱️ [Calculate] ${variableName}: total=${totalMs}ms (setup=${evalMs}ms, exec=${runMs}ms)`);
 
+    // 🦆 Phase 4: Cache the result on the server
+    cacheVariable(variableName, result);
+
     res.json({ value: result, success: true });
+
+    // Trigger GC after large calculations to reclaim memory promptly
+    if (typeof global.gc === 'function' && totalMs > 2000) {
+      setTimeout(() => { try { global.gc(); } catch {} }, 500);
+    }
   } catch (err) {
     const totalMs = Date.now() - calcStartTime;
     console.error(`❌ [Calculate] ${variableName} FAILED after ${totalMs}ms: ${err.message}`);
     return res.status(400).json({ message: 'Error evaluating logic: ' + err.message });
   }
+});
+
+// ============================================
+// 🦆 VARIABLE CACHE MANAGEMENT (Phase 4)
+// ============================================
+
+/** Get server variable cache status */
+app.get('/api/variable-cache/status', (req, res) => {
+  const variables = [];
+  for (const [name, entry] of serverVariableCache) {
+    variables.push({
+      name,
+      sizeMB: +(entry.sizeBytes / 1024 / 1024).toFixed(2),
+      cachedAt: new Date(entry.ts).toISOString(),
+    });
+  }
+  res.json({
+    success: true,
+    count: variables.length,
+    totalMB: +(serverCacheTotalBytes / 1024 / 1024).toFixed(2),
+    ceilingMB: +(SERVER_CACHE_MAX_BYTES / 1024 / 1024).toFixed(0),
+    variables,
+  });
+});
+
+/** Clear server variable cache */
+app.post('/api/variable-cache/clear', (req, res) => {
+  clearVariableCache();
+  res.json({ success: true, message: 'Variable cache cleared' });
 });
 
 app.get("/api/get-all-ds-names", async (req, res) => {
