@@ -88,7 +88,8 @@ import {
 } from '../utils/downloadUtilities';
 import { exportDashboardPPTXEditable } from '../utils/pptxExport';
 import { API_BASE_URL } from '../config/api.config';
-import { replaceVariableReferencesAsync } from '../utils/variableResolver';
+// replaceVariableReferencesAsync kept for potential future DuckDB-WASM use
+// import { replaceVariableReferencesAsync } from '../utils/variableResolver';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -118,10 +119,27 @@ const safeParse = (value: string): any => {
   }
 };
 
+const extractReferencedVariableNames = (template: string): Set<string> => {
+  const names = new Set<string>();
+  if (!template) return names;
+  const pattern = /\$\{([^}]+)\}|\{\{([^}]+)\}\}/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(template)) !== null) {
+    const name = match[1] || match[2];
+    if (name) names.add(name);
+  }
+  return names;
+};
+
+const escapeRegex = (str: string): string => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const replaceVariableReferences = (jsonString: string, variables: Record<string, any>): string => {
   let result = jsonString;
-  
-  Object.entries(variables).forEach(([name, value]) => {
+  const referencedNames = extractReferencedVariableNames(jsonString);
+
+  referencedNames.forEach((name) => {
+    if (!(name in variables)) return;
+    const value = variables[name];
     // Check if the raw stored value is a formatted number (before parsing)
     const isFormattedNumber = typeof value === 'string' && /^[\d,]+$/.test(value);
     
@@ -136,10 +154,10 @@ const replaceVariableReferences = (jsonString: string, variables: Record<string,
     }
     
     // Replace in JSON context: "${variableName}"
-    result = result.replace(new RegExp(`"\\$\\{${name}\\}"`, 'g'), replacement);
+    result = result.replace(new RegExp(`"\\$\\{${escapeRegex(name)}\\}"`, 'g'), replacement);
     
     // Replace in HTML context: ${variableName}
-    result = result.replace(new RegExp(`\\$\\{${name}\\}`, 'g'), replacement);
+    result = result.replace(new RegExp(`\\$\\{${escapeRegex(name)}\\}`, 'g'), replacement);
   });
   
   return result;
@@ -593,8 +611,6 @@ export default function DropDragDashboard() {
     const chartIdsFromContainers = Object.keys(childCardConfigs);
     const allChartIds = Array.from(new Set([...chartIdsFromConfigs, ...chartIdsFromContainers]));
     
-    console.log(`👁️ [Visibility] Checking ${allChartIds.length} charts (${chartIdsFromConfigs.length} from chartConfigs, ${chartIdsFromContainers.length} from childCardConfigs)`);
-    
     // 🔥 Get the current visibility variable mappings from the "Is Visible" tab
     const visibilityVariables = snapshot.getLoadable(chartVisibilityVariableState);
     const visibilityVarMap = visibilityVariables.state === 'hasValue' ? visibilityVariables.contents : {};
@@ -618,7 +634,6 @@ export default function DropDragDashboard() {
             }
             // If variable is true = SHOW, if false = HIDE
             isVisibleFromTab = parsedValue === true;
-            console.log(`👁️ [Visibility] Chart ${chartId}: variable "${visibilityVarName}" = ${parsedValue} → visible: ${isVisibleFromTab}`);
           } catch (e) {
             console.warn(`Could not get visibility variable "${visibilityVarName}" for chart ${chartId}:`, e);
             isVisibleFromTab = true;
@@ -648,7 +663,6 @@ export default function DropDragDashboard() {
             // If parent visibility variable is false, hide the entire container
             if (parsedValue === false) {
               visibilityMap[chartId] = false;
-              console.log(`👁️ [Visibility] Chart ${chartId}: MultiCard visibility variable = false → hidden`);
               continue;
             }
           } catch (e) {
@@ -721,9 +735,7 @@ export default function DropDragDashboard() {
 
   // 🔥 PERFORMANCE: Synchronous variable loading
   useEffect(() => {
-    console.log(`🔄 variableUpdateTrigger changed to: ${variableUpdateTrigger}`);
     const vars = getAllVariables();
-    console.log(`📦 Got ${Object.keys(vars).length} variables`);
     setAvailableVariables(vars);
   }, [getAllVariables, variableUpdateTrigger]);
 
@@ -736,7 +748,6 @@ export default function DropDragDashboard() {
       const prevValuesStr = JSON.stringify(visibilityVarValues);
       
       if (valuesStr !== prevValuesStr) {
-        console.log(`👁️ [Visibility] Variable values changed:`, values);
         setVisibilityVarValues(values);
       }
     });
@@ -746,15 +757,12 @@ export default function DropDragDashboard() {
   useEffect(() => {
     if (!dataLoaded) return; // Wait for data to load
     
-    console.log(`🔄 [Visibility Effect] Triggered - variableUpdateTrigger: ${variableUpdateTrigger}, visibilityVarMap:`, visibilityVariableMap, 'varValues:', visibilityVarValues);
-    
     getChartVisibility().then((newVisibility) => {
       // Ensure all charts in configs have visibility set (default to true if not set)
       const allChartIds = Object.keys(chartConfigs);
       allChartIds.forEach(chartId => {
         if (newVisibility[chartId] === undefined) {
           newVisibility[chartId] = true; // Default to visible
-          console.log(`👁️ [Visibility] Chart ${chartId} had no visibility rule, defaulting to visible`);
         }
       });
       
@@ -766,9 +774,6 @@ export default function DropDragDashboard() {
         return;
       }
 
-      console.log('👁️ Visibility changed:', newVisibility);
-      console.log(`   Total charts: ${allChartIds.length}, Visible: ${Object.values(newVisibility).filter(v => v !== false).length}`);
-
       // Check if any hidden card is becoming visible
       const anyBecameVisible = Object.keys(newVisibility).some(chartId => {
         const wasHidden = previousVisibilityRef.current[chartId] === false;
@@ -777,8 +782,6 @@ export default function DropDragDashboard() {
       });
 
       if (anyBecameVisible) {
-        console.log('🔄 Cards becoming visible - restoring ALL to original positions');
-        
         isInternalUpdateRef.current = true;
         
         // Restore ALL items to their TRUE original positions
@@ -792,7 +795,6 @@ export default function DropDragDashboard() {
             // Restore each item to its TRUE original position
             currentLayout.forEach((item: Layout) => {
               if (trueOriginalPositionsRef.current[item.i]) {
-                console.log(`🔄 Restoring ${item.i} to TRUE original position:`, trueOriginalPositionsRef.current[item.i]);
                 restoredLayout.push(makeMutableLayoutItem(trueOriginalPositionsRef.current[item.i]));
               } else {
                 restoredLayout.push(makeMutableLayoutItem(item));
@@ -819,81 +821,60 @@ export default function DropDragDashboard() {
       previousVisibilityRef.current = { ...newVisibility };
       setChartVisibility(newVisibility);
     });
-  }, [dataLoaded, getChartVisibility, filterNames, variableUpdateTrigger, setLayouts, chartConfigs, visibilityVariableMap, visibilityVarValues]);
+  }, [dataLoaded, getChartVisibility, setLayouts, chartConfigs, visibilityVarValues, visibilityVariableMap]);
 
   useEffect(() => {
     getChartDimensions().then(setChartDimensions);
   }, [getChartDimensions, filterNames, variableUpdateTrigger]);
 
-  // 🦆 DuckDB-WASM Phase 3: Process chart configs asynchronously.
-  // Only the variables each chart actually references are fetched from
-  // DuckDB-WASM — no more loading ALL 100K-row datasets into JS memory.
-  const [processedChartConfigs, setProcessedChartConfigs] = useState<Record<string, any>>({});
+  // Process chart configs with variable replacement (no caching - causes stale data)
+  const processedChartConfigs = useMemo(() => {
+    const processed: Record<string, any> = {};
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const processCharts = async () => {
-      const processed: Record<string, any> = {};
-
-      for (const [id, config] of Object.entries(chartConfigs)) {
-        if (cancelled) return;
-
-        if (!config) {
-          processed[id] = null;
-          continue;
-        }
-
-        if (config.type === 'html' && config.htmlContent) {
-          try {
-            const htmlWithVariables = await replaceVariableReferencesAsync(
-              config.htmlContent,
-              availableVariables
-            );
-            processed[id] = { html: htmlWithVariables, type: 'html' };
-          } catch (error) {
-            processed[id] = { html: config.htmlContent, type: 'html' };
-          }
-          continue;
-        }
-
-        if (config.type === 'table' || config.type === 'tableChart') {
-          processed[id] = null;
-          continue;
-        }
-
-        let configToProcess: string | null = null;
-
-        if (config.template) {
-          configToProcess = config.template;
-        } else if (typeof config === 'object' && config !== null) {
-          const { _lastRefresh, htmlContent, type, ...rest } = config;
-          configToProcess = JSON.stringify(rest);
-        }
-
-        if (configToProcess) {
-          try {
-            const configWithVariables = await replaceVariableReferencesAsync(
-              configToProcess,
-              availableVariables
-            );
-            const parsedConfig = JSON.parse(configWithVariables);
-            processed[id] = parsedConfig;
-          } catch (error) {
-            processed[id] = null;
-          }
-        } else {
-          processed[id] = null;
-        }
+    Object.entries(chartConfigs).forEach(([id, config]) => {
+      if (!config) {
+        processed[id] = null;
+        return;
       }
 
-      if (!cancelled) {
-        setProcessedChartConfigs(processed);
+      if (config.type === 'html' && config.htmlContent) {
+        try {
+          const htmlWithVariables = replaceVariableReferences(config.htmlContent, availableVariables);
+          processed[id] = { html: htmlWithVariables, type: 'html' };
+        } catch (error) {
+          processed[id] = { html: config.htmlContent, type: 'html' };
+        }
+        return;
       }
-    };
 
-    processCharts();
-    return () => { cancelled = true; };
+      if (config.type === 'table' || config.type === 'tableChart') {
+        processed[id] = null;
+        return;
+      }
+
+      let configToProcess = null;
+
+      if (config.template) {
+        configToProcess = config.template;
+      } else if (typeof config === 'object' && config !== null) {
+        const { _lastRefresh, htmlContent, type, ...rest } = config;
+        configToProcess = JSON.stringify(rest);
+      }
+
+      if (configToProcess) {
+        try {
+          const configWithVariables = replaceVariableReferences(configToProcess, availableVariables);
+          const parsedConfig = JSON.parse(configWithVariables);
+          processed[id] = parsedConfig;
+        } catch (error) {
+          processed[id] = null;
+        }
+      } else {
+        processed[id] = null;
+      }
+    });
+
+    return processed;
   }, [chartConfigs, availableVariables]);
 
   // Initialize idRef from database on mount
@@ -1741,6 +1722,7 @@ export default function DropDragDashboard() {
                 <ParentCardContainer
                   parentCardId={item.i}
                   config={containerConfig}
+                  allVariables={availableVariables}
                   showExport={isEditMode ? false : true}
                   onPointClick={isOnClickEnabled(item.i) ? (pointData: any) => handleChartClick(item.i, pointData) : undefined}
                   onChartBackgroundClick={isOnClickEnabled(item.i) && clickSnapshot.active ? handleOnClickReset : undefined}
@@ -2023,7 +2005,7 @@ export default function DropDragDashboard() {
         {/* Home */}
         <Tooltip title="Home" placement="right">
           <Box
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/?nav=home')}
             sx={{
               display: 'flex',
               flexDirection: 'column',
@@ -2052,6 +2034,7 @@ export default function DropDragDashboard() {
           }}
         >
           <Box
+            onClick={() => navigate('/?nav=libraries')}
             sx={{
               display: 'flex',
               flexDirection: 'column',

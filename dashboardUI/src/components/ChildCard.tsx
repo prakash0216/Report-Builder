@@ -10,11 +10,13 @@ import { onClickSnapshotState } from '../recoil/OnClickSnapshotState';
 import ResizableChart from './ResizableChart';
 import DashboardTable from './DashboardTable';
 import ChildCardTooltip, { ChildCardTooltipRef } from './ChildCardTooltip';
-import { replaceVariableReferencesAsync } from '../utils/variableResolver';
+// replaceVariableReferencesAsync kept for potential future DuckDB-WASM use
+// import { replaceVariableReferencesAsync } from '../utils/variableResolver';
 
 interface ChildCardProps {
   config: ChildCardConfig;
   parentCardId?: string;         // Parent card ID for tooltip key construction
+  allVariables?: Record<string, any>; // Optional shared variable map from parent
   parentWidth?: number;
   parentHeight?: number;
   gap?: number;
@@ -25,12 +27,29 @@ interface ChildCardProps {
 }
 
 // 🔥 FIXED: Match the replaceVariableReferences from DragDropDashboard.tsx exactly
+const extractReferencedVariableNames = (template: string): Set<string> => {
+  const names = new Set<string>();
+  if (!template) return names;
+  const pattern = /\$\{([^}]+)\}|\{\{([^}]+)\}\}/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(template)) !== null) {
+    const name = match[1] || match[2];
+    if (name) names.add(name);
+  }
+  return names;
+};
+
+const escapeRegex = (str: string): string => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const replaceVariables = (template: string, variables: Record<string, any>): string => {
   if (!template) return template;
   
   let result = template;
+  const referencedNames = extractReferencedVariableNames(template);
   
-  Object.entries(variables).forEach(([name, value]) => {
+  referencedNames.forEach((name) => {
+    if (!(name in variables)) return;
+    const value = variables[name];
     // Check if the raw stored value is a formatted number (before parsing)
     const isFormattedNumber = typeof value === 'string' && /^[\d,]+$/.test(value);
     
@@ -45,13 +64,13 @@ const replaceVariables = (template: string, variables: Record<string, any>): str
     }
     
     // Replace in JSON context: "${variableName}" (quoted placeholder)
-    result = result.replace(new RegExp(`"\\$\\{${name}\\}"`, 'g'), replacement);
+    result = result.replace(new RegExp(`"\\$\\{${escapeRegex(name)}\\}"`, 'g'), replacement);
     
     // Replace in unquoted context: ${variableName}
-    result = result.replace(new RegExp(`\\$\\{${name}\\}`, 'g'), replacement);
+    result = result.replace(new RegExp(`\\$\\{${escapeRegex(name)}\\}`, 'g'), replacement);
     
     // Replace {{variableName}} pattern for HTML
-    result = result.replace(new RegExp(`\\{\\{${name}\\}\\}`, 'g'), 
+    result = result.replace(new RegExp(`\\{\\{${escapeRegex(name)}\\}\\}`, 'g'),
       typeof value === 'object' ? JSON.stringify(value) : String(value));
   });
   
@@ -68,8 +87,11 @@ const replaceHtmlVariables = (template: string, variables: Record<string, any>):
   if (!template) return template;
   
   let result = template;
+  const referencedNames = extractReferencedVariableNames(template);
   
-  Object.entries(variables).forEach(([name, value]) => {
+  referencedNames.forEach((name) => {
+    if (!(name in variables)) return;
+    const value = variables[name];
     // For HTML, always convert to string representation
     let replacement: string;
     if (value === null || value === undefined) {
@@ -81,10 +103,10 @@ const replaceHtmlVariables = (template: string, variables: Record<string, any>):
     }
     
     // Replace ${variableName}
-    result = result.replace(new RegExp(`\\$\\{${name}\\}`, 'g'), replacement);
+    result = result.replace(new RegExp(`\\$\\{${escapeRegex(name)}\\}`, 'g'), replacement);
     
     // Replace {{variableName}} pattern
-    result = result.replace(new RegExp(`\\{\\{${name}\\}\\}`, 'g'), replacement);
+    result = result.replace(new RegExp(`\\{\\{${escapeRegex(name)}\\}\\}`, 'g'), replacement);
   });
   
   // Replace any remaining unreplaced patterns
@@ -111,7 +133,7 @@ const safeParse = (value: any): any => {
 };
 
 // Custom hook to get all variables as an object
-function useAllVariables(): Record<string, any> {
+function useAllVariables(enabled: boolean = true): Record<string, any> {
   const variableNames = useRecoilValue(variableNamesState);
   
   // 🔥 PERFORMANCE: Use synchronous getLoadable instead of async getPromise (matching DragDropDashboard)
@@ -144,9 +166,10 @@ function useAllVariables(): Record<string, any> {
   
   // 🔥 Update variables when trigger changes (matching DragDropDashboard behavior)
   React.useEffect(() => {
+    if (!enabled) return;
     const vars = getAllVariables();
     setVariables(vars);
-  }, [getAllVariables, variableNames, variableUpdateTrigger]);
+  }, [enabled, getAllVariables, variableNames, variableUpdateTrigger]);
   
   return variables;
 }
@@ -154,6 +177,7 @@ function useAllVariables(): Record<string, any> {
 const ChildCard: React.FC<ChildCardProps> = ({
   config,
   parentCardId,
+  allVariables,
   parentWidth = 400,
   parentHeight = 300,
   gap = 8,
@@ -168,7 +192,8 @@ const ChildCard: React.FC<ChildCardProps> = ({
   const [highlightedRowIndex, setHighlightedRowIndex] = useState<number | null>(null);
   
   // Get all variables for template replacement
-  const variables = useAllVariables();
+  const localVariables = useAllVariables(!allVariables);
+  const variables = allVariables ?? localVariables;
   
   // 🔥 Tooltip configuration
   const childCardKey = parentCardId ? `${parentCardId}_${config.id}` : '';
@@ -244,8 +269,7 @@ const ChildCard: React.FC<ChildCardProps> = ({
   const [chartOptions, setChartOptions] = useState<any>(null);
   const [chartError, setChartError] = useState<string | null>(null);
 
-  // 🦆 DuckDB-WASM Phase 3: Parse chart template asynchronously.
-  // Only the variables this chart references are fetched from DuckDB-WASM.
+  // Parse chart template and create options - with robust error handling
   useEffect(() => {
     if (config.type !== 'chart') {
       setChartOptions(null);
@@ -267,99 +291,80 @@ const ChildCard: React.FC<ChildCardProps> = ({
       return;
     }
 
-    let cancelled = false;
+    try {
+      const replacedTemplate = replaceVariables(config.template, variables);
+      const parsed = JSON.parse(replacedTemplate);
+      
+      // Validate that chart type is valid to prevent Highcharts error #17
+      const chartType = parsed?.chart?.type;
+      if (chartType !== undefined && chartType !== null && chartType.toString().trim() === '') {
+        setChartOptions(null);
+        setChartError('Empty chart type');
+        return;
+      }
+      
+      // Check if chart type is a valid Highcharts type
+      const validChartTypes = ['line', 'spline', 'area', 'areaspline', 'column', 'bar', 'pie', 'scatter', 'gauge', 'arearange', 'areasplinerange', 'columnrange', 'bubble', 'boxplot', 'errorbar', 'waterfall', 'funnel', 'pyramid', 'heatmap', 'treemap', 'sankey', 'sunburst', 'organization', 'networkgraph', 'packedbubble', 'lollipop', 'dumbbell', 'timeline', 'venn', 'wordcloud', 'polygon', 'streamgraph', 'variablepie', 'dependencywheel', 'vector', 'windbarb', 'xrange', 'item', 'solidgauge'];
+      if (chartType && !validChartTypes.includes(chartType)) {
+        setChartOptions(null);
+        setChartError(`Unknown chart type: ${chartType}`);
+        return;
+      }
+      
+      // Ensure series exists and has valid data
+      if (!parsed?.series || !Array.isArray(parsed.series)) {
+        setChartOptions(null);
+        setChartError('No series data defined');
+        return;
+      }
 
-    const resolveAndParse = async () => {
-      try {
-        const replacedTemplate = await replaceVariableReferencesAsync(config.template!, variables);
-        if (cancelled) return;
-
-        const parsed = JSON.parse(replacedTemplate);
-        
-        // Validate that chart type is valid to prevent Highcharts error #17
-        const chartType = parsed?.chart?.type;
-        if (chartType !== undefined && chartType !== null && chartType.toString().trim() === '') {
+      // 🔥 CRITICAL: Validate series data to prevent Highcharts crash
+      for (let i = 0; i < parsed.series.length; i++) {
+        const series = parsed.series[i];
+        if (series.data === null || series.data === undefined) {
           setChartOptions(null);
-          setChartError('Empty chart type');
+          setChartError(`Series ${i + 1} has no data (waiting for variable)`);
           return;
         }
-        
-        // Check if chart type is a valid Highcharts type
-        const validChartTypes = ['line', 'spline', 'area', 'areaspline', 'column', 'bar', 'pie', 'scatter', 'gauge', 'arearange', 'areasplinerange', 'columnrange', 'bubble', 'boxplot', 'errorbar', 'waterfall', 'funnel', 'pyramid', 'heatmap', 'treemap', 'sankey', 'sunburst', 'organization', 'networkgraph', 'packedbubble', 'lollipop', 'dumbbell', 'timeline', 'venn', 'wordcloud', 'polygon', 'streamgraph', 'variablepie', 'dependencywheel', 'vector', 'windbarb', 'xrange', 'item', 'solidgauge'];
-        if (chartType && !validChartTypes.includes(chartType)) {
+        if (!Array.isArray(series.data)) {
           setChartOptions(null);
-          setChartError(`Unknown chart type: ${chartType}`);
+          setChartError(`Series ${i + 1} data must be an array`);
           return;
-        }
-        
-        // Ensure series exists and has valid data
-        if (!parsed?.series || !Array.isArray(parsed.series)) {
-          setChartOptions(null);
-          setChartError('No series data defined');
-          return;
-        }
-
-        // 🔥 CRITICAL: Validate series data to prevent Highcharts crash
-        for (let i = 0; i < parsed.series.length; i++) {
-          const series = parsed.series[i];
-          if (series.data === null || series.data === undefined) {
-            setChartOptions(null);
-            setChartError(`Series ${i + 1} has no data (waiting for variable)`);
-            return;
-          }
-          if (!Array.isArray(series.data)) {
-            setChartOptions(null);
-            setChartError(`Series ${i + 1} data must be an array`);
-            return;
-          }
-        }
-
-        // 🔥 CRITICAL: Validate xAxis categories if present
-        if (parsed.xAxis?.categories !== undefined) {
-          if (parsed.xAxis.categories === null || !Array.isArray(parsed.xAxis.categories)) {
-            setChartOptions(null);
-            setChartError('xAxis categories must be an array (waiting for variable)');
-            return;
-          }
-        }
-        
-        // 🔥 Check if container scroll is enabled (passed from ParentCardContainer)
-        const containerScrollEnabled = (config as any).__containerScroll || false;
-        
-        // For container scroll mode, remove any chart-level scroll constraints
-        if (containerScrollEnabled && parsed.xAxis) {
-          delete parsed.xAxis.min;
-          delete parsed.xAxis.max;
-          delete parsed.xAxis.scrollbar;
-        }
-        
-        // All validations passed - set the chart options
-        if (!cancelled) {
-          setChartOptions(parsed);
-          setChartError(null);
-        }
-      } catch (error: any) {
-        if (!cancelled) {
-          setChartOptions(null);
-          setChartError(error.message || 'Invalid JSON');
         }
       }
-    };
 
-    resolveAndParse();
-    return () => { cancelled = true; };
+      // 🔥 CRITICAL: Validate xAxis categories if present
+      if (parsed.xAxis?.categories !== undefined) {
+        if (parsed.xAxis.categories === null || !Array.isArray(parsed.xAxis.categories)) {
+          setChartOptions(null);
+          setChartError('xAxis categories must be an array (waiting for variable)');
+          return;
+        }
+      }
+      
+      // 🔥 Check if container scroll is enabled (passed from ParentCardContainer)
+      const containerScrollEnabled = (config as any).__containerScroll || false;
+      
+      // For container scroll mode, remove any chart-level scroll constraints
+      if (containerScrollEnabled && parsed.xAxis) {
+        delete parsed.xAxis.min;
+        delete parsed.xAxis.max;
+        delete parsed.xAxis.scrollbar;
+      }
+      
+      // All validations passed - set the chart options
+      setChartOptions(parsed);
+      setChartError(null);
+    } catch (error: any) {
+      setChartOptions(null);
+      setChartError(error.message || 'Invalid JSON');
+    }
   }, [config.type, config.template, variables]);
 
   // 🔥 Tooltip handlers
   const handleShowTooltip = useCallback((event: MouseEvent | { clientX: number; clientY: number }, point: any) => {
     if (!isTooltipEnabled || !tooltipRef.current) return;
-    
-    // 🔥 DEBUG: Log what Highcharts gives us
-    console.log('🔍 [Tooltip] Raw point from Highcharts:', point);
-    console.log('🔍 [Tooltip] point.category:', point?.category);
-    console.log('🔍 [Tooltip] point.name:', point?.name);
-    console.log('🔍 [Tooltip] point.options:', point?.options);
-    
+
     // 🔥 FIX: Get category from multiple possible sources
     // In bar charts with xAxis categories, the category might be in different places
     const category = point?.category 
@@ -641,18 +646,10 @@ const ChildCard: React.FC<ChildCardProps> = ({
     };
   }, [chartOptions, isTooltipEnabled, handleShowTooltip, handleHideTooltip, onPointClick, onChartBackgroundClick, highlightEnabled, shouldHighlight, onClickConfigs, parentCardId, config.id]);
 
-  // 🦆 DuckDB-WASM Phase 3: Render HTML content asynchronously
-  const [htmlContent, setHtmlContent] = useState<string | null>(null);
-  useEffect(() => {
-    if (config.type !== 'html' || !config.htmlContent) {
-      setHtmlContent(null);
-      return;
-    }
-    let cancelled = false;
-    replaceVariableReferencesAsync(config.htmlContent, variables).then((html) => {
-      if (!cancelled) setHtmlContent(html);
-    });
-    return () => { cancelled = true; };
+  // Render HTML content
+  const htmlContent = useMemo(() => {
+    if (config.type !== 'html' || !config.htmlContent) return null;
+    return replaceVariables(config.htmlContent, variables);
   }, [config.type, config.htmlContent, variables]);
 
   // Render content based on type

@@ -225,11 +225,20 @@ const DashboardViews: React.FC = () => {
       setIsLoading(true);
       setDashboardNotFound(false);
       
-      // First get dashboard info
-      const dashboardResponse = await fetch(`${API_BASE}/dashboards/${dashboardSlug}`);
-      const dashboardData = await dashboardResponse.json();
+      // First get dashboard info (with retry for transient failures)
+      let dashboardData: any = null;
+      for (let attempt = 0; attempt <= 2; attempt++) {
+        try {
+          const dashboardResponse = await fetch(`${API_BASE}/dashboards/${dashboardSlug}`);
+          dashboardData = await dashboardResponse.json();
+          if (dashboardData.success || dashboardResponse.status === 404) break;
+        } catch {
+          if (attempt === 2) throw new Error('Failed to fetch dashboard after retries');
+        }
+        if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      }
       
-      if (dashboardData.success && dashboardData.dashboard) {
+      if (dashboardData?.success && dashboardData.dashboard) {
         const dashId = dashboardData.dashboard.id;
         setDashboardId(dashId);
         setDashboardIdForFavorites(dashId);
@@ -1204,7 +1213,7 @@ const DashboardViews: React.FC = () => {
         {/* Nav Icons with Labels */}
         {/* Home */}
         <Box
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/?nav=home')}
           sx={{ 
             display: 'flex',
             flexDirection: 'column',

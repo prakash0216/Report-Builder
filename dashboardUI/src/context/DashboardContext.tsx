@@ -1,8 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api.config';
 
 const API_BASE = `${API_BASE_URL}/api`;
+
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
 
 type ErrorType = 'dashboard_not_found' | 'view_not_found' | 'network_error' | null;
 
@@ -45,6 +48,36 @@ interface DashboardProviderProps {
   children: React.ReactNode;
 }
 
+// Helper: fetch with retry for transient failures
+async function fetchWithRetry(url: string, retries: number = MAX_RETRIES): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url);
+      // If we got a valid HTTP response (even 404), return it — no retry needed
+      if (response.ok || response.status === 404) {
+        return response;
+      }
+      // Server error (500, 502, 503, etc.) — retry
+      if (attempt < retries) {
+        console.warn(`Retrying ${url} (attempt ${attempt + 1}/${retries}) — status ${response.status}`);
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS * (attempt + 1)));
+        continue;
+      }
+      return response;
+    } catch (err) {
+      // Network error (fetch itself failed) — retry
+      if (attempt < retries) {
+        console.warn(`Retrying ${url} (attempt ${attempt + 1}/${retries}) — network error`);
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  // Should never reach here, but satisfy TypeScript
+  return fetch(url);
+}
+
 export const DashboardProvider: React.FC<DashboardProviderProps> = ({ children }) => {
   const { dashboardName: dashboardSlugParam, viewName: viewSlugParam } = useParams<{
     dashboardName?: string;
@@ -61,7 +94,11 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({ children }
   const [error, setError] = useState<string | null>(null);
   const [errorType, setErrorType] = useState<ErrorType>(null);
 
+  // Track the current fetch to avoid stale updates on rapid navigation
+  const fetchIdRef = useRef(0);
+
   const fetchContext = useCallback(async () => {
+    const currentFetchId = ++fetchIdRef.current;
     setIsLoading(true);
     setError(null);
     setErrorType(null);
@@ -79,9 +116,23 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({ children }
         return;
       }
 
-      // Fetch dashboard info
-      const dashboardResponse = await fetch(`${API_BASE}/dashboards/${dashboardSlugParam}`);
-      const dashboardData = await dashboardResponse.json();
+      // Fetch dashboard info with retry
+      const dashboardResponse = await fetchWithRetry(`${API_BASE}/dashboards/${dashboardSlugParam}`);
+      
+      // Bail out if a newer fetch has started (user navigated away)
+      if (currentFetchId !== fetchIdRef.current) return;
+
+      let dashboardData;
+      try {
+        dashboardData = await dashboardResponse.json();
+      } catch {
+        // Response wasn't valid JSON (server error page, etc.)
+        console.error(`Invalid JSON response for dashboard: "${dashboardSlugParam}"`);
+        setError('Server returned an invalid response. Please try again.');
+        setErrorType('network_error');
+        setIsLoading(false);
+        return;
+      }
 
       if (!dashboardData.success || !dashboardData.dashboard) {
         console.error(`Dashboard not found: "${dashboardSlugParam}"`);
@@ -97,10 +148,23 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({ children }
 
       // If we have a view slug, fetch view info
       if (viewSlugParam) {
-        const viewResponse = await fetch(
+        const viewResponse = await fetchWithRetry(
           `${API_BASE}/dashboards/${dashboardSlugParam}/views/${viewSlugParam}`
         );
-        const viewData = await viewResponse.json();
+        
+        // Bail out if a newer fetch has started
+        if (currentFetchId !== fetchIdRef.current) return;
+
+        let viewData;
+        try {
+          viewData = await viewResponse.json();
+        } catch {
+          console.error(`Invalid JSON response for view: "${viewSlugParam}"`);
+          setError('Server returned an invalid response. Please try again.');
+          setErrorType('network_error');
+          setIsLoading(false);
+          return;
+        }
 
         if (viewData.success && viewData.view) {
           setViewId(viewData.view.id);
@@ -117,11 +181,15 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({ children }
         setViewName('');
       }
     } catch (err) {
+      // Bail out if a newer fetch has started
+      if (currentFetchId !== fetchIdRef.current) return;
       console.error('Error fetching dashboard context:', err);
       setError('Failed to load dashboard context');
       setErrorType('network_error');
     } finally {
-      setIsLoading(false);
+      if (currentFetchId === fetchIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [dashboardSlugParam, viewSlugParam]);
 

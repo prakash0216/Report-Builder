@@ -12,8 +12,10 @@ module.exports = function (app) {
       target: 'http://127.0.0.1:3002',
       changeOrigin: true,
       secure: false,
-      proxyTimeout: 60000,
-      timeout: 60000,
+      // 0 disables Node socket timeout (effectively unlimited at this proxy layer).
+      // Note: upstream layers (IIS/ARR/LB/browser) may still enforce their own limits.
+      proxyTimeout: 0,
+      timeout: 0,
       onError: (err, req, res) => {
         console.error('[proxy] /api -> 127.0.0.1:3002 error:', err.message);
         res.writeHead(502, { 'Content-Type': 'application/json' });

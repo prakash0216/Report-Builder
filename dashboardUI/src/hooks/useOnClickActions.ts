@@ -8,7 +8,7 @@ import { onClickConfigState, OnClickConfig } from '../recoil/OnClickConfigState'
 import { onClickSnapshotState, OnClickSnapshot } from '../recoil/OnClickSnapshotState';
 import { variableAtomFamily } from '../recoil/VariableFamily';
 import { isDuckDBRef } from '../services/VariableStorageService';
-import VariableStorageService from '../services/VariableStorageService';
+import VariableStorageService from '../services/VariableStorageService'; // Used for cache-miss retry
 import { variableNamesState, variableUpdateTriggerState } from '../recoil/Variabletracker';
 import { parameterAtomFamily } from '../recoil/ParameterFamliy';
 import { filterConfigFamily, filterNamesState } from '../recoil/FiltersFamily';
@@ -42,11 +42,7 @@ const safeParse = (value: string): any => {
   try {
     return JSON.parse(value);
   } catch {
-    try {
-      return Function('"use strict";return (' + value + ')')();
-    } catch {
-      return value;
-    }
+    return value;
   }
 };
 
@@ -114,21 +110,26 @@ export const useOnClickActions = () => {
     for (const varName of varNamesArray) {
       try {
         const rawValue = snapshot.getLoadable(variableAtomFamily(varName)).contents;
+        if (typeof rawValue !== 'string') continue;
+
+        // Fast path: DuckDB ref marker can be detected without JSON.parse.
+        if (isDuckDBRef(rawValue)) {
+          variableRefs.push(varName);
+          continue;
+        }
+
+        // Fast path: large JSON arrays are expensive to parse on every click.
+        // Send as ref and let backend resolve from cache (or 449 retry path).
+        const trimmedRaw = rawValue.trim();
+        if (rawValue.length > SIZE_THRESHOLD && trimmedRaw.startsWith('[')) {
+          variableRefs.push(varName);
+          continue;
+        }
+
         const parsedValue = safeParse(rawValue);
         if (parsedValue !== '' && parsedValue !== undefined && parsedValue !== null) {
-          if (isDuckDBRef(parsedValue)) {
-            // Large DuckDB variable — send as ref (server cache should have it)
-            variableRefs.push(varName);
-          } else {
-            // Small variable — check size and decide
-            const jsonLen = Array.isArray(parsedValue) && parsedValue.length > 100
-              ? JSON.stringify(parsedValue).length : 0;
-            if (jsonLen > SIZE_THRESHOLD) {
-              variableRefs.push(varName);
-            } else {
-              allVariables[varName] = parsedValue;
-            }
-          }
+          // Small variable — inline it for backend execution.
+          allVariables[varName] = parsedValue;
         }
       } catch (err) { /* skip */ }
     }
@@ -172,23 +173,19 @@ export const useOnClickActions = () => {
             if (mapping.sourceKey === '_rowData') {
               // Special key: the entire row object
               clickVariables[mapping.clickVariable] = rowData;
-              console.log(`  📋 [row] _rowData → ${mapping.clickVariable} = ${JSON.stringify(rowData).substring(0, 100)}...`);
             } else if (mapping.sourceKey === '_rowIndex') {
               // Special key: the row index
               clickVariables[mapping.clickVariable] = (pointData as any)?._rowIndex ?? 0;
-              console.log(`  📋 [row] _rowIndex → ${mapping.clickVariable} = ${(pointData as any)?._rowIndex}`);
             } else {
               // Column name: extract specific column value from row
               const value = rowData[mapping.sourceKey];
               clickVariables[mapping.clickVariable] = value;
-              console.log(`  📋 [row] ${mapping.sourceKey} → ${mapping.clickVariable} = ${JSON.stringify(value)}`);
             }
           } else if (mapping.extractionType === 'config') {
             // Extract from the chart configuration (design-time data)
             const chartOptions = (pointData as any)?._chartOptions || {};
             const value = getNestedValue(chartOptions, mapping.sourceKey);
             clickVariables[mapping.clickVariable] = value;
-            console.log(`  📋 [config] ${mapping.sourceKey} → ${mapping.clickVariable} = ${JSON.stringify(value)}`);
           } else {
             // Default ('point'): extract from the clicked point (runtime data)
             // For table clicks, also check _rowData as a fallback for column-named source keys
@@ -198,7 +195,6 @@ export const useOnClickActions = () => {
               value = rowData[mapping.sourceKey];
             }
             clickVariables[mapping.clickVariable] = value;
-            console.log(`  📋 [point] ${mapping.sourceKey} → ${mapping.clickVariable} = ${JSON.stringify(value)}`);
           }
         }
 
@@ -317,19 +313,15 @@ export const useOnClickActions = () => {
 
             let successCount = 0;
             const newCustomVarNames: string[] = [];
-            const varStorageOnClick = VariableStorageService.getInstance();
             for (const r of batchResult.results) {
               if (r.success) {
-                // 🦆 DuckDB-WASM: offload large onClick results to WASM
-                const parsedOnClickValue = typeof r.value === 'string' ? safeParse(r.value) : r.value;
-                const { recoilValue: onClickRecoilVal } = await varStorageOnClick.storeVariable(r.variableName, parsedOnClickValue);
-                set(variableAtomFamily(r.variableName), onClickRecoilVal);
+                const calculatedValue = typeof r.value === 'string' ? r.value : JSON.stringify(r.value);
+                set(variableAtomFamily(r.variableName), calculatedValue);
                 successCount++;
                 // Track custom variables that need to be registered
                 if (customVarNames.has(r.variableName)) {
                   newCustomVarNames.push(r.variableName);
                 }
-                console.log(`  ✅ ${r.variableName}${customVarNames.has(r.variableName) ? ' (new)' : ''} = ${onClickRecoilVal.substring(0, 100)}${onClickRecoilVal.length > 100 ? '...' : ''}`);
               } else {
                 console.error(`  ❌ ${r.variableName}: ${r.error}`);
               }

@@ -2119,12 +2119,38 @@ app.get('/api/connector-columns/:connectorId', async (req, res) => {
   }
 });
 
+// ── Extraction lock: prevents concurrent extractions for the same data source ──
+const activeExtractions = new Map(); // dataSourceName → { startedAt, query }
+
 app.post('/api/execute-query', async (req, res) => {
   const { connectionId, connectionType, dataSourceName, query, connectorType, csvConnectorId } = req.body;
 
   if (!dataSourceName || !query) {
       return res.status(400).json({ success: false, error: 'Data source name and query are required' });
   }
+
+  // ── Guard: reject if an extraction is already running for this data source ──
+  if (activeExtractions.has(dataSourceName)) {
+    const running = activeExtractions.get(dataSourceName);
+    const elapsed = ((Date.now() - running.startedAt) / 1000).toFixed(0);
+    console.warn(`⚠️ Rejected duplicate extraction for "${dataSourceName}" — already running for ${elapsed}s`);
+    return res.status(409).json({
+      success: false,
+      error: `Extraction for "${dataSourceName}" is already in progress (${elapsed}s elapsed). Please wait for it to complete.`,
+      alreadyRunning: true,
+    });
+  }
+
+  // Mark extraction as active
+  activeExtractions.set(dataSourceName, { startedAt: Date.now(), query });
+
+  // Helper to release the extraction lock
+  const releaseExtractionLock = () => {
+    if (activeExtractions.has(dataSourceName)) {
+      activeExtractions.delete(dataSourceName);
+      console.log(`🔓 Extraction lock released for "${dataSourceName}"`);
+    }
+  };
 
   // Check if this is a CSV connector (either explicit connectorType or connectionId starts with 'csv_')
   const isCsvConnector = connectorType === 'csv' || 
@@ -2143,6 +2169,7 @@ app.post('/api/execute-query', async (req, res) => {
       }
 
       if (!actualCsvConnectorId) {
+        releaseExtractionLock();
         return res.status(400).json({ success: false, error: 'CSV connector ID is required' });
       }
 
@@ -2152,6 +2179,7 @@ app.post('/api/execute-query', async (req, res) => {
       );
 
       if (csvConnectors.length === 0) {
+        releaseExtractionLock();
         return res.status(404).json({ success: false, error: 'CSV connector not found' });
       }
 
@@ -2183,6 +2211,7 @@ app.post('/api/execute-query', async (req, res) => {
       }
 
       if (queryResult.length === 0) {
+        releaseExtractionLock();
         return res.status(400).json({ 
           success: false, 
           error: 'Query returned no results. Cannot create data source without data.' 
@@ -2200,8 +2229,9 @@ app.post('/api/execute-query', async (req, res) => {
         }, {})
       );
 
-      // Write to parquet file
+      // Write to parquet file (yield event loop every 5000 rows so other API requests aren't blocked)
       const writer = await parquet.ParquetWriter.openFile(parquetSchema, parquetFilePath);
+      let csvRowsWritten = 0;
       
       for (const row of queryResult) {
         const parquetRow = {};
@@ -2210,6 +2240,10 @@ app.post('/api/execute-query', async (req, res) => {
           parquetRow[col] = (val === null || typeof val === 'undefined') ? null : String(val);
         });
         await writer.appendRow(parquetRow);
+        csvRowsWritten++;
+        if (csvRowsWritten % 5000 === 0) {
+          await new Promise(resolve => setImmediate(resolve));
+        }
       }
       
       await writer.close();
@@ -2241,9 +2275,10 @@ app.post('/api/execute-query', async (req, res) => {
       const fileStats = fs.statSync(parquetFilePath);
       const fileSizeMB = (fileStats.size / (1024 * 1024)).toFixed(2);
 
+      releaseExtractionLock();
       res.json({
         success: true,
-        data: queryResult.slice(0, 100), // Preview first 100 rows
+        data: queryResult.slice(0, 10), // Send only 10 sample rows to UI to avoid payload/network errors
         rowCount: queryResult.length,
         query: query,
         message: `Data source ${dataSourceName} created successfully from CSV with ${queryResult.length} rows (${fileSizeMB} MB)`
@@ -2251,6 +2286,7 @@ app.post('/api/execute-query', async (req, res) => {
 
     } catch (err) {
       console.error('❌ Error executing CSV query:', err);
+      releaseExtractionLock();
       res.status(500).json({ success: false, error: err.message });
     }
     return; // Exit after handling CSV connector
@@ -2261,6 +2297,7 @@ app.post('/api/execute-query', async (req, res) => {
   // ============================================
   
   if (!connectionId || !connectionType) {
+    releaseExtractionLock();
     return res.status(400).json({ success: false, error: 'Connection ID and connection type are required for Snowflake connectors' });
   }
 
@@ -2268,6 +2305,7 @@ app.post('/api/execute-query', async (req, res) => {
       try {
           const connectionDetails = await dbClient.query(`SELECT * from snow_flake_connections where id=${connectionId}`);
           if (connectionDetails.length === 0) {
+              releaseExtractionLock();
               return res.status(404).json({ success: false, error: 'Connection not found' });
           }
           const conn = connectionDetails[0];
@@ -2296,6 +2334,7 @@ app.post('/api/execute-query', async (req, res) => {
           sfConnection.connect((err, connection) => {
               if (err) {
                   console.error('❌ Unable to connect to Snowflake:', err.message);
+                  releaseExtractionLock();
                   return res.status(500).json({ success: false, error: err.message });
               } else {
                   console.log('✅ Successfully connected to Snowflake.');
@@ -2308,6 +2347,7 @@ app.post('/api/execute-query', async (req, res) => {
                           if (err) {
                               console.error('❌ Failed to execute query:', err.message);
                               sfConnection.destroy();
+                              releaseExtractionLock();
                               return res.status(500).json({ success: false, error: err.message });
                           } else {
                               const columnNames = stmt.getColumns().map(col => col.getName());
@@ -2329,9 +2369,10 @@ app.post('/api/execute-query', async (req, res) => {
                                   console.log(`⏱️  Query executed in ${timeTaken} seconds, fetched ${rows.length} rows.`);
 
                                   sfConnection.destroy();
+                                  releaseExtractionLock();
                                   res.json({ 
                                       success: true, 
-                                      data: rows.slice(0,100),
+                                      data: rows.slice(0,10), // Send only 10 sample rows to UI
                                       rowCount: rows.length, 
                                       query: query,  
                                       message: `Data source ${dataSourceName} created successfully with ${rows.length} rows` 
@@ -2339,6 +2380,7 @@ app.post('/api/execute-query', async (req, res) => {
                               }).catch(duckdbErr => {
                                   console.error('❌ Error creating DuckDB table:', duckdbErr.message);
                                   sfConnection.destroy();
+                                  releaseExtractionLock();
                                   res.status(500).json({ success: false, error: duckdbErr.message });
                               });
                               
@@ -2359,6 +2401,7 @@ app.post('/api/execute-query', async (req, res) => {
           });
       } catch (err) {
           console.error('❌ Error processing request:', err.message);
+          releaseExtractionLock();
           res.status(500).json({ success: false, error: err.message });
       }
   } else if (connectionType === 'Extract') {
@@ -2370,6 +2413,7 @@ app.post('/api/execute-query', async (req, res) => {
         
         const connectionDetails = await dbClient.query(`SELECT * from snow_flake_connections where id=${connectionId}`);
         if (connectionDetails.length === 0) {
+            releaseExtractionLock();
             return res.status(404).json({ success: false, error: 'Connection not found' });
         }
         
@@ -2398,6 +2442,7 @@ app.post('/api/execute-query', async (req, res) => {
         sfConnection.connect((err, connection) => {
             if (err) {
                 console.error('❌ Unable to connect to Snowflake:', err.message);
+                releaseExtractionLock();
                 return res.status(500).json({ success: false, error: err.message });
             } else {
                 console.log('✅ Successfully connected to Snowflake.');
@@ -2409,6 +2454,7 @@ app.post('/api/execute-query', async (req, res) => {
                         if (err) {
                             console.error('❌ Failed to execute query:', err.message);
                             sfConnection.destroy();
+                            releaseExtractionLock();
                             return res.status(500).json({ success: false, error: err.message });
                         }
                         
@@ -2449,6 +2495,7 @@ app.post('/api/execute-query', async (req, res) => {
                                 
                                 try {
                                     const batchSize = rows.length;
+                                    let rowsInChunk = 0;
                                     
                                     for (const row of rows) {
                                         const parquetRow = {};
@@ -2457,6 +2504,12 @@ app.post('/api/execute-query', async (req, res) => {
                                             parquetRow[col] = (val === null || typeof val === 'undefined') ? null : String(val);
                                         });
                                         await writer.appendRow(parquetRow);
+                                        
+                                        // Yield the event loop every 5000 rows so other API requests can be processed
+                                        rowsInChunk++;
+                                        if (rowsInChunk % 5000 === 0) {
+                                            await new Promise(resolve => setImmediate(resolve));
+                                        }
                                     }
                                     
                                     const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -2472,7 +2525,7 @@ app.post('/api/execute-query', async (req, res) => {
                             stream.on('data', (row) => {
                                 totalRowCount++;
                                 
-                                if (previewRows.length < 100) {
+                                if (previewRows.length < 10) {
                                     previewRows.push(row);
                                 }
                                 
@@ -2499,6 +2552,7 @@ app.post('/api/execute-query', async (req, res) => {
                                         stream.destroy();
                                         writer.close().catch(() => {});
                                         sfConnection.destroy();
+                                        releaseExtractionLock();
                                     });
                                 }
                             });
@@ -2507,6 +2561,7 @@ app.post('/api/execute-query', async (req, res) => {
                                 console.error('❌ Stream error:', streamErr.message);
                                 await writer.close().catch(() => {});
                                 sfConnection.destroy();
+                                releaseExtractionLock();
                                 res.status(500).json({ success: false, error: streamErr.message });
                             });
                             
@@ -2538,18 +2593,6 @@ app.post('/api/execute-query', async (req, res) => {
                                         console.log(`✅ ====================================`);
                                         
                                         sfConnection.destroy();
-                                        
-                                        
-                                        res.json({
-                                            success: true,
-                                            data: previewRows,
-                                            rowCount: totalRowCount,
-                                            query: query,
-                                            loadTime: totalTime,
-                                            parquetFile: parquetFilePath,
-                                            fileSizeMB: fileSizeMB,
-                                            message: `Data source ${dataSourceName} created successfully with ${totalRowCount.toLocaleString()} rows in ${totalTime}s (${fileSizeMB} MB)`
-                                        });
                                         
                                         const deleteQuery = `DELETE FROM data_source_registry WHERE ds_name='${dataSourceName}'`;
                                         const insertQuery = `INSERT INTO data_source_registry (ds_name,connection_id,type,query,created_at,parquet_path) VALUES ('${dataSourceName}',${connectionId},'${connectionType}','${query.replace(/'/g, "''")}',CURRENT_TIMESTAMP,'${parquetFilePath}')`;
@@ -2602,10 +2645,24 @@ app.post('/api/execute-query', async (req, res) => {
                                           console.warn('⚠️ Base table creation failed (non-critical):', optErr.message);
                                         }
                                         
+                                        // Send response AFTER everything is done — with only 10 sample rows
+                                        releaseExtractionLock();
+                                        res.json({
+                                            success: true,
+                                            data: previewRows,
+                                            rowCount: totalRowCount,
+                                            query: query,
+                                            loadTime: totalTime,
+                                            parquetFile: parquetFilePath,
+                                            fileSizeMB: fileSizeMB,
+                                            message: `Data source ${dataSourceName} created successfully with ${totalRowCount.toLocaleString()} rows in ${totalTime}s (${fileSizeMB} MB)`
+                                        });
+                                        
                                     } catch (err) {
                                         console.error('❌ Error finalizing parquet write:', err.message);
                                         await writer.close().catch(() => {});
                                         sfConnection.destroy();
+                                        releaseExtractionLock();
                                         res.status(500).json({ success: false, error: err.message });
                                     }
                                 };
@@ -2616,6 +2673,7 @@ app.post('/api/execute-query', async (req, res) => {
                         } catch (err) {
                             console.error('❌ Error initializing Parquet writer:', err.message);
                             sfConnection.destroy();
+                            releaseExtractionLock();
                             res.status(500).json({ success: false, error: err.message });
                         }
                     }
@@ -2624,9 +2682,11 @@ app.post('/api/execute-query', async (req, res) => {
         });
     } catch (err) {
         console.error('❌ Error processing request:', err.message);
+        releaseExtractionLock();
         res.status(500).json({ success: false, error: err.message });
     }
 } else {
+      releaseExtractionLock();
       return res.status(400).json({ success: false, error: 'Unsupported connection type' });
   }
 });

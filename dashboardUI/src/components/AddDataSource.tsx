@@ -657,7 +657,8 @@ export default function AddDataSourceMui() {
       
       const response = await axios.post(
         `${API_BASE_URL}/api/execute-query`,
-        requestBody
+        requestBody,
+        { timeout: 10 * 60 * 1000 } // 10 minute timeout for large extractions
       );
 
       const result = response.data;
@@ -676,7 +677,12 @@ export default function AddDataSourceMui() {
     } catch (err) {
       let errorMessage = 'Failed to execute query';
       if (axios.isAxiosError(err)) {
-        errorMessage = err.response?.data?.error || err.message || errorMessage;
+        // If backend says extraction is already running, show that message
+        if (err.response?.data?.alreadyRunning) {
+          errorMessage = err.response.data.error;
+        } else {
+          errorMessage = err.response?.data?.error || err.message || errorMessage;
+        }
       } else if (err instanceof Error) {
         errorMessage = err.message;
       }

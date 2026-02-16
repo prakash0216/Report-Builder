@@ -305,17 +305,14 @@ export const useGlobalRecalculation = () => {
   };
 
   // Batch update all variables in Recoil at once (single React re-render)
-  // 🦆 DuckDB-WASM: large datasets are offloaded to WASM memory automatically.
   const batchUpdateVariables = useRecoilCallback(({ set, snapshot }) => async (
     updates: Array<{ variableName: string; value: any }>
   ) => {
     const currentVarNames = await snapshot.getPromise(variableNamesState);
     const newVarNames = new Set(currentVarNames);
-    const varStorage = VariableStorageService.getInstance();
     
     for (const { variableName, value } of updates) {
-      const { recoilValue } = await varStorage.storeVariable(variableName, value);
-      set(variableAtomFamily(variableName), recoilValue);
+      set(variableAtomFamily(variableName), JSON.stringify(value));
       newVarNames.add(variableName);
     }
     

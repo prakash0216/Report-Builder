@@ -5,8 +5,7 @@ import { ParentCardConfig } from '../recoil/ChildCardState';
 import ChildCard from './ChildCard';
 import { variableAtomFamily } from '../recoil/VariableFamily';
 import { variableUpdateTriggerState, variableNamesState } from '../recoil/Variabletracker';
-import { isDuckDBRef } from '../services/VariableStorageService';
-import VariableStorageService from '../services/VariableStorageService';
+// DuckDB imports removed — ParentCardContainer uses sync variable resolution
 
 // 🔥 HTML variable replacement for parent titles
 const replaceHtmlVariables = (template: string, variables: Record<string, any>): string => {
@@ -48,6 +47,7 @@ const safeParse = (value: any): any => {
 interface ParentCardContainerProps {
   parentCardId: string;
   config: ParentCardConfig;
+  allVariables?: Record<string, any>;
   showExport?: boolean;
   onPointClick?: (pointData: any) => void;
   onChartBackgroundClick?: () => void;
@@ -56,6 +56,7 @@ interface ParentCardContainerProps {
 const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
   parentCardId,
   config,
+  allVariables,
   showExport = false,
   onPointClick,
   onChartBackgroundClick,
@@ -89,31 +90,16 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
     return vars;
   }, [variableNames]);
   
-  // 🦆 DuckDB-WASM Phase 3: Update variables when trigger changes,
-  // resolving DuckDB refs for small scalars used in titles.
+  // Update variables when trigger changes
   useEffect(() => {
+    if (allVariables) {
+      setVariables(allVariables);
+      return;
+    }
+
     const vars = getAllVariables();
-
-    // Resolve DuckDB refs (titles only use small scalar values)
-    const resolve = async () => {
-      const varStorage = VariableStorageService.getInstance();
-      const resolved: Record<string, any> = { ...vars };
-
-      for (const [name, value] of Object.entries(vars)) {
-        if (isDuckDBRef(value)) {
-          try {
-            resolved[name] = await varStorage.resolveVariableByName(name, JSON.stringify(value));
-          } catch {
-            // Keep ref as fallback — title will show metadata but not crash
-          }
-        }
-      }
-
-      setVariables(resolved);
-    };
-
-    resolve();
-  }, [getAllVariables, variableNames, variableUpdateTrigger]);
+    setVariables(vars);
+  }, [allVariables, getAllVariables, variableNames, variableUpdateTrigger]);
 
   // Handle container resize
   const updateDimensions = useCallback(() => {
@@ -461,6 +447,7 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
                   <ChildCard
                     config={childConfig}
                     parentCardId={parentCardId}
+                    allVariables={variables}
                     parentWidth={dimensions.width * effectiveWidth}
                     parentHeight={(contentHeight - (config.gap * 2)) * effectiveHeight}
                     gap={0}
@@ -565,6 +552,7 @@ const ParentCardContainer: React.FC<ParentCardContainerProps> = ({
               key={childConfig.id}
               config={effectiveConfig}
               parentCardId={parentCardId}
+              allVariables={variables}
               parentWidth={dimensions.width}
               parentHeight={dimensions.height - parentTitleHeight}
               gap={config.gap}

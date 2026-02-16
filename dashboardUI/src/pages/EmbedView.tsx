@@ -192,7 +192,7 @@ const EmbedView: React.FC = () => {
           {/* Home */}
           <Tooltip title="Home" placement="right">
             <Box
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/?nav=home')}
               sx={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -214,7 +214,7 @@ const EmbedView: React.FC = () => {
           {/* Libraries */}
           <Tooltip title="Libraries" placement="right">
             <Box
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/?nav=libraries')}
               sx={{
                 display: 'flex',
                 flexDirection: 'column',

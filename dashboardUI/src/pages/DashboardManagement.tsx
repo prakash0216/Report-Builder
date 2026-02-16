@@ -181,7 +181,7 @@ const DashboardManagement: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [menuDashboard, setMenuDashboard] = useState<Dashboard | null>(null);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeNav, setActiveNav] = useState<'libraries' | 'home' | 'projects' | 'charts' | 'docs' | 'dataConnections' | 'functions'>('libraries');
   const [activeLibraryTab, setActiveLibraryTab] = useState<number>(0);
   const [dataTabIndex, setDataTabIndex] = useState<number>(0);
@@ -194,8 +194,27 @@ const DashboardManagement: React.FC = () => {
       setActiveNav('dataConnections');
     } else if (navParam === 'functions') {
       setActiveNav('functions');
+    } else if (navParam === 'libraries') {
+      setActiveNav('libraries');
+    } else if (navParam === 'home') {
+      setActiveNav('home');
     }
   }, [searchParams]);
+
+  // Helper to update both activeNav state and URL query param
+  const handleNavClick = (nav: typeof activeNav) => {
+    setActiveNav(nav);
+    const navParamMap: Record<typeof activeNav, string> = {
+      libraries: 'libraries',
+      home: 'home',
+      projects: 'projects',
+      charts: 'charts',
+      docs: 'docs',
+      dataConnections: 'data',
+      functions: 'functions',
+    };
+    setSearchParams({ nav: navParamMap[nav] }, { replace: true });
+  };
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
   const [sortMenuAnchor, setSortMenuAnchor] = useState<null | HTMLElement>(null);
   const [libraryMenuAnchor, setLibraryMenuAnchor] = useState<null | HTMLElement>(null);
@@ -1320,7 +1339,7 @@ const DashboardManagement: React.FC = () => {
         {/* Nav Icons with Labels */}
         {/* Home */}
         <Box
-          onClick={() => setActiveNav('home')}
+          onClick={() => handleNavClick('home')}
         sx={{ 
             display: 'flex',
             flexDirection: 'column',
@@ -1349,7 +1368,7 @@ const DashboardManagement: React.FC = () => {
           }}
         >
           <Box
-            onClick={() => setActiveNav('libraries')}
+            onClick={() => handleNavClick('libraries')}
             sx={{
               display: 'flex',
               flexDirection: 'column',
@@ -1421,7 +1440,7 @@ const DashboardManagement: React.FC = () => {
 
         {/* Data */}
         <Box
-          onClick={() => setActiveNav('dataConnections')}
+          onClick={() => handleNavClick('dataConnections')}
           sx={{
             display: 'flex',
             flexDirection: 'column',
@@ -1442,7 +1461,7 @@ const DashboardManagement: React.FC = () => {
 
         {/* Predefined Functions */}
         <Box
-          onClick={() => setActiveNav('functions')}
+          onClick={() => handleNavClick('functions')}
           sx={{
             display: 'flex',
             flexDirection: 'column',
@@ -1465,7 +1484,7 @@ const DashboardManagement: React.FC = () => {
 
         {/* Docs */}
         <Box
-          onClick={() => setActiveNav('docs')}
+          onClick={() => handleNavClick('docs')}
                 sx={{
             display: 'flex',
             flexDirection: 'column',
@@ -1871,7 +1890,7 @@ const DashboardManagement: React.FC = () => {
                     </Typography>
                   </Box>
                   <Button
-                    onClick={(e) => { e.stopPropagation(); setActiveNav('libraries'); }}
+                    onClick={(e) => { e.stopPropagation(); handleNavClick('libraries'); }}
                     sx={{ textTransform: 'none', color: '#3B82F6', fontWeight: 500 }}
                   >
                     View all
@@ -2624,7 +2643,7 @@ const DashboardManagement: React.FC = () => {
               </Typography>
               <Button
                 variant="outlined"
-                onClick={() => setActiveNav('libraries')}
+                onClick={() => handleNavClick('libraries')}
                 sx={{ textTransform: 'none', borderRadius: 2 }}
               >
                 Go to Libraries

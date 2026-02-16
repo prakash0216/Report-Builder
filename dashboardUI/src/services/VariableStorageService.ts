@@ -134,21 +134,6 @@ class VariableStorageService {
       }
     }
 
-    // For DuckDB-WASM not ready or if we shouldn't offload (or offload failed):
-    // Also opportunistically store in DuckDB-WASM (non-blocking) for future use,
-    // but DON'T change the Recoil value (keep full JSON for backward compat)
-    if (
-      this.duckdb.isReady() &&
-      Array.isArray(parsedValue) &&
-      parsedValue.length > 0 &&
-      typeof parsedValue[0] === 'object' &&
-      parsedValue[0] !== null &&
-      !Array.isArray(parsedValue[0])
-    ) {
-      // Fire-and-forget: store a copy in DuckDB for future querying
-      this.duckdb.storeVariable(name, parsedValue).catch(() => {});
-    }
-
     return { recoilValue: jsonString, offloaded: false };
   }
 

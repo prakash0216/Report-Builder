@@ -115,7 +115,7 @@ const LeftSidebar: React.FC<{ dashboardSlug?: string; viewSlug?: string }> = ({ 
       {/* Home */}
       <Tooltip title="Home" placement="right">
         <Box
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/?nav=home')}
           sx={{
             display: 'flex',
             flexDirection: 'column',
@@ -137,7 +137,7 @@ const LeftSidebar: React.FC<{ dashboardSlug?: string; viewSlug?: string }> = ({ 
       {/* Libraries */}
       <Tooltip title="Libraries" placement="right">
         <Box
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/?nav=libraries')}
           sx={{
             display: 'flex',
             flexDirection: 'column',
