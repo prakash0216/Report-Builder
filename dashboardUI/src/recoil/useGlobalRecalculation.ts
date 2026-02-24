@@ -59,6 +59,7 @@ export const useGlobalRecalculation = () => {
   const previousSnapshotRef = useRef<string>('');
   const mountCalculationDoneRef = useRef(false);
   const mountSequenceRunningRef = useRef(false); // Atomic flag to prevent double execution
+  const prevPathnameRef = useRef(location.pathname);
 
   // Check if we're on a dashboard view route (/:dashboardName/:viewName)
   // This is true when we're viewing charts, not on management pages
@@ -459,13 +460,25 @@ export const useGlobalRecalculation = () => {
   // Track if we've ever successfully calculated on dashboard
   const hasCompletedDashboardCalcRef = useRef(false);
   
-  // Reset mount flag when leaving dashboard
+  // Reset mount flags when leaving dashboard or when navigating to a different view
   useEffect(() => {
+    const pathChanged = prevPathnameRef.current !== location.pathname;
+    prevPathnameRef.current = location.pathname;
+
     if (!isDashboardRoute && mountCalculationDoneRef.current) {
       mountCalculationDoneRef.current = false;
       initializedRef.current = false;
+      hasCompletedDashboardCalcRef.current = false;
+    } else if (pathChanged && isDashboardRoute) {
+      // Navigating between views — must re-run calculation after DataInitializer reloads
+      mountCalculationDoneRef.current = false;
+      mountSequenceRunningRef.current = false;
+      hasCompletedDashboardCalcRef.current = false;
+      initializedRef.current = false;
+      previousSnapshotRef.current = '';
+      cancellationTokenRef.current.cancelled = true;
     }
-  }, [isDashboardRoute]);
+  }, [isDashboardRoute, location.pathname]);
 
   // Shared debounce timer — prevents double recalculations from filter watcher + reset trigger
   const recalcDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
