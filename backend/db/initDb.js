@@ -73,6 +73,7 @@ async function createDashboardsTable() {
       await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS embed_type VARCHAR DEFAULT ''`);
       await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS embed_link TEXT`);
       await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS trigger_calculation TEXT`);
+      await dbClient.run(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS tableau_synced_at TIMESTAMP`);
       console.log("✅ Migration: Added new columns to dashboards table");
     } catch (migrationErr) {
       console.log("ℹ️ Dashboard columns migration skipped (may already exist)");

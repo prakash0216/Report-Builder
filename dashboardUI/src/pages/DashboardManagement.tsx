@@ -171,7 +171,7 @@ const DashboardManagement: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<{
     dashboards: Dashboard[];
-    views: Array<{ id: string; name: string; slug: string; description?: string; dashboardId: string; dashboardName: string; dashboardSlug: string; dashboardIconText: string; dashboardIconColor: string }>;
+    views: Array<{ id: string; name: string; slug: string; description?: string; embedType?: string; embedLink?: string; dashboardId: string; dashboardName: string; dashboardSlug: string; dashboardIconText: string; dashboardIconColor: string }>;
   }>({ dashboards: [], views: [] });
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'compact'>('grid');
@@ -425,7 +425,7 @@ const DashboardManagement: React.FC = () => {
       );
 
       // Fetch views for all dashboards and search through them
-      const allViews: Array<{ id: string; name: string; slug: string; description?: string; dashboardId: string; dashboardName: string; dashboardSlug: string; dashboardIconText: string; dashboardIconColor: string }> = [];
+      const allViews: Array<{ id: string; name: string; slug: string; description?: string; embedType?: string; embedLink?: string; dashboardId: string; dashboardName: string; dashboardSlug: string; dashboardIconText: string; dashboardIconColor: string }> = [];
       
       // Fetch views from all dashboards in parallel
       const viewPromises = dashboards.map(async (dashboard) => {
@@ -439,6 +439,8 @@ const DashboardManagement: React.FC = () => {
               name: v.name,
               slug: v.slug,
               description: v.description || '',
+              embedType: v.embed_type || v.embedType || '',
+              embedLink: v.embed_link || v.embedLink || '',
               dashboardId: dashboard.id,
               dashboardName: dashboard.name,
               dashboardSlug: slug,
@@ -528,6 +530,7 @@ const DashboardManagement: React.FC = () => {
 
       if (data.success && data.dashboard) {
         const db = data.dashboard;
+
         const newDashboard: Dashboard = {
           id: db.id.toString(),
           name: db.name,
@@ -552,11 +555,17 @@ const DashboardManagement: React.FC = () => {
           embedType: db.embedType || db.embed_type || '',
           embedLink: db.embedLink || db.embed_link || '',
           triggerCalculation: db.triggerCalculation || db.trigger_calculation || '',
+          tableauSyncedAt: db.tableauSyncedAt || db.tableau_synced_at || undefined,
         };
         
         setDashboards([...dashboards, newDashboard]);
         resetCreateForm();
         setOpenCreateDialog(false);
+
+        // If Tableau library, navigate to embed page to trigger sync
+        if (newDashboard.embedType === 'tableau' && newDashboard.embedLink) {
+          navigate(`/${newDashboard.slug}/embed?sync=true`);
+        }
       }
     } catch (err) {
       console.error('Error creating dashboard:', err);
@@ -626,7 +635,8 @@ const DashboardManagement: React.FC = () => {
             d.id === editingDashboard.id
               ? { 
                   ...d, 
-                  name: db.name, 
+                  name: db.name,
+                  slug: db.slug || db.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-'),
                   description: db.description || '', 
                   dataSource: db.dataSource || db.data_source || '',
                   timePeriodStart: db.timePeriodStart || db.time_period_start,
@@ -640,10 +650,25 @@ const DashboardManagement: React.FC = () => {
                   embedType: db.embedType || db.embed_type || '',
                   embedLink: db.embedLink || db.embed_link || '',
                   triggerCalculation: db.triggerCalculation || db.trigger_calculation || '',
+                  tableauSyncedAt: db.tableauSyncedAt || db.tableau_synced_at || undefined,
                 }
               : d
           )
         );
+        // If embed link changed and it's a Tableau type, trigger re-sync
+        const oldLink = editingDashboard.embedLink || '';
+        const newLink = db.embedLink || db.embed_link || '';
+        const newType = db.embedType || db.embed_type || '';
+        const newSlug = db.slug || editingDashboard.slug;
+
+        if (newType === 'tableau' && newLink && newLink !== oldLink) {
+          setEditingDashboard(null);
+          setEditName('');
+          setEditDesc('');
+          setOpenCreateDialog(false);
+          navigate(`/${newSlug}/embed?sync=true`);
+          return;
+        }
       }
     } catch (err) {
       console.error('Error updating dashboard:', err);
@@ -687,12 +712,13 @@ const DashboardManagement: React.FC = () => {
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '')
       .replace(/\s+/g, '-');
-    
-    // Check if dashboard has an embed link - if so, route to embed view
-    if ((dashboard as any).embedType && (dashboard as any).embedLink) {
+
+    if ((dashboard as any).embedType === 'tableau' && (dashboard as any).embedLink) {
+      // Tableau libraries always go to views page; Sync button is there if needed
+      navigate(`/${slug}`);
+    } else if ((dashboard as any).embedType && (dashboard as any).embedLink) {
       navigate(`/${slug}/embed`);
     } else {
-      // Normal flow - go to views page
       navigate(`/${slug}`);
     }
   };
@@ -732,7 +758,7 @@ const DashboardManagement: React.FC = () => {
 
   // Library Menu Item Component with Views Submenu - Pure CSS hover approach
   const LibraryMenuItemWithViews = ({ dashboard }: { dashboard: Dashboard }) => {
-    const [views, setViews] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+    const [views, setViews] = useState<Array<{ id: string; name: string; slug: string; embedType?: string; embedLink?: string }>>([]);
     const [loadingViews, setLoadingViews] = useState(false);
     const [viewsLoaded, setViewsLoaded] = useState(false);
 
@@ -745,7 +771,13 @@ const DashboardManagement: React.FC = () => {
         const response = await fetch(`${API_BASE}/dashboards/${slug}/views`);
         const data = await response.json();
         if (data.success && data.views) {
-          setViews(data.views.map((v: any) => ({ id: v.id.toString(), name: v.name, slug: v.slug })));
+          setViews(data.views.map((v: any) => ({
+            id: v.id.toString(),
+            name: v.name,
+            slug: v.slug,
+            embedType: v.embed_type || v.embedType || '',
+            embedLink: v.embed_link || v.embedLink || '',
+          })));
         }
         setViewsLoaded(true);
       } catch (err) {
@@ -755,10 +787,14 @@ const DashboardManagement: React.FC = () => {
       }
     };
 
-    const handleViewClick = (e: React.MouseEvent, viewSlug: string) => {
+    const handleViewClick = (e: React.MouseEvent, view: { slug: string; embedType?: string; embedLink?: string }) => {
       e.stopPropagation();
       const dashboardSlug = (dashboard as any).slug || dashboard.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
-      navigate(`/${dashboardSlug}/${viewSlug}`);
+      if (view.embedType && view.embedLink) {
+        navigate(`/${dashboardSlug}/embed?view=${view.slug}`);
+      } else {
+        navigate(`/${dashboardSlug}/${view.slug}`);
+      }
     };
 
     return (
@@ -826,7 +862,7 @@ const DashboardManagement: React.FC = () => {
             views.map((view) => (
               <Box
                 key={view.id}
-                onClick={(e) => handleViewClick(e, view.slug)}
+                onClick={(e) => handleViewClick(e, view)}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
@@ -873,7 +909,7 @@ const DashboardManagement: React.FC = () => {
     const libraryType = dashboard.libraryType || 'Core libraries';
 
     // State for views (loaded on hover)
-    const [views, setViews] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+    const [views, setViews] = useState<Array<{ id: string; name: string; slug: string; embedType?: string; embedLink?: string }>>([]);
     const [loadingViews, setLoadingViews] = useState(false);
     const [viewsLoaded, setViewsLoaded] = useState(false);
 
@@ -886,7 +922,13 @@ const DashboardManagement: React.FC = () => {
         const response = await fetch(`${API_BASE}/dashboards/${slug}/views`);
         const data = await response.json();
         if (data.success && data.views) {
-          setViews(data.views.map((v: any) => ({ id: v.id.toString(), name: v.name, slug: v.slug })));
+          setViews(data.views.map((v: any) => ({
+            id: v.id.toString(),
+            name: v.name,
+            slug: v.slug,
+            embedType: v.embed_type || v.embedType || '',
+            embedLink: v.embed_link || v.embedLink || '',
+          })));
         }
         setViewsLoaded(true);
       } catch (err) {
@@ -896,11 +938,15 @@ const DashboardManagement: React.FC = () => {
       }
     };
 
-    // Navigate to specific view
-    const handleViewClick = (e: React.MouseEvent, viewSlug: string) => {
+    // Navigate to specific view — route to /embed for Tableau/iframe views
+    const handleViewClick = (e: React.MouseEvent, view: { slug: string; embedType?: string; embedLink?: string }) => {
       e.stopPropagation();
       const dashboardSlug = (dashboard as any).slug || dashboard.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
-      navigate(`/${dashboardSlug}/${viewSlug}`);
+      if (view.embedType && view.embedLink) {
+        navigate(`/${dashboardSlug}/embed?view=${view.slug}`);
+      } else {
+        navigate(`/${dashboardSlug}/${view.slug}`);
+      }
     };
 
     // Info tooltip content - Details with Views shown on hover
@@ -932,7 +978,7 @@ const DashboardManagement: React.FC = () => {
               views.map((view) => (
                 <Box
                   key={view.id}
-                  onClick={(e) => handleViewClick(e, view.slug)}
+                  onClick={(e) => handleViewClick(e, view)}
           sx={{
             display: 'flex',
             alignItems: 'center',
@@ -1156,7 +1202,7 @@ const DashboardManagement: React.FC = () => {
                         key={view.id}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleViewClick(e, view.slug);
+                          handleViewClick(e, view);
                         }}
                         sx={{
                           display: 'flex',
@@ -1818,7 +1864,11 @@ const DashboardManagement: React.FC = () => {
                               <Box
                                 key={`${view.dashboardId}-${view.id}`}
                                 onClick={() => {
-                                  navigate(`/${view.dashboardSlug}/${view.slug}`);
+                                  if (view.embedType && view.embedLink) {
+                                    navigate(`/${view.dashboardSlug}/embed?view=${view.slug}`);
+                                  } else {
+                                    navigate(`/${view.dashboardSlug}/${view.slug}`);
+                                  }
                                   setSearchQuery('');
                                   setSearchResults({ dashboards: [], views: [] });
                                 }}
@@ -2237,7 +2287,11 @@ const DashboardManagement: React.FC = () => {
                               <Box
                                 key={`lib-${view.dashboardId}-${view.id}`}
                                 onClick={() => {
-                                  navigate(`/${view.dashboardSlug}/${view.slug}`);
+                                  if (view.embedType && view.embedLink) {
+                                    navigate(`/${view.dashboardSlug}/embed?view=${view.slug}`);
+                                  } else {
+                                    navigate(`/${view.dashboardSlug}/${view.slug}`);
+                                  }
                                   setSearchQuery('');
                                   setSearchResults({ dashboards: [], views: [] });
                                 }}

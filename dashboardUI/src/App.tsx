@@ -52,16 +52,6 @@ function App() {
               }
             />
 
-            {/* View Embed View - /dashboardName/viewName/embed (Protected) */}
-            <Route 
-              path="/:dashboardSlug/:viewSlug/embed" 
-              element={
-                <ProtectedRoute>
-                  <EmbedView />
-                </ProtectedRoute>
-              }
-            />
-
             {/* View Editor - /dashboardName/viewName (Protected) */}
             <Route 
               path="/:dashboardName/:viewName" 

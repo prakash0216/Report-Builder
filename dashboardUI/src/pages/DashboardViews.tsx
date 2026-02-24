@@ -81,6 +81,8 @@ import {
   BookmarkBorder as BookmarkBorderIcon,
   Apps as AppsIcon,
   ExpandMore as ExpandMoreIcon,
+  Sync as SyncIcon,
+  NavigateNext as NavigateNextIcon,
 } from '@mui/icons-material';
 import AddDataSource from '../components/AddDataSource';
 import SnowflakeConnector from '../components/SnowflakeConnector';
@@ -120,6 +122,8 @@ const DashboardViews: React.FC = () => {
   // State for dashboard info
   const [, setDashboardId] = useState<number | null>(null);
   const [dashboardName, setDashboardName] = useState<string>('Dashboard');
+  const [dashboardEmbedType, setDashboardEmbedType] = useState<string>('');
+  const [dashboardEmbedLink, setDashboardEmbedLink] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardNotFound, setDashboardNotFound] = useState(false);
 
@@ -243,6 +247,8 @@ const DashboardViews: React.FC = () => {
         setDashboardId(dashId);
         setDashboardIdForFavorites(dashId);
         setDashboardName(dashboardData.dashboard.name);
+        setDashboardEmbedType(dashboardData.dashboard.embedType || dashboardData.dashboard.embed_type || '');
+        setDashboardEmbedLink(dashboardData.dashboard.embedLink || dashboardData.dashboard.embed_link || '');
         
         // Fetch favorites for this dashboard
         fetchFavorites(dashId);
@@ -608,6 +614,11 @@ const DashboardViews: React.FC = () => {
             slug: vw.slug,
             description: vw.description || '' 
           });
+
+          const newSlug = vw.slug || vw.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
+          if (newSlug !== editingView.slug) {
+            navigate(`/${dashboardSlug}/${newSlug}`, { replace: true });
+          }
         }
       } else {
         console.error('Failed to update view:', data.error);
@@ -675,7 +686,7 @@ const DashboardViews: React.FC = () => {
     
     // Check if view has an embed link - if so, route to embed view
     if (view.embedType && view.embedLink) {
-      navigate(`/${dashboardSlug}/${viewSlug}/embed`);
+      navigate(`/${dashboardSlug}/embed?view=${viewSlug}`);
     } else {
       // Normal drag-drop dashboard flow
       navigate(`/${dashboardSlug}/${viewSlug}`);
@@ -1536,12 +1547,29 @@ const DashboardViews: React.FC = () => {
               >
                 {/* Title and Actions Row */}
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  {/* Title with blue vertical line and back button */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Box sx={{ width: 4, height: 24, bgcolor: '#3B82F6', borderRadius: 1 }} />
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#1F2937' }}>
-                      {dashboardName}
-                    </Typography>
+                  {/* Title with blue vertical line + breadcrumb */}
+                  <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 2 }}>
+                    <Box sx={{ width: 4, borderRadius: 1, bgcolor: '#3B82F6' }} />
+                    <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 0.5 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: '#1F2937' }}>
+                        {dashboardName}
+                      </Typography>
+                      <Breadcrumbs
+                        separator={<NavigateNextIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />}
+                        sx={{ '& .MuiBreadcrumbs-li': { lineHeight: 1 } }}
+                      >
+                        <Link
+                          underline="hover"
+                          sx={{ fontSize: '0.8rem', color: '#6B7280', cursor: 'pointer', '&:hover': { color: '#3B82F6' } }}
+                          onClick={() => navigate('/')}
+                        >
+                          Libraries
+                        </Link>
+                        <Typography sx={{ fontSize: '0.8rem', color: '#3B82F6', fontWeight: 600 }}>
+                          {dashboardName}
+                        </Typography>
+                      </Breadcrumbs>
+                    </Box>
                   </Box>
 
                   {/* Right side actions */}
@@ -1811,6 +1839,30 @@ const DashboardViews: React.FC = () => {
             </Box>
 
             {/* Floating Add Button */}
+            {dashboardEmbedType === 'tableau' && dashboardEmbedLink && (
+              <Tooltip title="Sync Tableau Views" placement="left">
+                <IconButton
+                  onClick={() => navigate(`/${dashboardSlug}/embed?sync=true`)}
+                  sx={{
+                    position: 'fixed',
+                    bottom: 100,
+                    right: 32,
+                    width: 56,
+                    height: 56,
+                    bgcolor: '#7C3AED',
+                    color: 'white',
+                    boxShadow: '0 4px 20px rgba(124, 58, 237, 0.4)',
+                    '&:hover': {
+                      bgcolor: '#6D28D9',
+                      transform: 'scale(1.1)',
+                    },
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <SyncIcon sx={{ fontSize: 28 }} />
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title="Create New View" placement="left">
               <IconButton
                 onClick={() => { setEditingView(null); resetCreateForm(); fetchCalculations(); setOpenCreateDialog(true); }}

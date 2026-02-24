@@ -31,6 +31,8 @@ import snowflake from 'snowflake-sdk';
 import crypto from 'crypto';
 import bodyParser from 'body-parser';
 import parquet from 'parquetjs'
+import axios from 'axios';
+import https from 'https';
 
 const app = express();
 app.use(bodyParser.json({limit: '50mb'}));
@@ -6029,6 +6031,7 @@ app.get('/api/dashboards', async (req, res) => {
         embedType: d.embed_type,
         embedLink: d.embed_link,
         triggerCalculation: d.trigger_calculation,
+        tableauSyncedAt: d.tableau_synced_at,
         createdAt: d.created_at,
         updatedAt: d.updated_at,
         views_count: Number(d.views_count) || 0,
@@ -6086,6 +6089,7 @@ app.get('/api/dashboards/:identifier', async (req, res) => {
       embedType: d.embed_type,
       embedLink: d.embed_link,
       triggerCalculation: d.trigger_calculation,
+      tableauSyncedAt: d.tableau_synced_at,
       createdAt: d.created_at,
       updatedAt: d.updated_at,
     };
@@ -6189,6 +6193,7 @@ app.post('/api/dashboards', async (req, res) => {
       embedType: d.embed_type,
       embedLink: d.embed_link,
       triggerCalculation: d.trigger_calculation,
+      tableauSyncedAt: d.tableau_synced_at,
       createdAt: d.created_at,
       updatedAt: d.updated_at,
     };
@@ -6223,7 +6228,8 @@ app.put('/api/dashboards/:id', async (req, res) => {
     adminPortalId,
     embedType,
     embedLink,
-    triggerCalculation
+    triggerCalculation,
+    tableauSyncedAt
   } = req.body;
 
   console.log('📝 [API /dashboards/:id] updates:', req.body);
@@ -6278,6 +6284,9 @@ app.put('/api/dashboards/:id', async (req, res) => {
     if (iconImageUrl !== undefined) {
       updates.push(iconImageUrl ? `icon_image_url='${iconImageUrl.replace(/'/g, "''")}'` : `icon_image_url=NULL`);
     }
+    if (tableauSyncedAt !== undefined) {
+      updates.push(tableauSyncedAt ? `tableau_synced_at='${tableauSyncedAt}'` : `tableau_synced_at=NULL`);
+    }
     
     updates.push(`updated_at=CURRENT_TIMESTAMP`);
     
@@ -6306,6 +6315,7 @@ app.put('/api/dashboards/:id', async (req, res) => {
       embedType: d.embed_type,
       embedLink: d.embed_link,
       triggerCalculation: d.trigger_calculation,
+      tableauSyncedAt: d.tableau_synced_at,
       createdAt: d.created_at,
       updatedAt: d.updated_at,
     };
@@ -7704,6 +7714,202 @@ app.put('/api/auth/password', async (req, res) => {
   } catch (err) {
     console.error('❌ Error changing password:', err.message);
     res.status(500).json({ success: false, error: 'Failed to change password' });
+  }
+});
+
+// ============================================
+// TABLEAU TRUSTED TICKET
+// ============================================
+const TABLEAU_SERVER_URL = process.env.TABLEAU_SERVER_URL || 'https://map.customerportal.iqvia.com';
+
+app.get('/api/tableau-ticket/:site', async (req, res) => {
+  try {
+    const site = req.params.site;
+    const tableauUsername = 461910;
+    // Allow the frontend to specify which Tableau server to request the ticket from
+    const serverUrl = req.query.server || TABLEAU_SERVER_URL;
+
+    if (!tableauUsername) {
+      return res.json({ ok: false, error: 'username query parameter is required' });
+    }
+
+    const response = await axios.post(
+      `${serverUrl}/trusted`,
+      new URLSearchParams({
+        username: String(tableauUsername),
+        target_site: site,
+      }).toString(),
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+      }
+    );
+
+    const ticketId = String(response.data).trim();
+
+    if (!ticketId || ticketId === '-1') {
+      console.error(`Tableau trusted ticket returned -1 for user="${tableauUsername}" site="${site}"`);
+      return res.json({ ok: false, error: 'Tableau returned -1 — check that the username is whitelisted and the server IP is trusted' });
+    }
+
+    console.log(`Tableau ticket obtained for user="${tableauUsername}" site="${site}": ${ticketId}`);
+    res.json({ ok: true, ticket_id: ticketId });
+  } catch (err) {
+    console.error('Tableau ticket error:', err.message);
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+// ============================================
+// TABLEAU REST API — Extract views from a workbook URL
+// ============================================
+const TABLEAU_API_VERSION = '3.22';
+const httpsAgentNoVerify = new https.Agent({ rejectUnauthorized: false });
+
+/**
+ * Sign in to Tableau REST API using trusted authentication (PAT or username/password).
+ * For now we use the trusted ticket mechanism to get a session.
+ * Returns { token, siteId } or null.
+ */
+async function tableauRestSignIn(site) {
+  const username = process.env.TABLEAU_REST_USERNAME;
+  const password = process.env.TABLEAU_REST_PASSWORD;
+  const patName = process.env.TABLEAU_PAT_NAME;
+  const patSecret = process.env.TABLEAU_PAT_SECRET;
+
+  if (!patName && !username) {
+    return null;
+  }
+
+  const signInUrl = `${TABLEAU_SERVER_URL}/api/${TABLEAU_API_VERSION}/auth/signin`;
+
+  let credentials;
+  if (patName && patSecret) {
+    credentials = {
+      credentials: {
+        personalAccessTokenName: patName,
+        personalAccessTokenSecret: patSecret,
+        site: { contentUrl: site || '' },
+      },
+    };
+  } else {
+    credentials = {
+      credentials: {
+        name: username,
+        password: password,
+        site: { contentUrl: site || '' },
+      },
+    };
+  }
+
+  const resp = await axios.post(signInUrl, credentials, {
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    httpsAgent: httpsAgentNoVerify,
+  });
+
+  const creds = resp.data?.credentials;
+  if (!creds?.token) return null;
+
+  return {
+    token: creds.token,
+    siteId: creds.site?.id,
+    userId: creds.user?.id,
+  };
+}
+
+/**
+ * GET /api/tableau-workbook-views
+ * Query params: url (the Tableau view URL), site (optional, extracted from URL if missing)
+ *
+ * Returns all published views (sheets) in the workbook that contains the given view URL.
+ */
+app.get('/api/tableau-workbook-views', async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url) {
+      return res.json({ ok: false, error: 'url query parameter is required' });
+    }
+
+    // Parse the URL to extract workbook name and site
+    let site = '';
+    let workbookName = '';
+    try {
+      const parsed = new URL(url);
+      let pathname = parsed.pathname;
+      // Strip /trusted/... prefix
+      pathname = pathname.replace(/\/trusted\/(?:[^/]+\/)?(?=t\/|views\/)/, '/');
+
+      const siteMatch = pathname.match(/\/(?:t|site)\/([^/]+)\/views\/([^/]+)/);
+      if (siteMatch) {
+        site = siteMatch[1];
+        workbookName = siteMatch[2];
+      } else {
+        const defaultMatch = pathname.match(/\/views\/([^/]+)/);
+        if (defaultMatch) {
+          workbookName = defaultMatch[1];
+        }
+      }
+    } catch {
+      return res.json({ ok: false, error: 'Invalid URL' });
+    }
+
+    if (!workbookName) {
+      return res.json({ ok: false, error: 'Could not extract workbook name from URL' });
+    }
+
+    // Sign in to REST API
+    const session = await tableauRestSignIn(site);
+    if (!session) {
+      return res.json({
+        ok: false,
+        error: 'Tableau REST API credentials not configured. Set TABLEAU_PAT_NAME + TABLEAU_PAT_SECRET or TABLEAU_REST_USERNAME + TABLEAU_REST_PASSWORD in .env',
+      });
+    }
+
+    const { token, siteId } = session;
+    const headers = {
+      'X-Tableau-Auth': token,
+      Accept: 'application/json',
+    };
+
+    // Find the workbook by name
+    const wbSearchUrl = `${TABLEAU_SERVER_URL}/api/${TABLEAU_API_VERSION}/sites/${siteId}/workbooks?filter=name:eq:${encodeURIComponent(workbookName)}`;
+    const wbResp = await axios.get(wbSearchUrl, { headers, httpsAgent: httpsAgentNoVerify });
+    const workbooks = wbResp.data?.workbooks?.workbook || [];
+
+    if (workbooks.length === 0) {
+      // Sign out
+      await axios.post(`${TABLEAU_SERVER_URL}/api/${TABLEAU_API_VERSION}/auth/signout`, null, { headers, httpsAgent: httpsAgentNoVerify }).catch(() => {});
+      return res.json({ ok: false, error: `Workbook "${workbookName}" not found on site "${site}"` });
+    }
+
+    const workbookId = workbooks[0].id;
+    const workbookDisplayName = workbooks[0].name;
+
+    // Get all views in the workbook
+    const viewsUrl = `${TABLEAU_SERVER_URL}/api/${TABLEAU_API_VERSION}/sites/${siteId}/workbooks/${workbookId}/views`;
+    const viewsResp = await axios.get(viewsUrl, { headers, httpsAgent: httpsAgentNoVerify });
+    const views = viewsResp.data?.views?.view || [];
+
+    // Sign out
+    await axios.post(`${TABLEAU_SERVER_URL}/api/${TABLEAU_API_VERSION}/auth/signout`, null, { headers, httpsAgent: httpsAgentNoVerify }).catch(() => {});
+
+    const serverBase = new URL(url).origin;
+    const result = views.map((v) => ({
+      id: v.id,
+      name: v.name,
+      viewUrlName: v.viewUrlName || v.name.replace(/\s+/g, ''),
+      contentUrl: v.contentUrl,
+      embedUrl: site
+        ? `${serverBase}/t/${site}/views/${workbookName}/${v.viewUrlName || v.name.replace(/\s+/g, '')}`
+        : `${serverBase}/views/${workbookName}/${v.viewUrlName || v.name.replace(/\s+/g, '')}`,
+    }));
+
+    console.log(`Tableau REST API: Found ${result.length} views in workbook "${workbookDisplayName}"`);
+    res.json({ ok: true, workbookName: workbookDisplayName, site, views: result });
+  } catch (err) {
+    console.error('Tableau workbook views error:', err.message);
+    res.json({ ok: false, error: err.message });
   }
 });
 

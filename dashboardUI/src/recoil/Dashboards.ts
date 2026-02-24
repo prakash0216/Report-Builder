@@ -27,6 +27,7 @@ export interface Dashboard{
     embedType?: '' | 'iframe' | 'tableau';  // Embed type
     embedLink?: string;            // Embed link URL
     triggerCalculation?: string;   // Calculation to trigger on visit
+    tableauSyncedAt?: string;      // Last time Tableau views were synced
 }
 
 export const dashboardsManager=atom<Dashboard[]>({

@@ -58,6 +58,8 @@ import {
   IconButton,
   ListItemIcon,
   ListItemText,
+  Breadcrumbs,
+  Link,
 } from "@mui/material";
 import {
   Logout as LogoutIcon,
@@ -75,6 +77,7 @@ import {
   ChevronRight as ChevronRightIcon,
   Layers as LayersIcon,
   Add as AddIcon,
+  NavigateNext as NavigateNextIcon,
 } from "@mui/icons-material";
 import { dataLoadedState } from '../components/DataInitializer';
 import Highcharts from 'highcharts';
@@ -285,6 +288,8 @@ export default function DropDragDashboard() {
     id: string;
     name: string;
     slug: string;
+    embedType?: '' | 'iframe' | 'tableau';
+    embedLink?: string;
   }
   const [dynamicViews, setDynamicViews] = useState<ViewData[]>([]);
   const [openCreateViewDialog, setOpenCreateViewDialog] = useState(false);
@@ -305,6 +310,8 @@ export default function DropDragDashboard() {
           id: v.id.toString(),
           name: v.name,
           slug: v.slug,
+          embedType: v.embed_type || v.embedType || '',
+          embedLink: v.embed_link || v.embedLink || '',
         }));
         setDynamicViews(mappedViews);
       }
@@ -392,9 +399,13 @@ export default function DropDragDashboard() {
     }
   };
 
-  // Handle view tab click - navigate to the view
+  // Handle view tab click - navigate to the view (or embed route if it has an embed link)
   const handleViewTabClick = (view: ViewData) => {
-    navigate(`/${dashboardSlug}/${view.slug}`);
+    if (view.embedType && view.embedLink) {
+      navigate(`/${dashboardSlug}/embed?view=${view.slug}`);
+    } else {
+      navigate(`/${dashboardSlug}/${view.slug}`);
+    }
   };
 
   const [customViews] = useState([
@@ -1813,7 +1824,7 @@ export default function DropDragDashboard() {
 
   // Library Menu Item Component with Views Submenu
   const LibraryMenuItemWithViews = ({ dashboard }: { dashboard: { id: string; name: string; slug: string } }) => {
-    const [menuViews, setMenuViews] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+    const [menuViews, setMenuViews] = useState<Array<{ id: string; name: string; slug: string; embedType?: string; embedLink?: string }>>([]);
     const [loadingMenuViews, setLoadingMenuViews] = useState(false);
     const [menuViewsLoaded, setMenuViewsLoaded] = useState(false);
 
@@ -1824,7 +1835,13 @@ export default function DropDragDashboard() {
         const response = await fetch(`${API_BASE_URL}/api/dashboards/${dashboard.slug}/views`);
         const data = await response.json();
         if (data.success && data.views) {
-          setMenuViews(data.views.map((v: any) => ({ id: v.id.toString(), name: v.name, slug: v.slug })));
+          setMenuViews(data.views.map((v: any) => ({
+            id: v.id.toString(),
+            name: v.name,
+            slug: v.slug,
+            embedType: v.embed_type || v.embedType || '',
+            embedLink: v.embed_link || v.embedLink || '',
+          })));
         }
         setMenuViewsLoaded(true);
       } catch (err) {
@@ -1834,9 +1851,13 @@ export default function DropDragDashboard() {
       }
     };
 
-    const handleMenuViewClick = (e: React.MouseEvent, viewSlug: string) => {
+    const handleMenuViewClick = (e: React.MouseEvent, view: { slug: string; embedType?: string; embedLink?: string }) => {
       e.stopPropagation();
-      navigate(`/${dashboard.slug}/${viewSlug}`);
+      if (view.embedType && view.embedLink) {
+        navigate(`/${dashboard.slug}/embed?view=${view.slug}`);
+      } else {
+        navigate(`/${dashboard.slug}/${view.slug}`);
+      }
     };
 
     return (
@@ -1904,7 +1925,7 @@ export default function DropDragDashboard() {
             menuViews.map((view) => (
               <Box
                 key={view.id}
-                onClick={(e) => handleMenuViewClick(e, view.slug)}
+                onClick={(e) => handleMenuViewClick(e, view)}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
@@ -2281,26 +2302,36 @@ export default function DropDragDashboard() {
               border: '1px solid #E5E7EB',
             }}
           >
-            {/* Left side - Back button + Dashboard/View name */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Tooltip title={`Back to ${currentDashboardName} views`}>
-                <IconButton
-                  onClick={() => navigate(`/${dashboardSlug}`)}
-                  size="small"
-                  sx={{
-                    color: '#6B7280',
-                    bgcolor: '#F3F4F6',
-                    borderRadius: 1,
-                    '&:hover': { bgcolor: '#E5E7EB', color: '#3B82F6' },
-                  }}
+            {/* Left side - Title + Breadcrumb */}
+            <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 2 }}>
+              <Box sx={{ width: 4, borderRadius: 1, bgcolor: '#3B82F6' }} />
+              <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 0.5 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: '#1F2937' }}>
+                  {currentDashboardName}
+                </Typography>
+                <Breadcrumbs
+                  separator={<NavigateNextIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />}
+                  sx={{ '& .MuiBreadcrumbs-li': { lineHeight: 1 } }}
                 >
-                  <ChevronRightIcon sx={{ transform: 'rotate(180deg)' }} /> Back
-                </IconButton>
-              </Tooltip>
-              <Box sx={{ width: 4, height: 32, bgcolor: '#3B82F6', borderRadius: 1 }} />
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#1F2937' }}>
-                {currentDashboardName}
-              </Typography>
+                  <Link
+                    underline="hover"
+                    sx={{ fontSize: '0.8rem', color: '#6B7280', cursor: 'pointer', '&:hover': { color: '#3B82F6' } }}
+                    onClick={() => navigate('/')}
+                  >
+                    Libraries
+                  </Link>
+                  <Link
+                    underline="hover"
+                    sx={{ fontSize: '0.8rem', color: '#6B7280', cursor: 'pointer', '&:hover': { color: '#3B82F6' } }}
+                    onClick={() => navigate(`/${dashboardSlug}`)}
+                  >
+                    {currentDashboardName}
+                  </Link>
+                  <Typography sx={{ fontSize: '0.8rem', color: '#3B82F6', fontWeight: 600 }}>
+                    {currentViewName}
+                  </Typography>
+                </Breadcrumbs>
+              </Box>
             </Box>
 
             {/* Right side - Action buttons with text */}

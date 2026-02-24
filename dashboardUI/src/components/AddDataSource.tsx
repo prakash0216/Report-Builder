@@ -105,7 +105,7 @@ export default function AddDataSourceMui() {
   // Connection dropdowns - now unified to handle both Snowflake and CSV connectors
   const [connectors, setConnectors] = useState<any[]>([]);
   const [selectedConnectorId, setSelectedConnectorId] = useState<string | number | ''>('');
-  const [selectedConnectorType, setSelectedConnectorType] = useState<'snowflake' | 'csv'>('snowflake');
+  const [selectedConnectorType, setSelectedConnectorType] = useState<'snowflake' | 'csv' | ''>('');
   const [connectionType, setConnectionType] = useState<string>('Live');
   
   // Legacy state for backward compatibility
@@ -377,15 +377,9 @@ export default function AddDataSourceMui() {
       setConnectionNames(snowflakeConnectors.map((c: any) => ({ id: c.snowflakeConnectionId, connectionName: c.name })));
       
       console.log('Fetched connectors:', fetchedConnectors);
-      if (fetchedConnectors.length > 0) {
-        const firstConnector = fetchedConnectors[0];
-        setSelectedConnectorId(firstConnector.id);
-        setSelectedConnectorType(firstConnector.type);
-        // For CSV connectors, default to Extract mode
-        if (firstConnector.type === 'csv') {
-          setConnectionType('Extract');
-        }
-      }
+      // Don't auto-select here — let loadDataSourceDetails effect
+      // pick the correct connector based on the selected data source.
+      // This prevents a Snowflake fetch when the data source is CSV.
     } catch (err) {
       console.error('Failed to fetch connectors', err);
       showAlert('Failed to fetch connectors', 'error');
@@ -716,10 +710,21 @@ export default function AddDataSourceMui() {
     }
   }, [dataSourceNames, selectedDS]);
 
-  // Load data source details when a data source is selected
+  // Load data source details when a data source is selected, or select default connector
   useEffect(() => {
+    if (connectors.length === 0) return;
+
     const loadDataSourceDetails = async () => {
-      if (!selectedDS) return;
+      if (!selectedDS) {
+        // No data source selected yet — use first connector as default
+        if (!selectedConnectorId) {
+          const firstConn = connectors[0];
+          setSelectedConnectorId(firstConn.id);
+          setSelectedConnectorType(firstConn.type);
+          if (firstConn.type === 'csv') setConnectionType('Extract');
+        }
+        return;
+      }
 
       try {
         const response = await axios.get(`${API_BASE_URL}/api/datasources/${selectedDS}`);
@@ -727,7 +732,7 @@ export default function AddDataSourceMui() {
           const ds = response.data.dataSource;
           
           // Handle CSV connector if csv_connector_id exists
-          if (ds.csvConnectorId && connectors.length > 0) {
+          if (ds.csvConnectorId) {
             const csvConnector = connectors.find(c => c.type === 'csv' && c.csvConnectorId === ds.csvConnectorId);
             if (csvConnector) {
               setSelectedConnectorId(csvConnector.id);
@@ -738,19 +743,17 @@ export default function AddDataSourceMui() {
           }
           
           // Handle Snowflake connection if connectionId exists
-          if (ds.connectionId && connectors.length > 0) {
+          if (ds.connectionId) {
             const snowflakeConnector = connectors.find(c => c.type === 'snowflake' && c.snowflakeConnectionId === ds.connectionId);
             if (snowflakeConnector) {
               setSelectedConnectorId(snowflakeConnector.id);
               setSelectedConnectorType('snowflake');
-            } else if (connectors.length > 0) {
-              // Connection doesn't exist, use first available
+            } else {
               const firstConn = connectors[0];
               setSelectedConnectorId(firstConn.id);
               setSelectedConnectorType(firstConn.type);
             }
-          } else if (connectors.length > 0) {
-            // No connection set, use first available
+          } else {
             const firstConn = connectors[0];
             setSelectedConnectorId(firstConn.id);
             setSelectedConnectorType(firstConn.type);
@@ -759,15 +762,20 @@ export default function AddDataSourceMui() {
           if (ds.connectionType) {
             setConnectionType(ds.connectionType);
           }
-        }
-      } catch (err) {
-        // Data source might not exist yet (newly created), that's okay
-        console.log('Data source details not found, using defaults');
-        // Set default connector if available
-        if (connectors.length > 0 && !selectedConnectorId) {
+        } else {
+          // No data source details — use first connector
           const firstConn = connectors[0];
           setSelectedConnectorId(firstConn.id);
           setSelectedConnectorType(firstConn.type);
+          if (firstConn.type === 'csv') setConnectionType('Extract');
+        }
+      } catch (err) {
+        console.log('Data source details not found, using defaults');
+        if (!selectedConnectorId) {
+          const firstConn = connectors[0];
+          setSelectedConnectorId(firstConn.id);
+          setSelectedConnectorType(firstConn.type);
+          if (firstConn.type === 'csv') setConnectionType('Extract');
         }
       }
     };
