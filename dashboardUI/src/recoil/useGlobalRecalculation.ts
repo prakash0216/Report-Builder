@@ -61,9 +61,12 @@ export const useGlobalRecalculation = () => {
   const mountSequenceRunningRef = useRef(false); // Atomic flag to prevent double execution
   const prevPathnameRef = useRef(location.pathname);
 
-  // Check if we're on a dashboard view route (/:dashboardName/:viewName)
-  // This is true when we're viewing charts, not on management pages
-  const isDashboardRoute = location.pathname.split('/').filter(Boolean).length >= 2;
+  // Check if we're on a dashboard VIEW route (/:dashboardName/:viewName)
+  // Exactly 2 path segments, excluding embed and edit pages
+  const pathSegments = location.pathname.split('/').filter(Boolean);
+  const isDashboardRoute = pathSegments.length === 2
+    && pathSegments[1] !== 'embed'
+    && !location.pathname.includes('/addChart/');
 
   // 🔥 PERFORMANCE: Pre-fetch all context once, not per-calculation
   // Returns allVariables too so executeSingleLogicFast doesn't re-read atoms
@@ -418,14 +421,20 @@ export const useGlobalRecalculation = () => {
   }, []);
 
   // Run calculations on mount when data is loaded
+  // Only trigger on dataLoaded or route changes, NOT on storedLogics.length changes
+  // (storedLogics changes from Hooks after create/execute should not re-trigger a full build)
+  const hasLogicsRef = useRef(false);
+  hasLogicsRef.current = storedLogics.length > 0;
+
   useEffect(() => {
     if (!dataLoaded) return;
+    if (!isDashboardRoute) return;
     if (mountCalculationDoneRef.current || mountSequenceRunningRef.current) return;
     if (recalculationInProgressRef.current) return;
-    if (storedLogics.length === 0) return;
+    if (!hasLogicsRef.current) return;
 
     // If returning to dashboard (already completed before), skip — filter trigger will handle
-    if (isDashboardRoute && hasCompletedDashboardCalcRef.current) {
+    if (hasCompletedDashboardCalcRef.current) {
       mountCalculationDoneRef.current = true;
       initializedRef.current = false;
       previousSnapshotRef.current = allFiltersSnapshot;
@@ -440,11 +449,9 @@ export const useGlobalRecalculation = () => {
         initializedRef.current = true; // Temporarily disable filter watcher
         await recalculateAllLogics();
         
-        if (isDashboardRoute) {
-          initializedRef.current = false;
-          previousSnapshotRef.current = allFiltersSnapshot;
-          hasCompletedDashboardCalcRef.current = true;
-        }
+        initializedRef.current = false;
+        previousSnapshotRef.current = allFiltersSnapshot;
+        hasCompletedDashboardCalcRef.current = true;
         mountSequenceRunningRef.current = false;
       } catch (err) {
         console.error('❌ [Recalc] Mount sequence failed:', err);
@@ -455,7 +462,7 @@ export const useGlobalRecalculation = () => {
     };
     
     runMountSequence();
-  }, [storedLogics.length, dataLoaded, location.pathname, isDashboardRoute]);
+  }, [dataLoaded, location.pathname, isDashboardRoute]);
 
   // Track if we've ever successfully calculated on dashboard
   const hasCompletedDashboardCalcRef = useRef(false);

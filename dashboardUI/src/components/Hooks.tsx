@@ -759,10 +759,14 @@ export default function Hooks() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
-    // Helper function to reload calculations from database
+    // Helper function to reload calculations from database (scoped to current dashboard)
     const reloadCalculations = useCallback(async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/calculations`);
+            const dashboardId = getCurrentDashboardId();
+            const url = dashboardId
+                ? `${API_BASE_URL}/api/calculations?dashboardId=${dashboardId}`
+                : `${API_BASE_URL}/api/calculations`;
+            const response = await fetch(url);
             if (response.ok) {
                 const data = await response.json();
                 if (data.success && data.calculations) {
