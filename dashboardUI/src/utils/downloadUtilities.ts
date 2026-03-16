@@ -35,6 +35,8 @@ export interface ChartRef {
   containerElement?: HTMLElement;
   tableData?: TableData;
   tableTheme?: TableThemeForExport;
+  /** Processed Highcharts options object (with variables resolved) for interactive HTML export */
+  chartOptions?: Record<string, any>;
 }
 
 export interface ExportFilterSummaryItem {
@@ -1234,5 +1236,359 @@ export const exportAllAsPPT = async (chartRefs: ChartRef[], fileName = 'Dashboar
     // Fallback: try the older API signature
     await pptx.writeFile(outputFileName);
   }
+};
+
+// ---------------------------------------------------------------------------
+// HTML Export — each card becomes a standalone .html file
+// ---------------------------------------------------------------------------
+
+const buildHtmlTableMarkup = (
+  tableData: TableData,
+  theme?: TableThemeForExport
+): string => {
+  const t = theme || {
+    headerBgColor: '#1F2937',
+    headerTextColor: '#FFFFFF',
+    rowBgColor: '#FFFFFF',
+    rowAltBgColor: '#F9FAFB',
+    rowTextColor: '#374151',
+    borderColor: '#E5E7EB',
+    cellPadding: 'normal' as const,
+    fontSize: 'medium' as const,
+  };
+
+  const pad = t.cellPadding === 'compact' ? '4px 8px' : t.cellPadding === 'comfortable' ? '12px 16px' : '8px 12px';
+  const fs = t.fontSize === 'small' ? '12px' : t.fontSize === 'large' ? '15px' : '13px';
+
+  let html = `<table style="border-collapse:collapse;width:100%;font-family:system-ui,-apple-system,sans-serif;font-size:${fs};">`;
+  html += '<thead><tr>';
+  for (const col of tableData.columns) {
+    html += `<th style="background:${t.headerBgColor};color:${t.headerTextColor};padding:${pad};border:1px solid ${t.borderColor};text-align:left;font-weight:600;">${escapeHtml(col)}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  tableData.rows.forEach((row, idx) => {
+    const bg = idx % 2 === 0 ? t.rowBgColor : t.rowAltBgColor;
+    html += `<tr style="background:${bg};">`;
+    for (const col of tableData.columns) {
+      const val = row[col] ?? '';
+      html += `<td style="color:${t.rowTextColor};padding:${pad};border:1px solid ${t.borderColor};">${escapeHtml(String(val))}</td>`;
+    }
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  return html;
+};
+
+const escapeHtml = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/**
+ * Safely serialize a Highcharts options object to a JSON string.
+ *
+ * Uses JSON.stringify with a custom replacer that:
+ *  - Drops functions (they can't survive JSON round-trip; Highcharts defaults
+ *    provide reasonable tooltip/label formatting out of the box)
+ *  - Drops DOM element references and circular structures
+ *  - Preserves all data, styling, and configuration
+ *
+ * The result is valid JSON that can be embedded in a <script> tag and parsed
+ * with JSON.parse() on the client side.
+ */
+const safeSerializeOptions = (obj: any): string => {
+  const seen = new WeakSet();
+  return JSON.stringify(obj, (_key, value) => {
+    if (typeof value === 'function') return undefined;
+    if (value instanceof HTMLElement) return undefined;
+    if (value instanceof Event) return undefined;
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) return undefined;
+      seen.add(value);
+    }
+    if (typeof value === 'number' && !isFinite(value)) return null;
+    return value;
+  }, 2);
+};
+
+/**
+ * Sanitize a Highcharts userOptions object for standalone HTML export.
+ *
+ * Removes properties that reference live DOM nodes, Highcharts internal
+ * state, or anything that would fail in a fresh browser context.
+ */
+const sanitizeChartOptions = (opts: Record<string, any>): Record<string, any> => {
+  const clone: Record<string, any> = {};
+
+  const skipKeys = new Set([
+    'renderTo', 'chart.renderTo', 'chart.events',
+    '_colorIndex', '_symbolIndex', 'index', 'colorIndex',
+    'symbolIndex', 'baseSeries', 'linkedParent',
+  ]);
+
+  for (const [key, val] of Object.entries(opts)) {
+    if (skipKeys.has(key)) continue;
+    if (val instanceof HTMLElement) continue;
+    if (val === undefined) continue;
+
+    if (key === 'chart' && typeof val === 'object' && val !== null) {
+      const { renderTo, events, ...rest } = val;
+      clone[key] = rest;
+    } else if (Array.isArray(val)) {
+      clone[key] = val.map(item =>
+        (typeof item === 'object' && item !== null && !(item instanceof HTMLElement))
+          ? sanitizeChartOptions(item)
+          : item
+      );
+    } else if (typeof val === 'object' && val !== null) {
+      clone[key] = sanitizeChartOptions(val);
+    } else {
+      clone[key] = val;
+    }
+  }
+
+  return clone;
+};
+
+export const exportAllAsHTML = async (
+  chartRefs: ChartRef[],
+  fileName = 'Dashboard',
+  meta?: { dashboardName?: string; viewName?: string; filters?: ExportFilterSummaryItem[] }
+) => {
+  console.log('[HTML Export] Starting interactive export with', chartRefs.length, 'cards');
+  await waitForChartsReady(chartRefs);
+
+  const cardSections: string[] = [];
+  const chartScripts: string[] = [];
+  let chartCounter = 0;
+  let needsHighcharts = false;
+  let needsHighchartsStock = false;
+
+  for (const ref of chartRefs) {
+    try {
+      const title = ref.title || ref.chartId;
+      let inner = '';
+
+      if (ref.type === 'chart') {
+        const chart = ref.chart || (ref.containerElement ? await getChartWithRetry(ref.containerElement, 2) : null);
+        const options = ref.chartOptions || (chart ? (chart as any).userOptions : null);
+
+        console.log(`[HTML Export] Chart "${title}" (${ref.chartId}): chart=${!!chart}, options=${!!options}, chartOptions=${!!ref.chartOptions}, series=${options?.series?.length ?? 'none'}`);
+
+        if (options || chart) {
+          needsHighcharts = true;
+          const containerId = `chart-${chartCounter++}`;
+
+          // Build the best possible options object:
+          // 1. Start with provided options (userOptions or parsed template)
+          // 2. Enrich with live data from the chart instance
+          let sanitized: Record<string, any>;
+
+          if (options) {
+            sanitized = sanitizeChartOptions(options);
+          } else {
+            sanitized = {};
+          }
+
+          // Always try to pull live series data from the chart instance.
+          // This handles cases where userOptions has empty/stale data, or
+          // when the template had ${variable} placeholders that are now resolved.
+          if (chart) {
+            const liveSeries = (chart as any).series || [];
+            if (liveSeries.length > 0) {
+              if (!sanitized.series || !Array.isArray(sanitized.series) || sanitized.series.length === 0) {
+                sanitized.series = liveSeries.map((s: any) => ({
+                  ...sanitizeChartOptions(s.userOptions || s.options || {}),
+                  data: s.options?.data || s.userOptions?.data || [],
+                }));
+              } else {
+                for (let si = 0; si < sanitized.series.length && si < liveSeries.length; si++) {
+                  const liveS = liveSeries[si];
+                  const optS = sanitized.series[si];
+                  if ((!optS.data || (Array.isArray(optS.data) && optS.data.length === 0)) && liveS.options?.data) {
+                    optS.data = liveS.options.data;
+                  }
+                  if (!optS.name && liveS.name) optS.name = liveS.name;
+                  if (!optS.type && liveS.type) optS.type = liveS.type;
+                }
+              }
+            }
+
+            // Pull live xAxis categories
+            const liveXAxes = (chart as any).xAxis || [];
+            if (liveXAxes.length > 0) {
+              const axes = sanitized.xAxis
+                ? (Array.isArray(sanitized.xAxis) ? sanitized.xAxis : [sanitized.xAxis])
+                : [{}];
+              for (let ai = 0; ai < axes.length && ai < liveXAxes.length; ai++) {
+                if (!axes[ai].categories && liveXAxes[ai]?.categories?.length) {
+                  axes[ai].categories = liveXAxes[ai].categories;
+                }
+                if (!axes[ai].title?.text && liveXAxes[ai]?.userOptions?.title?.text) {
+                  axes[ai].title = axes[ai].title || {};
+                  axes[ai].title.text = liveXAxes[ai].userOptions.title.text;
+                }
+              }
+              sanitized.xAxis = axes.length === 1 ? axes[0] : axes;
+            }
+
+            // Pull live yAxis config
+            const liveYAxes = (chart as any).yAxis || [];
+            if (liveYAxes.length > 0 && !sanitized.yAxis) {
+              sanitized.yAxis = liveYAxes.map((a: any) => sanitizeChartOptions(a.userOptions || {}));
+            }
+
+            // Pull title if missing
+            if (!sanitized.title?.text && (chart as any).title?.textStr) {
+              sanitized.title = sanitized.title || {};
+              sanitized.title.text = (chart as any).title.textStr;
+            }
+
+            // Pull chart type if missing
+            if (!sanitized.chart?.type && (chart as any).options?.chart?.type) {
+              sanitized.chart = sanitized.chart || {};
+              sanitized.chart.type = (chart as any).options.chart.type;
+            }
+          }
+
+          console.log(`[HTML Export] Sanitized config for "${title}": series=${sanitized.series?.length ?? 0}, type=${sanitized.chart?.type || 'auto'}, dataPoints=${sanitized.series?.[0]?.data?.length ?? 0}`);
+
+          if (sanitized.navigator || sanitized.rangeSelector || sanitized.scrollbar
+            || (chart && (chart as any).navigator)) {
+            needsHighchartsStock = true;
+          }
+
+          inner = `<div id="${containerId}" style="width:100%;min-height:400px;"></div>`;
+
+          const serialized = safeSerializeOptions(sanitized);
+          if (!serialized || serialized === 'null' || serialized === '{}') {
+            console.warn('[HTML Export] Empty serialized config for', ref.chartId);
+            const fallbackChart = chart || (ref.containerElement ? await getChartWithRetry(ref.containerElement, 2) : null);
+            if (fallbackChart) {
+              const svg = (fallbackChart as any).getSVG?.();
+              inner = svg || (ref.containerElement ? ref.containerElement.innerHTML : '<p>No chart data</p>');
+            }
+          } else {
+            chartScripts.push(
+              `      (function() {\n` +
+              `        try {\n` +
+              `          var opts = JSON.parse(${JSON.stringify(serialized)});\n` +
+              `          opts.chart = opts.chart || {};\n` +
+              `          opts.chart.renderTo = '${containerId}';\n` +
+              `          if (typeof Highcharts.stockChart === 'function' && (opts.navigator || opts.rangeSelector || opts.scrollbar)) {\n` +
+              `            Highcharts.stockChart(opts);\n` +
+              `          } else {\n` +
+              `            Highcharts.chart(opts);\n` +
+              `          }\n` +
+              `        } catch(e) {\n` +
+              `          console.error('Chart render error for ${containerId}:', e);\n` +
+              `          document.getElementById('${containerId}').innerHTML = '<p style=\"color:red;padding:20px;\">Chart failed to render: ' + e.message + '</p>';\n` +
+              `        }\n` +
+              `      })();`
+            );
+          }
+        } else if (ref.containerElement) {
+          inner = ref.containerElement.innerHTML;
+        }
+      } else if (ref.type === 'table' || ref.type === 'tableChart') {
+        if (ref.tableData && ref.tableData.columns.length > 0) {
+          inner = buildHtmlTableMarkup(ref.tableData, ref.tableTheme);
+        } else if (ref.containerElement) {
+          inner = ref.containerElement.innerHTML;
+        }
+      } else if (ref.type === 'html') {
+        if (ref.htmlContent) {
+          inner = `<div class="html-content">${ref.htmlContent}</div>`;
+        } else if (ref.containerElement) {
+          inner = `<div class="html-content">${ref.containerElement.innerHTML}</div>`;
+        }
+      }
+
+      if (!inner) {
+        inner = '<p style="color:#94A3B8;text-align:center;">No content available</p>';
+      }
+
+      cardSections.push(
+        `<section class="card">\n` +
+        `  <div class="card-title">${escapeHtml(title)}</div>\n` +
+        `  <div class="card-body">${inner}</div>\n` +
+        `</section>`
+      );
+    } catch (err) {
+      console.warn('[HTML Export] Failed for', ref.chartId, err);
+    }
+  }
+
+  if (cardSections.length === 0) {
+    console.warn('[HTML Export] No cards to export');
+    return;
+  }
+
+  const pageTitle = meta?.viewName
+    ? `${meta.dashboardName || 'Dashboard'} — ${meta.viewName}`
+    : (meta?.dashboardName || fileName);
+
+  const filterHtml = meta?.filters?.length
+    ? `<div class="filters"><strong>Active Filters:</strong> ${meta.filters.map(f => `<span class="filter-chip">${escapeHtml(f.name)}: ${escapeHtml(f.value)}</span>`).join(' ')}</div>`
+    : '';
+
+  const HC_CDN = 'https://cdn.jsdelivr.net/npm/highcharts@12.1.2';
+  const highchartsScriptTags = needsHighcharts
+    ? (needsHighchartsStock
+        ? `<script src="${HC_CDN}/highstock.js"><\/script>\n<script src="${HC_CDN}/modules/exporting.js"><\/script>\n<script src="${HC_CDN}/modules/export-data.js"><\/script>\n<script src="${HC_CDN}/modules/accessibility.js"><\/script>`
+        : `<script src="${HC_CDN}/highcharts.js"><\/script>\n<script src="${HC_CDN}/modules/exporting.js"><\/script>\n<script src="${HC_CDN}/modules/export-data.js"><\/script>\n<script src="${HC_CDN}/modules/accessibility.js"><\/script>`)
+    : '';
+
+  const initScript = chartScripts.length > 0
+    ? `<script>\n    document.addEventListener('DOMContentLoaded', function() {\n${chartScripts.join('\n')}\n    });\n    <\/script>`
+    : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHtml(pageTitle)}</title>
+${highchartsScriptTags}
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#F1F5F9;color:#1E293B;padding:32px}
+  .page-header{margin-bottom:28px}
+  .page-title{font-size:26px;font-weight:700;color:#0F172A;border-left:4px solid #3B82F6;padding-left:14px}
+  .page-subtitle{font-size:13px;color:#64748B;margin-top:6px;padding-left:18px}
+  .filters{margin-top:12px;padding-left:18px;font-size:12px;color:#475569}
+  .filter-chip{display:inline-block;background:#E0E7FF;color:#3730A3;padding:2px 10px;border-radius:10px;margin:2px 4px;font-size:11px}
+  .cards{display:flex;flex-direction:column;gap:24px}
+  .card{background:#FFFFFF;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);overflow:hidden;break-inside:avoid}
+  .card-title{font-size:15px;font-weight:600;color:#1F2937;padding:16px 20px 0;margin-bottom:4px}
+  .card-body{padding:16px 20px 20px;overflow:auto}
+  .card-body svg{display:block;max-width:100%;height:auto;margin:0 auto}
+  .card-body table{width:100%}
+  .html-content img{max-width:100%;height:auto}
+  .footer{margin-top:32px;text-align:center;font-size:11px;color:#94A3B8;padding-top:16px;border-top:1px solid #E2E8F0}
+  @media print{body{background:#fff;padding:12px}.card{box-shadow:none;border:1px solid #E2E8F0}.footer{display:none}}
+</style>
+</head>
+<body>
+<div class="page-header">
+  <div class="page-title">${escapeHtml(pageTitle)}</div>
+  <div class="page-subtitle">Exported on ${new Date().toLocaleString()} &bull; ${cardSections.length} card${cardSections.length > 1 ? 's' : ''}</div>
+  ${filterHtml}
+</div>
+<div class="cards">
+${cardSections.join('\n')}
+</div>
+<div class="footer">Exported from Report Builder</div>
+${initScript}
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `${sanitizeFileName(fileName)}.html`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+  console.log(`[HTML Export] Downloaded interactive HTML with ${cardSections.length} cards, ${chartScripts.length} live charts`);
 };
 

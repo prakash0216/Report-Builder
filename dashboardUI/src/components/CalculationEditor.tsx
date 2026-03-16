@@ -32,6 +32,9 @@ export function CalculationEditor({
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const disposablesRef = useRef<IDisposable[]>([]);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const isInternalChangeRef = useRef(false);
 
   // Categorize filters by prefix
   const paramFilters = filterNames.filter(name => name.startsWith('param_'));
@@ -634,6 +637,20 @@ export function CalculationEditor({
     disposablesRef.current.push(jsLibraryProvider);
   };
 
+  // Sync value from parent only when it differs from the editor's own content
+  // (e.g., loading a saved calculation or clearing the editor)
+  useEffect(() => {
+    if (!editorRef.current) return;
+    if (isInternalChangeRef.current) {
+      isInternalChangeRef.current = false;
+      return;
+    }
+    const currentValue = editorRef.current.getValue();
+    if (value !== currentValue) {
+      editorRef.current.setValue(value);
+    }
+  }, [value]);
+
   // Re-register providers when data changes
   useEffect(() => {
     if (monacoRef.current) {
@@ -770,8 +787,11 @@ export function CalculationEditor({
           height={height}
           defaultLanguage="javascript"
           theme="calculationTheme"
-          value={value}
-          onChange={(val) => onChange(val || '')}
+          defaultValue={value}
+          onChange={(val) => {
+            isInternalChangeRef.current = true;
+            onChangeRef.current(val || '');
+          }}
           beforeMount={handleEditorWillMount}
           onMount={handleEditorDidMount}
           options={{

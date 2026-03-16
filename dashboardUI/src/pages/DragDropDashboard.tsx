@@ -86,6 +86,7 @@ import {
   exportAllAsSVG,
   exportAllAsCSV,
   exportAllAsExcel,
+  exportAllAsHTML,
   exportDashboardAsImage,
   ChartRef,
 } from '../utils/downloadUtilities';
@@ -423,6 +424,7 @@ export default function DropDragDashboard() {
     { id: "csv", name: "CSV", icon: "📊", description: "Data export as CSV" },
     { id: "xls", name: "Excel", icon: "📗", description: "All cards as sheets" },
     { id: "pptx-editable", name: "PowerPoint (PPTX)", icon: "📑", description: "Editable charts (pptxgen)" },
+    { id: "html", name: "HTML File", icon: "🌐", description: "Dashboard as HTML File" },
   ]);
 
   const [branchOptions] = useState([
@@ -1046,6 +1048,16 @@ export default function DropDragDashboard() {
             childHtmlContent = childContainer.innerHTML;
           }
           
+          let childChartOptions: Record<string, any> | undefined;
+          if (childConfig.type === 'chart') {
+            if (childChartInstance) {
+              try { childChartOptions = (childChartInstance as any).userOptions; } catch { /* ignore */ }
+            }
+            if (!childChartOptions && childConfig.template) {
+              try { childChartOptions = JSON.parse(childConfig.template); } catch { /* ignore */ }
+            }
+          }
+
           console.log(`[Export] Including visible child card: ${childConfig.id}`);
           refs.push({
             chart: childChartInstance,
@@ -1056,6 +1068,7 @@ export default function DropDragDashboard() {
             containerElement: childContainer || container || undefined,
             tableData: childTableData,
             tableTheme: childConfig.tableSettings?.theme,
+            chartOptions: childChartOptions,
           });
         }
         continue; // Skip adding the parent container itself
@@ -1107,6 +1120,16 @@ export default function DropDragDashboard() {
         tableData = getTableData(configData.tableDataSource);
       }
 
+      let chartOptions: Record<string, any> | undefined;
+      if (contentType === 'chart') {
+        if (chartInstance) {
+          try { chartOptions = (chartInstance as any).userOptions; } catch { /* ignore */ }
+        }
+        if (!chartOptions && processedChartConfigs[item.i] && processedChartConfigs[item.i]?.type !== 'html') {
+          chartOptions = processedChartConfigs[item.i];
+        }
+      }
+
       refs.push({
         chart: chartInstance,
         chartId: item.i,
@@ -1116,6 +1139,7 @@ export default function DropDragDashboard() {
         containerElement: container || undefined,
         tableData,
         tableTheme: configData?.tableSettings?.theme,
+        chartOptions,
       });
     }
     
@@ -1199,6 +1223,9 @@ export default function DropDragDashboard() {
           break;
         case 'pptx-editable':
           await exportDashboardPPTXEditable(refs, exportFileName, exportMeta);
+          break;
+        case 'html':
+          await exportAllAsHTML(refs, exportFileName, exportMeta);
           break;
         default:
           console.warn('Unknown format', format);
